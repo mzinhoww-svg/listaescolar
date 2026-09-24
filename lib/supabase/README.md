@@ -24,3 +24,6 @@ Não cole valores neste repositório nem em docs. As chaves legadas (`ANON_KEY`,
 ## Validação
 
 `lib/env.public.ts` (`getPublicEnv`) e `lib/env.ts` (`getServerEnv`, só servidor) validam com Zod quando chamadas. Build e testes não exigem nenhuma variável.
+
+## Trilhas paralelas
+Cada worktree paralelo precisa de `project_id` e portas próprias em `supabase/config.toml` para que `db:reset` de uma trilha não afete outra. Edite localmente e não commite: `git update-index --skip-worktree supabase/config.toml`.

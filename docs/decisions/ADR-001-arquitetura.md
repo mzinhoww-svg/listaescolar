@@ -1,6 +1,6 @@
 # ADR-001: Arquitetura do Lista da Escola (ListaCerta)
 
-Status: **aguardando escolha** · Data: 2026-09-24 · Autor: tech lead (Claude)
+Status: **aceita (A · repo novo · Supabase do zero · marca ListaCerta)** · Data: 2026-09-24 · Autor: tech lead (Claude)
 
 Custos em USD são referências de tabela pública dos fornecedores; confirmar no site oficial antes de contratar. Custos de IA dependem de volume real, que ainda não existe.
 
@@ -68,7 +68,7 @@ Custos em USD são referências de tabela pública dos fornecedores; confirmar n
 | Links de afiliado | Serviço `AffiliateLinkBuilder` por varejista + rota `/ir-para` com registro de clique | Atual | Igual A |
 | Marketplaces | Adapter `RetailerProvider` por varejista; preço sempre com origem, data e hora da consulta | Atual | Igual A |
 | WhatsApp da papelaria | `wa.me` com mensagem gerada e código do lead; API da Meta só na fase 2 | Igual | API oficial desde o início |
-| Implantação | Vercel (preview por PR) + Supabase com um projeto (produção) + Supabase local para dev | Lovable | Vercel + host Node + serviços |
+| Implantação | Vercel (preview por PR) + Supabase com dois projetos (staging e produção) | Lovable | Vercel + host Node + serviços |
 
 ## 5. Recomendação: A
 

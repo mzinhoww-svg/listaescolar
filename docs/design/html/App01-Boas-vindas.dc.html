@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>App — Boas-vindas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#0F1B2D}
+a{color:#0F1B2D}a:hover{color:#0B6B4A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F5F2EA; display: flex; flex-direction: column; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #0F1B2D">
+<div style="height: 470px; background: #0F1B2D; border-radius: 0 0 36px 36px; position: relative; overflow: hidden">
+<div style="position: absolute; left: 24px; top: 64px; padding: 10px 16px; background: #F5F2EA; border-radius: 999px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; transform: rotate(-6deg)"><svg width="16" height="16" viewBox="0 0 120 120" aria-hidden="true"><path d="M22 64 L46 88 L98 34" fill="none" stroke="#0B6B4A" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"></path></svg>Lista oficial da escola</div>
+<div style="position: absolute; left: 70px; top: 128px; width: 250px; height: 300px; box-sizing: border-box; padding: 28px; background: #F5F2EA; border-radius: 24px; transform: rotate(4deg); display: flex; flex-direction: column; gap: 18px">
+<div style="height: 12px; width: 150px; border-radius: 6px; background: #0F1B2D"></div>
+<div style="height: 12px; width: 110px; border-radius: 6px; background: #0F1B2D; opacity: 0.5"></div>
+<div style="height: 12px; width: 170px; border-radius: 6px; background: #0F1B2D; opacity: 0.5"></div>
+<div style="height: 12px; width: 90px; border-radius: 6px; background: #0F1B2D; opacity: 0.5"></div>
+<svg width="170" height="110" viewBox="0 0 120 78" aria-hidden="true"><path d="M8 40 L34 66 L112 8" fill="none" stroke="#2FCB86" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</div>
+<div style="position: absolute; right: 22px; top: 360px; width: 64px; height: 64px; border-radius: 20px; background: #2FCB86; display: flex; align-items: center; justify-content: center"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0F1B2D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"></path></svg></div>
+</div>
+<div style="flex-grow: 1; padding: 36px 24px 40px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center">
+<div style="display: flex; flex-direction: column; gap: 14px; align-items: center">
+<h1 style="margin: 0; font-size: 36px; font-weight: 800; line-height: 1.08; letter-spacing: -0.035em">A lista da escola, pronta em minutos.</h1>
+<p style="margin: 0; font-size: 15px; font-weight: 500; line-height: 1.5; color: #3A4658">Lista oficial, itens conferidos e o preço mais justo entre lojas e papelarias.</p>
+</div>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: center">
+<button style="width: 100%; height: 56px; border: none; border-radius: 999px; background: #0F1B2D; color: #F5F2EA; font-family: inherit; font-size: 16px; font-weight: 800">Começar</button>
+<a href="#entrar" style="font-size: 15px; font-weight: 700; text-decoration: none">Já tenho conta</a>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

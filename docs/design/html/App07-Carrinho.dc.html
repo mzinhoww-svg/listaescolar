@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>App — Carrinho inteligente</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#0F1B2D}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 56px 20px 28px; background: #F5F2EA; display: flex; flex-direction: column; gap: 16px; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #0F1B2D">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<button aria-label="Voltar" style="width: 48px; height: 48px; border: none; border-radius: 24px; background: #ECE8DE; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1B2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button>
+<div style="font-size: 16px; font-weight: 700">Carrinho inteligente</div>
+<button aria-label="Notificações" style="width: 48px; height: 48px; border: none; border-radius: 24px; background: #ECE8DE; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1B2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
+</div>
+<div style="font-size: 14px; font-weight: 700">Como você prefere comprar?</div>
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px">
+<button style="height: 92px; border: 2px solid #0F1B2D; border-radius: 20px; background: #2FCB86; color: #0F1B2D; font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="font-size: 14px; font-weight: 800">Mais barato</span><span style="font-size: 12px; font-weight: 700">R$ [PREÇO]</span></button>
+<button style="height: 92px; border: none; border-radius: 20px; background: #ECE8DE; color: #0F1B2D; font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="font-size: 14px; font-weight: 800">Recomendado</span><span style="font-size: 12px; font-weight: 600; color: #3A4658">R$ [PREÇO]</span></button>
+<button style="height: 92px; border: none; border-radius: 20px; background: #ECE8DE; color: #0F1B2D; font-family: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px"><span style="font-size: 14px; font-weight: 800">Mais rápido</span><span style="font-size: 12px; font-weight: 600; color: #3A4658">R$ [PREÇO]</span></button>
+</div>
+<div style="font-size: 17px; font-weight: 800; margin-top: 4px">Onde comprar cada parte</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="padding: 16px; background: #FFFFFF; border-radius: 22px; display: flex; align-items: center; gap: 14px"><div style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; background: #ECE8DE; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">ML</div><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">Mercado Livre</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">[N] itens · entrega em [prazo]</div></div><div style="font-size: 16px; font-weight: 800">R$ [x]</div></div>
+<div style="padding: 16px; background: #FFFFFF; border-radius: 22px; display: flex; align-items: center; gap: 14px"><div style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; background: #ECE8DE; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">AZ</div><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">Amazon</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">[N] itens · entrega em [prazo]</div></div><div style="font-size: 16px; font-weight: 800">R$ [x]</div></div>
+<div style="padding: 16px; background: #FFFFFF; border-radius: 22px; display: flex; align-items: center; gap: 14px"><div style="width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; background: #0F1B2D; color: #F5F2EA; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800">PL</div><div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">Papelaria local</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">[N] itens · via cotação</div></div><div style="font-size: 16px; font-weight: 800">R$ [x]</div></div>
+</div>
+<div style="flex-grow: 1"></div>
+<div style="padding: 18px; background: #FFFFFF; border-radius: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; color: #3A4658"><span>Itens</span><span>R$ [x]</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; color: #3A4658"><span>Frete</span><span>R$ [x]</span></div>
+<div style="height: 1px; background: #E6E2D8"></div>
+<div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: 800"><span>Total</span><span>R$ [PREÇO]</span></div>
+</div>
+<button style="height: 56px; border: none; border-radius: 999px; background: #0F1B2D; color: #F5F2EA; font-family: inherit; font-size: 16px; font-weight: 800">Ir para as lojas</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

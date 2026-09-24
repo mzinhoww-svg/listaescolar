@@ -4,7 +4,7 @@ Data: 2026-09-24 · Decisões fechadas: **Arquitetura A** · **Repo novo + Supab
 
 ## 1. Stack
 - **Front e servidor:** Next.js App Router (versão estável atual), TypeScript strict, Tailwind com tokens da marca, Zod, React Hook Form. Componentes com até 250 linhas.
-- **Supabase (projeto único de produção + Supabase local para dev):** Postgres com RLS, Auth, Storage, Edge Functions e Queues (pgmq). Migrations SQL versionadas, chaves com `gen_random_uuid()`.
+- **Supabase (dois projetos: staging e produção):** Postgres com RLS, Auth, Storage, Edge Functions e Queues (pgmq). Migrations SQL versionadas, chaves com `gen_random_uuid()`.
 - **Deploy:** Vercel, com preview por PR.
 - **Testes:** Vitest para domínio e serviços; agent-browser para E2E por fatia.
 - **Observabilidade:** Sentry, logs do Supabase e tabela `ai_decisions`.

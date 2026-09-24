@@ -19,10 +19,10 @@
 
 ## Pré-requisitos do responsável (uma vez)
 - Criar o repositório GitHub vazio e conectar à Vercel.
-- Criar um projeto no Supabase (produção). Sem staging.
+- Criar dois projetos no Supabase (staging e produção).
 - Guardar as chaves nos envs da Vercel e no `.env.local`.
 - Separar o CSV oficial do INEP.
-- Definir as chaves dos provedores de IA (DeepSeek, GLM e o de visão).
+- Definir a chave do OpenRouter e os modelos em `AI_MODEL_*`.
 
 ## Fatias
 
@@ -108,7 +108,7 @@
 **Prompt:**
 > Crie `lib/ai`:
 > - interfaces `OcrProvider` e `LlmProvider`;
-> - adapters para DeepSeek, GLM e um provedor de visão;
+> - adapter OpenRouter, com modelos barato, forte e de visão vindos de `AI_MODEL_*`;
 > - roteador barato-primeiro que escala quando a validação Zod falha, a confiança fica abaixo do limiar ou há timeout.
 >
 > `prompt_registry` versionado, `ai_settings` com limiares e `ai_decisions` gravando modelo, provedor, versão do prompt, versão do pipeline, scores, alertas e timestamps. A extração normaliza, classifica, dá confiança por item e gera os alertas do spec.
@@ -175,13 +175,81 @@
 **Prompt:**
 > Rate limit em upload, OCR, login e leads. Headers de segurança e CSP. Sentry com escopo por perfil, sem dado pessoal. Alertas para fila morta e taxa de erro do provedor de IA.
 
+### S21 · Cobrança da papelaria: leads grátis, créditos e passe de temporada
+**Referência:** `docs/SPEC-2-cobranca-b2b.md`, telas Pap06-Creditos, Admin10-Planos, Pap01-Cadastro.
+**Prompt:**
+> Tabelas `plans`, `stationery_wallets`, `credit_ledger` (livro-razão imutável), `season_passes` e `invoices`. Regras: primeiros leads grátis por papelaria, com o valor em `plans` e nunca fixo no código; crédito por lead com preço por faixa de itens; passe de temporada de novembro a março, parcelável em até 3x. O débito só acontece quando o lead é entregue. Interface `PaymentProvider` com implementação fake para testes e um adapter Pix atrás de flag, sem credencial real no código. Tela de créditos e plano da papelaria e tela de planos no admin.
+
+**Aceite:**
+- O saldo é sempre igual à soma do livro-razão, com teste de concorrência.
+- O lead não é entregue sem saldo nem passe ativo.
+
+### S22 · Atribuição, conversão e contestação
+**Referência:** telas Pap03-LeadDetalhe, App22-VoceComprou, App23-Avaliar, Admin11-Auditoria, Admin12-Contestacoes.
+**Prompt:**
+> Três sinais de conversão:
+> - confirmação da papelaria;
+> - confirmação do pai ("Você comprou?");
+> - Pix pela plataforma.
+>
+> Convertido significa 2 de 3 sinais. A papelaria pode contestar em até 72 h pelos motivos do spec: número errado, lista incompleta, duplicado ou fora da área. Contestação aceita devolve o crédito no livro-razão. Inclui avaliação da papelaria pelo pai e auditoria de conversão no admin.
+
+**Aceite:** testes da regra 2 de 3, do prazo de 72 h e do estorno de crédito.
+
+### S23 · Comissão, repasses e inadimplência
+**Referência:** telas Admin13-Repasses, Admin14-Inadimplencia.
+**Prompt:**
+> Comissão só quando o Pix passa pela plataforma. Repasse opcional para escola ou APM, configurável por escola. Tela de repasses com conciliação e tela de inadimplência com régua de cobrança por status. Não há movimentação real de dinheiro: o sistema gera instruções e registros, e o admin executa manualmente.
+
+**Aceite:** o relatório de repasse bate com o livro-razão, com teste.
+
+### S24 · Portal B2B: cadastro, chaves e API v1
+**Referência:** `docs/SPEC-2-cobranca-b2b.md` (seção Lógica B2B), telas B2B00-Parceiros, B2B01-Visao, B2B02-API, B2B03-Docs, Admin15-ParceirosB2B.
+**Prompt:**
+> Parceiros dos tipos varejista, marca e EdTech/ERP. Chaves `x-listacerta-key` com hash no banco, escopos e rotação sem downtime (duas chaves ativas ao mesmo tempo). Endpoints:
+> - `GET /v1/schools`
+> - `GET /v1/schools/{inep}/lists`
+> - `GET /v1/lists/{id}/items`
+> - `POST /v1/carts/match`
+>
+> A API expõe só listas públicas e dados agregados. Rate limit por chave. Documentação navegável.
+
+**Aceite:**
+- Nenhuma rota devolve dado pessoal, com teste.
+- Chave revogada falha na hora.
+
+### S25 · Widget e webhooks
+**Referência:** telas B2B04-Widget, B2B05-Webhooks.
+**Prompt:**
+> Widget embutível que leva a lista ao carrinho do varejista parceiro. Webhooks `list.published`, `list.updated`, `list.archived` e `school.approved`, assinados com HMAC, com retry, log de entregas e reenvio manual.
+
+**Aceite:**
+- Assinatura verificável por teste.
+- Entrega com falha entra em retry e depois em dead letter.
+
+### S26 · Campanhas de marca, insights e faturamento B2B
+**Referência:** telas B2B06-Campanhas, B2B07-NovaCampanha, B2B08-Insights, B2B09-Faturamento, Admin16-Campanhas.
+**Prompt:**
+> Campanhas de sugestão de produto com CPM ou CPC, sempre marcadas como patrocinadas e bloqueadas quando conflitam com alerta Procon: marca exigida pela escola não pode ser substituída. Aprovação obrigatória no admin. Insights agregados com k-anonimato: célula abaixo de k fica oculta. Faturamento B2B com extrato.
+
+**Aceite:** testes de k-anonimato e de bloqueio Procon.
+
+### S27 · Site público e páginas de sistema
+**Referência:** telas Landing, ComoFunciona, Sis01-LinkCurto a Sis07-Sobre, App14-EscolaPublica, App14b-EscolaEstados.
+**Prompt:**
+> Landing, como funciona, sobre, termos e privacidade (com placeholders jurídicos, sem afirmar conformidade), link curto da lista com QR, página de redirecionamento para loja, 403 e 404. SEO e Open Graph.
+
 ### S20 · Produção e suíte E2E final
 **Prompt:**
-> Rodar as migrations em produção somente após `supabase db reset` local verde e aprovação humana. Suíte agent-browser completa cobrindo os fluxos pai, escola, admin e papelaria. Checklist de go-live em `docs/GO-LIVE.md`. Importar o CSV oficial em produção e registrar a contagem real.
+> Rodar as migrations em staging e depois em produção. Suíte agent-browser completa cobrindo os fluxos pai, escola, admin e papelaria. Checklist de go-live em `docs/GO-LIVE.md`. Importar o CSV oficial em produção e registrar a contagem real.
 
-## Ordem sugerida
+## Ordem de execução (escopo completo, ADR-002 rejeitado)
 1. S00, S01, S02.
 2. Em paralelo: [S03, S04, S05, S06], [S07, S08, S09, S10] e [S12, S13, S14].
 3. S11.
-4. S15, S16, S17, S18, S19.
-5. S20.
+4. Em paralelo: [S21, S22, S23] e [S24, S25, S26].
+5. S15, S16, S27.
+6. S17, S18, S19.
+7. S20 por último.
+
+Toda fatia usa as telas de `docs/design/` como referência visual obrigatória. O mapa está em `docs/design/SCREENS.md`.

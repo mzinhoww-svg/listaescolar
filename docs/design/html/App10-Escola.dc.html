@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>App — Painel da escola</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#0F1B2D}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 56px 20px 28px; background: #F5F2EA; display: flex; flex-direction: column; gap: 16px; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #0F1B2D">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<div style="display: flex; align-items: center; gap: 10px"><svg width="40" height="40" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="30" fill="#0F1B2D"></rect><rect x="28" y="30" width="42" height="11" rx="5.5" fill="#F5F2EA"></rect><rect x="28" y="52" width="28" height="11" rx="5.5" fill="#F5F2EA" fill-opacity="0.55"></rect><path d="M30 80 L44 94 L92 46" fill="none" stroke="#2FCB86" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"></path></svg><div style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #3A4658">Escola</div></div>
+<button aria-label="Notificações" style="width: 48px; height: 48px; border: none; border-radius: 24px; background: #ECE8DE; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1B2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></button>
+</div>
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.035em">[Nome da escola]<br>Listas 2027</h1>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+<div style="padding: 18px; background: #0F1B2D; color: #F5F2EA; border-radius: 24px; display: flex; flex-direction: column; gap: 6px"><div style="font-size: 30px; font-weight: 800; letter-spacing: -0.03em">[N]/[N]</div><div style="font-size: 13px; font-weight: 600; color: #B9C2CF">séries publicadas</div></div>
+<div style="padding: 18px; background: #2FCB86; border-radius: 24px; display: flex; flex-direction: column; gap: 6px"><div style="font-size: 30px; font-weight: 800; letter-spacing: -0.03em">[N]</div><div style="font-size: 13px; font-weight: 700">famílias com lista</div></div>
+</div>
+<div style="font-size: 17px; font-weight: 800; margin-top: 4px">Séries</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="padding: 16px; background: #FFFFFF; border-radius: 20px; display: flex; align-items: center; justify-content: space-between"><div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">[1º ano]</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">[N] itens</div></div><div style="padding: 6px 12px; border-radius: 999px; background: #D5F5E6; color: #0B6B4A; font-size: 12px; font-weight: 800">Publicada</div></div>
+<div style="padding: 16px; background: #FFFFFF; border-radius: 20px; display: flex; align-items: center; justify-content: space-between"><div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">[2º ano]</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">[N] itens</div></div><div style="padding: 6px 12px; border-radius: 999px; background: #D5F5E6; color: #0B6B4A; font-size: 12px; font-weight: 800">Publicada</div></div>
+<div style="padding: 16px; background: #FFFFFF; border-radius: 20px; display: flex; align-items: center; justify-content: space-between"><div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">[3º ano]</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">Rascunho salvo</div></div><div style="padding: 6px 12px; border-radius: 999px; background: #FDEBD3; color: #8A4B00; font-size: 12px; font-weight: 800">Em revisão</div></div>
+<div style="padding: 16px; background: #FFFFFF; border-radius: 20px; display: flex; align-items: center; justify-content: space-between"><div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 15px; font-weight: 800">[4º ano]</div><div style="font-size: 12px; font-weight: 500; color: #5A6575">Nenhum item</div></div><div style="padding: 6px 12px; border-radius: 999px; background: #ECE8DE; color: #3A4658; font-size: 12px; font-weight: 800">Pendente</div></div>
+</div>
+<div style="flex-grow: 1"></div>
+<button style="height: 56px; border: none; border-radius: 999px; background: #0F1B2D; color: #F5F2EA; font-family: inherit; font-size: 16px; font-weight: 800">Publicar nova lista</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

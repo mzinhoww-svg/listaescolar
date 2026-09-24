@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>App — Pedido confirmado</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#0F1B2D}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 56px 20px 28px; background: #F5F2EA; display: flex; flex-direction: column; gap: 18px; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #0F1B2D">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<button aria-label="Fechar" style="width: 48px; height: 48px; border: none; border-radius: 24px; background: #ECE8DE; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1B2D" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+<div style="font-size: 16px; font-weight: 700">Comprovante</div>
+<button aria-label="Compartilhar" style="width: 48px; height: 48px; border: none; border-radius: 24px; background: #ECE8DE; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1B2D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"></path></svg></button>
+</div>
+<div style="padding: 32px 22px 24px; background: #FFFFFF; border-radius: 32px; display: flex; flex-direction: column; align-items: center; gap: 22px">
+<div style="width: 104px; height: 104px; border-radius: 52px; background: #D5F5E6; display: flex; align-items: center; justify-content: center"><svg width="80" height="80" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="30" fill="#0F1B2D"></rect><rect x="28" y="30" width="42" height="11" rx="5.5" fill="#F5F2EA"></rect><rect x="28" y="52" width="28" height="11" rx="5.5" fill="#F5F2EA" fill-opacity="0.55"></rect><path d="M30 80 L44 94 L92 46" fill="none" stroke="#2FCB86" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center"><div style="font-size: 26px; font-weight: 800; letter-spacing: -0.03em">Lista certa!</div><div style="font-size: 14px; font-weight: 500; line-height: 1.5; color: #3A4658">A papelaria recebeu seu pedido pelo WhatsApp e vai confirmar a entrega.</div></div>
+<div style="width: 100%; display: flex; flex-direction: column; gap: 12px; padding-top: 18px; border-top: 1px dashed #D9D4C8">
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="font-weight: 500; color: #5A6575">Aluno</span><span style="font-weight: 700">[Aluno 1]</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="font-weight: 500; color: #5A6575">Escola</span><span style="font-weight: 700">[Escola] · [5º ano]</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="font-weight: 500; color: #5A6575">Papelaria</span><span style="font-weight: 700">[Papelaria A]</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="font-weight: 500; color: #5A6575">Entrega</span><span style="font-weight: 700">[data] · [período]</span></div>
+</div>
+<div style="width: 100%; display: flex; justify-content: space-between; align-items: baseline; padding-top: 16px; border-top: 1px solid #E6E2D8"><span style="font-size: 16px; font-weight: 800">Total</span><span style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em">R$ [PREÇO]</span></div>
+</div>
+<div style="flex-grow: 1"></div>
+<button style="height: 56px; border: none; border-radius: 999px; background: #0F1B2D; color: #F5F2EA; font-family: inherit; font-size: 16px; font-weight: 800">Voltar ao início</button>
+<button style="height: 54px; border: 1.5px solid #0F1B2D; border-radius: 999px; background: transparent; color: #0F1B2D; font-family: inherit; font-size: 15px; font-weight: 700">Acompanhar no WhatsApp</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

@@ -7,3 +7,5 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: toda mudança, inclusive CLAUDE.md e docs, segue branch → PR → revisão → merge; nunca push em main — pedido explícito do humano — custo: baixo, basta editar o CLAUDE.md.
 - Ruling: worktrees ficam em ../listaescolar-wt/SNN (fora do repo) — evita risco de commitar a árvore e dispensa .gitignore — custo baixo: mover pastas.
 Ruling: Next 16 reescreve bloco nextjs-agent-rules no CLAUDE.md a cada dev/build/typegen — reverter com git checkout CLAUDE.md antes de commitar e conferir git status — custo: um commit acidental de bloco extra no CLAUDE.md
+- Ruling: cada trilha paralela usa project_id e bloco de portas próprios do Supabase local (config.toml) — evita db:reset de uma trilha apagar o banco da outra — custo: ajuste de portas.
+- Ruling: CI dispara em push só na main e em PRs para main — evita execução dupla por PR — custo: branch sem PR não roda CI.

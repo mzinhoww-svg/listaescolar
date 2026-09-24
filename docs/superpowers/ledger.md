@@ -6,3 +6,4 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: regra "Autonomia" gravada no CLAUDE.md, com prioridade sobre "pare e aponte ao humano" — pedido explícito do humano para valer entre sessões — custo: baixo, basta editar o CLAUDE.md.
 - Ruling: toda mudança, inclusive CLAUDE.md e docs, segue branch → PR → revisão → merge; nunca push em main — pedido explícito do humano — custo: baixo, basta editar o CLAUDE.md.
 - Ruling: worktrees ficam em ../listaescolar-wt/SNN (fora do repo) — evita risco de commitar a árvore e dispensa .gitignore — custo baixo: mover pastas.
+Ruling: Next 16 reescreve bloco nextjs-agent-rules no CLAUDE.md a cada dev/build/typegen — reverter com git checkout CLAUDE.md antes de commitar e conferir git status — custo: um commit acidental de bloco extra no CLAUDE.md

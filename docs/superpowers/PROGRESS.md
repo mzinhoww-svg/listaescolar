@@ -10,6 +10,7 @@
 
 ## Bloqueios / pendências do humano
 - Produção: projeto Supabase de produção ainda não existe (só o humano cria). Necessário apenas na S20.
+- Preview da Vercel protegido: o agente não consegue abrir o preview no agent-browser. Ação do humano: liberar acesso (Trusted Sources/bypass) ou desativar a proteção só de Previews. Até lá o E2E roda no build local (Ruling no ledger).
 - Credenciais: Pix, afiliados (MELI/Amazon), VAPID de produção, chave de produção do OpenRouter.
 
 ## Notas operacionais

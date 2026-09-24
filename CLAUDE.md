@@ -60,5 +60,8 @@ Todas as decisões são do Claude: produto, UX, arquitetura, banco, bibliotecas,
 
 Mesmo nesses casos: deixar tudo pronto, registrar em `docs/superpowers/PROGRESS.md` o que falta e continuar as outras fatias em paralelo, sem ficar parado.
 
+### Fluxo de mudança (vale também para docs e para este arquivo)
+Toda mudança, inclusive no CLAUDE.md, segue: branch, commit, PR, revisão e só então merge (squash). Nunca push direto na `main`, nunca force push. Sem revisão registrada no PR, não há merge.
+
 ## Ambiente (ADR-003)
 O projeto Supabase `ListaEscolar` (ref hojbnqkwzsicahzgshne) é o **staging**. Migrations podem ser aplicadas nele. O projeto de **produção** ainda não existe e só o humano o cria (ver PROGRESS.md). Isto substitui `docs/decisions/0001-sem-staging.md`.

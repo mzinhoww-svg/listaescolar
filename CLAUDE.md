@@ -8,7 +8,7 @@ ListaCerta: plataforma neutra de listas oficiais de material escolar. Não vende
 ## Documentos do repositório
 - `docs/SPEC.md`: spec do produto (estados, modelo de dados, fluxos, critérios de pronto).
 - `docs/PLAN.md`: plano de fatias S00 a S20, com prompt, aceite e teste de cada uma.
-- `docs/decisions/`: ADRs. ADR-001 é definitivo. ADRs com status "proposta" não valem até o humano aprovar.
+- `docs/decisions/`: ADRs. ADR-001 é definitivo; ADR-003 aceito. ADRs com status "proposta" não valem até o humano aprovar.
 - `docs/brand/`: tokens.json, guia de marca, logos (SVG e PNG) e pranchas da marca. Use estes arquivos no layout; não redesenhe o logo.
 - `docs/SPEC-2-cobranca-b2b.md`: regras de cobrança da papelaria, conversão, contestação e portal B2B.
 - `docs/design/`: 82 telas em PNG e HTML de referência, com o mapa por fatia em `SCREENS.md`. Toda UI segue essas telas.
@@ -22,7 +22,7 @@ ListaCerta: plataforma neutra de listas oficiais de material escolar. Não vende
 
 ## Decisões definitivas (não reabrir)
 - Arquitetura A: Next.js App Router + Supabase (Postgres, Auth, Storage, Edge Functions, Queues) + Vercel.
-- Repositório novo, Supabase do zero, projetos `staging` e `production`.
+- Repositório novo, Supabase do zero, projetos `staging` e `production` (hoje só o staging existe; ver ADR-003).
 - Marca ListaCerta. Tokens: Tinta #0F1B2D, Papel #F5F2EA, Verde Certo #2FCB86, Verde Fundo #0B6B4A, fonte Plus Jakarta Sans.
 
 ## Regras de código
@@ -65,3 +65,4 @@ Toda mudança, inclusive no CLAUDE.md, segue: branch, commit, PR, revisão e só
 
 ## Ambiente (ADR-003)
 O projeto Supabase `ListaEscolar` (ref hojbnqkwzsicahzgshne) é o **staging**. Migrations podem ser aplicadas nele. O projeto de **produção** ainda não existe e só o humano o cria (ver PROGRESS.md). Isto substitui `docs/decisions/0001-sem-staging.md`.
+`supabase db push`/`link` remoto só vale para o ref de staging. Nunca linkar nem aplicar nada em outro ref (produção) sem o humano. O paralelismo entre fatias, quando uma fatia fica bloqueada por uma das exceções acima, é a única exceção a "uma fatia por vez" fora das trilhas do PLAN.

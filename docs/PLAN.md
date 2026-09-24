@@ -19,7 +19,7 @@
 
 ## Pré-requisitos do responsável (uma vez)
 - Criar o repositório GitHub vazio e conectar à Vercel.
-- Criar dois projetos no Supabase (staging e produção).
+- Supabase: o projeto ListaEscolar é o staging (ADR-003). O projeto de produção é criado pelo humano antes da S20.
 - Guardar as chaves nos envs da Vercel e no `.env.local`.
 - Separar o CSV oficial do INEP.
 - Definir a chave do OpenRouter e os modelos em `AI_MODEL_*`.

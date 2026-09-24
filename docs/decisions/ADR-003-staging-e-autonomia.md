@@ -11,5 +11,9 @@ Data: 24/09/2026 · Status: aceita (decisão do humano) · Substitui `0001-sem-s
 ## Regra de autonomia
 Todas as decisões técnicas e de produto são do Claude, registradas como Ruling no ledger. Exceções: produção, credenciais que só o humano tem, gasto de dinheiro. Ver seção "Autonomia" do CLAUDE.md.
 
+## Guarda-corpo
+- `supabase link`/`db push` remoto só no ref de staging. O ref de produção nunca é linkado por agente.
+- Docker via Colima e `pnpm db:reset` são a intenção de dev local (o script nasce na S00).
+
 ## Consequências
 - SPEC e CLAUDE.md, que falam em `staging` e `production`, passam a ser consistentes com o ambiente real.

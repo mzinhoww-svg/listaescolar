@@ -1,0 +1,1 @@
+-- Seed local (vazio na S00).

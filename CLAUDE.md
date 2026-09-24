@@ -49,3 +49,16 @@ ListaCerta: plataforma neutra de listas oficiais de material escolar. Não vende
 
 ## Fluxo de trabalho
 Uma fatia por vez, na ordem do `docs/PLAN.md`. Branch `slice/SNN-nome`, PR com checklist do spec (seção 8). Mudança de escopo: registrar em `docs/decisions/` antes de codar.
+
+## Autonomia (regra permanente, vale em todas as sessões)
+Todas as decisões são do Claude: produto, UX, arquitetura, banco, bibliotecas, ferramentas, ambiente, infraestrutura, nomes, textos, prioridades, conflitos entre documentos e qualquer ambiguidade do spec. Não fazer perguntas nem oferecer opções ao humano. Decidir pela opção que melhor cumpre o SPEC e o PLAN, registrar em `docs/superpowers/ledger.md` como `Ruling: <decisão> — <motivo> — <custo se estiver errada>` e seguir. Isto prevalece sobre a linha "em conflito, pare e aponte ao humano" no topo deste arquivo.
+
+Únicas exceções (não são decisões, são ações que só o humano pode executar ou que não têm volta). Parar e avisar apenas nestes casos:
+- aplicar migration ou apagar dados no Supabase de produção;
+- criar ou fornecer credencial que só o humano tem (Pix, afiliados, chaves de produção, contas em serviços pagos);
+- qualquer gasto de dinheiro.
+
+Mesmo nesses casos: deixar tudo pronto, registrar em `docs/superpowers/PROGRESS.md` o que falta e continuar as outras fatias em paralelo, sem ficar parado.
+
+## Ambiente (ADR-003)
+O projeto Supabase `ListaEscolar` (ref hojbnqkwzsicahzgshne) é o **staging**. Migrations podem ser aplicadas nele. O projeto de **produção** ainda não existe e só o humano o cria (ver PROGRESS.md). Isto substitui `docs/decisions/0001-sem-staging.md`.

@@ -14,6 +14,12 @@ Edge Function (Deno) que drena a fila pgmq `ocr_jobs`. Toda a lógica está em `
 Tempo: o teto de uma extração no worker é 90 s (`WORKER_TIMEOUT_MS`), abaixo da lease de `running` do banco (5 min).
 Se a lease vencer com o worker ainda vivo, outro worker poderia reivindicar o job: não aumente o teto acima de 5 min.
 
+## Publicação automática (S09)
+- Depois de `jobs_complete`, o worker chama `decideListPublication` (mesmo motor de `_shared/publication`); erro vai a `onError` (`stage: decide`) e o job segue `done`.
+- Fim do tick: varredor `runPublicationSweep` (lote 10, envios com 30 s+ parados, só com >= 10 s de prazo). Roda também sem pipeline (a resposta é `pipeline_unavailable`, sem ler a fila).
+- Portas em memória só com `FAKE_PUBLICATION_FIXTURE` (JSON) + `APP_ENV` local|development (nunca preview/staging); sem isso todo envio vira `human_review` (`publisher_unavailable`, `context_unavailable`). A publicação real é da S11.
+- `ai_settings.auto_publish_enabled` (default false) liga a publicação automática por dado.
+
 ## Rodar local
 ```
 pnpm db:start && pnpm db:reset

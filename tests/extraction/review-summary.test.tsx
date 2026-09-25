@@ -48,3 +48,16 @@ describe("ReviewSummary com confiança baixa (S08)", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+describe("ReviewSummary: aviso de revisão não duplica o estado de publicação", () => {
+  const REVIEW = "Sua lista passa por revisão antes de aparecer para outras famílias.";
+  it("human_review com estado: mostra só o estado, sem o aviso duplicado", () => {
+    render(<ReviewSummary isDemo={false} status="human_review" result={{ ...base, warnings: [] }} />);
+    expect(screen.getByTestId("publication-state")).toBeTruthy();
+    expect(screen.queryByText(REVIEW)).toBeNull();
+  });
+  it("sem estado de publicação: o aviso continua", () => {
+    render(<ReviewSummary isDemo={false} result={{ ...base, warnings: [] }} />);
+    expect(screen.getByText(REVIEW)).toBeTruthy();
+  });
+});

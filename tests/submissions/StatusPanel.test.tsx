@@ -91,4 +91,27 @@ describe("StatusPanel", () => {
     expect(screen.getByText("Não conseguimos atualizar o andamento")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
+
+  it.each([
+    ["human_review", "Em revisão pela equipe"],
+    ["approved", "Aprovada, aguardando publicação"],
+    ["published", "Publicada automaticamente"],
+  ])("estado %s mostra o texto fixo, sem prazo", (status, title) => {
+    render(<StatusPanel submissionId={ID} initial={{ ...base, status, jobStatus: "succeeded", result }} />);
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.getByTestId("publication-state").textContent).not.toMatch(/\d/);
+  });
+
+  it("publicada pela porta em memória: selo Demonstração; sem isso, sem selo", () => {
+    const { unmount } = render(<StatusPanel submissionId={ID} initial={{ ...base, status: "published", result, publicationDemo: true }} />);
+    expect(screen.getByText("Demonstração")).toBeInTheDocument();
+    unmount();
+    render(<StatusPanel submissionId={ID} initial={{ ...base, status: "published", result }} />);
+    expect(screen.queryByText("Demonstração")).toBeNull();
+  });
+
+  it("review_needed não mostra o bloco de decisão", () => {
+    render(<StatusPanel submissionId={ID} initial={{ ...base, status: "review_needed", result }} />);
+    expect(screen.queryByTestId("publication-state")).toBeNull();
+  });
 });

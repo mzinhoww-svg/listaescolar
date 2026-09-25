@@ -61,6 +61,7 @@ describe("GET /api/submissions/[id]/status", () => {
       notifyChannel: "none",
       isDemo: true,
       pipelineAvailable: true,
+      publicationDemo: false,
     });
   });
 

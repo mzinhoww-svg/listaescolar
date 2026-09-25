@@ -68,6 +68,11 @@ export interface JobQueue {
   enqueue(submissionId: string): Promise<{ jobId: string }>;
 }
 
+/** Decisão de publicação automática (S09), ligada por `features/submissions/deps.ts`. Opcional: sem ela, nada muda. */
+export interface PublicationDecider {
+  decide(submissionId: string): Promise<{ status: string }>;
+}
+
 export type SubmitDeps = {
   /** `null`: nenhum pipeline configurado; grava, enfileira e a tela informa indisponibilidade. */
   pipeline: ExtractionPipeline | null;
@@ -75,9 +80,17 @@ export type SubmitDeps = {
   queue: JobQueue;
   clock: Clock;
   budgetMs?: number;
+  /** Chamada depois de `recordSyncResult`, com teto de 3 s e erro engolido; o varredor cobre o que falhar. */
+  publication?: PublicationDecider;
 };
 
 export type SubmitResult =
-  | { status: "review_needed"; submissionId: string; result: ExtractionResult }
+  | {
+      status: "review_needed";
+      submissionId: string;
+      result: ExtractionResult;
+      /** Só quando a decisão de publicação respondeu dentro do teto (S09). */
+      publication?: { status: string };
+    }
   | { status: "processing_async"; submissionId: string; jobId: string; pipelineAvailable: boolean }
   | { status: "failed"; submissionId: string; reason: string };

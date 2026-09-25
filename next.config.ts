@@ -1,6 +1,8 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
+import { robotsHeaders } from "./lib/robots-header";
+
 const dsn = process.env.SENTRY_DSN;
 
 const baseConfig: NextConfig = {
@@ -8,6 +10,10 @@ const baseConfig: NextConfig = {
   // Vale para o envio de lista (S07), o CSV do INEP (S03) e a planilha de catálogo (S13, até 2 MB).
   // Maiores: `pnpm import:inep`.
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
+  // Previews e qualquer ambiente fora da produção da Vercel nunca são indexados (X-Robots-Tag: noindex).
+  async headers() {
+    return robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV });
+  },
   ...(dsn ? { env: { NEXT_PUBLIC_SENTRY_DSN: dsn } } : {}),
 };
 

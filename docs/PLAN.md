@@ -249,6 +249,8 @@
 
 **Aceite (go-live):** `docs/superpowers/DEBT.md` sem itens de severidade alta abertos, ou cada um com Ruling explícito no `docs/superpowers/ledger.md`.
 
+**Checklist de go-live (obrigatório em `docs/GO-LIVE.md`):** reativar a proteção dos previews da Vercel (Vercel Authentication ou equivalente) ANTES de entrar qualquer dado real (D-074): hoje os previews são públicos, apontam para o staging e só têm `X-Robots-Tag: noindex`.
+
 ## Ordem de execução (escopo completo, ADR-002 rejeitado)
 1. S00, S01, S02.
 2. Em paralelo: [S03, S04, S05, S06], [S07, S08, S09, S10] e [S12, S13, S14].

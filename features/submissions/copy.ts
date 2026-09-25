@@ -59,17 +59,29 @@ export const ACCEPT_ATTR = "application/pdf,image/jpeg,image/png,image/webp,imag
  * Estado da decisão de publicação (S09). Só o estado: nenhum prazo, contagem ou motivo em texto livre
  * (os códigos de motivo ficam em `ai_decisions`, para a equipe; a S10 os mostra ao admin).
  */
-export const PUBLICATION_STATE_COPY: Record<"human_review" | "approved" | "published", { title: string; body: string }> = {
+export const PUBLICATION_STATE_COPY: Record<"human_review" | "approved" | "published" | "published_auto" | "rejected", { title: string; body: string }> = {
   human_review: {
     title: "Em revisão pela equipe",
     body: "A equipe confere a lista antes de ela aparecer para outras famílias.",
   },
   approved: {
-    title: "Aprovada, aguardando publicação",
+    title: "Aprovada pela equipe; publicação em andamento",
     body: "A lista foi aprovada e a publicação ainda não terminou.",
   },
+  // Neutro: vale para publicação humana e para quando não se sabe quem publicou (D-071).
   published: {
+    title: "Lista publicada",
+    body: "A lista foi publicada.",
+  },
+  // Só quando a linha `publication:published` prova que foi automática.
+  published_auto: {
     title: "Publicada automaticamente",
     body: "A lista passou pelas verificações e foi publicada.",
   },
+  rejected: {
+    title: "Lista não publicada",
+    body: "A equipe não publicou esta lista como oficial.",
+  },
 };
+
+export const REJECTED_COPY_HINT = "Você ainda pode usar sua cópia para montar o carrinho.";

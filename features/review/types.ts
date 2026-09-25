@@ -49,7 +49,7 @@ export interface ReviewStore {
     actorId: string,
     result: { newVersionId: string; previousVersionId: string | null; listId: string | null },
   ): Promise<"completed" | "already_completed" | "not_approved" | "orphaned">;
-  failPublish(submissionId: string, actorId: string, reason: string): Promise<"failed" | "not_approved">;
+  failPublish(submissionId: string, actorId: string, reason: string): Promise<"failed" | "not_approved" | "busy">;
 }
 
 export type ReviewOutcome =

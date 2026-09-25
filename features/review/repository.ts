@@ -29,6 +29,7 @@ const versionRow = z.object({
 const VERSION_COLUMNS = "id, version, grade, school_year, items, origin, created_at, actor_id";
 const toVersion = (r: z.infer<typeof versionRow>): ReviewVersion => ({ id: r.id, version: r.version, grade: r.grade, schoolYear: r.school_year, items: r.items, origin: r.origin, createdAt: r.created_at });
 
+const subRow = z.object({ status: z.string(), source: z.enum(["parent", "school"]), school_id: uuid.nullable(), submitted_by: uuid, is_demo: z.boolean() });
 const saveOut = z.union([
   z.object({ state: z.literal("saved"), version: z.number().int(), versionId: uuid }),
   z.object({ state: z.literal("stale"), version: z.number().int(), versionId: uuid }),
@@ -84,9 +85,7 @@ export function createReviewRepository(client: SupabaseClient) {
       return rpc("review_reject", { p_submission_id: id, p_actor_id: actorId, p_expected_version: expected, p_reason: reason }, z.enum(["rejected", "stale", "not_reviewable"]));
     },
     async loadContext(id) {
-      const s = await one(
-        client.from("list_submissions").select("status, source, school_id, submitted_by, is_demo").eq("id", id).maybeSingle() as unknown as PromiseLike<{ data: { status: string; source: "parent" | "school"; school_id: string | null; submitted_by: string; is_demo: boolean } | null; error: PgError }>,
-      );
+      const s = await one(client.from("list_submissions").select("status, source, school_id, submitted_by, is_demo").eq("id", id).maybeSingle() as PromiseLike<{ data: unknown; error: PgError }>).then((raw) => (raw === null ? null : subRow.parse(raw)));
       const v = s ? await latestVersion(id) : null;
       if (!s || !v) return null;
       const ctx: ReviewContext = {
@@ -110,7 +109,7 @@ export function createReviewRepository(client: SupabaseClient) {
     },
     completePublish: (id, actorId, r) =>
       rpc("review_complete_publish", { p_submission_id: id, p_actor_id: actorId, p_result: { newVersionId: r.newVersionId, previousVersionId: r.previousVersionId, listId: r.listId } }, z.enum(["completed", "already_completed", "not_approved", "orphaned"])),
-    failPublish: (id, actorId, reason) => rpc("review_publish_fail", { p_submission_id: id, p_actor_id: actorId, p_reason: reason }, z.enum(["failed", "not_approved"])),
+    failPublish: (id, actorId, reason) => rpc("review_publish_fail", { p_submission_id: id, p_actor_id: actorId, p_reason: reason }, z.enum(["failed", "not_approved", "busy"])),
   };
   return { store, latestVersion, resultOf, client };
 }

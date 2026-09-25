@@ -107,6 +107,44 @@ describe("revisão ponta a ponta contra o banco local (porta em memória)", () =
     await expect(repo.store.open(id, IDS.parent)).rejects.toMatchObject({ code: "forbidden" });
   });
 
+  it("abas Aprovadas/Recusadas filtram no banco: a aprovada aparece mesmo com mais de 300 envios antigos publicados automaticamente", async () => {
+    const id = await commit({ grade: "4º ano", year: 2027 });
+    const repo = createReviewRepository(service);
+    const svc = createReviewService({ store: repo.store, publication: memoryPublication().deps });
+    const admin = await actorOf(IDS.admin, "admin");
+    await svc.open(admin, id);
+    await svc.save(admin, id, { expectedVersion: 1, grade: "4º ano", schoolYear: 2027, items: [{ name: "Caderno", quantity: 2, unit: "un", category: "papelaria", confidence: 0.9, alerts: [], origin: "extracted" }] });
+    expect(await svc.approve(admin, id, { expectedVersion: 2, acknowledged: true })).toEqual({ status: "approved" });
+    const cedo = await withSuperuser(async (c) => {
+      const ids: string[] = [];
+      for (let i = 0; i < 305; i++) ids.push(await seedSubmission(c, { schoolId: SCHOOL, status: "published" }));
+      return ids;
+    });
+    created.push(...cedo);
+    await withSuperuser(async (c) => {
+      await c.query("update public.list_submissions set created_at = now() - interval '30 days' where id = any($1::uuid[])", [cedo]);
+    });
+    expect((await listQueue(repo, "approved")).find((r) => r.id === id)?.state).toBe("awaiting_publication");
+  });
+
+  it("fila: itemCount vem do resultado MAIS RECENTE e o motivo da falha de publicação aparece em Pendentes", async () => {
+    const id = await commit({ grade: "4º ano", year: 2027 });
+    await withSuperuser(async (c) => {
+      const job = await c.query<{ id: string }>("insert into public.jobs (kind, payload, idempotency_key, submission_id) values ('ocr_jobs', '{}'::jsonb, $1, $2) returning id", [`k2-${id}`, id]);
+      const three = { items: [1, 2, 3].map((n) => ({ name: `Item ${n}`, quantity: n, unit: null, confidence: 0.9 })), overallConfidence: 0.9, warnings: [] };
+      await c.query("insert into public.ocr_jobs (job_id, submission_id, result, created_at) values ($1, $2, $3::jsonb, now() + interval '1 minute')", [job.rows[0]!.id, id, JSON.stringify(three)]);
+    });
+    const repo = createReviewRepository(service);
+    const svc = createReviewService({ store: repo.store, publication: memoryPublication().deps });
+    const admin = await actorOf(IDS.admin, "admin");
+    await svc.open(admin, id);
+    expect((await listQueue(repo, "pending")).find((r) => r.id === id)?.itemCount).toBe(3);
+    await svc.save(admin, id, { expectedVersion: 1, grade: "4º ano", schoolYear: 2027, items: [{ name: "Caderno", quantity: 2, unit: "un", category: "papelaria", confidence: 0.9, alerts: [], origin: "extracted" }] });
+    await svc.approve(admin, id, { expectedVersion: 2, acknowledged: true });
+    expect(await repo.store.failPublish(id, IDS.admin, "list_archived")).toBe("failed");
+    expect((await listQueue(repo, "pending")).find((r) => r.id === id)?.reasons).toContain("list_archived");
+  });
+
   it("D-071: publicada pela automática mostra publishedBy auto (linha publication:published), não só o status", async () => {
     const id = await commit({ status: "published" });
     await withSuperuser((c) =>

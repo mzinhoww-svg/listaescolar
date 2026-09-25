@@ -121,14 +121,20 @@ describe("0204: review_open", () => {
     });
   });
 
-  it("usa o resultado mais recente; sem resultado, resultado inválido ou estado não revisável -> P0002", async () => {
+  it("usa o resultado mais recente; estado não revisável ou envio inexistente -> P0002 (resultado ausente/inválido cria a versão 1 vazia)", async () => {
     await tx(async (c) => {
       const semResultado = await seedSubmission(c, { result: null });
       const invalido = await seedSubmission(c, { result: { items: [{ name: "  ", quantity: 1, unit: null, confidence: 0.5 }], overallConfidence: 0.5, warnings: [] } });
       const cedo = await seedSubmission(c, { status: "review_needed" });
       const ok = await seedSubmission(c, { status: "approved" });
       await asService(c);
-      for (const id of [semResultado, invalido, cedo]) expect((await open(c, id)).code).toBe("P0002");
+      expect((await open(c, cedo)).code).toBe("P0002");
+      for (const id of [semResultado, invalido]) {
+        expect((await open(c, id)).error).toBeNull();
+        await asSuper(c);
+        expect((await c.query("select version, items, origin from public.review_versions where submission_id = $1", [id])).rows).toEqual([{ version: 1, items: [], origin: "extraction" }]);
+        await asService(c);
+      }
       expect((await open(c, ok)).error).toBeNull();
       expect((await open(c, randomUUID())).code).toBe("P0002");
     });

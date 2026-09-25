@@ -3,7 +3,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { attempt, cleanupUsers, DATABASE_URL, IDS, seedUsers, withSuperuser } from "./helpers";
 import {
-  approve, asService, asSuper, begin, complete, failPublish, item, open, reject, purgeSubmissions, reviewRows, rpc, save, seedSubmission, statusOf, tx,
+  approve, asService, asSuper, begin, complete, failPublish, item, open, reject, purgeSubmissions, release, reviewRows, rpc, save, seedSubmission, statusOf, tx,
 } from "./review-fixtures";
 
 const GOOD = [item({ name: "Caderno", quantity: 2 }), item({ name: "Lápis", quantity: 12, category: "escrita" })];
@@ -252,6 +252,8 @@ describe("0204: publicação humana (begin/complete/fail)", () => {
       const id = await approved(c);
       await begin(c, id);
       expect((await failPublish(c, id, "Bad Code")).code).toBe("22023");
+      expect((await failPublish(c, id, "list_archived")).rows[0]!.r).toBe("busy"); // lease ativa: chamada à porta em voo
+      await release(c, id);
       expect((await failPublish(c, id, "list_archived")).rows[0]!.r).toBe("failed");
       expect(await statusOf(c, id)).toBe("human_review");
       expect((await failPublish(c, id, "list_archived")).rows[0]!.r).toBe("not_approved");
@@ -296,8 +298,8 @@ describe("0204: publicação humana (begin/complete/fail)", () => {
         for (const role of /review_items_valid/.test(f.sig) ? ["anon"] : ["anon", "authenticated"]) {
           expect((await c.query("select has_function_privilege($1, $2::regprocedure, 'execute') as ok", [role, f.sig])).rows[0].ok, `${role} ${f.sig}`).toBe(false);
         }
-        if (!/review_items_valid/.test(f.sig)) expect((await c.query("select has_function_privilege('service_role', $1::regprocedure, 'execute') as ok", [f.sig])).rows[0].ok, f.sig).toBe(/(review_items_from_result|review_assert_admin|review_last_decision)/.test(f.sig) ? false : true);
-        if (!/review_items_valid|review_items_from_result/.test(f.sig)) {
+        if (!/review_items_valid/.test(f.sig)) expect((await c.query("select has_function_privilege('service_role', $1::regprocedure, 'execute') as ok", [f.sig])).rows[0].ok, f.sig).toBe(/(review_items_from_result|review_assert_admin|review_last_decision|review_has_critical_alert)/.test(f.sig) ? false : true);
+        if (!/review_items_valid|review_items_from_result|review_has_critical_alert/.test(f.sig)) {
           expect(f.prosecdef, f.sig).toBe(true);
           expect(String(f.proconfig)).toContain("search_path=");
         }
@@ -383,7 +385,7 @@ describe("0204: corrida real entre dois admins (duas conexões)", () => {
     try {
       await withSuperuser(async (c) => {
         await c.query("select public.review_save_version($1::uuid, $2::uuid, 1, $3::jsonb)", [id, IDS.admin, JSON.stringify(payload())]);
-        await c.query("select public.review_approve($1::uuid, $2::uuid, 2, '[]'::jsonb)", [id, IDS.admin]);
+        await c.query("select public.review_approve($1::uuid, $2::uuid, 2, '[\"critical_alerts_acknowledged\"]'::jsonb)", [id, IDS.admin]);
       });
       const out = await twoClients((a, b) => Promise.all([once(a, () => begin(a, id)), once(b, () => begin(b, id))]));
       const s = out.map((o) => (o.rows[0]?.r as { state: string }).state).sort();

@@ -98,13 +98,16 @@ export const rpc = (c: Client, fn: string, sig: string, args: unknown[]) =>
 export const open = (c: Client, sub: string, actor: string = IDS.admin) => rpc(c, "review_open", "$1::uuid, $2::uuid", [sub, actor]);
 export const save = (c: Client, sub: string, expected: number, payload: unknown, actor: string = IDS.admin) =>
   rpc(c, "review_save_version", "$1::uuid, $2::uuid, $3::int, $4::jsonb", [sub, actor, expected, JSON.stringify(payload)]);
-export const approve = (c: Client, sub: string, expected: number, reasons: string[] = [], actor: string = IDS.admin) =>
+/** Padrão: a RESULT semeada tem alerta crítico (handwritten está na configuração padrão), então o padrão confirma. */
+export const ACK = ["critical_alerts_acknowledged"];
+export const approve = (c: Client, sub: string, expected: number, reasons: string[] = ACK, actor: string = IDS.admin) =>
   rpc(c, "review_approve", "$1::uuid, $2::uuid, $3::int, $4::jsonb", [sub, actor, expected, JSON.stringify(reasons)]);
 export const reject = (c: Client, sub: string, expected: number, reason = "illegible_document", actor: string = IDS.admin) =>
   rpc(c, "review_reject", "$1::uuid, $2::uuid, $3::int, $4::text", [sub, actor, expected, reason]);
 export const begin = (c: Client, sub: string, actor: string = IDS.admin) => rpc(c, "review_begin_publish", "$1::uuid, $2::uuid, 120", [sub, actor]);
 export const complete = (c: Client, sub: string, result: unknown, actor: string = IDS.admin) =>
   rpc(c, "review_complete_publish", "$1::uuid, $2::uuid, $3::jsonb", [sub, actor, JSON.stringify(result)]);
+export const release = (c: Client, sub: string, actor: string = IDS.admin) => rpc(c, "review_release_publish", "$1::uuid, $2::uuid", [sub, actor]);
 export const failPublish = (c: Client, sub: string, reason: string, actor: string = IDS.admin) =>
   rpc(c, "review_publish_fail", "$1::uuid, $2::uuid, $3::text", [sub, actor, reason]);
 

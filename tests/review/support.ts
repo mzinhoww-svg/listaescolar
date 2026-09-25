@@ -24,7 +24,7 @@ export const FIXTURE = JSON.stringify({
 export type Calls = { name: string; args: unknown[] }[];
 
 /** Store falso: registra chamadas; estado do envio scriptável. */
-export function fakeStore(over: { ctx?: Partial<ReviewContext> | null; begin?: BeginOutcome; save?: SaveOutcome; approve?: "approved" | "stale" | "not_reviewable"; complete?: "completed" | "already_completed" | "not_approved" | "orphaned" } = {}) {
+export function fakeStore(over: { ctx?: Partial<ReviewContext> | null; fail?: "failed" | "not_approved" | "busy"; begin?: BeginOutcome; save?: SaveOutcome; approve?: "approved" | "stale" | "not_reviewable"; complete?: "completed" | "already_completed" | "not_approved" | "orphaned" } = {}) {
   const calls: Calls = [];
   const rec = <T,>(name: string, value: T) => (...args: unknown[]): Promise<T> => {
     calls.push({ name, args });
@@ -49,7 +49,7 @@ export function fakeStore(over: { ctx?: Partial<ReviewContext> | null; begin?: B
     beginPublish: rec("beginPublish", over.begin ?? ({ state: "leased", approvedVersionId: V2 } as BeginOutcome)),
     releasePublish: rec("releasePublish", undefined),
     completePublish: rec("completePublish", over.complete ?? "completed"),
-    failPublish: rec("failPublish", "failed" as const),
+    failPublish: rec("failPublish", over.fail ?? ("failed" as const)),
   } as ReviewStore;
   return { store, calls, names: () => calls.map((c) => c.name) };
 }

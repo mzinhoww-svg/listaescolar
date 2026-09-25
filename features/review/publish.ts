@@ -23,7 +23,7 @@ export const HUMAN_PUBLISH_LEASE_SECONDS = 120;
 export const HUMAN_PUBLISH_TIMEOUT_MS = 45_000;
 const CODE = /^[a-z][a-z0-9_]{0,59}$/;
 
-/** Itens da versão aprovada para a porta; `null` se algum item não estiver completo. Item da equipe = confiança 1 ("conferido"). */
+/** Itens da versão aprovada para a porta; `null` se algum item não estiver completo. Confiança nunca é inventada: item revisado/sem número vai com `null` e `origin: 'reviewed'`. */
 export function toPublishItems(v: ReviewVersion): PublishItem[] | null {
   const out: PublishItem[] = [];
   for (const [i, it] of v.items.entries()) {
@@ -35,7 +35,8 @@ export function toPublishItems(v: ReviewVersion): PublishItem[] | null {
       category: it.category,
       quantity: it.quantity,
       unit: it.unit,
-      confidence: it.origin === "extracted" ? (it.confidence ?? 1) : 1,
+      confidence: it.origin === "extracted" ? it.confidence : null,
+      origin: it.origin === "extracted" ? "extracted" : "reviewed",
     });
   }
   return out.length > 0 ? out : null;
@@ -90,18 +91,18 @@ export async function publishApproved(o: {
     if (!known || known.transient) return { status: "publish_pending" };
     pctx = null;
   }
-  const blockers = publicationBlockers({ schoolId: ctx.submission.schoolId, grade: ctx.version.grade, schoolYear: ctx.version.schoolYear, items: ctx.version.items }, pctx);
-  if (blockers.length > 0 || !pctx?.gradeSlug || ctx.submission.schoolId === null || ctx.version.schoolYear === null) {
-    const code = blockers[0] ?? "context_unavailable";
-    return fail(store, actorId, id, code);
-  }
-
   const lease = await store.beginPublish(id, actorId, HUMAN_PUBLISH_LEASE_SECONDS);
   if (lease.state === "busy") return { status: "publish_pending" };
   if (lease.state === "orphaned") return { status: "orphaned" };
   if (lease.state === "not_approved") return { status: "not_reviewable" };
   if (lease.state === "already_completed") return { status: "published", listId: null, previousVersionId: null, newVersionId: null };
   if (!lease.approvedVersionId) return { status: "not_reviewable" };
+
+  // Bloqueio de contexto só DEPOIS de ter a lease: falhar o envio com a chamada de outro admin em voo deixaria a publicação sem trilha.
+  const blockers = publicationBlockers({ schoolId: ctx.submission.schoolId, grade: ctx.version.grade, schoolYear: ctx.version.schoolYear, items: ctx.version.items }, pctx);
+  if (blockers.length > 0 || !pctx?.gradeSlug || ctx.submission.schoolId === null || ctx.version.schoolYear === null) {
+    return fail(store, actorId, id, blockers[0] ?? "context_unavailable");
+  }
 
   const approved = await store.loadVersion(id, lease.approvedVersionId);
   const items = approved ? toPublishItems(approved) : null;
@@ -151,7 +152,10 @@ export async function publishApproved(o: {
   return { status: "published", listId: result.listId, previousVersionId: result.previousVersionId, newVersionId: result.newVersionId };
 }
 
+/** Falha permanente: quem tem a lease a solta antes (falhar com lease ativa devolve `busy`, e aí a chamada é de outro admin). */
 async function fail(store: ReviewStore, actorId: string, id: string, code: string): Promise<PublishOutcome> {
+  await store.releasePublish(id, actorId);
   const r = await store.failPublish(id, actorId, code);
+  if (r === "busy") return { status: "publish_pending" };
   return r === "failed" ? { status: "publish_failed", code } : { status: "not_reviewable" };
 }

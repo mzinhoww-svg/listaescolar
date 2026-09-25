@@ -9,6 +9,8 @@ describe("cleanText (D-030)", () => {
     ["5<6", "5<6"],
     ["Cola 2 > 1 unidade", "Cola 2 > 1 unidade"],
     ["< 5 anos", "< 5 anos"],
+    ["Caneta azul<preta", "Caneta azul<preta"],
+    ["Caderno <script", "Caderno <script"],
     ["  Caderno   96  folhas ", "Caderno 96 folhas"],
   ])("preserva %j", (input, expected) => {
     expect(cleanText(input, 300)).toBe(expected);
@@ -19,7 +21,6 @@ describe("cleanText (D-030)", () => {
     ["<img src=x onerror=1>Caderno", "Caderno"],
     ["Lápis </script> preto", "Lápis preto"],
     ["<!-- c -->Régua", "Régua"],
-    ["Caderno <script", "Caderno"],
     ["<br/>", ""],
   ])("remove marcação em %j", (input, expected) => {
     expect(cleanText(input, 300)).toBe(expected);
@@ -27,6 +28,7 @@ describe("cleanText (D-030)", () => {
 
   it("remove controle/bidi e limita o tamanho", () => {
     expect(cleanText("a\u0000b‮c", 300)).toBe("abc");
+    expect(cleanText("Caderno\u2066azul\u2069", 300)).toBe("Cadernoazul"); // isolados bidi: mesmo conjunto do SQL/Zod da revisão
     expect(cleanText("x".repeat(400), 300)).toHaveLength(300);
   });
 });

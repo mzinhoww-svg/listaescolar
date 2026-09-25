@@ -36,7 +36,10 @@ export type PublishItem = {
   category: string;
   quantity: number;
   unit: string | null;
-  confidence: number;
+  /** `null` = sem número da extração (item revisado/adicionado pela equipe): nunca inventar 1; a S11 decide a exibição. */
+  confidence: number | null;
+  /** Aditivo (S10): `reviewed` = conferido/editado/adicionado pela equipe; ausente equivale a `extracted` (publicação automática). */
+  origin?: "extracted" | "reviewed";
 };
 
 export type PublishRequest = {

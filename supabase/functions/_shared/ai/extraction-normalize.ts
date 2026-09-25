@@ -2,7 +2,7 @@
 import { ITEM_CATEGORIES, type ItemCategory } from "../extraction-schema.ts";
 
 export const CONTROL_CHARS = new RegExp(
-  "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\ufeff]",
+  "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u2069\\ufeff]",
   "g",
 );
 
@@ -13,7 +13,7 @@ export const CONTROL_CHARS = new RegExp(
  */
 export function cleanText(input: string, max: number): string {
   return input
-    .replace(/<[A-Za-z/!][^>]*>?/g, " ")
+    .replace(/<[A-Za-z/!][^>]*>/g, " ")
     .replace(CONTROL_CHARS, "")
     .replace(/\s+/g, " ")
     .trim()

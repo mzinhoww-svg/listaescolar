@@ -1,5 +1,5 @@
 -- 0204_human_review: revisão humana (S10, trilha Pipeline). Aditiva.
--- ai_decisions passa a aceitar kind='review' (edited/approved/rejected/published/publish_failed), sempre com actor_id e sem
+-- ai_decisions passa a aceitar kind='review' (edited/approved/rejected/published/publish_failed/publish_orphaned), sempre com actor_id e sem
 -- provedor/modelo/prompt. O CONTEÚDO editado vive em review_versions (append-only) e o da cópia do pai em parent_list_copies;
 -- ai_decisions só recebe códigos, ids e o ator. Toda decisão humana grava sua linha `review` na MESMA transação da transição do
 -- envio, por funções review_* (SECURITY DEFINER, EXECUTE só service_role, papel admin conferido no SQL) sob FOR UPDATE do envio
@@ -43,7 +43,7 @@ begin
         return false;
       end if;
     end loop;
-    if jsonb_typeof(e -> 'name') <> 'string' or length(btrim(e ->> 'name')) not between 1 and 300 or (e ->> 'name') ~ bad then
+    if jsonb_typeof(e -> 'name') <> 'string' or (e ->> 'name') <> btrim(e ->> 'name') or length(e ->> 'name') not between 1 and 300 or (e ->> 'name') ~ bad then
       return false;
     end if;
     q := e -> 'quantity';
@@ -119,7 +119,7 @@ alter table public.ai_decisions
   add constraint ai_decisions_kind_decision_valid check (
     (kind = 'extraction' and decision in ('accepted', 'escalated', 'failed'))
     or (kind = 'publication' and decision in ('auto_publish', 'human_review', 'published', 'publish_failed', 'publish_orphaned'))
-    or (kind = 'review' and decision in ('edited', 'approved', 'rejected', 'published', 'publish_failed'))
+    or (kind = 'review' and decision in ('edited', 'approved', 'rejected', 'published', 'publish_failed', 'publish_orphaned'))
   ),
   add constraint ai_decisions_provider_coupling check (
     (kind = 'extraction' and provider is not null and model is not null and prompt_key is not null and prompt_version is not null)
@@ -285,6 +285,27 @@ begin
 end;
 $$;
 
+-- Há alerta crítico no resultado? Mesma regra de criticalAlertsIn (TS): criticalAlerts não vazio OU alerta do documento/itens
+-- dentro de ai_settings.critical_alerts. Resultado ausente/não objeto = não.
+create function public.review_has_critical_alert(p_result jsonb, p_config text[]) returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(
+    jsonb_typeof(p_result) = 'object' and (
+      (jsonb_typeof(p_result -> 'criticalAlerts') = 'array' and jsonb_array_length(p_result -> 'criticalAlerts') > 0)
+      or exists (
+        select 1 from jsonb_array_elements_text(case when jsonb_typeof(p_result -> 'alerts') = 'array' then p_result -> 'alerts' else '[]'::jsonb end) a
+         where a = any (coalesce(p_config, '{}'::text[])))
+      or exists (
+        select 1
+          from jsonb_array_elements(case when jsonb_typeof(p_result -> 'items') = 'array' then p_result -> 'items' else '[]'::jsonb end) i,
+               jsonb_array_elements_text(case when jsonb_typeof(i.value -> 'alerts') = 'array' then i.value -> 'alerts' else '[]'::jsonb end) a
+         where a = any (coalesce(p_config, '{}'::text[])))
+    ), false);
+$$;
+
 -- Última decisão `review` do envio (a mais recente vale: aprovar de novo depois de um publish_failed).
 create function public.review_last_decision(p_submission_id uuid) returns table (decision text, new_version_id uuid)
 language sql
@@ -293,7 +314,7 @@ security definer
 set search_path = ''
 as $$
   select d.decision, d.new_version_id from public.ai_decisions d
-   where d.kind = 'review' and d.entity_id = p_submission_id and d.decision <> 'edited'
+   where d.kind = 'review' and d.entity_id = p_submission_id and d.decision not in ('edited', 'publish_orphaned')
    order by d.created_at desc, d.id desc limit 1;
 $$;
 
@@ -323,7 +344,8 @@ begin
      order by o.created_at desc, o.id desc limit 1;
     items := public.review_items_from_result(r);
     if items is null then
-      raise exception 'resultado da extração ausente ou inválido' using errcode = 'P0002';
+      -- Resultado ausente/inválido: versão 1 vazia. A aprovação segue bloqueada (no_items); o admin recusa ou digita os itens.
+      items := '[]'::jsonb;
     end if;
     insert into public.review_versions (submission_id, version, grade, school_year, items, origin, actor_id)
     values (p_submission_id, 1, s.grade, s.school_year, items, 'extraction', null)
@@ -358,14 +380,17 @@ begin
   if not (p_payload ? 'items') or not public.review_items_valid(p_payload -> 'items') then
     raise exception 'payload inválido: items' using errcode = '22023';
   end if;
-  if p_payload ? 'grade' and jsonb_typeof(p_payload -> 'grade') not in ('null', 'string') then
+  if not (p_payload ? 'grade') or not (p_payload ? 'school_year') then
+    raise exception 'payload inválido: grade e school_year são obrigatórios (null explícito)' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_payload -> 'grade') not in ('null', 'string') then
     raise exception 'payload inválido: grade' using errcode = '22023';
   end if;
   g := case when jsonb_typeof(p_payload -> 'grade') = 'string' then btrim(p_payload ->> 'grade') end;
   if g is not null and (length(g) not between 1 and 60 or g ~ '[[:cntrl:]]') then
     raise exception 'payload inválido: grade' using errcode = '22023';
   end if;
-  if p_payload ? 'school_year' and jsonb_typeof(p_payload -> 'school_year') not in ('null', 'number') then
+  if jsonb_typeof(p_payload -> 'school_year') not in ('null', 'number') then
     raise exception 'payload inválido: school_year' using errcode = '22023';
   end if;
   if jsonb_typeof(p_payload -> 'school_year') = 'number' then
@@ -407,6 +432,10 @@ declare
   st public.list_status;
   sid uuid;
   latest record;
+  ocr_result jsonb;
+  cfg text[];
+  crit boolean;
+  acked boolean;
 begin
   perform public.review_assert_admin(p_actor_id);
   if p_reasons is null or not public.ai_reason_codes_valid(p_reasons)
@@ -428,6 +457,20 @@ begin
      or exists (select 1 from jsonb_array_elements(latest.items) e where jsonb_typeof(e -> 'quantity') <> 'number' or jsonb_typeof(e -> 'category') <> 'string')
      or latest.grade is null or latest.school_year is null or sid is null then
     raise exception 'não aprovável: itens completos, série, ano e escola são obrigatórios' using errcode = '22023';
+  end if;
+  -- Alerta crítico (mesma definição de criticalAlertsIn, features/review/gate.ts): a confirmação é exigida quando há alerta
+  -- crítico e recusada quando não há (a trilha não pode afirmar uma confirmação que não existia).
+  select o.result into ocr_result from public.ocr_jobs o
+   where o.submission_id = p_submission_id and o.result is not null
+   order by o.created_at desc, o.id desc limit 1;
+  select a.critical_alerts into cfg from public.ai_settings a where a.scope = 'default';
+  crit := public.review_has_critical_alert(ocr_result, cfg);
+  acked := p_reasons ? 'critical_alerts_acknowledged';
+  if crit and not acked then
+    raise exception 'alerta crítico: critical_alerts_acknowledged é obrigatório' using errcode = '22023';
+  end if;
+  if acked and not crit then
+    raise exception 'critical_alerts_acknowledged sem alerta crítico' using errcode = '22023';
   end if;
   update public.list_submissions set status = 'approved' where id = p_submission_id;
   insert into public.ai_decisions (entity_type, entity_id, kind, pipeline_version, decision, justification, reasons, actor_id, new_version_id, created_at)
@@ -496,7 +539,7 @@ begin
   if st <> 'approved' or last.decision is distinct from 'approved' then
     return jsonb_build_object('state', 'not_approved', 'approvedVersionId', null);
   end if;
-  if exists (select 1 from public.ai_decisions where kind = 'publication' and entity_id = p_submission_id and decision = 'publish_orphaned') then
+  if exists (select 1 from public.ai_decisions where kind in ('publication', 'review') and entity_id = p_submission_id and decision = 'publish_orphaned') then
     return jsonb_build_object('state', 'orphaned', 'approvedVersionId', last.new_version_id);
   end if;
   select lease_until into until_ts from public.publication_leases where submission_id = p_submission_id;
@@ -571,12 +614,20 @@ begin
   if exists (select 1 from public.ai_decisions where kind = 'review' and entity_id = p_submission_id and decision = 'published') then
     return 'already_completed';
   end if;
+  if exists (select 1 from public.ai_decisions where kind in ('publication', 'review') and entity_id = p_submission_id and decision = 'publish_orphaned') then
+    return 'orphaned';
+  end if;
   select * into last from public.review_last_decision(p_submission_id);
   if st <> 'approved' or last.decision is distinct from 'approved' then
+    -- A porta publicou depois de a falha (ou recusa) ter sido gravada: a versão publicada ficaria órfã. Nunca silêncio:
+    -- registra review/publish_orphaned com as versões da porta. Sem histórico de aprovação humana não é resposta a nós.
+    if exists (select 1 from public.ai_decisions where kind = 'review' and entity_id = p_submission_id and decision = 'approved') then
+      insert into public.ai_decisions (entity_type, entity_id, kind, pipeline_version, decision, justification, reasons, actor_id, previous_version_id, new_version_id, created_at)
+      values ('list_submission', p_submission_id, 'review', 's10.1', 'publish_orphaned', 'published_after_failure', '[]'::jsonb, p_actor_id,
+              (p_result ->> 'previousVersionId')::uuid, (p_result ->> 'newVersionId')::uuid, clock_timestamp());
+      return 'orphaned';
+    end if;
     return 'not_approved';
-  end if;
-  if exists (select 1 from public.ai_decisions where kind = 'publication' and entity_id = p_submission_id and decision = 'publish_orphaned') then
-    return 'orphaned';
   end if;
   insert into public.ai_decisions (entity_type, entity_id, kind, pipeline_version, decision, justification, actor_id, previous_version_id, new_version_id, created_at)
   values ('list_submission', p_submission_id, 'review', 's10.1', 'published', 'human_published', p_actor_id,
@@ -595,6 +646,7 @@ as $$
 declare
   st public.list_status;
   last record;
+  until_ts timestamptz;
 begin
   perform public.review_assert_admin(p_actor_id);
   if p_reason is null or p_reason !~ '^[a-z][a-z0-9_]{0,59}$' then
@@ -607,6 +659,11 @@ begin
   select * into last from public.review_last_decision(p_submission_id);
   if st <> 'approved' or last.decision is distinct from 'approved' then
     return 'not_approved';
+  end if;
+  -- Chamada à porta em voo (lease ativa): falhar agora deixaria a publicação sem trilha. Quem tem a lease libera antes.
+  select lease_until into until_ts from public.publication_leases where submission_id = p_submission_id;
+  if found and until_ts > now() then
+    return 'busy';
   end if;
   insert into public.ai_decisions (entity_type, entity_id, kind, pipeline_version, decision, justification, reasons, actor_id, new_version_id, created_at)
   values ('list_submission', p_submission_id, 'review', 's10.1', 'publish_failed', p_reason, jsonb_build_array(p_reason), p_actor_id, last.new_version_id, clock_timestamp());
@@ -678,7 +735,9 @@ $$;
 comment on table public.review_versions is 'S10: versões da revisão do admin (append-only); a versão 1 é o retrato da extração.';
 comment on table public.parent_list_copies is 'S10: cópia privada do pai; nunca oficial nem publicável; escrita só pelas funções parent_copy_*.';
 comment on function public.review_items_valid(jsonb) is 'S10: validador puro dos itens da revisão (mesmas regras do Zod).';
-comment on function public.review_open(uuid, uuid) is 'S10: cria a versão 1 (retrato da extração) se faltar; devolve a versão vigente.';
+comment on function public.review_open(uuid, uuid) is 'S10: cria a versão 1 (retrato da extração; vazia se o resultado faltar ou for inválido) se faltar; devolve a versão vigente.';
+comment on function public.review_has_critical_alert(jsonb, text[]) is 'S10: paridade SQL de criticalAlertsIn (features/review/gate.ts).';
+comment on column public.ai_decisions.new_version_id is 'Significado por decision: publication published/publish_orphaned e review published/publish_orphaned = versão da LISTA criada pela porta; review edited/approved/rejected/publish_failed = id de review_versions (a nova/vigente/aprovada).';
 comment on function public.review_save_version(uuid, uuid, int, jsonb) is 'S10: edição versionada e auditada (saved/stale/not_reviewable) sob lock do envio.';
 comment on function public.review_approve(uuid, uuid, int, jsonb) is 'S10: aprovação humana (human_review -> approved) com linha review/approved.';
 comment on function public.review_reject(uuid, uuid, int, text) is 'S10: recusa humana com motivo de lista fechada (human_review -> rejected).';
@@ -691,7 +750,7 @@ comment on function public.parent_copy_save(uuid, uuid, int, jsonb) is 'S10: sal
 
 revoke execute on function
   public.review_versions_block_mutation(), public.parent_list_copies_guard(),
-  public.review_assert_admin(uuid), public.review_items_from_result(jsonb), public.review_last_decision(uuid),
+  public.review_assert_admin(uuid), public.review_items_from_result(jsonb), public.review_last_decision(uuid), public.review_has_critical_alert(jsonb, text[]),
   public.review_open(uuid, uuid), public.review_save_version(uuid, uuid, int, jsonb), public.review_approve(uuid, uuid, int, jsonb),
   public.review_reject(uuid, uuid, int, text), public.review_begin_publish(uuid, uuid, int), public.review_release_publish(uuid, uuid),
   public.review_complete_publish(uuid, uuid, jsonb), public.review_publish_fail(uuid, uuid, text),

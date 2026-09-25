@@ -31,17 +31,18 @@ describe("publish: caminho feliz pela ListPublisher", () => {
       source: "school_upload",
       actor: { kind: "admin", profileId: ADMIN_ID },
     });
-    expect(publisher!.calls[0]!.items[0]).toEqual({ position: 1, originalName: "Caderno", normalizedName: "caderno", category: "papelaria", quantity: 2, unit: "un", confidence: 0.9 });
+    expect(publisher!.calls[0]!.items[0]).toEqual({ position: 1, originalName: "Caderno", normalizedName: "caderno", category: "papelaria", quantity: 2, unit: "un", confidence: 0.9, origin: "extracted" });
     expect(f.names()).toEqual(["loadContext", "beginPublish", "loadVersion", "completePublish"]);
     const done = f.calls.at(-1)!;
     expect(done.args.slice(0, 2)).toEqual([SUB, ADMIN_ID]);
   });
 
-  it("item editado/adicionado vai à porta com confiança 1 (conferido pela equipe); extraído mantém a sua", async () => {
+  it("confiança nunca é inventada: item editado/adicionado/sem número vai com null e origin reviewed; extraído mantém a sua", async () => {
     const f = fakeStore({ ctx: approvedCtx({ version: version({ items: [item({ origin: "edited", confidence: 0.2 }), item({ name: "Cola", origin: "added", confidence: null }), item({ name: "Tesoura", confidence: 0.7 })] }) }) });
     const { deps, publisher } = memoryPublication();
     await createReviewService({ store: f.store, publication: deps }).publish(await admin(), SUB);
-    expect(publisher!.calls[0]!.items.map((i) => i.confidence)).toEqual([1, 1, 0.7]);
+    expect(publisher!.calls[0]!.items.map((i) => i.confidence)).toEqual([null, null, 0.7]);
+    expect(publisher!.calls[0]!.items.map((i) => i.origin)).toEqual(["reviewed", "reviewed", "extracted"]);
   });
 
   it("envio de família publica com source parent_upload", async () => {
@@ -90,6 +91,20 @@ describe("publish: estados sem chamar a porta", () => {
     expect(out).toEqual({ status: "publish_failed", code: "school_not_found" });
     expect(f.calls.find((c) => c.name === "failPublish")!.args).toEqual([SUB, ADMIN_ID, "school_not_found"]);
     expect(publisher!.calls).toHaveLength(0);
+    // a lease vem ANTES do bloqueio e é solta antes de falhar (falhar com lease ativa devolve busy)
+    expect(f.names()).toEqual(["loadContext", "beginPublish", "releasePublish", "failPublish"]);
+  });
+
+  it("bloqueio de contexto sem conseguir a lease (outro admin em voo): nada é falhado", async () => {
+    const f = fakeStore({ ctx: approvedCtx({ submission: { status: "approved", source: "school", schoolId: "60000000-0000-4000-8000-0000000000ff", submittedBy: "y", isDemo: false } }), begin: { state: "busy", approvedVersionId: V2 } });
+    const out = await createReviewService({ store: f.store, publication: memoryPublication().deps }).publish(await admin(), SUB);
+    expect(out).toEqual({ status: "publish_pending" });
+    expect(f.names()).toEqual(["loadContext", "beginPublish"]);
+  });
+
+  it("failPublish devolve busy (lease retomada por outro admin): publish_pending, sem afirmar falha", async () => {
+    const f = fakeStore({ ctx: approvedCtx({ submission: { status: "approved", source: "school", schoolId: "60000000-0000-4000-8000-0000000000ff", submittedBy: "y", isDemo: false } }), fail: "busy" });
+    expect(await createReviewService({ store: f.store, publication: memoryPublication().deps }).publish(await admin(), SUB)).toEqual({ status: "publish_pending" });
   });
 });
 

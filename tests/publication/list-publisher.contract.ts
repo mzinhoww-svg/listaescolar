@@ -84,6 +84,13 @@ export function runListPublisherContract(name: string, make: () => PublisherHarn
       expect(e.code).toMatch(/^[a-z][a-z0-9_]{0,59}$/);
     });
 
+    it("aditivo S10: item revisado (confidence null, origin reviewed) é aceito e a chave idempotente devolve o mesmo resultado", async () => {
+      const { publisher } = await make();
+      const items = [{ position: 1, originalName: "Cola", normalizedName: "cola", category: "papelaria", quantity: 1, unit: null, confidence: null, origin: "reviewed" as const }];
+      const a = await publisher.publish(request({ items }));
+      expect(await publisher.publish(request({ items }))).toEqual(a);
+    });
+
     it("sem itens é recusado com erro permanente", async () => {
       const { publisher } = await make();
       const e = await rejection(publisher.publish(request({ items: [] })));

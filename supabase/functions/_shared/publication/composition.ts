@@ -15,10 +15,11 @@ export type PublicationEnv = EnvLike & { FAKE_PUBLICATION_FIXTURE?: string };
 
 export const MEMORY_PORT_ENVS = ["local", "development"] as const;
 
-/** As portas em memória só existem com a fixture válida e APP_ENV explícito `local` ou `development`. */
+/** As portas em memória só existem com a fixture válida, APP_ENV explícito `local`/`development` e VERCEL_ENV ausente ou `development` (um preview com APP_ENV=local por engano não liga portas contra o staging). */
 export function publicationPortsAllowed(env: PublicationEnv): boolean {
   const app = (env.APP_ENV ?? "").trim();
-  return (MEMORY_PORT_ENVS as readonly string[]).includes(app) && !isProductionEnv(env) && parsePublicationFixture(env.FAKE_PUBLICATION_FIXTURE) !== null;
+  const vercel = (env.VERCEL_ENV ?? "").trim();
+  return (MEMORY_PORT_ENVS as readonly string[]).includes(app) && (vercel === "" || vercel === "development") && !isProductionEnv(env) && parsePublicationFixture(env.FAKE_PUBLICATION_FIXTURE) !== null;
 }
 
 /** Verdadeiro quando a publicação vem da porta em memória (demonstração): a tela mostra o selo "Demonstração". */

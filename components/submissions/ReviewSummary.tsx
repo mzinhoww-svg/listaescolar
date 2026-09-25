@@ -33,7 +33,7 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false 
           ) : null}
         </section>
       ) : null}
-      {status === "published" ? null : (
+      {state ? null : (
         <p className="text-texto-2 rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-semibold">{REVIEW_NOTICE}</p>
       )}
       {items.length === 0 ? (

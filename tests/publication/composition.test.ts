@@ -47,6 +47,9 @@ describe("createPublicationDeps: portas em memória só com fixture e ambiente e
     expect(d.publisher).toBeNull();
     expect(d.context).toBeNull();
   });
+  it("APP_ENV=local com VERCEL_ENV=development liga; ausente liga", () => {
+    expect(build({ APP_ENV: "local", VERCEL_ENV: "development", FAKE_PUBLICATION_FIXTURE: FIXTURE }).publisher).not.toBeNull();
+  });
   it("fixture sem APP_ENV explícito: portas nulas", () => {
     expect(build({ FAKE_PUBLICATION_FIXTURE: FIXTURE }).publisher).toBeNull();
     expect(build({ APP_ENV: "", FAKE_PUBLICATION_FIXTURE: FIXTURE }).context).toBeNull();
@@ -54,6 +57,7 @@ describe("createPublicationDeps: portas em memória só com fixture e ambiente e
   it.each([
     { APP_ENV: "production" },
     { APP_ENV: "local", VERCEL_ENV: "production" },
+    { APP_ENV: "local", VERCEL_ENV: "preview" },
     { NODE_ENV: "production" },
     { APP_ENV: "outro" },
   ])("ambiente produtivo ou desconhecido %j: portas nulas", (env) => {

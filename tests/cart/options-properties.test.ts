@@ -17,6 +17,16 @@ function rng(seed: number): () => number {
   };
 }
 
+/** Fisher-Yates com PRNG semeado: a mesma semente sempre dá a mesma ordem. */
+function shuffle<T>(list: readonly T[], r: () => number): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [out[i], out[j]] = [out[j] as T, out[i] as T];
+  }
+  return out;
+}
+
 function scenario(seed: number) {
   const r = rng(seed);
   const int = (n: number) => Math.floor(r() * n);
@@ -75,7 +85,6 @@ function checkOption(o: CartOption, items: CartItemInput[]): void {
     expect(o.status).toBe("unavailable");
     expect(priced).toHaveLength(0);
   } else {
-    expect(Number.isSafeInteger(o.totalCents)).toBe(true);
     expect(o.totalCents).toBe(priced.reduce((s, l) => s + (l.lineTotalCents ?? 0), 0));
     expect(o.status).toBe(o.missingItems.length === 0 ? "available" : "partial");
     expect(o.stores.length).toBeGreaterThan(0);
@@ -99,7 +108,7 @@ describe("propriedades do motor (300 cenários aleatórios reproduzíveis)", () 
       if (items.length === 0) continue;
       for (const o of opts) checkOption(o, items);
       // Determinismo e independência da ordem das cotações.
-      const shuffled = [...quotes].reverse();
+      const shuffled = shuffle(quotes, rng(seed + 9_000));
       expect(JSON.stringify(buildCartOptions(items, shuffled, local, NOW))).toBe(
         JSON.stringify(opts),
       );

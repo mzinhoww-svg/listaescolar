@@ -1,6 +1,11 @@
 import { buildSearchUrl, RedirectTargetError, type RetailerTarget } from "./redirect-target";
 
-export type AffiliateEnv = { MELI_AFFILIATE_ID?: string; AMAZON_ASSOCIATE_TAG?: string };
+export type AffiliateEnv = {
+  MELI_AFFILIATE_ID?: string;
+  /** Opcional: só entra na URL se existir (matt_word). */
+  MELI_AFFILIATE_WORD?: string;
+  AMAZON_ASSOCIATE_TAG?: string;
+};
 export type RedirectResult = { url: string; affiliateApplied: boolean };
 
 export interface AffiliateLinkBuilder {
@@ -15,8 +20,8 @@ function cleanId(value: string | undefined): string | null {
 }
 
 /**
- * Amazon: `tag=<associate tag>`. Mercado Livre: `matt_tool` + `matt_word` (parâmetros do programa de
- * afiliados; confirmar com o ID real). Sem ID válido a URL sai simples e `affiliateApplied = false`.
+ * Amazon: `tag=<associate tag>`. Mercado Livre: `matt_tool=<MELI_AFFILIATE_ID>` e, só se
+ * `MELI_AFFILIATE_WORD` existir, `matt_word` (formato a confirmar com o programa real). Sem ID válido a URL sai simples e `affiliateApplied = false`.
  */
 export function createAffiliateLinkBuilder(env: AffiliateEnv): AffiliateLinkBuilder {
   return {
@@ -34,7 +39,8 @@ export function createAffiliateLinkBuilder(env: AffiliateEnv): AffiliateLinkBuil
         const id = cleanId(env.MELI_AFFILIATE_ID);
         if (id) {
           url.searchParams.set("matt_tool", id);
-          url.searchParams.set("matt_word", id);
+          const word = cleanId(env.MELI_AFFILIATE_WORD);
+          if (word) url.searchParams.set("matt_word", word);
           applied = true;
         }
       }

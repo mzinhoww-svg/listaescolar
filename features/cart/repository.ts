@@ -10,7 +10,7 @@ import {
   type RetailerRow,
   type SnapshotRow,
 } from "./schemas";
-import type { CartOption, CartStrategy } from "./types";
+import { CART_STRATEGIES, type CartOption, type CartStrategy } from "./types";
 
 // Todas as funções recebem o cliente (do usuário, para valer a RLS; ou admin, em rotinas de servidor).
 
@@ -105,19 +105,24 @@ export async function createCart(client: SupabaseClient, input: NewCartInput): P
   if (error) fail("criar carrinho", error);
   const cartId = z.uuid().parse(data.id);
   if (input.items.length > 0) {
-    const { error: itemsError } = await client
-      .from("cart_items")
-      .insert(
-        input.items.map((i) => ({
-          cart_id: cartId,
-          list_item_id: i.listItemId ?? null,
-          name: i.name,
-          quantity: i.quantity,
-        })),
-      );
+    const { error: itemsError } = await client.from("cart_items").insert(
+      input.items.map((i) => ({
+        cart_id: cartId,
+        list_item_id: i.listItemId ?? null,
+        name: i.name,
+        quantity: i.quantity,
+      })),
+    );
     if (itemsError) {
-      await client.from("carts").delete().eq("id", cartId); // sem carrinho pela metade
-      fail("criar itens do carrinho", itemsError);
+      // Sem carrinho pela metade; se o desfazer também falhar, o erro original leva os dois.
+      const { error: undoError } = await client.from("carts").delete().eq("id", cartId);
+      const suffix = undoError
+        ? `; falha ao desfazer o carrinho ${cartId}: ${undoError.message}`
+        : "";
+      fail("criar itens do carrinho", {
+        message: `${itemsError.message}${suffix}`,
+        code: itemsError.code,
+      });
     }
   }
   return cartId;
@@ -152,9 +157,7 @@ export async function getCart(client: SupabaseClient, cartId: string): Promise<C
     id: z.uuid().parse(data.id),
     ownerId: z.uuid().parse(data.owner_id),
     listId: z.uuid().nullable().parse(data.list_id),
-    strategy: z
-      .enum(["cheapest", "fewest_stores", "balanced", "local_stationery"])
-      .parse(data.strategy),
+    strategy: z.enum(CART_STRATEGIES).parse(data.strategy),
     isDemo: z.boolean().parse(data.is_demo),
     items: items.map((i) => ({
       id: i.id,
@@ -166,35 +169,57 @@ export async function getCart(client: SupabaseClient, cartId: string): Promise<C
   };
 }
 
-/** Snapshots dos itens (todas as lojas ativas). O motor aplica frescor e validade. */
+/** Validade padrão de um preço (igual à do motor): 24 h. */
+export const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** Linhas mais recentes lidas por item (poucas lojas por item; evita um limite global que cortaria itens). */
+export const SNAPSHOTS_PER_ITEM_LIMIT = 50;
+
+export type SnapshotQueryOptions = { now?: Date; maxAgeMs?: number; perItemLimit?: number };
+
+/**
+ * Snapshots dos itens (lojas ativas) dentro da validade (`checked_at >= now - validade`), no máximo
+ * `perItemLimit` linhas mais recentes por item. O motor ainda aplica frescor e validade.
+ */
 export async function getPriceSnapshots(
   client: SupabaseClient,
   itemKeys: string[],
+  options: SnapshotQueryOptions = {},
 ): Promise<SnapshotRow[]> {
-  if (itemKeys.length === 0) return [];
-  const { data, error } = await client
-    .from("price_snapshots")
-    .select(
-      "item_key, price_cents, source, checked_at, product_url, is_demo, retailers!inner(slug, is_active)",
-    )
-    .in("item_key", itemKeys)
-    .eq("retailers.is_active", true)
-    .order("checked_at", { ascending: false })
-    .limit(2000);
-  if (error) fail("ler preços", error);
+  const keys = [...new Set(itemKeys)];
+  if (keys.length === 0) return [];
+  const now = options.now ?? new Date();
+  const since = new Date(now.getTime() - (options.maxAgeMs ?? SNAPSHOT_MAX_AGE_MS)).toISOString();
+  const limit = options.perItemLimit ?? SNAPSHOTS_PER_ITEM_LIMIT;
+  const results = await Promise.all(
+    keys.map((key) =>
+      client
+        .from("price_snapshots")
+        .select(
+          "item_key, price_cents, source, checked_at, product_url, is_demo, retailers!inner(slug, is_active)",
+        )
+        .eq("item_key", key)
+        .eq("retailers.is_active", true)
+        .gte("checked_at", since)
+        .order("checked_at", { ascending: false })
+        .limit(limit),
+    ),
+  );
   const rows: SnapshotRow[] = [];
-  for (const raw of data ?? []) {
-    const retailer = Array.isArray(raw.retailers) ? raw.retailers[0] : raw.retailers;
-    const parsed = snapshotRowSchema.safeParse({
-      retailerSlug: retailer?.slug,
-      itemKey: raw.item_key,
-      priceCents: raw.price_cents,
-      source: raw.source,
-      checkedAt: raw.checked_at,
-      productUrl: raw.product_url,
-      isDemo: raw.is_demo,
-    });
-    if (parsed.success) rows.push(parsed.data);
+  for (const { data, error } of results) {
+    if (error) fail("ler preços", error);
+    for (const raw of data ?? []) {
+      const retailer = Array.isArray(raw.retailers) ? raw.retailers[0] : raw.retailers;
+      const parsed = snapshotRowSchema.safeParse({
+        retailerSlug: retailer?.slug,
+        itemKey: raw.item_key,
+        priceCents: raw.price_cents,
+        source: raw.source,
+        checkedAt: raw.checked_at,
+        productUrl: raw.product_url,
+        isDemo: raw.is_demo,
+      });
+      if (parsed.success) rows.push(parsed.data);
+    }
   }
   return rows;
 }

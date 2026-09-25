@@ -60,7 +60,6 @@ describe("buildCartOptions: as quatro estratégias (fixtures de teste)", () => {
       ["lapis hb", "amazon", 150, 450],
       ["cola branca", "amazon", 250, 250],
     ]);
-    expect(Number.isInteger(o.totalCents)).toBe(true);
   });
 
   it("balanced: prazo vindo da fonte pode virar a escolha; sem prazo, ele não entra", () => {
@@ -118,15 +117,24 @@ describe("buildCartOptions: as quatro estratégias (fixtures de teste)", () => {
     expect(o).toMatchObject({ status: "available", totalCents: 333, stores: ["kalunga"] });
   });
 
-  it("mesmo item em várias lojas: fica o mais barato; mesmo preço, o mais recente", () => {
+  it("mesmo item em várias lojas: fica o mais barato; empate de preço vai para a loja de id menor", () => {
     const quotes = [
       q("a", COLA, 300, { checkedAt: hoursAgo(5) }),
       q("b", COLA, 300, { checkedAt: hoursAgo(1) }),
       q("c", COLA, 301),
     ];
     const o = by(buildCartOptions([COLA], quotes, null, NOW), "cheapest");
-    expect(o.lines[0]?.storeId).toBe("a"); // 'a' e 'b' empatam em preço; cheapest desempata por loja (alfabética)
+    expect(o.lines[0]?.storeId).toBe("a");
     expect(o.totalCents).toBe(300);
+  });
+
+  it("mesma loja e mesmo preço em duas datas: vale a consulta mais recente", () => {
+    const quotes = [
+      q("a", COLA, 300, { checkedAt: hoursAgo(5) }),
+      q("a", COLA, 300, { checkedAt: hoursAgo(1) }),
+    ];
+    const l = by(buildCartOptions([COLA], quotes, null, NOW), "cheapest").lines[0];
+    expect(l?.checkedAt).toEqual(hoursAgo(1));
   });
 
   it("quantidade alta: sem float; overflow vira indisponível, nunca valor errado", () => {

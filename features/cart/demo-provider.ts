@@ -1,13 +1,33 @@
 import type { ProviderOptions, RetailerProvider } from "./ports";
 import type { CartItemInput, Quote } from "./types";
 
-export type DemoEnv = { DEMO_RETAILERS?: string; VERCEL_ENV?: string };
+export type DemoEnv = {
+  DEMO_RETAILERS?: string;
+  VERCEL_ENV?: string;
+  NEXT_PUBLIC_SUPABASE_URL?: string;
+};
 export const DEMO_SOURCE = "demo";
 export const DEMO_RETAILER_SLUGS = ["amazon", "kalunga", "magalu", "mercadolivre"] as const;
 
-/** Demonstração só com DEMO_RETAILERS=1 e nunca em produção (VERCEL_ENV=production). */
+function isLoopbackUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const host = new URL(value).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Demonstração fail-closed: exige DEMO_RETAILERS=1 E (VERCEL_ENV em preview|development OU (VERCEL_ENV
+ * ausente E NEXT_PUBLIC_SUPABASE_URL em loopback)). Produção, ambiente desconhecido e deploy fora da
+ * Vercel apontando para Supabase remoto ficam desligados.
+ */
 export function isDemoEnabled(env: DemoEnv): boolean {
-  return env.DEMO_RETAILERS === "1" && env.VERCEL_ENV !== "production";
+  if (env.DEMO_RETAILERS !== "1") return false;
+  if (env.VERCEL_ENV === undefined) return isLoopbackUrl(env.NEXT_PUBLIC_SUPABASE_URL);
+  return env.VERCEL_ENV === "preview" || env.VERCEL_ENV === "development";
 }
 
 function hash(text: string): number {

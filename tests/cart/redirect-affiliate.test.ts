@@ -86,6 +86,14 @@ describe("destino do redirect", () => {
     expect(buildSearchUrl(R(), "a".repeat(100_000)).href.length).toBeLessThan(300);
   });
 
+  it("query '.' ou '..' é recusada (não vira segmento de caminho)", () => {
+    for (const q of [".", "..", " . ", "\n..\t"]) {
+      expect(codeOf(() => buildSearchUrl(R(), q))).toBe("unsafe_target");
+    }
+    expect(buildSearchUrl(R(), "a.b").pathname).toBe("/busca/a.b");
+    expect(buildSearchUrl(R(), "...").pathname).toBe("/busca/...");
+  });
+
   it("query vazia ou só controles é recusada", () => {
     expect(codeOf(() => buildSearchUrl(R(), "   \r\n "))).toBe("empty_query");
   });
@@ -140,10 +148,30 @@ describe("afiliados", () => {
     });
   });
 
-  it("Mercado Livre com ID: parâmetros de afiliado e selo", () => {
+  it("Mercado Livre com ID: matt_tool = ID e sem matt_word quando não há palavra", () => {
     const out = buildRetailerRedirect(ML, "caderno", { MELI_AFFILIATE_ID: "abc123" });
-    expect(out.affiliateApplied).toBe(true);
-    expect(new URL(out.url).searchParams.get("matt_word")).toBe("abc123");
+    expect(out).toEqual({
+      url: "https://lista.mercadolivre.com.br/caderno?matt_tool=abc123",
+      affiliateApplied: true,
+    });
+  });
+
+  it("Mercado Livre com ID e palavra: matt_tool e matt_word; palavra inválida é omitida", () => {
+    const env = { MELI_AFFILIATE_ID: "abc123", MELI_AFFILIATE_WORD: "listacerta" };
+    expect(buildRetailerRedirect(ML, "caderno", env)).toEqual({
+      url: "https://lista.mercadolivre.com.br/caderno?matt_tool=abc123&matt_word=listacerta",
+      affiliateApplied: true,
+    });
+    const bad = buildRetailerRedirect(ML, "caderno", { ...env, MELI_AFFILIATE_WORD: "a&b" });
+    expect(bad.url).toBe("https://lista.mercadolivre.com.br/caderno?matt_tool=abc123");
+  });
+
+  it("palavra sem ID não aplica afiliado", () => {
+    const out = buildRetailerRedirect(ML, "caderno", { MELI_AFFILIATE_WORD: "listacerta" });
+    expect(out).toEqual({
+      url: "https://lista.mercadolivre.com.br/caderno",
+      affiliateApplied: false,
+    });
   });
 
   it("ID de um programa não vaza para outro varejista", () => {

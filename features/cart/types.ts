@@ -1,10 +1,10 @@
-export type CartStrategy = "cheapest" | "fewest_stores" | "balanced" | "local_stationery";
-export const CART_STRATEGIES: readonly CartStrategy[] = [
+export const CART_STRATEGIES = [
   "cheapest",
   "fewest_stores",
   "balanced",
   "local_stationery",
-];
+] as const;
+export type CartStrategy = (typeof CART_STRATEGIES)[number];
 
 export type OptionStatus = "available" | "partial" | "unavailable";
 export type OptionReason = "empty_cart" | "no_price_source" | "no_local_quote" | "amount_overflow";
@@ -61,7 +61,7 @@ export type CartOption = {
   stores: string[];
   missingItems: string[];
   reason?: OptionReason;
-  /** `<loja>:<itemKey>` cujas únicas cotações estavam velhas (ou com data inconfiável) e ficaram fora do total. */
+  /** `<storeId>:<itemKey>` (storeId = slug ou `local:<uuid>`) cujas únicas cotações estavam velhas (ou com data inconfiável) e ficaram fora do total. */
   staleExcluded: string[];
 };
 

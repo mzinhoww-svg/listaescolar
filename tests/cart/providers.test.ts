@@ -81,17 +81,39 @@ describe("SnapshotRetailerProvider", () => {
 });
 
 describe("DemoRetailerProvider", () => {
-  it("só existe com DEMO_RETAILERS=1 e nunca em produção", () => {
+  it("fail-closed: só com DEMO_RETAILERS=1 e preview/development, ou sem VERCEL_ENV com Supabase em loopback", () => {
+    const on = { DEMO_RETAILERS: "1" };
     expect(isDemoEnabled({})).toBe(false);
-    expect(isDemoEnabled({ DEMO_RETAILERS: "0" })).toBe(false);
-    expect(isDemoEnabled({ DEMO_RETAILERS: "true" })).toBe(false);
-    expect(isDemoEnabled({ DEMO_RETAILERS: "1", VERCEL_ENV: "production" })).toBe(false);
-    expect(isDemoEnabled({ DEMO_RETAILERS: "1", VERCEL_ENV: "preview" })).toBe(true);
-    expect(createDemoRetailerProvider({})).toBeNull();
+    expect(isDemoEnabled({ DEMO_RETAILERS: "0", VERCEL_ENV: "preview" })).toBe(false);
+    expect(isDemoEnabled({ DEMO_RETAILERS: "true", VERCEL_ENV: "preview" })).toBe(false);
+    expect(isDemoEnabled({ ...on, VERCEL_ENV: "production" })).toBe(false);
+    expect(isDemoEnabled({ ...on, VERCEL_ENV: "preview" })).toBe(true);
+    expect(isDemoEnabled({ ...on, VERCEL_ENV: "development" })).toBe(true);
+    expect(isDemoEnabled({ ...on, VERCEL_ENV: "staging" })).toBe(false);
+    // sem VERCEL_ENV: só com URL do Supabase em loopback
+    expect(isDemoEnabled(on)).toBe(false);
+    expect(isDemoEnabled({ ...on, NEXT_PUBLIC_SUPABASE_URL: "https://abc.supabase.co" })).toBe(
+      false,
+    );
+    expect(isDemoEnabled({ ...on, NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321" })).toBe(true);
+    expect(isDemoEnabled({ ...on, NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321" })).toBe(true);
+    expect(isDemoEnabled({ ...on, NEXT_PUBLIC_SUPABASE_URL: "http://[::1]:54321" })).toBe(true);
+    expect(isDemoEnabled({ ...on, NEXT_PUBLIC_SUPABASE_URL: "http://localhost.evil.com" })).toBe(
+      false,
+    );
+    expect(isDemoEnabled({ ...on, NEXT_PUBLIC_SUPABASE_URL: "lixo" })).toBe(false);
+    // VERCEL_ENV presente (mesmo vazio) nunca cai no ramo do loopback
     expect(
-      createDemoRetailerProvider({ DEMO_RETAILERS: "1", VERCEL_ENV: "production" }),
-    ).toBeNull();
-    expect(createDemoRetailerProvider({ DEMO_RETAILERS: "1" })).not.toBeNull();
+      isDemoEnabled({
+        ...on,
+        VERCEL_ENV: "production",
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:1",
+      }),
+    ).toBe(false);
+    expect(createDemoRetailerProvider({})).toBeNull();
+    expect(createDemoRetailerProvider(on)).toBeNull();
+    expect(createDemoRetailerProvider({ ...on, VERCEL_ENV: "production" })).toBeNull();
+    expect(createDemoRetailerProvider({ ...on, VERCEL_ENV: "preview" })).not.toBeNull();
   });
 
   it("gera cotações marcadas is_demo, com origem e data, determinísticas", async () => {
@@ -124,7 +146,11 @@ describe("ListReader", () => {
   it("leitor de demonstração só com a flag", async () => {
     expect(createDemoListReader({})).toBeNull();
     expect(createDemoListReader({ DEMO_RETAILERS: "1", VERCEL_ENV: "production" })).toBeNull();
-    const items = await createDemoListReader({ DEMO_RETAILERS: "1" })?.getItems(DEMO_LIST_ID);
+    expect(createDemoListReader({ DEMO_RETAILERS: "1" })).toBeNull(); // sem VERCEL_ENV e sem loopback
+    const items = await createDemoListReader({
+      DEMO_RETAILERS: "1",
+      VERCEL_ENV: "preview",
+    })?.getItems(DEMO_LIST_ID);
     expect(items?.length).toBeGreaterThan(0);
   });
 });

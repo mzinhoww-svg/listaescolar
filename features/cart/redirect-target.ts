@@ -44,6 +44,8 @@ export function buildSearchUrl(retailer: RetailerTarget, rawQuery: string): URL 
   if (!retailer.isActive) throw new RedirectTargetError("inactive_retailer");
   const query = sanitizeQuery(rawQuery);
   if (query === "") throw new RedirectTargetError("empty_query");
+  // encodeURIComponent deixa "." e ".." intactos e o URL os resolveria como segmentos de caminho.
+  if (query === "." || query === "..") throw new RedirectTargetError("unsafe_target");
   const template = retailer.searchUrlTemplate;
   // Exatamente um {query}, e fora da parte do host (senão a query escolheria o host).
   const afterOrigin = template.replace(/^https:\/\/[^/?#]*/, "");

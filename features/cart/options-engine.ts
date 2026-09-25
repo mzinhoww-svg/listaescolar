@@ -21,15 +21,28 @@ export const MAX_SUBSET_RETAILERS = 12;
 /**
  * Fórmula de `balanced` (determinística, inteiros). Entre as combinações de lojas que cobrem o máximo
  * de itens cotados, pontua cada uma com pesos em permil:
- *   score = 500·preço + 200·lojas + 200·cobertura + 100·prazo
- *   preço = menorTotal/total · lojas = menorNºLojas/nºLojas · cobertura = itensComPreço/itens
+ *   score = 500·preço + 200·lojas + 200·disponibilidade + 100·prazo
+ *   preço = menorTotal/total · lojas = menorNºLojas/nºLojas
+ *   disponibilidade = linhas com `inStock === true` (confirmado pela fonte) / nº de itens do carrinho;
+ *     estoque desconhecido (`inStock` ausente) conta 0, nunca é presumido;
  *   prazo = (1+menorPrazo)/(1+prazoDaCombinação), prazo = maior deliveryDays entre as linhas.
  * Cada razão é escalada a 1e6 (BigInt no preço). Prazo só entra se alguma combinação tem prazo em
- * todas as linhas (vindo da fonte); nesse caso combinações sem prazo completo pontuam 0 no termo.
- * Sem prazo em nenhuma, o termo sai e a comparação usa só os outros pesos. Desempate: maior score,
- * menor total, menos lojas, lista de lojas em ordem alfabética.
+ * todas as linhas (vindo da fonte). PRAZO AUSENTE PONTUA 0: combinação com alguma linha sem
+ * `deliveryDays` fica com 0 nesse termo (nunca se presume prazo). Sem prazo completo em nenhuma, o
+ * termo sai e a comparação usa só os outros pesos. Todas as combinações têm a mesma cobertura de
+ * preço (máxima); o termo de disponibilidade é o que diferencia estoque confirmado de desconhecido.
+ * Desempate: maior score, menor total, menos lojas, lista de lojas em ordem alfabética.
  */
-export const BALANCED_WEIGHTS = { price: 500, stores: 200, coverage: 200, delivery: 100 } as const;
+export const BALANCED_WEIGHT_PRICE = 500;
+export const BALANCED_WEIGHT_STORES = 200;
+export const BALANCED_WEIGHT_AVAILABILITY = 200;
+export const BALANCED_WEIGHT_DELIVERY = 100;
+export const BALANCED_WEIGHTS = {
+  price: BALANCED_WEIGHT_PRICE,
+  stores: BALANCED_WEIGHT_STORES,
+  availability: BALANCED_WEIGHT_AVAILABILITY,
+  delivery: BALANCED_WEIGHT_DELIVERY,
+} as const;
 const SCALE = BigInt(1_000_000);
 
 type Offer = {
@@ -49,6 +62,8 @@ type Assignment = {
   stores: string[];
   totalCents: number | null;
   priced: number;
+  /** Alguma linha estourou o inteiro seguro (preço x quantidade); a opção não tem total confiável. */
+  overflow: boolean;
 };
 
 function toOffer(q: Quote | LocalQuote): Offer {
@@ -80,10 +95,11 @@ function validOffer(o: Offer): boolean {
 
 function normalizeItems(items: readonly CartItemInput[]): { valid: NormItem[]; invalid: string[] } {
   const byKey = new Map<string, NormItem>();
-  const invalid: string[] = [];
+  const bad = new Set<string>();
   for (const item of items) {
-    if (!isQuantity(item.quantity) || item.itemKey.trim() === "") {
-      if (item.itemKey.trim() !== "" && !invalid.includes(item.itemKey)) invalid.push(item.itemKey);
+    if (item.itemKey.trim() === "") continue;
+    if (!isQuantity(item.quantity)) {
+      bad.add(item.itemKey);
       continue;
     }
     const prev = byKey.get(item.itemKey);
@@ -91,15 +107,27 @@ function normalizeItems(items: readonly CartItemInput[]): { valid: NormItem[]; i
     else
       byKey.set(item.itemKey, { itemKey: item.itemKey, name: item.name, quantity: item.quantity });
   }
-  const valid = [...byKey.values()].filter((i) => Number.isSafeInteger(i.quantity));
+  const valid: NormItem[] = [];
+  for (const entry of byKey.values()) {
+    if (Number.isSafeInteger(entry.quantity)) valid.push(entry);
+    else bad.add(entry.itemKey); // soma fora do inteiro seguro: vai para os inválidos, não some
+  }
+  // Uma entrada inválida não anula outra válida da mesma chave (essa continua cotada).
+  const invalid = [...bad].filter((k) => valid.every((v) => v.itemKey !== k));
   return { valid, invalid };
+}
+
+function cmpText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function cmpOffer(a: Offer, b: Offer): number {
   return (
     a.unitPriceCents - b.unitPriceCents ||
     b.checkedAt.getTime() - a.checkedAt.getTime() ||
-    (a.source < b.source ? -1 : a.source > b.source ? 1 : 0)
+    cmpText(a.source, b.source) ||
+    Number(a.isDemo === true) - Number(b.isDemo === true) || // real antes de demo
+    cmpText(a.url ?? "", b.url ?? "")
   );
 }
 
@@ -107,12 +135,12 @@ function cmpOffer(a: Offer, b: Offer): number {
 function prepare(offers: Offer[], items: NormItem[], now: Date, staleAfterMs: number) {
   const wanted = new Set(items.map((i) => i.itemKey));
   const best = new Map<string, Offer>(); // storeId\u0000itemKey
-  const staleKeys = new Set<string>();
+  const staleKeys = new Map<string, { storeId: string; itemKey: string }>();
   for (const o of offers) {
     if (!validOffer(o) || !wanted.has(o.itemKey)) continue;
     const age = now.getTime() - o.checkedAt.getTime();
     if (age > staleAfterMs || age < -FUTURE_SKEW_MS) {
-      staleKeys.add(`${o.storeId}:${o.itemKey}`);
+      staleKeys.set(`${o.storeId}\u0000${o.itemKey}`, { storeId: o.storeId, itemKey: o.itemKey });
       continue;
     }
     if (o.inStock === false) continue;
@@ -120,11 +148,10 @@ function prepare(offers: Offer[], items: NormItem[], now: Date, staleAfterMs: nu
     const prev = best.get(key);
     if (!prev || cmpOffer(o, prev) < 0) best.set(key, o);
   }
-  const staleExcluded = [...staleKeys]
-    .filter((k) => {
-      const i = k.indexOf(":");
-      return !best.has(`${k.slice(0, i)}\u0000${k.slice(i + 1)}`);
-    })
+  // Pares estruturados: o separador só é aplicado na saída, então `local:<uuid>` não quebra a conferência.
+  const staleExcluded = [...staleKeys.entries()]
+    .filter(([key]) => !best.has(key))
+    .map(([, pair]) => `${pair.storeId}:${pair.itemKey}`)
     .sort();
   const byStore = new Map<string, Map<string, Offer>>();
   for (const offer of best.values()) {
@@ -159,6 +186,7 @@ function assign(
   const lines: OptionLine[] = [];
   const used = new Set<string>();
   const amounts: number[] = [];
+  let overflow = false;
   for (const item of items) {
     let pick: Offer | null = null;
     for (const id of ordered) {
@@ -166,6 +194,7 @@ function assign(
       if (o && (!pick || o.unitPriceCents < pick.unitPriceCents)) pick = o;
     }
     const lineTotal = pick ? mulCents(pick.unitPriceCents, item.quantity) : null;
+    if (pick && lineTotal === null) overflow = true;
     if (!pick || lineTotal === null) {
       lines.push(emptyLine(item));
       continue;
@@ -188,7 +217,14 @@ function assign(
       isDemo: pick.isDemo,
     });
   }
-  return { lines, stores: [...used].sort(), totalCents: sumCents(amounts), priced: amounts.length };
+  const totalCents = sumCents(amounts);
+  return {
+    lines,
+    stores: [...used].sort(),
+    totalCents,
+    priced: amounts.length,
+    overflow: overflow || (amounts.length > 0 && totalCents === null),
+  };
 }
 
 function unavailable(
@@ -217,6 +253,7 @@ function toOption(
   invalid: string[],
   stale: string[],
 ): CartOption {
+  if (a.overflow) return unavailable(strategy, items, invalid, "amount_overflow", stale);
   if (a.priced === 0) return unavailable(strategy, items, invalid, "no_price_source", stale);
   if (a.totalCents === null) return unavailable(strategy, items, invalid, "amount_overflow", stale);
   const missing = [
@@ -279,6 +316,11 @@ function ratio(num: bigint, den: bigint): bigint {
   return (num * SCALE) / den;
 }
 
+/** Linhas com estoque confirmado pela fonte (`inStock === true`); desconhecido não conta. */
+function confirmedAvailability(a: Assignment): number {
+  return a.lines.filter((l) => l.status === "priced" && l.inStock === true).length;
+}
+
 function pickBalanced(cands: Candidate[], itemCount: number): Candidate {
   const totals = cands.map((c) => BigInt(c.totalCents ?? 0));
   const minTotal = totals.reduce((m, t) => (t < m ? t : m));
@@ -290,11 +332,12 @@ function pickBalanced(cands: Candidate[], itemCount: number): Candidate {
   const scored = cands.map((c, i) => {
     const d = deliveries[i] ?? null;
     let score =
-      BigInt(BALANCED_WEIGHTS.price) * ratio(minTotal, totals[i] ?? BigInt(1)) +
-      BigInt(BALANCED_WEIGHTS.stores) * ratio(BigInt(minStores), BigInt(c.stores.length)) +
-      BigInt(BALANCED_WEIGHTS.coverage) * ratio(BigInt(c.priced), BigInt(itemCount));
+      BigInt(BALANCED_WEIGHT_PRICE) * ratio(minTotal, totals[i] ?? BigInt(1)) +
+      BigInt(BALANCED_WEIGHT_STORES) * ratio(BigInt(minStores), BigInt(c.stores.length)) +
+      BigInt(BALANCED_WEIGHT_AVAILABILITY) *
+        ratio(BigInt(confirmedAvailability(c)), BigInt(itemCount));
     if (useDelivery && d !== null) {
-      score += BigInt(BALANCED_WEIGHTS.delivery) * ratio(BigInt(1 + minDelivery), BigInt(1 + d));
+      score += BigInt(BALANCED_WEIGHT_DELIVERY) * ratio(BigInt(1 + minDelivery), BigInt(1 + d));
     }
     return { c, score, total: totals[i] ?? BigInt(0) };
   });
@@ -332,8 +375,13 @@ function localAssignment(
   byStore: Map<string, Map<string, Offer>>,
 ): Assignment | null {
   let best: Assignment | null = null;
+  let overflowed: Assignment | null = null;
   for (const id of [...byStore.keys()].sort()) {
     const a = assign(items, byStore, [id]);
+    if (a.overflow) {
+      overflowed ??= a;
+      continue;
+    }
     if (a.priced === 0 || a.totalCents === null) continue;
     if (
       !best ||
@@ -342,7 +390,7 @@ function localAssignment(
     )
       best = a;
   }
-  return best;
+  return best ?? overflowed;
 }
 
 /**
@@ -364,7 +412,8 @@ export function buildCartOptions(
   const remote = prepare(quotes.map(toOffer), valid, now, staleAfterMs);
   const stale = remote.staleExcluded;
   const out: CartOption[] = [];
-  const cands = fullCoverageCandidates(valid, remote.byStore);
+  const everything = assign(valid, remote.byStore, [...remote.byStore.keys()]);
+  const cands = everything.overflow ? [] : fullCoverageCandidates(valid, remote.byStore);
   for (const strategy of CART_STRATEGIES) {
     if (strategy === "local_stationery") {
       const l = local ? prepare(local.map(toOffer), valid, now, staleAfterMs) : null;
@@ -376,13 +425,17 @@ export function buildCartOptions(
       );
       continue;
     }
+    if (everything.overflow) {
+      out.push(toOption(strategy, everything, valid, invalid, stale));
+      continue;
+    }
     if (cands.length === 0) {
       out.push(unavailable(strategy, valid, invalid, "no_price_source", stale));
       continue;
     }
     const chosen =
       strategy === "cheapest"
-        ? assign(valid, remote.byStore, [...remote.byStore.keys()])
+        ? everything
         : strategy === "fewest_stores"
           ? pickFewestStores(cands)
           : pickBalanced(cands, valid.length);

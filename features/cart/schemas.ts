@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { normalizeItemKey } from "./item-key";
+import { CART_STRATEGIES } from "./types";
 
 export const cartItemInputSchema = z
   .object({
@@ -12,9 +13,7 @@ export const cartItemInputSchema = z
 
 export const createCartSchema = z.object({
   listId: z.uuid(),
-  strategy: z
-    .enum(["cheapest", "fewest_stores", "balanced", "local_stationery"])
-    .default("cheapest"),
+  strategy: z.enum(CART_STRATEGIES).default("cheapest"),
 });
 
 export const redirectParamsSchema = z.object({

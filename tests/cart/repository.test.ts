@@ -40,6 +40,7 @@ function localEnv(): { url: string; publishable: string; secret: string } {
 const PASSWORD = "senha-de-teste-local-123";
 const SOURCE = "fixture_teste_repo";
 const INACTIVE = "loja-inativa-repo";
+const LIMIT_KEY = "item-teste-janela-repo";
 
 type Actor = { id: string; client: SupabaseClient };
 let env: ReturnType<typeof localEnv>;
@@ -88,6 +89,20 @@ beforeAll(async () => {
       ["magalu", COLA.itemKey, 280],
       [INACTIVE, COLA.itemKey, 1],
     ] as const;
+    // Janela e limite por item: uma linha velha (3 dias) e três recentes de um item só deste teste.
+    const windowRows = [
+      ["kalunga", LIMIT_KEY, 900, "3 days"],
+      ["kalunga", LIMIT_KEY, 30, "3 hours"],
+      ["magalu", LIMIT_KEY, 20, "2 hours"],
+      ["kalunga", LIMIT_KEY, 10, "1 hour"],
+    ] as const;
+    for (const [slug, key, cents, age] of windowRows) {
+      await c.query(
+        `insert into public.price_snapshots (retailer_id, item_key, price_cents, source, checked_at)
+         select id, $2, $3, $4, now() - $5::interval from public.retailers where slug = $1`,
+        [slug, key, cents, SOURCE, age],
+      );
+    }
     for (const [slug, key, cents] of rows) {
       await c.query(
         `insert into public.price_snapshots (retailer_id, item_key, price_cents, source, checked_at)
@@ -168,7 +183,56 @@ describe("features/cart/repository (Postgres local, RLS)", () => {
     const now = new Date(); // o snapshot foi gravado com now() no banco
     const cheapest = buildCartOptions([COLA], quotes, null, now)[0];
     expect(cheapest).toMatchObject({ status: "available", totalCents: 280, stores: ["magalu"] });
-    expect(NOW).toBeInstanceOf(Date);
+  });
+
+  it("snapshots: só dentro da validade (checked_at >= now - validade), no SQL", async () => {
+    const rows = await getPriceSnapshots(alice.client, [LIMIT_KEY]);
+    expect(rows.map((r) => r.priceCents).sort((a, b) => a - b)).toEqual([10, 20, 30]);
+    const wide = await getPriceSnapshots(alice.client, [LIMIT_KEY], {
+      maxAgeMs: 4 * 24 * 3_600_000,
+    });
+    expect(wide.map((r) => r.priceCents).sort((a, b) => a - b)).toEqual([10, 20, 30, 900]);
+  });
+
+  it("snapshots: limite por item (as mais recentes), não global", async () => {
+    const rows = await getPriceSnapshots(alice.client, [LIMIT_KEY, COLA.itemKey], {
+      perItemLimit: 1,
+    });
+    const mine = rows.filter((r) => r.source === SOURCE);
+    expect(mine.filter((r) => r.itemKey === LIMIT_KEY).map((r) => r.priceCents)).toEqual([10]);
+    expect(mine.filter((r) => r.itemKey === COLA.itemKey)).toHaveLength(1);
+  });
+
+  it("createCart: se o desfazer também falhar, o erro do delete vai junto (não é engolido)", async () => {
+    const fake = {
+      from(table: string) {
+        if (table === "carts") {
+          return {
+            insert: () => ({
+              select: () => ({
+                single: async () => ({
+                  data: { id: "00000000-0000-4000-8000-0000000000aa" },
+                  error: null,
+                }),
+              }),
+            }),
+            delete: () => ({
+              eq: async () => ({ error: { message: "delete negado", code: "42501" } }),
+            }),
+          };
+        }
+        return { insert: async () => ({ error: { message: "itens falharam", code: "23514" } }) };
+      },
+    } as unknown as SupabaseClient;
+    const err = await createCart(fake, {
+      ownerId: alice.id,
+      listId: null,
+      items: [{ name: "x", quantity: 1 }],
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RepositoryError);
+    expect((err as RepositoryError).message).toContain("itens falharam");
+    expect((err as RepositoryError).message).toContain("delete negado");
+    expect((err as RepositoryError).code).toBe("23514");
   });
 
   it("clique: cada clique vira uma linha (duplo clique registra dois); só o dono lê", async () => {

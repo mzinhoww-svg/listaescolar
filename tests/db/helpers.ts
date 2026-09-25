@@ -1,7 +1,21 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Client } from "pg";
 
+// Porta do Postgres local: lida do [db] do supabase/config.toml (cada trilha paralela tem a sua).
+function localDbPort(): number {
+  try {
+    const toml = readFileSync(resolve(process.cwd(), "supabase/config.toml"), "utf8");
+    const match = /\[db\][^[]*?\nport\s*=\s*(\d+)/.exec(toml);
+    if (match?.[1]) return Number(match[1]);
+  } catch {
+    // sem config.toml: usa a porta padrão
+  }
+  return 54322;
+}
+
 export const DATABASE_URL =
-  process.env.SUPABASE_DB_URL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+  process.env.SUPABASE_DB_URL ?? `postgresql://postgres:postgres@127.0.0.1:${localDbPort()}/postgres`;
 
 // audit_log é append-only: rodar estes testes em banco remoto deixaria linhas permanentes.
 const host = new URL(DATABASE_URL).hostname;

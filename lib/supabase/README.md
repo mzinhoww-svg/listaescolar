@@ -31,4 +31,4 @@ Não cole valores neste repositório nem em docs. As chaves legadas (`ANON_KEY`,
 `lib/env.public.ts` (`getPublicEnv`) e `lib/env.ts` (`getServerEnv`, só servidor) validam com Zod quando chamadas. Build e testes não exigem nenhuma variável.
 
 ## Trilhas paralelas
-Cada worktree paralelo precisa de `project_id` e portas próprias em `supabase/config.toml` para que `db:reset` de uma trilha não afete outra. Edite localmente e não commite: `git update-index --skip-worktree supabase/config.toml`.
+Cada worktree paralelo roda o seu próprio Supabase local. Na raiz do worktree: `node scripts/track-ports.mjs <índice 1-9>` (Dados=1, Pipeline=2, Comércio=3, Cobrança=4, B2B=5). O script troca `project_id` e as portas em `supabase/config.toml` e marca o arquivo com `skip-worktree` (nunca é commitado). O helper `tests/db/helpers.ts` lê a porta do Postgres desse arquivo, então `pnpm test:db` funciona sem variáveis. Use `pnpm exec supabase status` para ver as URLs (API, e-mail) da trilha. Índice 0 restaura o padrão. Depois de mudar o config, `pnpm db:stop && pnpm db:start`.

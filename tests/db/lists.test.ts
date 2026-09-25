@@ -144,6 +144,7 @@ describe("S05 schema: listas, versões e itens", () => {
         const { listId } = await seedInState(c, "approved");
         const v2 = await seedCandidate(c, listId);
         const v3 = await seedCandidate(c, listId);
+        await c.query("update public.list_versions set approved_by = $2, approved_at = now() where id = any($1::uuid[])", [[v2, v3], IDS.admin]);
         const ok = await attempt(c, "update public.list_versions set status = 'published', published_at = now() where id = $1", [v2]);
         expect(ok.error).toBeNull();
         const dup = await attempt(c, "update public.list_versions set status = 'published', published_at = now() where id = $1", [v3]);
@@ -153,7 +154,7 @@ describe("S05 schema: listas, versões e itens", () => {
 
     it("transições diretas ilegais de versão e mudança de list_id/version_number são recusadas", async () => {
       await inTx(async (c) => {
-        const { listId, versionId } = await seedInState(c, "published");
+        const { versionId } = await seedInState(c, "published");
         const other = await seedList(c, await seedSchool(c, "51999902"));
         const back = await attempt(c, "update public.list_versions set status = 'candidate', published_at = null where id = $1", [versionId]);
         expect(back.code).toBe("23514");
@@ -161,7 +162,6 @@ describe("S05 schema: listas, versões e itens", () => {
         expect(move.code).toBe("23514");
         const renum = await attempt(c, "update public.list_versions set version_number = 99 where id = $1", [versionId]);
         expect(renum.code).toBe("23514");
-        expect(listId).toBeTruthy();
       });
     });
 
@@ -286,24 +286,26 @@ describe("S05 RLS: o público só vê lista publicada (e versões published/supe
     const v2 = await seedCandidate(c, p2.listId, 2);
     await publish(c, p2.listId, v2); // v1 vira superseded
     const disabled = await seedSchool(c, "52999911", false);
-    await seedInState(c, "published", { schoolId: disabled, slug: "ef-1" });
-    return { lists, p2 };
+    const off = await seedInState(c, "published", { schoolId: disabled, slug: "ef-1" });
+    // só os dados semeados aqui: as contagens não podem depender do resto do banco (seed:demo-lists).
+    const listIds = [...Object.values(lists), p2.listId, off.listId];
+    return { lists, p2, schoolIds: [schoolId, disabled], listIds };
   }
 
   for (const who of PUBLIC_IDS) {
     it(`${who}: vê só a lista published e suas versões published/superseded; nada de candidate/archived/desabilitado`, async () => {
       await inTx(async (c) => {
-        const { lists } = await seedWorld(c);
+        const { lists, schoolIds, listIds } = await seedWorld(c);
         await switchTo(c, who);
-        const l = await c.query<{ id: string; status: string }>("select id, status::text from public.school_lists");
+        const l = await c.query<{ id: string; status: string }>("select id, status::text from public.school_lists where school_id = any($1::uuid[])", [schoolIds]);
         expect(l.rows.map((r) => r.status).sort()).toEqual(["published", "published"]);
         expect(l.rows.map((r) => r.id)).toContain(lists.published);
         for (const s of LIST_STATES.filter((x) => x !== "published")) {
           expect(l.rows.map((r) => r.id), s).not.toContain(lists[s]);
         }
-        const v = await c.query<{ status: string }>("select status::text from public.list_versions order by status");
+        const v = await c.query<{ status: string }>("select status::text from public.list_versions where list_id = any($1::uuid[]) order by status", [listIds]);
         expect(v.rows.map((r) => r.status)).toEqual(["published", "published", "superseded"]);
-        const items = await c.query("select id from public.list_items");
+        const items = await c.query("select id from public.list_items where version_id in (select id from public.list_versions where list_id = any($1::uuid[]))", [listIds]);
         expect(items.rowCount).toBe(6); // 3 versões visíveis x 2 itens
         const g = await c.query("select 1 from public.grades");
         expect(g.rowCount).toBe(16);
@@ -347,11 +349,12 @@ describe("S05 RLS: o público só vê lista publicada (e versões published/supe
   for (const who of PRIVILEGED) {
     it(`${who}: lê todas as listas, versões e eventos`, async () => {
       await inTx(async (c) => {
-        await seedWorld(c);
+        const { listIds } = await seedWorld(c);
         await switchTo(c, who);
-        expect((await c.query("select 1 from public.school_lists")).rowCount).toBe(12);
-        expect((await c.query("select 1 from public.list_versions")).rowCount).toBe(13);
-        expect((await c.query("select 1 from public.list_status_events")).rowCount).toBeGreaterThan(10);
+        const ids = [listIds];
+        expect((await c.query("select 1 from public.school_lists where id = any($1::uuid[])", ids)).rowCount).toBe(12);
+        expect((await c.query("select 1 from public.list_versions where list_id = any($1::uuid[])", ids)).rowCount).toBe(13);
+        expect((await c.query("select 1 from public.list_status_events where list_id = any($1::uuid[])", ids)).rowCount).toBeGreaterThan(10);
       });
     });
   }
@@ -382,7 +385,10 @@ describe("S05 RLS: o público só vê lista publicada (e versões published/supe
       await switchTo(c, "anon");
       expect((await c.query("select 1 from public.school_lists where id = $1", [listId])).rowCount).toBe(0);
       expect((await c.query("select 1 from public.list_versions where list_id = $1", [listId])).rowCount).toBe(0);
-      expect((await c.query("select 1 from public.list_items")).rowCount).toBe(0);
+      expect((await c.query("select 1 from public.list_items where version_id in (select id from public.list_versions where list_id = $1)", [listId])).rowCount).toBe(0);
+      await backToSuper(c);
+      const total = await c.query("select count(*)::int as n from public.list_items i join public.list_versions v on v.id = i.version_id where v.list_id = $1", [listId]);
+      expect(total.rows[0]?.n).toBeGreaterThan(0); // os itens existem; só não são visíveis
     });
   });
 

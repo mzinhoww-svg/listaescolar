@@ -59,6 +59,7 @@ async function publishedList(schoolId: string, slug: string, names: string[]) {
   const v = await repo.createCandidateVersion({ listId, source: "admin" });
   await repo.addItems(v.versionId, names.map((n) => item(n)));
   await toApproved(listId);
+  await repo.approveVersion({ listId, versionId: v.versionId, actorId: ACTOR });
   await repo.publishVersion({ listId, versionId: v.versionId, actorId: ACTOR });
   return { listId, versionId: v.versionId };
 }
@@ -109,6 +110,9 @@ describe("fluxo real de lista", () => {
     expect(await getPublishedList(INEP_A, "ef-1", YEAR, { client: pub })).toBeNull();
     expect(await listVersionHistory(INEP_A, "ef-1", YEAR, { client: pub })).toEqual([]);
 
+    // A aprovação da lista não basta: a versão precisa ser aprovada antes de publicar.
+    await expect(repo.publishVersion({ listId, versionId: v1.versionId, actorId: ACTOR })).rejects.toMatchObject({ code: "invalid_transition" });
+    await repo.approveVersion({ listId, versionId: v1.versionId, actorId: ACTOR });
     expect(await repo.publishVersion({ listId, versionId: v1.versionId, actorId: ACTOR })).toBe(1);
     const pubList = await getPublishedList(INEP_A, "ef-1", YEAR, { client: pub });
     expect(pubList?.version.versionNumber).toBe(1);
@@ -127,6 +131,7 @@ describe("fluxo real de lista", () => {
     expect((await getPublishedList(INEP_A, "ef-1", YEAR, { client: pub }))?.version.versionNumber).toBe(1);
     expect((await listVersionHistory(INEP_A, "ef-1", YEAR, { client: pub })).map((h) => h.versionNumber)).toEqual([1]);
 
+    await repo.approveVersion({ listId, versionId: v2.versionId, actorId: ACTOR });
     expect(await repo.publishVersion({ listId, versionId: v2.versionId, actorId: ACTOR })).toBe(2);
     const cur = await getPublishedList(INEP_A, "ef-1", YEAR, { client: pub });
     expect(cur?.version.versionNumber).toBe(2);
@@ -190,6 +195,12 @@ describe("guardas do repositório de escrita", () => {
     await expect(repo.publishVersion({ listId: l1, versionId: v1.versionId, actorId: ACTOR })).rejects.toMatchObject({ code: "invalid_transition" });
     await toApproved(l1);
     await expect(repo.publishVersion({ listId: l1, versionId: v2.versionId, actorId: ACTOR })).rejects.toMatchObject({ code: "invalid_argument" });
+    await expect(repo.approveVersion({ listId: l1, versionId: v2.versionId, actorId: ACTOR })).rejects.toMatchObject({ code: "invalid_argument" });
+    await repo.addItems(v1.versionId, [item("Caderno")]);
+    // aprovada mas vazia não publica; sem aprovação, com itens, também não
+    await expect(repo.publishVersion({ listId: l1, versionId: v1.versionId, actorId: ACTOR })).rejects.toMatchObject({ code: "invalid_transition" });
+    await repo.approveVersion({ listId: l1, versionId: v1.versionId, actorId: ACTOR });
+    await expect(repo.approveVersion({ listId: l1, versionId: v1.versionId, actorId: ACTOR })).rejects.toMatchObject({ code: "invalid_argument" });
     await expect(repo.publishVersion({ listId: l1, versionId: v1.versionId, actorId: ACTOR })).resolves.toBe(1);
   });
 

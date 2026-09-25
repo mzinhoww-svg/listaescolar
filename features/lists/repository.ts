@@ -137,7 +137,25 @@ export function createListsRepository(client: WriteClient) {
       if (error) throw mapError(error, "transition");
     },
 
-    /** Publica a versão candidata (lista `approved` ou `published`); a versão publicada anterior vira `superseded`. */
+    /**
+     * Aprova uma versão `candidate` da própria lista (grava quem e quando na versão). Só versão aprovada
+     * publica: a aprovação da lista (`transition -> approved`) não basta.
+     */
+    async approveVersion(input: { listId: string; versionId: string; actorId: string }): Promise<void> {
+      uuid.parse(input.actorId);
+      const { error } = await client.rpc("list_approve_version", {
+        p_list_id: input.listId,
+        p_version_id: input.versionId,
+        p_actor_id: input.actorId,
+      });
+      if (error) throw mapError(error, "approveVersion");
+    },
+
+    /**
+     * Publica a versão candidata, que precisa estar aprovada (`approveVersion`) e ter itens; a lista precisa
+     * estar `approved` ou `published`. A versão publicada anterior vira `superseded`. Sem aprovação ou sem
+     * itens o banco responde 23514 (`invalid_transition`).
+     */
     async publishVersion(input: { listId: string; versionId: string; actorId: string }): Promise<number> {
       uuid.parse(input.actorId);
       const { data, error } = await client.rpc("list_publish_version", {

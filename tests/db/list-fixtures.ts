@@ -99,7 +99,13 @@ export async function transition(c: Client, listId: string, to: ListState, reaso
   await c.query("select public.list_transition($1, $2::public.list_status, $3, $4)", [listId, to, IDS.admin, reason]);
 }
 
+export async function approveVersion(c: Client, listId: string, versionId: string): Promise<void> {
+  await c.query("select public.list_approve_version($1, $2, $3)", [listId, versionId, IDS.admin]);
+}
+
+/** Aprova a versão e publica (caminho feliz). Para testar recusas use o SQL direto. */
 export async function publish(c: Client, listId: string, versionId: string): Promise<void> {
+  await approveVersion(c, listId, versionId);
   await c.query("select public.list_publish_version($1, $2, $3)", [listId, versionId, IDS.admin]);
 }
 

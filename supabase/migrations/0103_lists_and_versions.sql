@@ -56,6 +56,9 @@ create table public.list_versions (
   archived_at timestamptz,
   created_by uuid references public.profiles (id) on delete set null,
   item_count integer not null default 0 check (item_count >= 0),
+  -- aprovação da versão (não só da lista): quem decidiu e quando; sem FK (histórico sobrevive ao perfil, ADR-004).
+  approved_by uuid,
+  approved_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint list_versions_list_number_key unique (list_id, version_number),
@@ -65,7 +68,10 @@ create table public.list_versions (
     or (status = 'candidate' and published_at is null)
     or status = 'archived'
   ),
-  constraint list_versions_archived_date check ((status = 'archived') = (archived_at is not null))
+  constraint list_versions_archived_date check ((status = 'archived') = (archived_at is not null)),
+  constraint list_versions_approval_pair check ((approved_by is null) = (approved_at is null)),
+  -- só versão aprovada chega a published (e depois superseded).
+  constraint list_versions_published_approved check (status not in ('published', 'superseded') or approved_by is not null)
 );
 
 -- Ponteiro da versão atual: (versão, lista) precisa existir junto => versão da própria lista.
@@ -165,13 +171,16 @@ create trigger list_status_events_immutable before update or delete on public.li
   for each row execute function public.list_status_events_block_mutation();
 
 -- Versão: só transições candidate->published|archived, published->superseded|archived, superseded->archived;
--- list_id e version_number nunca mudam.
+-- list_id e version_number nunca mudam; approved_by/approved_at, uma vez preenchidos, também não.
 create function public.list_versions_guard() returns trigger
 language plpgsql set search_path = ''
 as $$
 begin
   if new.list_id <> old.list_id or new.version_number <> old.version_number then
     raise exception 'list_id e version_number da versão são imutáveis' using errcode = '23514';
+  end if;
+  if old.approved_by is not null and (new.approved_by is distinct from old.approved_by or new.approved_at is distinct from old.approved_at) then
+    raise exception 'approved_by e approved_at da versão são imutáveis' using errcode = '23514';
   end if;
   if new.status <> old.status and not (
     (old.status = 'candidate' and new.status in ('published', 'archived'))
@@ -186,8 +195,10 @@ $$;
 create trigger list_versions_guard before update on public.list_versions
   for each row execute function public.list_versions_guard();
 
--- Itens: só versão candidate aceita insert/update/delete. A leitura da versão trava a linha em modo
--- compartilhado (publicar pega `for update`), então item e publicação se serializam.
+-- Itens: só versão candidate aceita insert/update/delete. A leitura da versão trava a linha em `for no key update`
+-- (publicar pega `for update`, que conflita), então item e publicação se serializam. Não usar `for share`: dois
+-- escritores de itens seguravam share e ambos tentavam o update de item_count => deadlock (40P01); com no key
+-- update o segundo espera no guard.
 create function public.list_items_guard() returns trigger
 language plpgsql security definer set search_path = ''
 as $$
@@ -201,7 +212,7 @@ begin
   else v_ids := array[old.version_id, new.version_id];
   end if;
   foreach v_id in array v_ids loop
-    select v.status into v_status from public.list_versions v where v.id = v_id for share;
+    select v.status into v_status from public.list_versions v where v.id = v_id for no key update;
     if v_status is distinct from 'candidate' then
       raise exception 'itens de versão % são imutáveis: só versão candidate aceita alterações', coalesce(v_status::text, 'inexistente')
         using errcode = '23514';
@@ -343,7 +354,7 @@ create policy list_status_events_select_admin on public.list_status_events
 -- Matriz de transições da lista (espelha features/lists/state.ts; um teste compara os dois)
 -- ---------------------------------------------------------------------------
 create function public.list_transition_allowed(p_from public.list_status, p_to public.list_status) returns boolean
-language sql immutable security definer set search_path = ''
+language sql immutable set search_path = ''
 as $$
   select exists (
     select 1 from (values
@@ -416,6 +427,8 @@ declare
   v_list_status public.list_status;
   v_number integer;
   v_status public.version_status;
+  v_approved_by uuid;
+  v_items integer;
 begin
   if p_actor_id is null then
     raise exception 'p_actor_id obrigatório para publicar' using errcode = '22023';
@@ -427,10 +440,16 @@ begin
   if v_list_status not in ('approved', 'published') then
     raise exception 'transição de lista inválida: % -> published', v_list_status using errcode = '23514';
   end if;
-  select v.status, v.version_number into v_status, v_number
+  select v.status, v.version_number, v.approved_by, v.item_count into v_status, v_number, v_approved_by, v_items
     from public.list_versions v where v.id = p_version_id and v.list_id = p_list_id for update;
   if not found or v_status <> 'candidate' then
     raise exception 'versão inválida para publicação: precisa ser candidate da própria lista' using errcode = '22023';
+  end if;
+  if v_approved_by is null then
+    raise exception 'versão não aprovada: use list_approve_version antes de publicar' using errcode = '23514';
+  end if;
+  if v_items = 0 then
+    raise exception 'versão sem itens não pode ser publicada' using errcode = '23514';
   end if;
 
   update public.list_versions set status = 'superseded'
@@ -439,9 +458,47 @@ begin
   update public.school_lists
      set status = 'published', current_version_id = p_version_id, published_at = now()
    where id = p_list_id;
-  insert into public.list_status_events (list_id, version_id, from_status, to_status, actor_id)
-  values (p_list_id, p_version_id, v_list_status, 'published', p_actor_id);
+  -- troca de versão numa lista já published não é transição de estado: from_status nulo + motivo.
+  insert into public.list_status_events (list_id, version_id, from_status, to_status, actor_id, reason)
+  values (
+    p_list_id, p_version_id,
+    case when v_list_status = 'published' then null else v_list_status end,
+    'published', p_actor_id,
+    case when v_list_status = 'published' then 'troca de versão' end
+  );
   return v_number;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- list_approve_version: aprova uma versão candidate da própria lista (approved_by/approved_at). Só a versão
+-- aprovada pode ser publicada. Mesma ordem de lock de list_publish_version (lista, depois versão).
+-- ---------------------------------------------------------------------------
+create function public.list_approve_version(p_list_id uuid, p_version_id uuid, p_actor_id uuid) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_status public.version_status;
+  v_approved_by uuid;
+begin
+  if p_actor_id is null then
+    raise exception 'p_actor_id obrigatório para aprovar versão' using errcode = '22023';
+  end if;
+  perform 1 from public.school_lists l where l.id = p_list_id for no key update;
+  if not found then
+    raise exception 'lista não encontrada' using errcode = 'P0002';
+  end if;
+  select v.status, v.approved_by into v_status, v_approved_by
+    from public.list_versions v where v.id = p_version_id and v.list_id = p_list_id for update;
+  if not found or v_status <> 'candidate' then
+    raise exception 'versão inválida para aprovação: precisa ser candidate da própria lista' using errcode = '22023';
+  end if;
+  if v_approved_by is not null then
+    raise exception 'versão já aprovada' using errcode = '22023';
+  end if;
+  update public.list_versions set approved_by = p_actor_id, approved_at = now() where id = p_version_id;
 end;
 $$;
 
@@ -508,10 +565,12 @@ $$;
 revoke execute on function public.list_transition_allowed(public.list_status, public.list_status) from public, anon, authenticated, service_role;
 revoke execute on function public.list_transition(uuid, public.list_status, uuid, text) from public, anon, authenticated, service_role;
 revoke execute on function public.list_publish_version(uuid, uuid, uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.list_approve_version(uuid, uuid, uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.list_archive(uuid, uuid, text) from public, anon, authenticated, service_role;
 revoke execute on function public.list_create_candidate_version(uuid, public.list_version_source, uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.list_transition_allowed(public.list_status, public.list_status) to service_role;
 grant execute on function public.list_transition(uuid, public.list_status, uuid, text) to service_role;
 grant execute on function public.list_publish_version(uuid, uuid, uuid) to service_role;
+grant execute on function public.list_approve_version(uuid, uuid, uuid) to service_role;
 grant execute on function public.list_archive(uuid, uuid, text) to service_role;
 grant execute on function public.list_create_candidate_version(uuid, public.list_version_source, uuid, uuid) to service_role;

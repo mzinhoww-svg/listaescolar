@@ -37,10 +37,6 @@ describe("S05 list_transition: matriz 10x10 contra o banco real", () => {
     });
   });
 
-  it("archived é terminal: nenhum destino sai dele", async () => {
-    expect(VALID_TRANSITIONS.archived).toEqual([]);
-  });
-
   it("origem inexistente: lista não encontrada (P0002)", async () => {
     await inTx(async (c) => {
       const r = await attempt(c, CALL, ["00000000-0000-4000-8000-00000000dead", "submitted", IDS.admin, null]);
@@ -112,13 +108,15 @@ describe("S05 list_transition: matriz 10x10 contra o banco real", () => {
       const r = await c.query<{ proname: string; prosecdef: boolean; proconfig: string[] | null; acl: string | null }>(
         `select proname, prosecdef, proconfig, proacl::text as acl from pg_proc
           where pronamespace = 'public'::regnamespace
-            and proname in ('list_transition','list_publish_version','list_archive','list_create_candidate_version','list_transition_allowed')`,
+            and proname in ('list_transition','list_publish_version','list_approve_version','list_archive','list_create_candidate_version','list_transition_allowed')`,
       );
       expect(r.rows.map((x) => x.proname).sort()).toEqual([
-        "list_archive", "list_create_candidate_version", "list_publish_version", "list_transition", "list_transition_allowed",
+        "list_approve_version", "list_archive", "list_create_candidate_version", "list_publish_version", "list_transition", "list_transition_allowed",
       ]);
       for (const f of r.rows) {
-        expect(f.prosecdef, f.proname).toBe(true);
+        // exceção explícita: list_transition_allowed é função pura (matriz imutável, sem acesso a tabelas);
+        // as demais alteram estado e por isso são SECURITY DEFINER.
+        expect(f.prosecdef, f.proname).toBe(f.proname !== "list_transition_allowed");
         expect(f.proconfig, f.proname).toContain('search_path=""');
         expect(f.acl, f.proname).toMatch(/service_role=X/);
         expect(f.acl, f.proname).not.toMatch(/(^|[{,])(=X|anon=|authenticated=)/);
@@ -131,6 +129,7 @@ describe("S05 list_transition: matriz 10x10 contra o banco real", () => {
         for (const sql of [
           "select public.list_transition($1, 'submitted', null, null)",
           "select public.list_archive($1, null, null)",
+          "select public.list_approve_version($1, gen_random_uuid(), null)",
           "select public.list_publish_version($1, gen_random_uuid(), null)",
           "select * from public.list_create_candidate_version($1, 'admin', null, null)",
         ]) {

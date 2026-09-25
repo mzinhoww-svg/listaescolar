@@ -11,9 +11,11 @@
     "test": "vitest run",
     "test:db": "vitest run -c vitest.db.config.ts",
     "format": "prettier --write .",
-    "db:start": "supabase start -x imgproxy,logflare,vector,studio",
-    "db:stop": "supabase stop",
-    "db:reset": "supabase db reset"
+    "db:start": "node scripts/supa.mjs start -x imgproxy,logflare,vector,studio",
+    "db:stop": "node scripts/supa.mjs stop",
+    "db:reset": "node scripts/supa.mjs db reset",
+    "db:status": "node scripts/supa.mjs status",
+    "db:env": "node scripts/supa.mjs env"
   },
   "dependencies": {
     "@sentry/nextjs": "^11.0.0",

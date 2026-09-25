@@ -23,3 +23,5 @@ next-env.d.ts
 *.tsbuildinfo
 npm-debug.log*
 .pnpm-debug.log*
+.track
+.track-workdir

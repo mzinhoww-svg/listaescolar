@@ -2,14 +2,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Client } from "pg";
 
-// Porta do Postgres local: lida do [db] do supabase/config.toml (cada trilha paralela tem a sua).
+// Porta do Postgres local: lida do config da trilha (.track-workdir, gerado por scripts/supa.mjs) ou do
+// supabase/config.toml. Falha alto se o arquivo existir e a porta não for encontrada.
 function localDbPort(): number {
-  try {
-    const toml = readFileSync(resolve(process.cwd(), "supabase/config.toml"), "utf8");
-    const match = /\[db\][^[]*?\nport\s*=\s*(\d+)/.exec(toml);
-    if (match?.[1]) return Number(match[1]);
-  } catch {
-    // sem config.toml: usa a porta padrão
+  const candidates = [".track-workdir/supabase/config.toml", "supabase/config.toml"];
+  for (const rel of candidates) {
+    let toml: string;
+    try {
+      toml = readFileSync(resolve(process.cwd(), rel), "utf8");
+    } catch {
+      continue;
+    }
+    const match = /\[db\]\n(?:[^\n[][^\n]*\n|\n)*?port\s*=\s*(\d+)/.exec(toml);
+    if (!match?.[1]) throw new Error(`porta do [db] não encontrada em ${rel}`);
+    return Number(match[1]);
   }
   return 54322;
 }

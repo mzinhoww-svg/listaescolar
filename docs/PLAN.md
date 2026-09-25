@@ -10,7 +10,7 @@
 ## Como executar
 - Cada fatia é um prompt curto para o Claude Code. Ele lê `CLAUDE.md` e o spec, executa, testa e abre o PR.
 - Toda fatia termina com o mesmo gate: `pnpm typecheck && pnpm lint && pnpm test` verdes, migrations aplicadas do zero no Supabase local, roteiro E2E com agent-browser no preview e checklist do spec (seção 8) no PR.
-- **Paralelismo** (dispatching-parallel-agents): depois de S02, três trilhas independentes podem rodar em worktrees separados.
+- **Paralelismo** (dispatching-parallel-agents): depois de S02, três trilhas podem rodar em worktrees separados, com isolamento e contratos definidos no ADR-004 (sem FK entre trilhas, portas em memória, integração na S11).
   - Trilha Dados: S03, S04, S05, S06.
   - Trilha Pipeline: S07, S08, S09, S10.
   - Trilha Comércio: S12, S13, S14.
@@ -127,7 +127,8 @@
 
 **E2E:** lista com alerta crítico vai para revisão, admin corrige e publica.
 
-### S11 · Notificações
+### S11 · Notificações e integração das trilhas
+**Adendo (ADR-004):** além do prompt abaixo, a S11 entrega a migration `0600_cross_track_fks.sql`, liga as portas `ListPublisher` e `ListReader` às tabelas reais e roda os E2E de ponta a ponta adiados das trilhas (S04 com lista, S10 publicar, S12 carrinho).
 **Prompt:**
 > Tabelas `notifications`, `push_subscriptions` e `notification_preferences`. Web Push com VAPID, central de notificações dentro do app e interface `Notifier` com implementação de e-mail desligada por flag. Cobrir os eventos da seção 6 do prompt.
 

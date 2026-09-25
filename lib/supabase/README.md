@@ -31,4 +31,9 @@ Não cole valores neste repositório nem em docs. As chaves legadas (`ANON_KEY`,
 `lib/env.public.ts` (`getPublicEnv`) e `lib/env.ts` (`getServerEnv`, só servidor) validam com Zod quando chamadas. Build e testes não exigem nenhuma variável.
 
 ## Trilhas paralelas
-Cada worktree paralelo roda o seu próprio Supabase local. Na raiz do worktree: `node scripts/track-ports.mjs <índice 1-9>` (Dados=1, Pipeline=2, Comércio=3, Cobrança=4, B2B=5). O script troca `project_id` e as portas em `supabase/config.toml` e marca o arquivo com `skip-worktree` (nunca é commitado). O helper `tests/db/helpers.ts` lê a porta do Postgres desse arquivo, então `pnpm test:db` funciona sem variáveis. Use `pnpm exec supabase status` para ver as URLs (API, e-mail) da trilha. Índice 0 restaura o padrão. Depois de mudar o config, `pnpm db:stop && pnpm db:start`.
+Cada worktree paralelo roda o seu próprio Supabase local, sem editar `supabase/config.toml`. Crie o arquivo `.track` (gitignored) na raiz do worktree com o índice da trilha (Dados=1, Pipeline=2, Comércio=3, Cobrança=4, B2B=5) ou exporte `TRACK=<n>`. Os scripts `pnpm db:start|stop|reset|status` passam por `scripts/supa.mjs`, que gera a cada execução `.track-workdir/supabase/config.toml` (project_id `listacerta-t<n>` e portas +100·n; app em `3000+n`) e roda o CLI com `--workdir`. Nada do config versionado é alterado, então editar `config.toml` (buckets, funções, templates) e fazer rebase continuam normais.
+- `pnpm test:db` lê a porta do Postgres do config da trilha.
+- `pnpm db:env` imprime as variáveis para o `.env.local` da trilha (URL, chaves e `NEXT_PUBLIC_SITE_URL`); rode o app com `PORT=$((3000+TRACK)) pnpm dev` (ou `next start -p`).
+- Derrubar uma trilha: `TRACK=<n> pnpm db:stop -- --no-backup`.
+- Após mudar `supabase/config.toml`, `pnpm db:stop && pnpm db:start`.
+- Ambiente da máquina (não versionado): Colima com 10 GB (`colima stop && colima start --cpu 4 --memory 10 --disk 40`); três stacks leves cabem.

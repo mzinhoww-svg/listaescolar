@@ -38,7 +38,8 @@ export type Identity =
   | "stationery_member"
   | "system"
   | "system_profile" // perfil com role system logado como authenticated (não service_role)
-  | "orphan";
+  | "orphan"
+  | "spare"; // parent extra (precisa de ensureProfile)
 
 /** Ids fixos dos usuários de teste. `orphan` e `spare` existem em auth.users, mas sem profile. */
 export const IDS = {

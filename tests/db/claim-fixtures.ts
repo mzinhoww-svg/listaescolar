@@ -41,7 +41,8 @@ export const SCHOOL_EMAIL = "diretoria@escola-teste.invalid";
 export const SCHOOL_PHONE = "65999990001";
 export const CLAIMANT_NAME = "Maria da Silva Santos";
 export const CLAIMANT_TITLE = "Diretora Pedagógica";
-export const CLAIMANT_EMAIL = "maria.claimant@escola-teste.invalid";
+/** E-mail da sessão do reivindicante (auth.users do seedUsers: `<papel>@teste.invalid`); o banco o copia. */
+export const CLAIMANT_EMAIL = "parent@teste.invalid";
 export const CLAIM_NOTE = "Sou a diretora desde 2020, nota interna";
 
 type SchoolOpts = {
@@ -88,18 +89,17 @@ export async function ensureProfile(c: Client, id: string, role = "parent"): Pro
   );
 }
 
-export type ClaimOpts = { claimant?: string; method?: ClaimMethod; note?: string | null; name?: string; email?: string };
+export type ClaimOpts = { claimant?: string; method?: ClaimMethod; note?: string | null; name?: string };
 
 export async function createClaim(c: Client, schoolId: string, o: ClaimOpts = {}): Promise<string> {
   const r = await c.query<{ id: string }>(
-    "select public.claim_create($1, $2, $3::public.claim_method, $4, $5, $6, $7, 'v1') as id",
+    "select public.claim_create($1, $2, $3::public.claim_method, $4, $5, $6, 'v1') as id",
     [
       schoolId,
       o.claimant ?? IDS.parent,
       o.method ?? "documents",
       o.name ?? CLAIMANT_NAME,
       CLAIMANT_TITLE,
-      o.email ?? CLAIMANT_EMAIL,
       o.note === undefined ? CLAIM_NOTE : o.note,
     ],
   );

@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  CLAIM_ACTORS, CLAIM_ORACLE, CLAIM_STATUSES, addEvidence, createClaim, decide, docsAwaiting, ensureProfile,
+  CLAIM_ACTORS, CLAIM_ORACLE, CLAIM_STATUSES, addEvidence, backdateTokens, createClaim, decide, docsAwaiting, ensureProfile,
   eventsOf, evidencePath, issueToken, schoolStatus, seedClaimSchool, sha, statusOf, submit,
 } from "./claim-fixtures";
 import { attempt, cleanupUsers, DATABASE_URL, IDS, inTx, seedUsers, withSuperuser } from "./helpers";
 
-const CREATE_SQL = "select public.claim_create($1, $2, $3::public.claim_method, 'Maria Silva', 'Diretora', 'm@x.invalid', null, 'v1')";
+const CREATE_SQL = "select public.claim_create($1, $2, $3::public.claim_method, 'Maria Silva', 'Diretora', null, 'v1')";
 
 describe("S06 matriz de transições (claim_transition_allowed)", () => {
   beforeAll(seedUsers);
@@ -31,13 +31,6 @@ describe("S06 matriz de transições (claim_transition_allowed)", () => {
       }
       expect(allowed).toBe(14);
     });
-  });
-
-  it("approved e rejected são terminais para todos os atores; mesmo estado nunca é permitido", () => {
-    for (const actor of CLAIM_ACTORS) {
-      expect(CLAIM_ORACLE[actor].filter(([f]) => f === "approved" || f === "rejected")).toEqual([]);
-      expect(CLAIM_ORACLE[actor].filter(([f, t]) => f === t)).toEqual([]);
-    }
   });
 });
 
@@ -143,17 +136,38 @@ describe("S06 claim_create", () => {
     await inTx(async (c) => {
       const school = await seedClaimSchool(c);
       const bad = [
-        ["A", "Diretora", "m@x.invalid", null],
-        ["Maria", "D", "m@x.invalid", null],
-        ["Maria", "Diretora", "  ", null],
-        ["Maria", "Diretora", "m@x.invalid", "x".repeat(501)],
+        ["A", "Diretora", null],
+        ["Maria", "D", null],
+        ["Maria", "Diretora", "x".repeat(501)],
       ] as const;
-      for (const [n, t, e, note] of bad) {
-        const r = await attempt(c, "select public.claim_create($1, $2, 'documents', $3, $4, $5, $6, 'v1')", [school, IDS.parent, n, t, e, note]);
-        expect(r.code, `${n}/${t}/${e}`).toBe("23514");
+      for (const [n, t, note] of bad) {
+        const r = await attempt(c, "select public.claim_create($1, $2, 'documents', $3, $4, $5, 'v1')", [school, IDS.parent, n, t, note]);
+        expect(r.code, `${n}/${t}`).toBe("23514");
       }
       const id = await createClaim(c, school, { note: "   " });
       expect((await c.query("select evidence_note from public.claims where id = $1", [id])).rows[0]?.evidence_note).toBeNull();
+    });
+  });
+});
+
+describe("S06 claim_create: e-mail da sessão", () => {
+  beforeAll(seedUsers);
+  afterAll(cleanupUsers);
+
+  it("contact_email é copiado de auth.users (não há parâmetro); e-mail ausente ou malformado recusa", async () => {
+    await inTx(async (c) => {
+      const school = await seedClaimSchool(c);
+      const id = await createClaim(c, school);
+      expect((await c.query("select contact_email from public.claims where id = $1", [id])).rows[0]?.contact_email).toBe("parent@teste.invalid");
+      await ensureProfile(c, IDS.spare, "parent");
+      for (const bad of [null, "   ", "sem-arroba", "a@b", "a b@c.d", "@x.invalid", "x".repeat(250) + "@a.bc"]) {
+        await c.query("update auth.users set email = $2 where id = $1", [IDS.spare, bad]);
+        const r = await attempt(c, CREATE_SQL, [school, IDS.spare, "documents"]);
+        expect(r.code, String(bad).slice(0, 12)).toBe("23514");
+        expect(r.error).toMatch(/e-mail da conta/);
+      }
+      await c.query("update auth.users set email = 'spare@teste.invalid' where id = $1", [IDS.spare]);
+      expect((await attempt(c, CREATE_SQL, [school, IDS.spare, "documents"])).error).toBeNull();
     });
   });
 });
@@ -442,12 +456,76 @@ describe("S06 claim_decide", () => {
     });
   });
 
-  it("verified nunca volta a claimed por nenhuma função (sync ignora verified)", async () => {
+  it("verified nunca volta a claimed: reivindicação em insufficient_evidence numa escola verified é recusada e a escola segue verified", async () => {
     await inTx(async (c) => {
-      const school = await seedClaimSchool(c, { status: "verified" });
+      const school = await seedClaimSchool(c);
+      const id = await docsAwaiting(c, school);
+      await decide(c, id, "insufficient_evidence", "Falta documento");
+      expect(await schoolStatus(c, school)).toBe("claimed");
+      await c.query("update public.schools set verification_status = 'verified' where id = $1", [school]); // dono (superuser)
+      await decide(c, id, "rejected", "Recusada depois de verificada por outro caminho");
+      expect(await statusOf(c, id)).toBe("rejected");
       expect(await schoolStatus(c, school)).toBe("verified");
       await c.query("select public.claim_expire_tokens()");
       expect(await schoolStatus(c, school)).toBe("verified");
+    });
+  });
+
+  it("decision_reason/decided_by/decided_at/decision_code não ficam velhos: limpos ao voltar a awaiting_verification; aprovar troca o motivo", async () => {
+    await inTx(async (c) => {
+      const school = await seedClaimSchool(c);
+      const id = await docsAwaiting(c, school);
+      await decide(c, id, "insufficient_evidence", "Faltou o documento X");
+      const row = () => c.query("select decision_reason, decision_code, decided_by, decided_at from public.claims where id = $1", [id]).then((r) => r.rows[0]);
+      expect((await row())?.decision_reason).toBe("Faltou o documento X");
+      await addEvidence(c, id);
+      await submit(c, id);
+      expect(await row()).toEqual({ decision_reason: null, decision_code: null, decided_by: null, decided_at: null });
+      await decide(c, id, "approved", null);
+      expect(await row()).toMatchObject({ decision_reason: null, decision_code: null, decided_by: IDS.admin });
+
+      const s2 = await seedClaimSchool(c, { inep: "51999802" });
+      const id2 = await docsAwaiting(c, s2, IDS.school_member);
+      await decide(c, id2, "insufficient_evidence", "Motivo velho");
+      await addEvidence(c, id2, IDS.school_member);
+      await submit(c, id2, IDS.school_member);
+      await decide(c, id2, "approved", "Aprovada após conferência");
+      expect((await c.query("select decision_reason from public.claims where id = $1", [id2])).rows[0]?.decision_reason).toBe("Aprovada após conferência");
+    });
+  });
+
+  it("escola suspensa ou município desabilitado depois da criação: submit, token e evidência recusam (23514); recusar (admin) segue possível", async () => {
+    const SUBMIT = "select public.claim_submit_for_review($1, $2)";
+    const ISSUE = "select * from public.claim_issue_token($1, $2, $3)";
+    const addEv = (c: import("pg").Client, id: string) =>
+      attempt(c, "select public.claim_add_evidence($1, $2, $3, 'application/pdf', 10, $4, 'a.pdf')", [id, IDS.parent, evidencePath(id), sha(id)]);
+    await inTx(async (c) => {
+      const school = await seedClaimSchool(c);
+      const docs = await createClaim(c, school);
+      await addEvidence(c, docs);
+      const other = await seedClaimSchool(c, { inep: "51999802" });
+      const email = await createClaim(c, other, { method: "institutional_email" });
+      await c.query("update public.schools set verification_status = 'suspended' where id = any($1::uuid[])", [[school, other]]);
+      for (const r of [await attempt(c, SUBMIT, [docs, IDS.parent]), await attempt(c, ISSUE, [email, IDS.parent, sha("s")]), await addEv(c, docs)]) {
+        expect(r.code).toBe("23514");
+        expect(r.error).toMatch(/suspensa/);
+      }
+      await decide(c, docs, "rejected", "Escola suspensa");
+      expect(await statusOf(c, docs)).toBe("rejected");
+    });
+    await inTx(async (c) => {
+      const school = await seedClaimSchool(c);
+      const docs = await createClaim(c, school);
+      await addEvidence(c, docs);
+      const other = await seedClaimSchool(c, { inep: "51999802" });
+      const email = await createClaim(c, other, { method: "institutional_email" });
+      await c.query("update public.municipalities set is_enabled = false where ibge_code = '5103403'");
+      for (const r of [await attempt(c, SUBMIT, [docs, IDS.parent]), await attempt(c, ISSUE, [email, IDS.parent, sha("s")]), await addEv(c, docs)]) {
+        expect(r.code).toBe("23514");
+        expect(r.error).toMatch(/município/);
+      }
+      await decide(c, docs, "rejected", "Município desabilitado");
+      expect(await statusOf(c, docs)).toBe("rejected");
     });
   });
 });
@@ -455,17 +533,18 @@ describe("S06 claim_decide", () => {
 // Concorrência: commits reais em conexões paralelas; limpeza por INEP no fim.
 describe("S06 concorrência", () => {
   const INEP = "51999901";
+  const INEP_LIKE = "519999__"; // 51999901..51999999: só estes testes gravam (commit) nessa faixa
   async function purge(): Promise<void> {
     await withSuperuser(async (c) => {
       await c.query("begin");
       await c.query("set local session_replication_role = replica");
-      const sub = "select id from public.claims where school_id in (select id from public.schools where inep = $1)";
+      const sub = "select id from public.claims where school_id in (select id from public.schools where inep like $1)";
       for (const t of ["claim_status_events", "claim_evidence", "claim_tokens"]) {
-        await c.query(`delete from public.${t} where claim_id in (${sub})`, [INEP]);
+        await c.query(`delete from public.${t} where claim_id in (${sub})`, [INEP_LIKE]);
       }
-      await c.query("delete from public.school_members where school_id in (select id from public.schools where inep = $1)", [INEP]);
-      await c.query(`delete from public.claims where id in (${sub})`, [INEP]);
-      await c.query("delete from public.schools where inep = $1", [INEP]);
+      await c.query("delete from public.school_members where school_id in (select id from public.schools where inep like $1)", [INEP_LIKE]);
+      await c.query(`delete from public.claims where id in (${sub})`, [INEP_LIKE]);
+      await c.query("delete from public.schools where inep like $1", [INEP_LIKE]);
       await c.query("commit");
     });
   }
@@ -558,5 +637,85 @@ describe("S06 concorrência", () => {
       expect((await c.query("select count(*)::int as n from public.claims where school_id = $1 and status not in ('approved','rejected')", [school])).rows[0]?.n).toBe(0);
       expect((await c.query("select count(*)::int as n from public.claims where school_id = $1 and decision_code = 'school_verified_by_other_claim'", [school])).rows[0]?.n).toBe(2);
     });
+  });
+
+  it("limite de 3 abertas por reivindicante vale entre escolas em conexões paralelas (lock advisory): 3 passam, a 4ª é 23514", async () => {
+    await reset();
+    await withSuperuser((c) => ensureProfile(c, IDS.orphan, "parent"));
+    const schools = await withSuperuser(async (c) => {
+      await c.query("begin");
+      const ids: string[] = [];
+      for (let i = 1; i <= 4; i++) ids.push(await seedClaimSchool(c, { inep: `5199992${i}` }));
+      await c.query("commit");
+      return ids;
+    });
+    const res = await Promise.allSettled(schools.map((s) => inOwnTx((c) => c.query(CREATE_SQL, [s, IDS.orphan, "documents"]), 300)));
+    expect(res.filter((r) => r.status === "fulfilled")).toHaveLength(3);
+    const rejected = res.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toMatchObject({ code: "23514" });
+    expect(String((rejected[0]!.reason as Error).message)).toMatch(/limite de 3/);
+    await withSuperuser(async (c) => {
+      expect((await c.query("select count(*)::int as n from public.claims where claimant_id = $1", [IDS.orphan])).rows[0]?.n).toBe(3);
+    });
+  });
+
+  /** 9 escolas (51999931..39), uma reivindicação por e-mail cada, todas com o token vencido. */
+  async function seedExpiredBatch(): Promise<string[]> {
+    return withSuperuser(async (c) => {
+      await c.query("begin");
+      const ids: string[] = [];
+      const who = [IDS.parent, IDS.school_member, IDS.spare];
+      for (let i = 0; i < 9; i++) {
+        const school = await seedClaimSchool(c, { inep: `5199993${i + 1}` });
+        const claimant = who[i % 3]!;
+        const id = await createClaim(c, school, { method: "institutional_email", claimant });
+        await issueToken(c, id, sha(`sweep-${i}`), claimant);
+        await backdateTokens(c, id, 25 * 3600);
+        ids.push(id);
+      }
+      await c.query("commit");
+      return ids;
+    });
+  }
+
+  it("duas varreduras claim_expire_tokens() concorrentes: sem deadlock, cada reivindicação expira uma vez (soma = 9)", async () => {
+    await reset();
+    const ids = await seedExpiredBatch();
+    const sweep = () => inOwnTx((c) => c.query<{ n: number }>("select public.claim_expire_tokens() as n"), 200);
+    const res = await Promise.all([sweep(), sweep()]);
+    expect(res.map((r) => r.rows[0]!.n).reduce((a, b) => a + b, 0)).toBe(9);
+    await withSuperuser(async (c) => {
+      for (const id of ids) expect((await eventsOf(c, id)).filter((e) => e.endsWith("token_expired:system"))).toHaveLength(1);
+    });
+  });
+
+  it("a varredura só toca candidatas com token vencido: não espera pela trava de uma escola cujo token ainda vale", async () => {
+    await reset();
+    const [expiredId] = await seedExpiredBatch();
+    const fresh = await withSuperuser(async (c) => {
+      await c.query("begin");
+      const school = await seedClaimSchool(c, { inep: "51999941" });
+      await ensureProfile(c, IDS.orphan, "parent");
+      const id = await createClaim(c, school, { method: "institutional_email", claimant: IDS.orphan });
+      await issueToken(c, id, sha("sweep-fresh"), IDS.orphan);
+      await c.query("commit");
+      return school;
+    });
+    const holder = new Client({ connectionString: DATABASE_URL });
+    await holder.connect();
+    try {
+      await holder.query("begin");
+      await holder.query("select 1 from public.schools where id = $1 for no key update", [fresh]);
+      const n = await inOwnTx(async (c) => {
+        await c.query("set local lock_timeout = '1500ms'");
+        return (await c.query<{ n: number }>("select public.claim_expire_tokens() as n")).rows[0]!.n;
+      });
+      expect(n).toBe(9);
+      expect(expiredId).toBeTruthy();
+    } finally {
+      await holder.query("rollback").catch(() => undefined);
+      await holder.end();
+    }
   });
 });

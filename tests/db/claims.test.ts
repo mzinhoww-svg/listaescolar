@@ -182,6 +182,7 @@ describe("S06 RLS e grants por perfil", () => {
   /** Cenário: parent reivindica (documentos), envia, admin pede mais evidência; parent também é membro (vínculo direto). */
   async function scenario(c: Client): Promise<{ school: string; claim: string }> {
     const school = await seedClaimSchool(c);
+    await ensureProfile(c, IDS.spare, "parent"); // terceiro parent, sem vínculo com a reivindicação
     const claim = await docsAwaiting(c, school, IDS.parent);
     await decide(c, claim, "insufficient_evidence", "Faltou o documento X");
     await c.query("insert into public.school_members (school_id, profile_id, member_role, claim_id) values ($1, $2, 'owner', $3)", [school, IDS.parent, claim]);
@@ -196,6 +197,7 @@ describe("S06 RLS e grants por perfil", () => {
         // claims, events, evidence, members
         ["parent", 1, 3, 1, 1],
         ["school_member", 0, 0, 0, 0],
+        ["spare", 0, 0, 0, 0],
         ["stationery_member", 0, 0, 0, 0],
         ["orphan", 0, 0, 0, 0],
         ["admin", 1, 3, 1, 1],
@@ -224,7 +226,7 @@ describe("S06 RLS e grants por perfil", () => {
         const r = await attempt(c, `select id from public.${t}`);
         expect(r.code, `anon ${t}`).toBe("42501");
       }
-      for (const who of ["parent", "school_member", "stationery_member", "orphan", "admin", "system_profile"] as const) {
+      for (const who of ["parent", "school_member", "spare", "stationery_member", "orphan", "admin", "system_profile"] as const) {
         await switchTo(c, who);
         expect((await attempt(c, "select id from public.claim_tokens")).code, who).toBe("42501");
         expect((await attempt(c, "select token_hash from public.claim_tokens")).code, who).toBe("42501");
@@ -269,7 +271,7 @@ describe("S06 RLS e grants por perfil", () => {
         `update public.${t} set updated_at = now()`,
         `delete from public.${t}`,
       ];
-      for (const who of ["anon", "parent", "school_member", "stationery_member", "orphan", "admin", "system_profile", "system"] as const) {
+      for (const who of ["anon", "parent", "school_member", "spare", "stationery_member", "orphan", "admin", "system_profile", "system"] as const) {
         await switchTo(c, who);
         for (const t of TABLES) {
           for (const sql of writes(t)) {
@@ -290,7 +292,7 @@ describe("S06 RLS e grants por perfil", () => {
       "claim_issue_token", "claim_confirm_token", "claim_expire_tokens", "claim_decide",
     ];
     const INTERNAL = [
-      "claim_school_mobile", "claim_lock", "claim_sync_school", "claim_apply", "claims_guard",
+      "claim_school_mobile", "claim_assert_school_open", "claim_lock", "claim_sync_school", "claim_apply", "claims_guard",
       "claim_status_events_block_mutation", "schools_guard_verification",
     ];
     await withSuperuser(async (c) => {
@@ -319,13 +321,13 @@ describe("S06 RLS e grants por perfil", () => {
       const school = await seedClaimSchool(c);
       for (const who of ["anon", "parent", "admin", "system_profile"] as const) {
         await switchTo(c, who);
-        const r = await attempt(c, "select public.claim_create($1, $2, 'documents', 'Maria', 'Dir', 'm@x.invalid', null, 'v1')", [school, IDS.parent]);
+        const r = await attempt(c, "select public.claim_create($1, $2, 'documents', 'Maria', 'Dir', null, 'v1')", [school, IDS.parent]);
         expect(r.code, who).toBe("42501");
         expect((await attempt(c, "select public.claim_decide($1, 'approved', $2, null)", [school, IDS.admin])).code, who).toBe("42501");
         expect((await attempt(c, "select public.claim_expire_tokens()")).code, who).toBe("42501");
       }
       await switchTo(c, "system"); // service_role executa
-      expect((await attempt(c, "select public.claim_create($1, $2, 'documents', 'Maria', 'Dir', 'm@x.invalid', null, 'v1')", [school, IDS.parent])).error).toBeNull();
+      expect((await attempt(c, "select public.claim_create($1, $2, 'documents', 'Maria', 'Dir', null, 'v1')", [school, IDS.parent])).error).toBeNull();
     });
   });
 });
@@ -354,7 +356,7 @@ describe("S06 storage e auditoria", () => {
       const claim = await createClaim(c, school);
       const path = evidencePath(claim);
       await c.query("insert into storage.objects (bucket_id, name, owner_id) values ('claim-evidence', $1, $2)", [path, IDS.parent]);
-      for (const who of ["anon", "parent", "school_member", "admin", "stationery_member", "system_profile"] as const) {
+      for (const who of ["anon", "parent", "school_member", "spare", "admin", "stationery_member", "system_profile"] as const) {
         await switchTo(c, who);
         const sel = await attempt(c, "select name from storage.objects where bucket_id = 'claim-evidence'");
         expect(sel.rows, `${who} select`).toEqual([]);
@@ -374,14 +376,17 @@ describe("S06 storage e auditoria", () => {
   it("audit_log de claims, evidências, tokens e vínculos não guarda nome, cargo, e-mail, nota, hash nem nome de arquivo", async () => {
     await inTx(async (c) => {
       const school = await seedClaimSchool(c);
-      const id = await createClaim(c, school, { method: "institutional_email", name: "Fulana Sigilosa de Tal", email: "sigilo.fulana@escola-teste.invalid", note: "Nota sigilosa da diretora" });
+      await c.query("update auth.users set email = 'sigilo.fulana@escola-teste.invalid' where id = $1", [IDS.parent]);
+      const id = await createClaim(c, school, { method: "institutional_email", name: "Fulana Sigilosa de Tal", note: "Nota sigilosa da diretora" });
       const t = await issueToken(c, id, sha("token-auditoria"));
       const docs = await createClaim(c, await seedClaimSchool(c, { inep: "51999802" }), { claimant: IDS.school_member, method: "documents" });
       const ev = await addEvidence(c, docs, IDS.school_member);
       await c.query("update public.claim_evidence set original_name = 'nome-original-sigiloso.pdf' where id = $1", [ev.id]);
       await c.query("update public.claims set claimant_role_title = 'Cargo Sigiloso' where id = $1", [id]);
       await ensureProfile(c, IDS.spare, "parent");
-      await c.query("insert into public.school_members (school_id, profile_id, member_role, claim_id) values ($1, $2, 'owner', $3)", [school, IDS.spare, id]);
+      const member = (await c.query<{ id: string }>(
+        "insert into public.school_members (school_id, profile_id, member_role, claim_id) values ($1, $2, 'owner', $3) returning id", [school, IDS.spare, id],
+      )).rows[0]!.id;
 
       const log = await c.query<{ entity_table: string; blob: string }>(
         `select entity_table, coalesce(before::text, '') || coalesce(after::text, '') as blob from public.audit_log
@@ -396,8 +401,8 @@ describe("S06 storage e auditoria", () => {
       }
       expect(all).not.toMatch(/token_hash|original_name|claimant_name|contact_email|evidence_note|claimant_role_title/);
       expect(all).toContain(school);
-      const members = await c.query("select count(*)::int as n from public.audit_log where entity_table = 'school_members'");
-      expect(members.rows[0]?.n).toBeGreaterThan(0);
+      const members = await c.query("select count(*)::int as n from public.audit_log where entity_table = 'school_members' and entity_id = $1", [member]);
+      expect(members.rows[0]?.n).toBe(1);
     });
   });
 });

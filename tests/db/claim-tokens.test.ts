@@ -109,6 +109,31 @@ describe("S06 emissão de token", () => {
     });
   });
 
+  it("teto de 10 tokens em 24 h por escola (várias reivindicantes): a terceira conta é recusada mesmo sem ter emitido nenhum", async () => {
+    await inTx(async (c) => {
+      await ensureProfile(c, IDS.spare, "parent");
+      const school = await seedClaimSchool(c);
+      const claim = (who: string) => createClaim(c, school, { method: "institutional_email", claimant: who });
+      const [a, b, third] = [await claim(IDS.parent), await claim(IDS.school_member), await claim(IDS.spare)];
+      for (const [id, who] of [[a, IDS.parent], [b, IDS.school_member]] as const) {
+        for (let i = 0; i < 5; i++) {
+          await issueToken(c, id, H(`sc${who.slice(-1)}${i}`), who);
+          await backdateTokens(c, id, 61);
+        }
+      }
+      const r = await attempt(c, ISSUE, [third, IDS.spare, H("sc-third")]);
+      expect(r.code).toBe("23514");
+      expect(r.error).toMatch(/10 tokens.*escola/);
+      expect(await statusOf(c, third)).toBe("submitted");
+      // o teto é por escola: outra escola não é afetada; fora da janela de 24 h volta a valer
+      const elsewhere = await createClaim(c, await seedClaimSchool(c, { inep: "51999802" }), { method: "institutional_email", claimant: IDS.spare });
+      expect((await attempt(c, ISSUE, [elsewhere, IDS.spare, H("sc-else")])).error).toBeNull();
+      await backdateTokens(c, a, 24 * 3600);
+      await backdateTokens(c, b, 24 * 3600);
+      expect((await attempt(c, ISSUE, [third, IDS.spare, H("sc-third")])).error).toBeNull();
+    });
+  });
+
   it("depois de confirmado o canal não emite mais token; estados finais e insufficient_evidence recusam", async () => {
     await inTx(async (c) => {
       const school = await seedClaimSchool(c);

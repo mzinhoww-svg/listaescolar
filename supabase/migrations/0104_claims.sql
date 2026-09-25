@@ -14,6 +14,11 @@
 --  * Evidências ficam no bucket privado `claim-evidence`, sem política em storage.objects para
 --    anon/authenticated (upload, leitura e remoção só pelo servidor com service_role).
 --  * Nenhuma escrita por anon/authenticated em nenhuma tabela; service_role só lê (escreve pelas funções).
+--  * Atenção (futuras migrations): o gatilho `schools_guard_verification` libera o dono (postgres/supabase_admin).
+--    Qualquer função SECURITY DEFINER futura que escreva `schools.verification_status` roda como dono e portanto
+--    passa pelo gatilho: só a escreva depois de conferir papel e regra por conta própria. O gatilho também
+--    bloqueia `verified|claimed -> suspended` por admin/service_role (a S16 precisa de uma função de suspensão).
+--  * Limites de emissão de token: por reivindicação (60 s, 5/24 h) e por escola (10/24 h, todas as reivindicantes).
 -- FKs só para schools, profiles e tabelas desta migration (ADR-004). Errcodes: 23514 regra/estado, 42501 papel ou
 -- dono, 22023 argumento inválido, P0002 não encontrado. Mensagens estáveis (a UI mapeia, nunca exibe).
 
@@ -376,14 +381,36 @@ begin
   update public.claims c
      set status = p_to,
          submitted_at = case when p_to = 'awaiting_verification' then coalesce(c.submitted_at, clock_timestamp()) else c.submitted_at end,
-         decided_at = case when v_decision then clock_timestamp() else c.decided_at end,
-         decided_by = case when v_decision then case when p_actor = 'admin' then p_actor_id end else c.decided_by end,
-         decision_reason = case when p_to in ('rejected', 'insufficient_evidence') then p_reason else c.decision_reason end,
-         decision_code = case when p_to in ('rejected', 'insufficient_evidence') then p_code else c.decision_code end
+         decided_at = case when v_decision then clock_timestamp() when p_to = 'awaiting_verification' then null else c.decided_at end,
+         decided_by = case when v_decision then case when p_actor = 'admin' then p_actor_id end
+                           when p_to = 'awaiting_verification' then null else c.decided_by end,
+         decision_reason = case when v_decision then p_reason when p_to = 'awaiting_verification' then null else c.decision_reason end,
+         decision_code = case when v_decision then p_code when p_to = 'awaiting_verification' then null else c.decision_code end
    where c.id = p_claim_id;
   insert into public.claim_status_events (claim_id, from_status, to_status, actor_kind, actor_id, reason)
   values (p_claim_id, v_from, p_to, p_actor, p_actor_id, p_reason);
   return v_from;
+end;
+$$;
+
+-- Escola já travada: depois de criada, a reivindicação só avança em escola não suspensa e município habilitado.
+-- (claim_decide não usa: o admin precisa poder recusar.) SECURITY INVOKER: só é chamada por funções do dono.
+create function public.claim_assert_school_open(p_school_id uuid) returns void
+language plpgsql set search_path = ''
+as $$
+declare
+  v_status public.verification_status;
+  v_enabled boolean;
+begin
+  select s.verification_status, m.is_enabled into v_status, v_enabled
+    from public.schools s left join public.municipalities m on m.id = s.municipality_id
+   where s.id = p_school_id;
+  if v_status = 'suspended' then
+    raise exception 'escola suspensa não aceita esta operação' using errcode = '23514';
+  end if;
+  if not coalesce(v_enabled, false) then
+    raise exception 'município não habilitado' using errcode = '23514';
+  end if;
 end;
 $$;
 
@@ -392,7 +419,7 @@ $$;
 -- ---------------------------------------------------------------------------
 create function public.claim_create(
   p_school_id uuid, p_claimant_id uuid, p_method public.claim_method, p_claimant_name text,
-  p_claimant_role_title text, p_contact_email text, p_evidence_note text, p_privacy_text_version text
+  p_claimant_role_title text, p_evidence_note text, p_privacy_text_version text
 ) returns uuid
 language plpgsql security definer set search_path = ''
 as $$
@@ -402,10 +429,16 @@ declare
   v_enabled boolean;
   v_id uuid;
   v_note text := nullif(btrim(coalesce(p_evidence_note, '')), '');
+  v_email text;
 begin
   select p.role into v_role from public.profiles p where p.id = p_claimant_id;
   if v_role is null or v_role not in ('parent', 'school_member') then
     raise exception 'papel não pode reivindicar escola' using errcode = '42501';
+  end if;
+  -- o e-mail de contato é o da conta (auth.users), nunca digitado
+  select nullif(btrim(u.email), '') into v_email from auth.users u where u.id = p_claimant_id;
+  if v_email is null or length(v_email) > 254 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'e-mail da conta ausente ou inválido' using errcode = '23514';
   end if;
   -- serializa o limite de abertas do mesmo usuário (a escola é travada depois; approve não usa este lock).
   perform pg_advisory_xact_lock(hashtextextended('claim_create:' || p_claimant_id::text, 0));
@@ -443,7 +476,7 @@ begin
     school_id, claimant_id, method, claimant_name, claimant_role_title, contact_email, evidence_note,
     privacy_ack_at, privacy_text_version, is_demo
   ) values (
-    p_school_id, p_claimant_id, p_method, p_claimant_name, p_claimant_role_title, p_contact_email, v_note,
+    p_school_id, p_claimant_id, p_method, p_claimant_name, p_claimant_role_title, v_email, v_note,
     now(), p_privacy_text_version, v_school.is_demo
   ) returning id into v_id;
   insert into public.claim_status_events (claim_id, from_status, to_status, actor_kind, actor_id)
@@ -469,6 +502,7 @@ begin
   if v_claim.claimant_id is distinct from p_actor_id then
     raise exception 'só o reivindicante envia evidências' using errcode = '42501';
   end if;
+  perform public.claim_assert_school_open(v_claim.school_id);
   if not ((v_claim.status = 'submitted' and v_claim.method = 'documents') or v_claim.status = 'insufficient_evidence') then
     raise exception 'reivindicação não aceita evidências neste estado' using errcode = '23514';
   end if;
@@ -530,6 +564,7 @@ begin
   if v_claim.claimant_id is distinct from p_actor_id then
     raise exception 'só o reivindicante envia para análise' using errcode = '42501';
   end if;
+  perform public.claim_assert_school_open(v_claim.school_id);
   if not public.claim_transition_allowed(v_claim.status, 'awaiting_verification', 'claimant') then
     raise exception 'transição de reivindicação inválida: % -> awaiting_verification (claimant)', v_claim.status using errcode = '23514';
   end if;
@@ -582,6 +617,7 @@ begin
   if v_claim.claimant_id is distinct from p_actor_id then
     raise exception 'só o reivindicante pede token' using errcode = '42501';
   end if;
+  perform public.claim_assert_school_open(v_claim.school_id);
   if v_claim.method = 'documents' then
     raise exception 'método documentos não usa token' using errcode = '23514';
   end if;
@@ -609,6 +645,11 @@ begin
   end if;
   if (select count(*) from public.claim_tokens t where t.claim_id = p_claim_id and t.created_at > now() - interval '24 hours') >= 5 then
     raise exception 'limite de 5 tokens em 24 horas' using errcode = '23514';
+  end if;
+  -- teto por escola (a trava da escola já está tomada): contas descartáveis não multiplicam mensagens ao contato oficial
+  if (select count(*) from public.claim_tokens t join public.claims c on c.id = t.claim_id
+       where c.school_id = v_claim.school_id and t.created_at > now() - interval '24 hours') >= 10 then
+    raise exception 'limite de 10 tokens em 24 horas para esta escola' using errcode = '23514';
   end if;
 
   update public.claim_tokens t set revoked_at = now()
@@ -699,7 +740,8 @@ begin
      where (p_claim_id is null or c.id = p_claim_id)
        and c.status = 'awaiting_verification' and c.method in ('institutional_email', 'institutional_whatsapp')
        and c.channel_confirmed_at is null
-     order by c.id
+       and (select t.expires_at from public.claim_tokens t where t.claim_id = c.id order by t.created_at desc, t.id limit 1) <= now()
+     order by c.school_id, c.id -- mesma ordem de trava (escola, reivindicação) em varreduras concorrentes: sem 40P01
   loop
     v_claim := public.claim_lock(v_id);
     if v_claim.status = 'awaiting_verification' and v_claim.channel_confirmed_at is null
@@ -758,7 +800,7 @@ begin
   if v_school_status in ('verified', 'suspended') then
     raise exception 'escola % não aceita aprovação', v_school_status using errcode = '23514';
   end if;
-  select p.role into v_role from public.profiles p where p.id = v_claim.claimant_id for update;
+  select p.role into v_role from public.profiles p where p.id = v_claim.claimant_id for no key update;
   if v_role not in ('parent', 'school_member') then
     raise exception 'papel do reivindicante não pode ser promovido' using errcode = '23514';
   end if;
@@ -792,9 +834,10 @@ revoke execute on function public.claim_school_mobile(text) from public, anon, a
 revoke execute on function public.claim_lock(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.claim_sync_school(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.claim_apply(uuid, public.claim_status, public.claim_actor, uuid, text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.claim_assert_school_open(uuid) from public, anon, authenticated, service_role;
 
 revoke execute on function public.claim_transition_allowed(public.claim_status, public.claim_status, public.claim_actor) from public, anon, authenticated, service_role;
-revoke execute on function public.claim_create(uuid, uuid, public.claim_method, text, text, text, text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.claim_create(uuid, uuid, public.claim_method, text, text, text, text) from public, anon, authenticated, service_role;
 revoke execute on function public.claim_add_evidence(uuid, uuid, text, text, integer, text, text) from public, anon, authenticated, service_role;
 revoke execute on function public.claim_remove_evidence(uuid, uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.claim_submit_for_review(uuid, uuid, text) from public, anon, authenticated, service_role;
@@ -803,7 +846,7 @@ revoke execute on function public.claim_confirm_token(text, uuid, uuid) from pub
 revoke execute on function public.claim_expire_tokens(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.claim_decide(uuid, public.claim_status, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.claim_transition_allowed(public.claim_status, public.claim_status, public.claim_actor) to service_role;
-grant execute on function public.claim_create(uuid, uuid, public.claim_method, text, text, text, text, text) to service_role;
+grant execute on function public.claim_create(uuid, uuid, public.claim_method, text, text, text, text) to service_role;
 grant execute on function public.claim_add_evidence(uuid, uuid, text, text, integer, text, text) to service_role;
 grant execute on function public.claim_remove_evidence(uuid, uuid) to service_role;
 grant execute on function public.claim_submit_for_review(uuid, uuid, text) to service_role;

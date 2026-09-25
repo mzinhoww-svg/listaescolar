@@ -86,7 +86,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-049 | ledger.md (Ruling de E2E local); e2e/S00 | Nenhum E2E rodou no preview da Vercel (preview protegido); a infraestrutura da Vercel não é coberta | alta | S20 (humano libera o preview) | aberta |
+| D-049 | ledger.md (Ruling de E2E local); e2e/S00 | Nenhum E2E rodou no preview da Vercel: a proteção foi desativada em 2026-09-25 (Ruling de previews públicos) e o E2E de cada fatia passa a rodar no preview após o primeiro deploy verde; enquanto isso vale o E2E local | alta | Orquestrador (a cada fatia) → S20 | em andamento |
 | D-050 | ledger.md (ADR-004, itens 7 a 10); PR #8 | E2E parcial até a S11: fluxos ponta a ponta com listas reais (lista → carrinho → lead) não exercitados | alta | S11 | aberta |
 | D-051 | ledger-dados S03 T3 e S06 T3 | `agent-browser upload` trava o renderer; E2E injeta arquivo por `DataTransfer`, sem exercitar o seletor real | baixa | S20 | aberta |
 | D-052 | ledger-dados S06 revisão final | Reenvio por `add_file` no E2E da S06 não confirma o fim do upload (flakiness) | baixa | S18 | aberta |
@@ -107,7 +107,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-058 | checks dos PRs #4 a #17 | Deploy de preview da Vercel falha em todos os PRs desde o #4 (variáveis `NEXT_PUBLIC_SUPABASE_*` ausentes no projeto) | alta | Humano (antes da S11) | aberta |
+| D-058 | checks dos PRs #4 a #17 | Deploy de preview da Vercel falhava em todos os PRs desde o #4 (variáveis `NEXT_PUBLIC_SUPABASE_*` ausentes no projeto `listaescolare`); o humano configurou as variáveis em 2026-09-25 17:31 UTC; falta confirmar o primeiro deploy verde | alta | Orquestrador (confirmar) | em andamento |
 | D-059 | ledger.md (S01, S02) | Pepper do IP de auditoria (`app.audit_ip_pepper`) não configurado; sem ele `ip_hash` fica nulo; validar cabeçalho `x-forwarded-for` no staging | alta | Humano / S20 | aberta |
 | D-060 | ledger-pipeline S07 T2; PR #14 | Edge Function `ocr-worker` sem deploy, sem agendamento pg_cron/pg_net (fora de migration, com Vault) e sem secrets (`WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_*`) | alta | Humano / S11 | aberta |
 | D-061 | ledger.md (S01) | Histórico remoto de migrations do staging usa timestamps e nomes diferentes dos arquivos; reconciliar antes da S20 | média | S20 | aberta |
@@ -122,6 +122,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-070 | ledger-pipeline S09 | `PortError` tipado (`transient`) obrigatório na porta real; versão real idempotente por `list_versions.submission_id`, perfil `system` e ajuste na 0600 (`p_actor_id` obrigatório) | alta | S11 | aberta |
 | D-071 | ledger-pipeline S09; OBRIGAÇÃO da S10 | `ReviewSummary` mostra "Publicada automaticamente" para qualquer status `published`; deve vir da linha `publication:published` automática (`actor_id` nulo), não só do status (aprovação humana também vira `published`) | alta | S10 | aberta |
 | D-072 | PR #20 (CI); ledger-comercio S27 (assets/fonts) | `pnpm build` do CI depende de `next/font/google` (busca Plus Jakarta Sans no Google Fonts): falhou uma vez ao obter a fonte do Google Fonts no build no PR #20 (rerun passou). Hospedar a fonte localmente (a S27 já commitou `assets/fonts` para a OG image) | média | S19 / S18 | aberta |
+| D-074 | Ruling de previews públicos (ledger.md) | Previews da Vercel públicos com o Supabase de staging (dados demo): reativar a Vercel Authentication (ou equivalente) ANTES de qualquer dado real; hoje só `X-Robots-Tag: noindex` os protege da indexação | alta | S20 (checklist de go-live; humano reativa) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 

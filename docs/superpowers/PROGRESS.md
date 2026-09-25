@@ -38,17 +38,17 @@ Aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O 
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
-| 0001_base_schema.sql | S01 | base_schema | n/d |
-| 0002_profile_on_signup.sql | S02 | profile_on_signup | n/d |
-| 0101_schools_and_imports.sql | S03 | 20260925043904 | schools_and_imports |
-| 0102_school_search.sql | S04 | 20260925052004 | school_search |
-| 0103_lists_and_versions.sql | S05 | 20260925061744 | lists_and_versions |
-| 0104_claims.sql | S06 | 20260925132606 | claims |
-| 0201_submissions_and_jobs.sql | S07 | 20260925053528 | submissions_and_jobs |
-| 0202_ai_registry_settings_decisions.sql | S08 | 20260925120948 | ai_registry_settings_decisions |
-| 0301_cart_retailers_affiliates.sql | S12 | 20260925041851 | cart_retailers_affiliates |
-| 0302_stationeries.sql | S13 | 20260925060339 | stationeries |
-| 0303_leads.sql | S14 | 20260925131816 | leads |
+| 0001_base_schema.sql | S01 | base_schema | 20260925003453 |
+| 0002_profile_on_signup.sql | S02 | profile_on_signup | 20260925012319 |
+| 0101_schools_and_imports.sql | S03 | schools_and_imports | 20260925043904 |
+| 0102_school_search.sql | S04 | school_search | 20260925052004 |
+| 0103_lists_and_versions.sql | S05 | lists_and_versions | 20260925061744 |
+| 0104_claims.sql | S06 | claims | 20260925132606 |
+| 0201_submissions_and_jobs.sql | S07 | submissions_and_jobs | 20260925053528 |
+| 0202_ai_registry_settings_decisions.sql | S08 | ai_registry_settings_decisions | 20260925120948 |
+| 0301_cart_retailers_affiliates.sql | S12 | cart_retailers_affiliates | 20260925041851 |
+| 0302_stationeries.sql | S13 | stationeries | 20260925060339 |
+| 0303_leads.sql | S14 | leads | 20260925131816 |
 
 Pendente de staging: `0203_publication_decisions.sql` (S09, branch `slice/S09-aprovacao`; aplicar depois da revisão final, antes do merge).
 

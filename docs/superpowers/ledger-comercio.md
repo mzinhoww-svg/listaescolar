@@ -215,3 +215,7 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orqu
 - Ruling (S27 fechamento): `ogText` aceita só o que o cmap da Plus Jakarta Sans ExtraBold cobre (ASCII, Latin-1 sem U+00AD, Latin Extended-A sem U+0149/U+017F, pontuação tipográfica); Latin Extended-B fora (lacunas na fonte) e cai na imagem genérica — custo se errada: baixo (escola com nome nesses caracteres usa a imagem genérica).
 - Ruling (S27 fechamento): `/como-funciona` usa container de 1200 px (igual ao cabeçalho/rodapé), não 1400; o 3º celular segue claro (não "Material entregue"), divergência deliberada do design (ver S27 T1 rodada 2) — custo se errada: baixo.
 - Ruling (S27 fechamento): o cleanup do `e2e-s27.sh` restaura o build normal (`PRODSIM_DIRTY`) se a fase k for interrompida — custo se errada: baixo.
+
+## S11 · Obrigação vinda do staging (2026-09-25)
+- Ruling: a 0601 (S11, Task 2) inclui `create or replace function public.audit_row_change` lendo o pepper de `coalesce(nullif(current_setting('app.audit_ip_pepper', true), ''), (select decrypted_secret from vault.decrypted_secrets where name = 'audit_ip_pepper'))` — o hospedado não permite o GUC de banco; local sem o segredo no Vault segue sem hash (falha fechada); teste de banco cobre GUC, Vault e ausência — custo se estiver errada: `ip_hash` continua nulo no staging (ver D-059)
+- Ruling: a chave do Asaas (`ASAAS_*`) já está no projeto Vercel e em `.env.local`; a S21/S23 não a usam para dinheiro real (só sandbox/fake) e revisam o adapter Pix contra a API do Asaas antes do go-live (D-076)

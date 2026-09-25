@@ -107,12 +107,12 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-058 | checks dos PRs #4 a #17; verificação de 2026-09-25 17:58 UTC | Deploy de preview da Vercel falha em todos os PRs desde o #4 (`NEXT_PUBLIC_SUPABASE_*` ausentes no build). Verificado pela API: o projeto `listaescolare` (conectado ao GitHub) NÃO tem nenhuma variável de ambiente; o projeto `listaescolar` (sem "e", que não recebe deploys) tem as 4 variáveis mas só no ambiente Production. Falta o humano criar no `listaescolare` as variáveis (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY, demais do `.env.example`) para Preview e Production, apontando para o staging nos previews | alta | Humano (antes de a S11 exigir E2E no preview) | aberta |
-| D-059 | ledger.md (S01, S02) | Pepper do IP de auditoria (`app.audit_ip_pepper`) não configurado; sem ele `ip_hash` fica nulo; validar cabeçalho `x-forwarded-for` no staging | alta | Humano / S20 | aberta |
-| D-060 | ledger-pipeline S07 T2; PR #14 | Edge Function `ocr-worker` sem deploy, sem agendamento pg_cron/pg_net (fora de migration, com Vault) e sem secrets (`WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_*`) | alta | Humano / S11 | aberta |
+| D-058 | checks dos PRs #4 a #17; verificação de 2026-09-25 | Deploy de preview da Vercel falhava desde o PR #4 (`NEXT_PUBLIC_SUPABASE_*` ausentes). Resolvido: o humano criou as variáveis no projeto `listaescolare` (Preview, Production e Development) e os deploys de preview (S11 `32845a8`; `chore/staging-ops-indexing` `2b79000`) e de produção da `main` (`02dfe00`) ficaram READY; verificado por `curl` em 2026-09-25: o preview responde 200 sem login e com `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` em `/`, `/sobre`, `/robots.txt` e `/escolas` | alta | Orquestrador | resolvida em 2026-09-25 (variáveis criadas; deploys READY) |
+| D-059 | ledger.md (S01, S02); verificação de 2026-09-25 | Pepper do IP de auditoria: o Supabase hospedado NÃO permite `alter database … set app.audit_ip_pepper` ao papel `postgres` (permission denied), então o GUC não pode ser definido. Criado o segredo `audit_ip_pepper` no Vault do staging (valor gerado no banco); falta a S11 (0601) fazer `audit_row_change` ler o pepper do Vault (com fallback ao GUC) e validar `x-forwarded-for` no staging; na produção, gerar outro pepper | alta | S11 (0601) / S20 | em andamento |
+| D-060 | ledger-pipeline S07 T2; PR #14; verificação de 2026-09-25 | Edge Function `ocr-worker`: no staging já existem `pg_cron`, `pg_net`, os segredos `ocr_worker_url` e `ocr_worker_secret` no Vault e o job `ocr-worker-tick` (a cada minuto, `timeout_milliseconds` 120000, lê URL e segredo do Vault) INATIVO. Falta (1) deploy da função com `verify_jwt=false` e (2) os secrets da função (`WORKER_SHARED_SECRET` = o do Vault, `APP_ENV=staging`, `OPENROUTER_KEY`, `AI_MODEL_*`): a CLI local não tem acesso ao projeto (403; ele pertence à org da integração Vercel) e o MCP não define secrets; depois ativar o job | alta | Humano (acesso CLI/secrets) → orquestrador | em andamento |
 | D-061 | ledger.md (S01) | Histórico remoto de migrations do staging usa timestamps e nomes diferentes dos arquivos; reconciliar antes da S20 | média | S20 | aberta |
 | D-062 | ledger-comercio S12 T2 | Formato do link de afiliado do Mercado Livre (`matt_tool`/`matt_word`) não confirmado | média | Humano / S20 | aberta |
-| D-063 | ledger.md (S02) | Supabase Auth hospedado sem Site URL/redirects/templates/SMTP: o link mágico só funciona no mesmo navegador | alta | Humano / S20 | aberta |
+| D-063 | ledger.md (S02) | Supabase Auth hospedado: o humano configurou em 2026-09-25 Site URL, Redirect URLs (incl. `https://listaescolare-*.vercel.app/**`) e os templates `magic_link` e `confirmation`; falta validar o link mágico em outro navegador no preview e configurar SMTP próprio antes de produção (o SMTP padrão do Supabase tem limite de envio) | média | Orquestrador (validar) / S20 (SMTP) | em andamento |
 | D-064 | ledger-pipeline S07 T3 | `bodySizeLimit` de 11 MB divergia do teto da Vercel | média | S07 | resolvida em S07 onda final (teto único de 4 MB) |
 | D-065 | ledger-pipeline S09 (M-2) | `ocr-worker`: o ramo sem pipeline responde 500 `misconfigured`/`pipeline_unavailable` mesmo varrendo publicação; sem regressão em deploys hospedados | baixa | S11 | aberta |
 | D-066 | ledger-pipeline S09 (M-7) | Quando a porta publica e o envio já não está `approved` (`not_approved`), a versão fica órfã sem linha persistente própria; só alerta `published_not_recorded` | média | S11 | aberta |
@@ -123,6 +123,8 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-071 | ledger-pipeline S09; OBRIGAÇÃO da S10 | `ReviewSummary` mostra "Publicada automaticamente" para qualquer status `published`; deve vir da linha `publication:published` automática (`actor_id` nulo), não só do status (aprovação humana também vira `published`) | alta | S10 | aberta |
 | D-072 | PR #20 (CI); ledger-comercio S27 (assets/fonts) | `pnpm build` do CI depende de `next/font/google` (busca Plus Jakarta Sans no Google Fonts): falhou uma vez ao obter a fonte do Google Fonts no build no PR #20 (rerun passou). Hospedar a fonte localmente (a S27 já commitou `assets/fonts` para a OG image) | média | S19 / S18 | aberta |
 | D-074 | Ruling de previews públicos (ledger.md) | Previews da Vercel públicos com o Supabase de staging (dados demo): reativar a Vercel Authentication (ou equivalente) ANTES de qualquer dado real; hoje só `X-Robots-Tag: noindex` os protege da indexação | alta | S20 (checklist de go-live; humano reativa) | aberta |
+| D-075 | Ruling de indexamento (ledger.md) | O deploy "de produção" da Vercel (`main`) aponta para o staging e seria indexável: passou a exigir `SITE_INDEXING=1` (além de `VERCEL_ENV=production`) para robots, sitemap e remoção do `X-Robots-Tag`; o humano liga `SITE_INDEXING=1` só no go-live | alta | S20 (checklist de go-live) | aberta |
+| D-076 | verificação de 2026-09-25 (env da Vercel) | Chaves `ASAAS_*` existem no projeto Vercel (PSP Asaas escolhido) e em `.env.local`, mas a S21 proíbe dinheiro real e credencial no código: usar só sandbox/fake até o go-live e revisar o adapter Pix (planejado genérico BACEN) contra a API do Asaas | média | S21/S23 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -130,7 +132,7 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 13 | 0 | 13 |
-| média | 25 | 4 | 29 |
+| alta | 12 | 1 | 13 |
+| média | 27 | 4 | 31 |
 | baixa | 30 | 1 | 31 |
-| **Total** | **68** | **5** | **73** |
+| **Total** | **69** | **6** | **75** |

@@ -130,7 +130,7 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 12 | 0 | 12 |
+| alta | 13 | 0 | 13 |
 | média | 25 | 4 | 29 |
 | baixa | 30 | 1 | 31 |
-| **Total** | **67** | **5** | **72** |
+| **Total** | **68** | **5** | **73** |

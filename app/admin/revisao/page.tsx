@@ -5,9 +5,9 @@ import { ReviewQueueTable } from "@/components/review/ReviewQueueTable";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { getReviewQueue } from "@/features/review/queries";
-import type { QueueRow, QueueTab } from "@/features/review/read-models";
+import { QUEUE_LIMIT, type QueueRow, type QueueTab } from "@/features/review/read-models";
 
-import { loadSchoolLabels } from "./loaders";
+import { loadPublicationInfo, loadSchoolLabels } from "./loaders";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Revisão de listas · ListaCerta" };
@@ -41,7 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
             aria-current={t.key === current.key ? "page" : undefined}
             className={`rounded-botao inline-flex min-h-11 items-center px-5 text-[14px] font-extrabold ${t.key === current.key ? "bg-tinta text-papel" : "bg-campo"}`}
           >
-            {t.label}{lists ? ` (${lists[i]?.length ?? 0})` : ""}
+            {t.label}{lists ? ` (${(lists[i]?.length ?? 0) >= QUEUE_LIMIT ? `${QUEUE_LIMIT}+` : (lists[i]?.length ?? 0)})` : ""}
           </Link>
         ))}
       </nav>
@@ -52,7 +52,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
       ) : rows.length === 0 ? (
         <p className="text-texto-2 rounded-[24px] bg-white p-8 text-[15px] font-bold">Nenhuma lista nesta aba.</p>
       ) : (
-        <ReviewQueueTable rows={rows} labels={labels} />
+        <ReviewQueueTable rows={rows} labels={labels} demoPublication={loadPublicationInfo().demo} />
       )}
     </AdminShell>
   );

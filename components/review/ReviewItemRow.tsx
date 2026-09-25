@@ -1,3 +1,4 @@
+import { categoryLabel } from "@/features/review/phrases";
 import { confidenceBand, type ConfidenceThresholds } from "@/features/review/confidence";
 import type { ReviewItem } from "@/features/review/schemas";
 import { ITEM_CATEGORIES } from "../../supabase/functions/_shared/extraction-schema";
@@ -12,12 +13,14 @@ type Props = {
   readOnly: boolean;
   onChange: (patch: Partial<ReviewItem>) => void;
   onRemove: () => void;
+  /** Erro de validação da linha (quantidade), já em frase. */
+  error?: string | null;
 };
 
 const field = "bg-campo rounded-campo min-h-11 w-full px-3 py-2 text-[14px] font-semibold";
 
 /** Uma linha de item. Nomes são sempre texto (React escapa): um nome hostil nunca vira marcação. */
-export function ReviewItemRow({ item, index, thresholds, readOnly, onChange, onRemove }: Props) {
+export function ReviewItemRow({ item, index, thresholds, readOnly, onChange, onRemove, error = null }: Props) {
   const n = index + 1;
   const band = confidenceBand(item, thresholds);
   const qty = item.quantity === null ? "?" : String(item.quantity);
@@ -34,21 +37,24 @@ export function ReviewItemRow({ item, index, thresholds, readOnly, onChange, onR
           <input
             aria-label={`Quantidade do item ${n}`}
             className={field}
+            aria-invalid={error ? true : undefined}
             type="number"
             inputMode="numeric"
             min={1}
+            step={1}
             max={9999}
             placeholder="?"
             value={item.quantity ?? ""}
             onChange={(e) => onChange({ quantity: e.target.value === "" ? null : Number(e.target.value) })}
           />
         )}
+        {error ? <p role="alert" className="text-erro-texto mt-1 text-[12px] font-bold">{error}</p> : null}
       </td>
       <td className="w-40 px-2 py-2">
-        {readOnly ? <span className="font-bold">{item.category ?? "indisponível"}</span> : (
+        {readOnly ? <span className="font-bold">{categoryLabel(item.category)}</span> : (
           <select aria-label={`Categoria do item ${n}`} className={field} value={item.category ?? ""} onChange={(e) => onChange({ category: e.target.value === "" ? null : (e.target.value as ReviewItem["category"]) })}>
             <option value="">Selecione</option>
-            {ITEM_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {ITEM_CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}
           </select>
         )}
       </td>

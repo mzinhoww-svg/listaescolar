@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 
+import { DemoBadge } from "@/components/admin/DemoBadge";
 import { IDLE, isProblem, type ReviewActionState } from "@/app/admin/revisao/state";
 import { REJECT_REASONS, type BlockerCode } from "@/features/review/codes";
 import { blockerPhrase, rejectReasonLabel } from "@/features/review/phrases";
@@ -15,12 +16,18 @@ type Props = {
   /** Estado do envio; só `human_review` decide. */
   status: string;
   /** Bloqueios calculados no servidor para a versão salva (inclui a confirmação do alerta crítico, quando exigida). */
-  blockers: readonly BlockerCode[];
+  blockers: readonly BlockerCode[] | null;
   /** Aprovado pela equipe e ainda não publicado (e sem publicação automática órfã). */
   canPublish: boolean;
   orphaned: boolean;
+  /** Calculado no servidor: existem as portas de publicação neste ambiente? */
+  publicationAvailable: boolean;
+  /** A publicação usaria a porta em memória: "Lista publicada." leva o selo "Demonstração". */
+  demoPublication: boolean;
   actions: { approveAndPublish: Act; reject: Act; publish: Act };
 };
+
+const UNAVAILABLE = "Lista aprovada pela equipe. Publicação indisponível neste ambiente até a integração.";
 
 const READ_ONLY: Record<string, string> = {
   published: "Esta lista já foi publicada. A tela está em modo somente leitura.",
@@ -28,25 +35,27 @@ const READ_ONLY: Record<string, string> = {
   approved: "Esta lista foi aprovada pela equipe. A tela está em modo somente leitura.",
 };
 
-function Result({ s }: { s: ReviewActionState }) {
+function Result({ s, demo = false }: { s: ReviewActionState; demo?: boolean }) {
   if (s.kind === "idle") return null;
   return (
     <p role={isProblem(s.kind) ? "alert" : "status"} className={`${isProblem(s.kind) ? "bg-erro-fundo text-erro-texto" : "bg-campo"} rounded-campo px-4 py-3 text-[14px] font-bold`}>
       {s.message}
+      {s.kind === "published" && demo ? <span className="ml-2 align-middle"><DemoBadge /></span> : null}
     </p>
   );
 }
 
 /** Painel de decisão (Admin05). Bloqueios em frases, confirmação do documento original e motivo de recusa de lista fechada. */
-export function DecisionPanel({ submissionId, version, status, blockers, canPublish, orphaned, actions }: Props) {
+export function DecisionPanel({ submissionId, version, status, blockers, canPublish, orphaned, publicationAvailable, demoPublication, actions }: Props) {
   const { dirty } = useDraft();
   const [ack, setAck] = useState(false);
   const [reason, setReason] = useState("");
   const [approveState, approveAction, approving] = useActionState(actions.approveAndPublish, IDLE);
   const [rejectState, rejectAction, rejecting] = useActionState(actions.reject, IDLE);
   const [publishState, publishAction, publishing] = useActionState(actions.publish, IDLE);
-  const needsAck = blockers.includes("critical_alerts_unconfirmed");
-  const open = blockers.filter((c) => !(c === "critical_alerts_unconfirmed" && ack));
+  const known = blockers ?? [];
+  const needsAck = known.includes("critical_alerts_unconfirmed");
+  const open = known.filter((c) => !(c === "critical_alerts_unconfirmed" && ack));
   const retry = [approveState.kind, publishState.kind].some((k) => k === "pending" || k === "unavailable");
   const hidden = (
     <>
@@ -62,13 +71,14 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
       {status !== "human_review" ? (
         <>
           <p className="text-[14px] font-semibold">{READ_ONLY[status] ?? "Este envio não está em revisão."}</p>
+          {canPublish && !publicationAvailable ? <p role="note" className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-3 text-[14px] font-bold">{UNAVAILABLE}</p> : null}
           {canPublish && !orphaned ? (
             <form action={publishAction}>
               {hidden}
-              <button type="submit" disabled={publishing} className="bg-verde-certo text-tinta rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">{retry ? "Tentar publicar de novo" : "Publicar"}</button>
+              <button type="submit" disabled={publishing || !publicationAvailable} className="bg-tinta text-papel rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">{retry ? "Tentar publicar de novo" : "Publicar"}</button>
             </form>
           ) : null}
-          <Result s={publishState} />
+          {[approveState, publishState].map((r, i) => (r.kind === "unavailable" && !publicationAvailable ? null : <Result key={i} s={r} demo={demoPublication} />))}
         </>
       ) : (
         <>
@@ -78,7 +88,9 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
               <ul className="mt-1 list-disc pl-5 text-[14px] font-semibold">{open.map((c) => <li key={c}>{blockerPhrase(c)}</li>)}</ul>
             </div>
           ) : null}
-          {dirty ? <p className="text-erro-texto text-[14px] font-bold">Salve a edição antes de aprovar.</p> : null}
+          {blockers === null ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível verificar as pendências desta lista. Recarregue a página antes de aprovar.</p> : null}
+          {orphaned ? <p role="alert" className="text-erro-texto text-[14px] font-bold">Aprovar e publicar está bloqueado até a conciliação da publicação automática (S11).</p> : null}
+          {dirty ? <p role="status" className="text-erro-texto text-[14px] font-bold">Salve a edição antes de aprovar.</p> : null}
           <form action={approveAction} className="flex flex-col gap-3">
             {hidden}
             {needsAck ? (
@@ -87,11 +99,11 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
                 Conferi o documento original
               </label>
             ) : null}
-            <button type="submit" disabled={approving || dirty || open.length > 0} className="bg-verde-certo text-tinta rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">
+            <button type="submit" disabled={approving || dirty || open.length > 0 || blockers === null || orphaned} className="bg-tinta text-papel rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">
               {approving ? "Publicando..." : retry ? "Tentar publicar de novo" : "Aprovar e publicar"}
             </button>
           </form>
-          <Result s={approveState} />
+          <Result s={approveState} demo={demoPublication} />
           <form action={rejectAction} className="border-campo flex flex-col gap-3 border-t pt-4">
             {hidden}
             <label className="flex flex-col gap-1 text-[13px] font-extrabold">
@@ -101,7 +113,7 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
                 {REJECT_REASONS.map((r) => <option key={r} value={r}>{rejectReasonLabel(r)}</option>)}
               </select>
             </label>
-            <button type="submit" disabled={rejecting || reason === ""} className="bg-erro-fundo text-erro-texto rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">Recusar</button>
+            <button type="submit" disabled={rejecting || reason === ""} className="border-erro-texto text-erro-texto rounded-botao min-h-11 border-2 bg-transparent px-6 text-[14px] font-extrabold disabled:opacity-50">Recusar</button>
           </form>
           <Result s={rejectState} />
         </>

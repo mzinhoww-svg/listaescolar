@@ -2,6 +2,8 @@
 // Alertas são sinalizações para revisão, não parecer jurídico (regra de produto do repositório): rótulos neutros.
 import { REASON_CODE_PATTERN, type ReasonCode } from "../../supabase/functions/_shared/publication/codes";
 
+import type { ItemCategory } from "../../supabase/functions/_shared/extraction-schema";
+
 import type { BlockerCode, RejectReason } from "./codes";
 
 /** Exaustivo: código novo na S09 quebra o typecheck aqui. */
@@ -95,3 +97,16 @@ const REJECT_LABELS: Record<RejectReason, string> = {
   other: "Outro motivo",
 };
 export const rejectReasonLabel = (code: RejectReason): string => REJECT_LABELS[code];
+
+const CATEGORY_LABELS: Record<ItemCategory, string> = {
+  papelaria: "Papelaria",
+  escrita: "Escrita",
+  arte: "Arte",
+  tecnologia: "Tecnologia",
+  higiene: "Higiene",
+  livros: "Livros",
+  uniforme: "Uniforme",
+  outros: "Outros",
+};
+/** Rótulo legível da categoria; o valor cru só vai no `value` do campo. Categoria desconhecida nunca é ecoada. */
+export const categoryLabel = (c: string | null): string => (c !== null && Object.hasOwn(CATEGORY_LABELS, c) ? (CATEGORY_LABELS[c as ItemCategory] as string) : "indisponível");

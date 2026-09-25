@@ -19,7 +19,7 @@ const initial: ReviewDraft = { grade: "4º ano", schoolYear: 2027, items: [item(
 const TH = { confidenceThreshold: 0.8, itemConfidenceThreshold: 0.6 };
 type Act = (prev: ReviewActionState, fd: FormData) => Promise<ReviewActionState>;
 
-function Workbench({ save, blockers = [], status = "human_review", actions }: { save?: Act; blockers?: never[] | string[]; status?: string; actions?: Partial<Record<"approveAndPublish" | "reject" | "publish", Act>> }) {
+function Workbench({ save, blockers = [], status = "human_review", actions, canPublish = false, orphaned = false, available = true, demo = false }: { save?: Act; blockers?: never[] | string[] | null; status?: string; canPublish?: boolean; orphaned?: boolean; available?: boolean; demo?: boolean; actions?: Partial<Record<"approveAndPublish" | "reject" | "publish", Act>> }) {
   const noop: Act = async () => IDLE;
   return (
     <DraftProvider>
@@ -28,9 +28,11 @@ function Workbench({ save, blockers = [], status = "human_review", actions }: { 
         submissionId="s1"
         version={2}
         status={status}
-        blockers={blockers as never[]}
-        canPublish={false}
-        orphaned={false}
+        blockers={blockers as never[] | null}
+        canPublish={canPublish}
+        orphaned={orphaned}
+        publicationAvailable={available}
+        demoPublication={demo}
         actions={{ approveAndPublish: actions?.approveAndPublish ?? noop, reject: actions?.reject ?? noop, publish: actions?.publish ?? noop }}
       />
     </DraftProvider>
@@ -80,7 +82,7 @@ describe("ReviewItemsEditor", () => {
     expect(payload.items[0].origin).toBe("extracted");
     expect(fd.get("submissionId")).toBe("s1");
     expect(JSON.stringify(payload)).not.toContain("actorId");
-    expect(await screen.findByRole("status")).toHaveTextContent("Edição salva (versão 3).");
+    expect(await screen.findByText("Edição salva (versão 3).")).toBeInTheDocument();
   });
   it("stale: aviso claro (role=alert), rascunho preservado e botão de recarregar", async () => {
     const save = vi.fn<Act>(async () => state("stale", "Esta lista foi alterada por outra pessoa. Recarregue."));
@@ -111,6 +113,46 @@ describe("ReviewItemsEditor", () => {
 });
 
 describe("DecisionPanel", () => {
+  it("bloqueios indisponíveis: role=alert e aprovar desabilitado", () => {
+    render(<Workbench blockers={null} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível verificar as pendências");
+    expect(screen.getByRole("button", { name: "Aprovar e publicar" })).toBeDisabled();
+  });
+  it("publish_orphaned desabilita aprovar", () => {
+    render(<Workbench orphaned />);
+    expect(screen.getByRole("button", { name: "Aprovar e publicar" })).toBeDisabled();
+  });
+  it("sem porta: após aprovar, a re-renderização com status approved mantém o aviso fixo e 'Publicar' desabilitado", async () => {
+    const approve = vi.fn<Act>(async () => state("unavailable", "Lista aprovada. Publicação indisponível neste ambiente até a integração."));
+    const { rerender } = render(<Workbench available={false} actions={{ approveAndPublish: approve }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar e publicar" }));
+    await waitFor(() => expect(approve).toHaveBeenCalled());
+    rerender(<Workbench available={false} status="approved" canPublish actions={{ approveAndPublish: approve }} />);
+    expect(screen.getAllByText(/Publicação indisponível neste ambiente até a integração/)).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Tentar publicar de novo" })).toBeDisabled();
+  });
+  it("com porta, 'Publicar' fica habilitado no envio aprovado", () => {
+    render(<Workbench status="approved" canPublish />);
+    expect(screen.getByRole("button", { name: "Publicar" })).toBeEnabled();
+    expect(screen.queryByText(/Publicação indisponível/)).toBeNull();
+  });
+  it("'Lista publicada.' leva o selo Demonstração com a porta em memória (também após re-renderizar como published)", async () => {
+    const approve = vi.fn<Act>(async () => state("published", "Lista publicada."));
+    const { rerender } = render(<Workbench demo actions={{ approveAndPublish: approve }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar e publicar" }));
+    expect(await screen.findByText("Lista publicada.")).toBeInTheDocument();
+    expect(screen.getByText("Demonstração")).toBeInTheDocument();
+    rerender(<Workbench demo status="published" actions={{ approveAndPublish: approve }} />);
+    expect(screen.getByText("Lista publicada.")).toBeInTheDocument();
+    expect(screen.getByText("Demonstração")).toBeInTheDocument();
+  });
+  it("sem demonstração, sem selo; 'Salve a edição antes de aprovar.' é role=status", () => {
+    render(<Workbench actions={{ approveAndPublish: async () => state("published", "Lista publicada.") }} />);
+    fireEvent.change(screen.getByLabelText("Nome do item 1"), { target: { value: "x" } });
+    expect(screen.getByText("Salve a edição antes de aprovar.")).toHaveAttribute("role", "status");
+    expect(screen.queryByText("Demonstração")).toBeNull();
+  });
+
   it("bloqueios em frases desabilitam o botão e mostram o motivo", () => {
     render(<Workbench blockers={["item_quantity_missing", "grade_missing"]} />);
     expect(screen.getByText("Há item sem quantidade: informe um número de 1 a 9999.")).toBeInTheDocument();

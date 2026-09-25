@@ -22,25 +22,43 @@ type Props = {
 };
 
 const field = "bg-campo rounded-campo min-h-11 px-3 py-2 text-[14px] font-semibold";
-const NEW_ITEM: ReviewItem = { name: "", quantity: 1, unit: null, category: null, confidence: null, alerts: [], origin: "added" };
+const NEW_ITEM: ReviewItem = { name: "", quantity: null, unit: null, category: null, confidence: null, alerts: [], origin: "added" };
+
+const QTY_ERROR = "Quantidade: use um número inteiro de 1 a 9999.";
+const qtyError = (it: ReviewItem): string | null => (it.quantity !== null && (!Number.isInteger(it.quantity) || it.quantity < 1 || it.quantity > 9999) ? QTY_ERROR : null);
 
 /** Série/ano e itens editáveis. Cada edição vira uma nova versão (versão otimista): `stale` mostra o aviso e mantém o rascunho. */
 export function ReviewItemsEditor({ submissionId, version, initial, thresholds, readOnly, action }: Props) {
   const router = useRouter();
   const { setDirty } = useDraft();
   const [draft, setDraft] = useState<ReviewDraft>(initial);
-  const [seen, setSeen] = useState(version);
+  // Versão e retrato em que o rascunho se baseia. O envio usa SEMPRE `base`: se outra pessoa mudou a lista, o servidor responde stale.
+  const [base, setBase] = useState({ version, initial });
+  const [reload, setReload] = useState(false);
   const [hideStale, setHideStale] = useState(false);
   const [result, formAction, pending] = useActionState(action, IDLE);
-  if (seen !== version) {
-    setSeen(version);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base.initial);
+  // Nova versão vinda do servidor: só troca o rascunho se ele não tem edição não salva OU se o admin pediu para recarregar.
+  if (base.version !== version && (reload || !dirty)) {
+    setBase({ version, initial });
     setDraft(initial);
+    setReload(false);
   }
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   useEffect(() => setDirty(dirty), [dirty, setDirty]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const setItem = (i: number, patch: Partial<ReviewItem>) =>
     setDraft((d) => ({ ...d, items: d.items.map((it, k) => (k === i ? { ...it, ...patch, origin: it.origin === "extracted" ? "edited" : it.origin } : it)) }));
+  const rowErrors = draft.items.map(qtyError);
+  const invalid = rowErrors.some((e) => e !== null);
   const attention = draft.items.filter((it) => it.alerts.length > 0 || it.quantity === null || (it.origin === "extracted" && thresholds !== null && it.confidence !== null && it.confidence < thresholds.itemConfidenceThreshold)).length;
   const gradeKnown = draft.grade === null || (GRADE_OPTIONS as readonly string[]).includes(draft.grade);
   const showResult = result.kind !== "idle" && !(hideStale && result.kind === "stale");
@@ -48,12 +66,13 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
   return (
     <form
       action={formAction}
+      noValidate
       onSubmit={() => setHideStale(false)}
       aria-label="Itens lidos pela IA"
       className="flex flex-col gap-4 rounded-[24px] bg-white p-5"
     >
       <input type="hidden" name="submissionId" value={submissionId} />
-      <input type="hidden" name="payload" value={JSON.stringify({ ...draft, expectedVersion: version })} />
+      <input type="hidden" name="payload" value={JSON.stringify({ ...draft, expectedVersion: base.version })} />
       <div className="flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1 text-[13px] font-extrabold">
           Série
@@ -76,8 +95,11 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
             onChange={(e) => setDraft((d) => ({ ...d, schoolYear: e.target.value === "" ? null : Number(e.target.value) }))}
           />
         </label>
-        <p className="text-texto-2 ml-auto text-[14px] font-bold">
-          {draft.items.length} {draft.items.length === 1 ? "item lido" : "itens lidos"} · {attention} {attention === 1 ? "precisa" : "precisam"} de atenção
+        <p className="ml-auto flex flex-wrap items-center gap-2 text-[14px] font-bold">
+          <span className="text-texto-2">{draft.items.length} {draft.items.length === 1 ? "item lido" : "itens lidos"}</span>
+          <span className={`${attention > 0 ? "bg-aviso-fundo text-aviso-texto" : "bg-campo text-texto-2"} rounded-botao px-3 py-1 text-xs font-extrabold`}>
+            {attention} {attention === 1 ? "precisa" : "precisam"} de atenção
+          </span>
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -94,7 +116,7 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
           </thead>
           <tbody>
             {draft.items.map((it, i) => (
-              <ReviewItemRow key={i} item={it} index={i} thresholds={thresholds} readOnly={readOnly} onChange={(p) => setItem(i, p)} onRemove={() => setDraft((d) => ({ ...d, items: d.items.filter((_, k) => k !== i) }))} />
+              <ReviewItemRow key={i} item={it} index={i} thresholds={thresholds} readOnly={readOnly} error={rowErrors[i] ?? null} onChange={(p) => setItem(i, p)} onRemove={() => setDraft((d) => ({ ...d, items: d.items.filter((_, k) => k !== i) }))} />
             ))}
           </tbody>
         </table>
@@ -103,7 +125,7 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
       {readOnly ? null : (
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" onClick={() => setDraft((d) => ({ ...d, items: [...d.items, NEW_ITEM] }))} className="bg-campo rounded-botao min-h-11 px-5 text-[14px] font-extrabold">Adicionar item</button>
-          <button type="submit" disabled={pending || !dirty} className="bg-tinta text-papel rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">
+          <button type="submit" disabled={pending || !dirty || invalid} className="bg-campo text-tinta rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">
             {pending ? "Salvando..." : "Salvar edição"}
           </button>
           {dirty ? <span className="text-texto-2 text-[13px] font-bold">Edição não salva</span> : null}
@@ -113,7 +135,7 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
         <div role={isProblem(result.kind) ? "alert" : "status"} className={`${isProblem(result.kind) ? "bg-erro-fundo text-erro-texto" : "bg-campo"} rounded-campo px-4 py-3 text-[14px] font-bold`}>
           {result.message}
           {result.kind === "stale" ? (
-            <button type="button" onClick={() => { setHideStale(true); router.refresh(); }} className="ml-2 underline">Recarregar a versão mais recente</button>
+            <button type="button" onClick={() => { setHideStale(true); setReload(true); router.refresh(); }} className="ml-2 underline">Recarregar a versão mais recente</button>
           ) : null}
         </div>
       ) : null}

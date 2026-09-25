@@ -10,7 +10,7 @@ import { formatWhen } from "./format";
 const STATE_TEXT = { awaiting_publication: "Aguardando publicação", published: "Publicada" } as const;
 
 /** Fila (Admin05). Só origem e data: nome e e-mail de quem enviou nunca chegam aqui. Textos vêm de frases fixas. */
-export function ReviewQueueTable({ rows, labels }: { rows: readonly QueueRow[]; labels: Readonly<Record<string, SchoolLabel>> }) {
+export function ReviewQueueTable({ rows, labels, demoPublication = false }: { rows: readonly QueueRow[]; labels: Readonly<Record<string, SchoolLabel>>; demoPublication?: boolean }) {
   return (
     <div className="overflow-x-auto rounded-[24px] bg-white p-2">
       <table className="w-full min-w-[860px] text-left text-[14px]">
@@ -32,6 +32,7 @@ export function ReviewQueueTable({ rows, labels }: { rows: readonly QueueRow[]; 
                   {school} · {r.grade ?? "série não informada"}
                   {r.isDemo ? <span className="ml-2"><DemoBadge /></span> : null}
                   {r.state ? <span className="bg-campo mt-1 block w-fit rounded-botao px-2.5 py-0.5 text-xs font-extrabold">{STATE_TEXT[r.state]}</span> : null}
+                  {r.state === "published" && demoPublication && !r.isDemo ? <span className="mt-1 block w-fit"><DemoBadge /></span> : null}
                 </td>
                 <td className="px-3 py-3">{r.schoolYear ?? "indisponível"}</td>
                 <td className="px-3 py-3">{r.source === "parent" ? "Família" : "Escola"}</td>

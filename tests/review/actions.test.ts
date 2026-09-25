@@ -118,6 +118,24 @@ describe("approveAndPublishAction", () => {
   });
 });
 
+describe("stale e not_reviewable não revalidam a rota (o rascunho do admin não se perde)", () => {
+  it("save, approve, reject e publish", async () => {
+    svc.save.mockResolvedValue({ status: "stale", version: 3, versionId: ID });
+    expect((await saveReviewAction(IDLE, form({ submissionId: ID, payload: payload() }))).kind).toBe("stale");
+    svc.approveAndPublish.mockResolvedValue({ approval: { status: "stale" }, publication: null });
+    expect((await approveAndPublishAction(IDLE, form({ submissionId: ID, expectedVersion: "1" }))).kind).toBe("stale");
+    svc.reject.mockResolvedValue({ status: "stale" });
+    expect((await rejectAction(IDLE, form({ submissionId: ID, expectedVersion: "1", reason: "other" }))).kind).toBe("stale");
+    svc.publish.mockResolvedValue({ status: "not_reviewable" });
+    await publishAction(IDLE, form({ submissionId: ID }));
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+  it("orphaned: aprovada com publicação bloqueada, frase clara", async () => {
+    svc.approveAndPublish.mockResolvedValue({ approval: { status: "approved" }, publication: { status: "orphaned" } });
+    expect((await approveAndPublishAction(IDLE, form({ submissionId: ID, expectedVersion: "1" }))).message).toMatch(/^Lista aprovada; publicação bloqueada:/);
+  });
+});
+
 describe("publishAction e rejectAction", () => {
   it("publishAction chama só publicar", async () => {
     svc.publish.mockResolvedValue({ status: "publish_pending" });

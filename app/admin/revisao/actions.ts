@@ -66,7 +66,7 @@ function publicationState(p: PublishOutcome | null): ReviewActionState {
     case "publish_failed":
       return state("failed", `A publicação falhou e o envio voltou à fila. ${reasonPhrase(p.code)}.`);
     case "orphaned":
-      return state("error", "Existe uma publicação automática não reconciliada; a conciliação é feita na integração (S11).");
+      return state("error", "Lista aprovada; publicação bloqueada: existe uma publicação automática não reconciliada. A conciliação é feita na integração (S11).");
     case "not_reviewable":
       return state("error", NOT_REVIEWABLE);
   }
@@ -86,8 +86,11 @@ export async function saveReviewAction(_prev: ReviewActionState, formData: FormD
   if (!parsed.success) return state("error", INVALID);
   try {
     const r = await buildReviewService().save(g.actor, g.id, parsed.data);
-    refresh(g.id);
-    if (r.status === "saved") return state("saved", `Edição salva (versão ${r.version}).`);
+    // stale/not_reviewable NÃO revalidam: a página não re-renderiza com a versão nova e o rascunho do admin fica intacto.
+    if (r.status === "saved") {
+      refresh(g.id);
+      return state("saved", `Edição salva (versão ${r.version}).`);
+    }
     if (r.status === "stale") return state("stale", STALE);
     return state("error", NOT_REVIEWABLE);
   } catch (e) {
@@ -104,8 +107,10 @@ export async function approveAndPublishAction(_prev: ReviewActionState, formData
   if (isState(g)) return g;
   try {
     const r = await buildReviewService().approveAndPublish(g.actor, g.id, { expectedVersion: versionOf(formData), acknowledged: ackOf(formData) });
+    const problem = approvalProblem(r.approval);
+    if (problem) return problem; // stale, bloqueio e não revisável: sem revalidar (o rascunho não se perde)
     refresh(g.id);
-    return approvalProblem(r.approval) ?? publicationState(r.publication);
+    return publicationState(r.publication);
   } catch (e) {
     return fail(e);
   }
@@ -117,7 +122,7 @@ export async function publishAction(_prev: ReviewActionState, formData: FormData
   if (isState(g)) return g;
   try {
     const p = await buildReviewService().publish(g.actor, g.id);
-    refresh(g.id);
+    if (p.status !== "not_reviewable") refresh(g.id);
     return publicationState(p);
   } catch (e) {
     return fail(e);
@@ -132,8 +137,10 @@ export async function rejectAction(_prev: ReviewActionState, formData: FormData)
   if (!(REJECT_REASONS as readonly string[]).includes(reason)) return state("error", "Escolha um motivo da lista.");
   try {
     const r = await buildReviewService().reject(g.actor, g.id, { reason, expectedVersion: versionOf(formData) });
-    refresh(g.id);
-    if (r.status === "rejected") return state("rejected", "Lista recusada.");
+    if (r.status === "rejected") {
+      refresh(g.id);
+      return state("rejected", "Lista recusada.");
+    }
     if (r.status === "stale") return state("stale", STALE);
     return state("error", NOT_REVIEWABLE);
   } catch (e) {

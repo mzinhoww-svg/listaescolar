@@ -9,7 +9,7 @@ const TEXT: Record<ConfidenceBand, string> = {
 };
 const STYLE: Record<ConfidenceBand, string> = {
   alta: "bg-verde-certo/25 text-verde-fundo",
-  media: "bg-campo text-tinta",
+  media: "bg-aviso-fundo text-aviso-texto",
   baixa: "bg-erro-fundo text-erro-texto",
   conferido: "bg-verde-fundo text-papel",
   indisponivel: "bg-campo text-texto-2",

@@ -6,7 +6,7 @@ const getSessionActor = vi.hoisted(() => vi.fn());
 const getReviewQueue = vi.hoisted(() => vi.fn());
 const getReviewDetail = vi.hoisted(() => vi.fn());
 const service = vi.hoisted(() => ({ open: vi.fn(), blockers: vi.fn() }));
-const loaders = vi.hoisted(() => ({ loadThresholds: vi.fn(), loadSchoolLabels: vi.fn() }));
+const loaders = vi.hoisted(() => ({ loadThresholds: vi.fn(), loadSchoolLabels: vi.fn(), loadPublicationInfo: vi.fn() }));
 vi.mock("@/features/auth/guard", () => ({ requireAccess: (...a: unknown[]) => requireAccess(...a) }));
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: () => getSessionActor() }));
 vi.mock("@/features/review/queries", () => ({ getReviewQueue: (...a: unknown[]) => getReviewQueue(...a), getReviewDetail: (...a: unknown[]) => getReviewDetail(...a) }));
@@ -47,6 +47,7 @@ beforeEach(() => {
   getSessionActor.mockResolvedValue({ userId: ME, role: "admin" });
   loaders.loadThresholds.mockResolvedValue({ confidenceThreshold: 0.8, itemConfidenceThreshold: 0.6 });
   loaders.loadSchoolLabels.mockResolvedValue({ [SCHOOL]: { name: "Escola Sintética", inep: "51000001" } });
+  loaders.loadPublicationInfo.mockReturnValue({ available: true, demo: false });
   service.open.mockResolvedValue({ version: 2, versionId: "v2" });
   service.blockers.mockResolvedValue(["item_quantity_missing", "critical_alerts_unconfirmed"]);
 });
@@ -85,6 +86,14 @@ describe("/admin/revisao (fila)", () => {
     expect(screen.getByText(/Escola não identificada neste ambiente · 4º ano/)).toBeInTheDocument();
     expect(screen.getByText("Aguardando publicação")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Aprovadas (1)" })).toHaveAttribute("aria-current", "page");
+  });
+  it("aba truncada mostra '100+'; Publicada leva o selo com a porta em memória", async () => {
+    loaders.loadPublicationInfo.mockReturnValue({ available: true, demo: true });
+    getReviewQueue.mockImplementation(async (_a: unknown, tab: string) => (tab === "approved" ? [row({ state: "published", isDemo: false })] : tab === "pending" ? Array.from({ length: 100 }, (_, i) => row({ id: `${ID.slice(0, -2)}${String(i % 90 + 10)}` })) : []));
+    render(await Queue({ searchParams: sp("aprovadas") }));
+    expect(screen.getByRole("link", { name: "Pendentes (100+)" })).toBeInTheDocument();
+    expect(screen.getByText("Publicada")).toBeInTheDocument();
+    expect(screen.getByText("Demonstração")).toBeInTheDocument();
   });
   it("aba vazia e erro com nova tentativa", async () => {
     getReviewQueue.mockResolvedValue([]);
@@ -133,7 +142,8 @@ describe("/admin/revisao/[id] (detalhe)", () => {
     expect(container.querySelector("tbody img")).toBeNull();
     expect(screen.getByLabelText("Nome do item 1")).toHaveValue(HOSTILE);
     expect(screen.getByLabelText("Quantidade do item 1")).toHaveAttribute("placeholder", "?");
-    expect(screen.getByText("2 itens lidos", { exact: false })).toHaveTextContent("1 precisa de atenção");
+    expect(screen.getByText("2 itens lidos")).toBeInTheDocument();
+    expect(screen.getByText("1 precisa de atenção")).toBeInTheDocument();
   });
   it("sem settings: faixa indisponível (nada de faixa inventada)", async () => {
     loaders.loadThresholds.mockResolvedValue(null);
@@ -155,6 +165,40 @@ describe("/admin/revisao/[id] (detalhe)", () => {
     render(await Detail({ params: params(ID) }));
     expect(screen.getByText(/publicação automática não reconciliada/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Publicar/ })).toBeNull();
+  });
+  it("bloqueios que falharam: alerta e aprovação desabilitada (nunca lista vazia = liberada)", async () => {
+    service.blockers.mockRejectedValue(new Error("boom"));
+    getReviewDetail.mockResolvedValue(detail());
+    render(await Detail({ params: params(ID) }));
+    expect(screen.getByText(/Não foi possível verificar as pendências/)).toHaveAttribute("role", "alert");
+    expect(screen.getByRole("button", { name: "Aprovar e publicar" })).toBeDisabled();
+  });
+  it("mostra o motivo do publish_failed no detalhe", async () => {
+    getReviewDetail.mockResolvedValue(detail({ decisions: [{ kind: "review", decision: "publish_failed", reasons: ["publish_rejected"], actorId: ME, createdAt: "2026-09-25T13:00:00Z" }] }));
+    render(await Detail({ params: params(ID) }));
+    expect(screen.getByText(/A última tentativa de publicação falhou.*A publicação foi recusada/)).toBeInTheDocument();
+  });
+  it("versão 1 vazia por resultado inválido: explica e manda recusar ou digitar", async () => {
+    getReviewDetail.mockResolvedValue(detail({ extraction: null, current: { id: "v1", version: 1, grade: "4º ano", schoolYear: 2027, items: [], origin: "extraction", createdAt: "2026-09-25T12:00:00Z" } }));
+    render(await Detail({ params: params(ID) }));
+    expect(screen.getByText("Não foi possível ler os itens desta lista: recuse ou digite os itens.")).toBeInTheDocument();
+  });
+  it("publicada pela porta em memória: selo Demonstração no cabeçalho (envio não demo); sem porta, sem selo", async () => {
+    loaders.loadPublicationInfo.mockReturnValue({ available: true, demo: true });
+    getReviewDetail.mockResolvedValue(detail({}, { status: "published", isDemo: false }));
+    const { unmount } = render(await Detail({ params: params(ID) }));
+    expect(screen.getAllByText("Demonstração").length).toBeGreaterThan(0);
+    unmount();
+    loaders.loadPublicationInfo.mockReturnValue({ available: false, demo: false });
+    render(await Detail({ params: params(ID) }));
+    expect(screen.queryByText("Demonstração")).toBeNull();
+  });
+  it("aprovada sem porta: aviso fixo persistente e Publicar desabilitado", async () => {
+    loaders.loadPublicationInfo.mockReturnValue({ available: false, demo: false });
+    getReviewDetail.mockResolvedValue(detail({ decisions: [{ kind: "review", decision: "approved", reasons: [], actorId: ME, createdAt: "2026-09-25T13:00:00Z" }] }, { status: "approved" }));
+    render(await Detail({ params: params(ID) }));
+    expect(screen.getByText(/Publicação indisponível neste ambiente até a integração/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publicar" })).toBeDisabled();
   });
   it("erro de leitura: alerta com nova tentativa", async () => {
     getReviewDetail.mockRejectedValue(new Error("boom"));

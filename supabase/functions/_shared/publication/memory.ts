@@ -22,6 +22,8 @@ export const publicationFixtureSchema = z
             verification: z.enum(["registered", "claimed", "verified", "suspended"]),
             municipalityEnabled: z.boolean(),
             linkedProfiles: z.array(uuid).max(200),
+            /** Rótulo para a tela de revisão (S10): só em memória; a leitura real de `schools` é da S11. */
+            label: z.object({ name: z.string().trim().min(1).max(120), inep: z.string().regex(/^\d{8}$/) }).strict().optional(),
           })
           .strict(),
       )

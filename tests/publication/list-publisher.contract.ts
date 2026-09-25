@@ -119,5 +119,25 @@ export function runListPublisherContract(name: string, make: () => PublisherHarn
       const e2 = await rejection(publisher.publish(request({ items: [{ position: 1, originalName: "Outro", normalizedName: "outro", category: "papelaria", quantity: 1, unit: null, confidence: 0.9 }] })));
       expect(e2.transient).toBe(false);
     });
+
+    // S10: publicação humana. A porta real (S11) precisa aceitar ator admin, origem parent_upload e chave = id da versão aprovada.
+    it("aceita ator admin e origem parent_upload, com chave própria (id da versão aprovada)", async () => {
+      const { publisher } = await make();
+      const admin = { kind: "admin" as const, profileId: "00000000-0000-4000-8000-000000000003" };
+      const versionId = "80000000-0000-4000-8000-0000000000d1";
+      const a = await publisher.publish(request({ idempotencyKey: versionId, actor: admin, source: "parent_upload" }));
+      expect(a.newVersionId).toMatch(UUID);
+      expect(await publisher.publish(request({ idempotencyKey: versionId, actor: admin, source: "parent_upload" }))).toEqual(a);
+    });
+
+    it("a chave da versão aprovada é distinta da chave automática: mesma lista, nova versão, versão anterior encadeada", async () => {
+      const { publisher } = await make();
+      const auto = await publisher.publish(request());
+      const humano = await publisher.publish(
+        request({ idempotencyKey: "80000000-0000-4000-8000-0000000000d2", actor: { kind: "admin", profileId: "00000000-0000-4000-8000-000000000003" }, source: "school_upload" }),
+      );
+      expect(humano.listId).toBe(auto.listId);
+      expect(humano.previousVersionId).toBe(auto.newVersionId);
+    });
   });
 }

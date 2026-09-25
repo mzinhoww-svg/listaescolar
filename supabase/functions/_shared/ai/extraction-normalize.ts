@@ -6,10 +6,14 @@ export const CONTROL_CHARS = new RegExp(
   "g",
 );
 
-/** Remove marcação HTML, caracteres de controle/bidi e espaços repetidos; limita o tamanho. */
+/**
+ * Remove marcação HTML (só sequências com forma de tag: `<` seguido de letra, `/` ou `!`), caracteres de controle/bidi e
+ * espaços repetidos; limita o tamanho. "< 5 anos", "5<6" e "a > b" são dado da lista e ficam (D-030). A proteção contra XSS
+ * é a renderização como texto (React), nunca `dangerouslySetInnerHTML`.
+ */
 export function cleanText(input: string, max: number): string {
   return input
-    .replace(/<[^>]*>?/g, " ")
+    .replace(/<[A-Za-z/!][^>]*>?/g, " ")
     .replace(CONTROL_CHARS, "")
     .replace(/\s+/g, " ")
     .trim()

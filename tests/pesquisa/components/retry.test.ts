@@ -20,7 +20,7 @@ describe("enviarComRetry", () => {
   });
 
   it("3 falhas: espera 1s, 3s e 9s entre tentativas, depois chama onFalhaFinal", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     vi.stubGlobal("fetch", fetchMock);
     const onFalhaFinal = vi.fn();
 
@@ -89,7 +89,7 @@ describe("enviarComRetry", () => {
   it("sucesso na 2ª tentativa: não chama onFalhaFinal e para de tentar", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: false, status: 500 })
       .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
     const onFalhaFinal = vi.fn();

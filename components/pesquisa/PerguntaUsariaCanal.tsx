@@ -46,9 +46,11 @@ export function PerguntaUsariaCanal({
     onResponder(step, { usaria, canal: slug });
   }
 
+  // `key` distinta por fase: a sub-pergunta remonta (foco no título, seleção e animação zerados).
   if (fase === "canal" && usaria) {
     return (
       <Tela
+        key="canal"
         titulo="E onde preferiria comprar?"
         progresso={{ atual: step, total: ULTIMO_STEP }}
         onVoltar={() => setFase("usaria")}
@@ -65,6 +67,7 @@ export function PerguntaUsariaCanal({
 
   return (
     <Tela
+      key="usaria"
       titulo="Imagine escolher a escola e a série e receber o carrinho pronto, com o preço comparado entre lojas. Você usaria?"
       progresso={{ atual: step, total: ULTIMO_STEP }}
       onVoltar={onVoltar}

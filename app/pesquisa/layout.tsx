@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 
 export default function PesquisaLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="selection:bg-verde-certo/40 selection:text-tinta caret-verde-fundo accent-verde-fundo flex flex-1 flex-col">
+    <div className="selection:bg-verde-fundo/20 selection:text-tinta caret-verde-fundo accent-verde-fundo flex flex-1 flex-col">
       {children}
     </div>
   );

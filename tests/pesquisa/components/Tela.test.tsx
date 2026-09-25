@@ -11,6 +11,7 @@ describe("Tela", () => {
       </Tela>,
     );
     expect(screen.getByText("2 de 12")).toBeInTheDocument();
+    expect(screen.getByText("2 de 12")).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext", "2 de 12");
     expect(
       screen.getByRole("heading", { level: 1, name: "Quantos filhos você tem na escola?" }),

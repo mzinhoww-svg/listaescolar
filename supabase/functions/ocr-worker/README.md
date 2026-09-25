@@ -51,5 +51,10 @@ select cron.schedule('ocr-worker-tick', '* * * * *', $$
   )
 $$);
 ```
-Além do cron, `createJobQueue` (features/submissions/supabase-queue.ts) chama a função logo após enfileirar (best effort, 1,5 s).
+O app NÃO chama a função ao enfileirar: o cron por minuto é o único acionador (nada de espera extra para o usuário).
 No hospedado isto é configuração fora do SQL versionado (registrar em PROGRESS.md pelo orquestrador).
+
+## Deploy no hospedado (notas)
+- `verify_jwt = false`: a função autentica sozinha (`x-worker-secret` ou `Authorization: Bearer <chave secreta>`). Ao publicar pelo MCP, passe o parâmetro `verify_jwt: false`; sem isso o gateway devolve 401 antes do código.
+- Segredos da função: `WORKER_SHARED_SECRET` (mín. 16), `APP_ENV` (`staging`; nunca `production` com demo), `DEMO_PIPELINE` (`1` só em ambiente não produtivo). `SUPABASE_URL` e a chave secreta vêm do runtime; se só existir a chave legada `service_role`, o código a usa como alternativa.
+- `net.http_post` do agendador usa `timeout_milliseconds` alto (ex.: `120000`): o padrão de 5 s derruba a chamada enquanto o tick ainda trabalha (o tick leva até 100 s).

@@ -32,7 +32,7 @@ describe("validateUpload", () => {
     ["pdf declarado como jpeg", file(pdf(), "image/jpeg"), "signature_mismatch"],
     ["tipo fora da lista (gif)", file(enc("GIF89a...."), "image/gif"), "unsupported_type"],
     ["0 bytes", { name: "a.pdf", declaredMime: "application/pdf", size: 0, bytes: new Uint8Array(0) }, "empty_file"],
-    ["mais de 10 MB", { name: "a.pdf", declaredMime: "application/pdf", size: 10 * 1024 * 1024 + 1, bytes: pdf() }, "file_too_large"],
+    ["mais de 4 MB", { name: "a.pdf", declaredMime: "application/pdf", size: 10 * 1024 * 1024 + 1, bytes: pdf() }, "file_too_large"],
     ["pdf criptografado", file(encryptedPdf(), "application/pdf"), "encrypted_pdf"],
     ["pdf truncado/corrompido", file(truncatedPdf(), "application/pdf"), "corrupt_file"],
     ["png gigante (30000 x 30000)", file(png(30000, 30000), "image/png"), "image_too_large"],

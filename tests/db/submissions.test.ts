@@ -281,4 +281,38 @@ describe("S07 RLS: consents, list_submissions, jobs, ocr_jobs", () => {
       expect(r.rows[0]?.fresh).toBe(true);
     });
   });
+
+  it("notify_target: e-mail ou telefone E.164; outro formato viola CHECK", async () => {
+    await withSuperuser(async (c) => {
+      const sub = SUB.parent;
+      for (const [ok, channel, target] of [
+        [true, "email", "pai@exemplo.invalid"],
+        [true, "whatsapp", "+5565999998888"],
+        [false, "email", "sem-arroba"],
+        [false, "whatsapp", "65999998888"],
+        [false, "email", "a b@x.com"],
+      ] as const) {
+        await c.query("begin");
+        const r = await attempt(
+          c,
+          `insert into public.jobs (kind, idempotency_key, submission_id, notify_channel, notify_target)
+           values ('ocr_jobs', 'nt-' || gen_random_uuid()::text, '${sub}', '${channel}', '${target}')`,
+        );
+        await c.query("rollback");
+        expect(r.error === null, `${channel} ${target}`).toBe(ok);
+      }
+    });
+  });
+
+  it("gatilhos de guarda usam search_path vazio", async () => {
+    await withSuperuser(async (c) => {
+      for (const fn of ["list_submissions_guard_update", "consents_guard_update"]) {
+        const r = await c.query<{ cfg: string[] | null }>(
+          "select proconfig cfg from pg_proc where oid = ('public.' || $1 || '()')::regprocedure",
+          [fn],
+        );
+        expect(r.rows[0]?.cfg?.some((x) => /^search_path=("")?$/.test(x)), fn).toBe(true);
+      }
+    });
+  });
 });

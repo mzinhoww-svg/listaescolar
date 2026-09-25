@@ -67,7 +67,7 @@ export function SchoolUploadForm({ schoolId, years, defaultYear }: { schoolId: s
             <button type="button" onClick={() => input.current?.click()} className="text-tinta font-bold underline">
               escolha no computador
             </button>{" "}
-            · até 10 MB
+            · até 4 MB
           </p>
           <input ref={input} id="file" name="file" type="file" accept={ACCEPT_ATTR} onChange={sync} className="sr-only" tabIndex={-1} aria-label="Arquivo da lista" />
         </section>

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef, useState, type FormEvent } from "react";
+import { startTransition, useActionState, useRef, useState, type FormEvent } from "react";
 
-import { clientCheck, formatSize } from "@/components/submissions/clientChecks";
+import { clientCheck, formatSize, pickedFile } from "@/components/submissions/clientChecks";
+import { prepareUpload } from "@/components/submissions/prepareUpload";
 import { ConsentField } from "@/components/submissions/ConsentField";
 import { BoltIcon, CameraIcon, ChevronLeftIcon, ClockIcon } from "@/components/submissions/icons";
 import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
@@ -30,10 +31,28 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
     setPicked(file ? { name: file.name, size: file.size } : null);
     setClientError(null);
   };
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
-    const problem = clientCheck(e.currentTarget);
+  const [preparing, setPreparing] = useState(false);
+  // O envio passa por aqui (não pelo `action` direto) para trocar fotos grandes pela versão reduzida (JPEG, 2400 px).
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const problem = clientCheck(form, { compressImages: true });
     setClientError(problem);
-    if (problem) e.preventDefault();
+    if (problem) return;
+    const data = new FormData(form);
+    const original = pickedFile(form);
+    if (original) {
+      setPreparing(true);
+      const prepared = await prepareUpload(original);
+      setPreparing(false);
+      if (!prepared.ok) {
+        setClientError(prepared.message);
+        return;
+      }
+      data.delete("file");
+      data.append("file", prepared.file);
+    }
+    startTransition(() => action(data));
   };
   const message = clientError ?? (state.status === "error" ? state.message : null);
 
@@ -82,8 +101,8 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
             </p>
           ) : null}
         </div>
-        <button type="submit" disabled={pending} className={`${primary} mt-auto`}>
-          Enviar para revisão
+        <button type="submit" disabled={pending || preparing} className={`${primary} mt-auto`}>
+          {preparing ? "Preparando a foto…" : "Enviar para revisão"}
         </button>
       </form>
       {pending ? (

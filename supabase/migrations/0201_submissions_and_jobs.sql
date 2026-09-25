@@ -64,7 +64,11 @@ create table public.jobs (
   locked_at timestamptz, -- quando o worker assumiu; running antigo = crash e pode ser retomado
   idempotency_key text not null unique check (length(btrim(idempotency_key)) > 0),
   notify_channel public.notify_channel not null default 'none',
-  notify_target text check (notify_target is null or length(notify_target) <= 254),
+  -- e-mail simples ou telefone E.164 (o formato é validado de novo na borda com Zod)
+  notify_target text check (
+    notify_target is null
+    or (length(notify_target) <= 254 and (notify_target ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' or notify_target ~ '^\+[1-9][0-9]{7,14}$'))
+  ),
   submission_id uuid references public.list_submissions (id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -167,6 +171,7 @@ revoke execute on function public.list_submissions_check_insert() from public, a
 -- (o consentimento que sustentou o envio não pode ser substituído por outro). Status, is_demo etc. seguem livres.
 create function public.list_submissions_guard_update() returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   if new.id is distinct from old.id
@@ -185,6 +190,7 @@ create trigger list_submissions_guard_update before update on public.list_submis
 -- Consentimento é imutável, exceto a revogação (revoked_at nulo -> data, uma única vez).
 create function public.consents_guard_update() returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   if new.id is distinct from old.id
@@ -449,6 +455,40 @@ $$;
 -- Envio síncrono (S07). O job nasce junto com o envio (idempotency_key = id do envio), `running` com lease: se o
 -- processo do app morrer, jobs_requeue_stale recupera o órfão depois da lease. As funções abaixo fecham o envio.
 
+-- Criação atômica do envio (consentimento + envio `processing` + job `running` com lease), UMA transação. O arquivo
+-- já foi para o Storage no caminho {perfil}/{id}/{arquivo}; se esta função falhar, o servidor remove o objeto.
+-- Os gatilhos (papel de envio, consentimento próprio, identidade imutável) continuam valendo dentro dela.
+create function public.submissions_create(
+  p_id uuid, p_profile_id uuid, p_source public.submission_source, p_school_id uuid, p_grade text, p_school_year int,
+  p_storage_path text, p_file_name text, p_mime_type text, p_size_bytes bigint, p_is_demo boolean,
+  p_consent_purpose text, p_consent_text_version text
+) returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c_id uuid;
+begin
+  insert into public.consents (profile_id, purpose, text_version)
+  values (p_profile_id, p_consent_purpose, p_consent_text_version)
+  returning id into c_id;
+  insert into public.list_submissions (
+    id, submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type, size_bytes,
+    consent_id, is_demo
+  ) values (
+    p_id, p_profile_id, p_source, p_school_id, p_grade, p_school_year, p_storage_path, p_file_name, p_mime_type,
+    p_size_bytes, c_id, coalesce(p_is_demo, false)
+  );
+  update public.list_submissions set status = 'processing' where id = p_id;
+  -- O job nasce com o envio: `running` com lease, chave = id do envio. Se o processo morrer daqui em diante,
+  -- jobs_requeue_stale o recoloca na fila depois da lease (nenhum envio fica preso em `processing`).
+  insert into public.jobs (kind, payload, status, attempts, locked_at, idempotency_key, submission_id)
+  values ('ocr_jobs', jsonb_build_object('submission_id', p_id), 'running', 1, now(), p_id::text, p_id);
+  return p_id;
+end;
+$$;
+
 -- Resultado dentro do orçamento de 10 s, TUDO numa transação: job succeeded + ocr_jobs + envio review_needed.
 -- Devolve false se o job não estiver mais `running` (ex.: já foi devolvido à fila); nada é gravado nesse caso.
 create function public.submissions_record_sync_result(p_submission_id uuid, p_result jsonb, p_duration_ms int)
@@ -546,6 +586,7 @@ revoke execute on function public.jobs_complete(uuid, jsonb, int, int, boolean) 
 revoke execute on function public.jobs_fail(uuid, text, int, boolean, int) from public, anon, authenticated, service_role;
 revoke execute on function public.submissions_record_sync_result(uuid, jsonb, int) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_defer(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.submissions_create(uuid, uuid, public.submission_source, uuid, text, int, text, text, text, bigint, boolean, text, text) from public, anon, authenticated, service_role;
 revoke execute on function public.submissions_reject(uuid, text) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_read(int, int) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_ack(bigint) from public, anon, authenticated, service_role;
@@ -558,6 +599,7 @@ grant execute on function public.jobs_complete(uuid, jsonb, int, int, boolean) t
 grant execute on function public.jobs_fail(uuid, text, int, boolean, int) to service_role;
 grant execute on function public.submissions_record_sync_result(uuid, jsonb, int) to service_role;
 grant execute on function public.jobs_defer(uuid) to service_role;
+grant execute on function public.submissions_create(uuid, uuid, public.submission_source, uuid, text, int, text, text, text, bigint, boolean, text, text) to service_role;
 grant execute on function public.submissions_reject(uuid, text) to service_role;
 grant execute on function public.jobs_read(int, int) to service_role;
 grant execute on function public.jobs_ack(bigint) to service_role;

@@ -14,6 +14,8 @@ export type FormErrorCode =
   | "no_file"
   | "forbidden"
   | "unexpected"
+  | "pdf_too_large"
+  | "image_undecodable"
   | UploadErrorCode;
 
 export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
@@ -23,7 +25,9 @@ export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
   forbidden: "Seu perfil não pode enviar listas por aqui.",
   unexpected: "Não foi possível enviar agora. Tente novamente em instantes.",
   empty_file: "O arquivo está vazio. Escolha outro.",
-  file_too_large: "O arquivo passa de 10 MB. Envie um arquivo menor.",
+  file_too_large: "O arquivo passa de 4 MB. Envie um arquivo menor.",
+  pdf_too_large: "Este PDF passa de 4 MB. Comprima o PDF ou envie fotos das páginas.",
+  image_undecodable: "Não conseguimos reduzir esta foto (formatos como HEIC). Envie em JPG ou PNG, ou como PDF.",
   unsupported_type: "Tipo de arquivo não aceito. Envie PDF, JPG, PNG, WEBP ou HEIC.",
   signature_mismatch: "O conteúdo do arquivo não confere com o tipo informado. Escolha outro arquivo.",
   encrypted_pdf: "Este PDF tem senha. Envie uma versão sem proteção.",

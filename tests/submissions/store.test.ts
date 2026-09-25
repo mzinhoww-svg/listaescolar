@@ -1,5 +1,4 @@
 // Integração contra o Supabase local da trilha (Postgres + Storage + funções jobs_*). Roda em `pnpm test:db`.
-import { execFileSync } from "node:child_process";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { Client } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -13,21 +12,13 @@ import { handleTick, type WorkerDeps } from "../../supabase/functions/_shared/wo
 import { attempt, cleanupUsers, DATABASE_URL, IDS, seedUsers, withClaims } from "../db/helpers";
 import { FakeClock } from "../helpers/fake-clock";
 import { pdf } from "../helpers/files";
+import { localApi } from "../helpers/local-api";
 
 const RESULT: ExtractionResult = {
   items: [{ name: "Caderno", quantity: 2, unit: "un", confidence: 0.9 }],
   overallConfidence: 0.9,
   warnings: [],
 };
-
-function localApi(): { url: string; key: string } {
-  const out = execFileSync("node", ["scripts/supa.mjs", "status"], { encoding: "utf8" });
-  const json = out.split("\n").find((l) => l.trim().startsWith("{"));
-  const env = JSON.parse(json ?? "{}") as { API_URL?: string; SECRET_KEY?: string; SERVICE_ROLE_KEY?: string };
-  const key = env.SECRET_KEY ?? env.SERVICE_ROLE_KEY;
-  if (!env.API_URL || !key) throw new Error("Supabase local fora do ar (pnpm db:start)");
-  return { url: env.API_URL, key };
-}
 
 const input = () => ({
   profileId: IDS.parent,
@@ -52,12 +43,14 @@ describe("envio + worker contra o Postgres local", () => {
     await pg.connect();
   });
   afterAll(async () => {
-    await pg.query("delete from public.list_submissions");
-    await pg.query("delete from public.jobs");
-    await pg.query("delete from public.consents");
-    await pg.query("select pgmq.purge_queue('ocr_jobs')");
-    await pg.query("select pgmq.purge_queue('ocr_jobs_dlq')");
-    await pg.end();
+    if (pg) {
+      await pg.query("delete from public.list_submissions");
+      await pg.query("delete from public.jobs");
+      await pg.query("delete from public.consents");
+      await pg.query("select pgmq.purge_queue('ocr_jobs')");
+      await pg.query("select pgmq.purge_queue('ocr_jobs_dlq')");
+      await pg.end();
+    }
     await cleanupUsers();
   });
   beforeEach(async () => {
@@ -199,23 +192,13 @@ describe("envio + worker contra o Postgres local", () => {
     expect((await rows("select status from public.jobs where id = $1", [r.jobId]))[0].status).toBe("succeeded");
   });
 
-  const failingOn = (table: string, method: "insert" | "update"): SupabaseClient =>
+  /** Cliente cujo `rpc` falha (o arquivo já subiu): simula queda entre o upload e a transação. */
+  const failingRpc = (): SupabaseClient =>
     new Proxy(sb, {
       get(target, prop) {
-        if (prop !== "from") return Reflect.get(target, prop, target) as unknown;
-        return (t: string) => {
-          const builder = target.from(t);
-          if (t !== table) return builder;
-          return new Proxy(builder, {
-            get(b, m) {
-              if (m === method) {
-                return () => ({ eq: async () => ({ error: { message: "boom" } }), select: () => ({ single: async () => ({ error: { message: "boom" } }) }), then: (ok: (v: unknown) => void) => ok({ error: { message: "boom" } }) });
-              }
-              const v = Reflect.get(b, m, b) as unknown;
-              return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(b) : v;
-            },
-          });
-        };
+        if (prop === "rpc") return () => Promise.resolve({ data: null, error: { message: "boom" } });
+        const v = Reflect.get(target, prop, target) as unknown;
+        return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
       },
     });
 
@@ -231,13 +214,23 @@ describe("envio + worker contra o Postgres local", () => {
   };
 
   it.each([
-    ["falha no insert do envio (o banco recusa)", () => sb, { source: "school" as const }],
-    ["falha no update para processing", () => failingOn("list_submissions", "update"), {}],
-    ["falha ao criar o job", () => failingOn("jobs", "insert"), {}],
+    ["o banco recusa o envio (origem school para pai)", () => sb, { source: "school" as const }],
+    ["a transação SQL falha depois do upload", () => failingRpc(), {}],
+    ["consentimento inválido (finalidade errada) desfaz o consentimento já inserido", () => sb, { consent: { purpose: "outra", textVersion: "v1" } }],
   ])("rollback completo: %s", async (_n, client, patch) => {
     const before = await storageCount();
     await expect(createSupabaseStore(client()).createSubmission({ ...newSubmission(), ...patch })).rejects.toThrow();
     await nothingLeft(before);
+  });
+
+  it("submissions_create: um único passo deixa consentimento, envio processing e job running com lease", async () => {
+    const { submissionId } = await createSupabaseStore(sb).createSubmission(newSubmission());
+    const sub = (await rows("select status, consent_id from public.list_submissions where id = $1", [submissionId]))[0];
+    expect(sub.status).toBe("processing");
+    expect(await rows("select 1 from public.consents where id = $1", [sub.consent_id])).toHaveLength(1);
+    const job = (await rows("select status, attempts, locked_at from public.jobs where idempotency_key = $1", [submissionId]))[0];
+    expect(job).toMatchObject({ status: "running", attempts: 1 });
+    expect(job.locked_at).not.toBeNull();
   });
 
   it("recordSyncResult atômico: job que não está mais running não grava nada e lança", async () => {

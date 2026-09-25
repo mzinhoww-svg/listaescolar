@@ -2,6 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const submitListAction = vi.fn();
+const canvasResize = vi.fn();
+vi.mock("@/components/submissions/prepareUpload", async (orig) => {
+  const real = await orig<typeof import("@/components/submissions/prepareUpload")>();
+  return { ...real, prepareUpload: (f: File) => real.prepareUpload(f, { resize: canvasResize }) };
+});
 vi.mock("@/app/enviar-lista/actions", () => ({ submitListAction: (p: unknown, f: FormData) => submitListAction(p, f) }));
 
 import { SubmitForm } from "@/app/enviar-lista/SubmitForm";
@@ -52,14 +57,55 @@ describe("SubmitForm (App15/App06)", () => {
     expect(submitListAction).not.toHaveBeenCalled();
   });
 
-  it("arquivo acima de 10 MB é recusado no navegador", async () => {
+  it("arquivo acima de 4 MB é recusado no navegador", async () => {
     render(<SubmitForm years={[2027]} defaultYear={2027} />);
     fill({ file: false });
     const big = new File([new Uint8Array(1)], "grande.pdf", { type: "application/pdf" });
     Object.defineProperty(big, "size", { value: 11 * 1024 * 1024 });
     fireEvent.change(screen.getByLabelText("Arquivo da lista"), { target: { files: [big] } });
     send();
-    expect(await screen.findByRole("alert")).toHaveTextContent("passa de 10 MB");
+    expect(await screen.findByRole("alert")).toHaveTextContent("passa de 4 MB");
+    expect(submitListAction).not.toHaveBeenCalled();
+  });
+
+  const pick = (file: File) => {
+    fireEvent.change(screen.getByLabelText("Série"), { target: { value: "5º ano" } });
+    fireEvent.change(screen.getByLabelText("Arquivo da lista"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("checkbox"));
+  };
+  const sized = (name: string, type: string, size: number) => {
+    const f = new File([new Uint8Array(1)], name, { type });
+    Object.defineProperty(f, "size", { value: size });
+    return f;
+  };
+
+  it("PDF acima de 4 MB: mensagem própria, sem chamar a action", async () => {
+    render(<SubmitForm years={[2027]} defaultYear={2027} />);
+    pick(sized("lista.pdf", "application/pdf", 5_000_000));
+    send();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Este PDF passa de 4 MB");
+    expect(submitListAction).not.toHaveBeenCalled();
+  });
+
+  it("foto acima de 3 MB: reduzida no navegador e enviada como JPEG", async () => {
+    canvasResize.mockReset().mockResolvedValue(new Blob([new Uint8Array(10)], { type: "image/jpeg" }));
+    submitListAction.mockResolvedValue({ status: "idle" });
+    render(<SubmitForm years={[2027]} defaultYear={2027} />);
+    pick(sized("foto.png", "image/png", 6_000_000));
+    send();
+    await waitFor(() => expect(submitListAction).toHaveBeenCalledTimes(1));
+    expect(canvasResize).toHaveBeenCalledWith(expect.any(File), 2400, 0.85);
+    const sent = (submitListAction.mock.calls[0]![1] as FormData).get("file") as File;
+    expect(sent.name).toBe("foto.jpg");
+    expect(sent.type).toBe("image/jpeg");
+  });
+
+  it("HEIC grande que o navegador não decodifica: mensagem clara", async () => {
+    canvasResize.mockReset().mockRejectedValue(new Error("decode"));
+    render(<SubmitForm years={[2027]} defaultYear={2027} />);
+    pick(sized("IMG_1.heic", "image/heic", 6_000_000));
+    send();
+    expect(await screen.findByRole("alert")).toHaveTextContent("JPG ou PNG");
     expect(submitListAction).not.toHaveBeenCalled();
   });
 

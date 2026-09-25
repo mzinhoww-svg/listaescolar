@@ -20,27 +20,14 @@ export function rpcOf(client: SupabaseClient): RpcFn {
 
 /**
  * Devolve o job do envio à fila via public.jobs_defer (atômico: job `queued` + mensagem + envio `processing_async`;
- * idempotente por envio). `kick` acorda a Edge Function (best effort); o pg_cron do minuto seguinte cobre qualquer falha.
+ * idempotente por envio). Não acorda a Edge Function: o pg_cron do minuto seguinte a aciona (sem espera extra no
+ * caminho do usuário).
  */
-export function createJobQueue(
-  client: SupabaseClient,
-  opts: { kick?: { url: string; secret: string } } = {},
-): JobQueue {
+export function createJobQueue(client: SupabaseClient): JobQueue {
   return {
     async enqueue(submissionId) {
       const { data, error } = await rpcOf(client)("jobs_defer", { p_submission_id: submissionId });
       if (error || typeof data !== "string") throw new Error("enqueue");
-      if (opts.kick) {
-        try {
-          await fetch(opts.kick.url, {
-            method: "POST",
-            headers: { "x-worker-secret": opts.kick.secret },
-            signal: AbortSignal.timeout(1_500),
-          });
-        } catch {
-          // best effort
-        }
-      }
       return { jobId: data };
     },
   };

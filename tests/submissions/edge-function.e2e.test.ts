@@ -1,6 +1,5 @@
 // Ciclo real contra a Edge Function ocr-worker servida localmente (Deno). Só roda com WORKER_URL e WORKER_SHARED_SECRET
 // (ver supabase/functions/ocr-worker/README.md); fora disso é ignorado, inclusive em `pnpm test:db`.
-import { execFileSync } from "node:child_process";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -12,6 +11,7 @@ import { createSupabaseStore } from "@/features/submissions/supabase-store";
 import { cleanupUsers, DATABASE_URL, IDS, seedUsers } from "../db/helpers";
 import { FakeClock } from "../helpers/fake-clock";
 import { pdf } from "../helpers/files";
+import { localApi } from "../helpers/local-api";
 
 const URL_ = process.env.WORKER_URL;
 const SECRET = process.env.WORKER_SHARED_SECRET;
@@ -28,19 +28,20 @@ describe.skipIf(!URL_ || !SECRET)("ocr-worker (Deno) de ponta a ponta", () => {
 
   beforeAll(async () => {
     await seedUsers();
-    const out = execFileSync("node", ["scripts/supa.mjs", "status"], { encoding: "utf8" });
-    const env = JSON.parse(out.split("\n").find((l) => l.trim().startsWith("{")) ?? "{}") as { API_URL: string; SECRET_KEY: string };
-    sb = createClient(env.API_URL, env.SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { url, key } = localApi();
+    sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     pg = new Client({ connectionString: DATABASE_URL });
     await pg.connect();
     for (const t of ["list_submissions", "jobs", "consents"]) await pg.query(`delete from public.${t}`);
     await pg.query("select pgmq.purge_queue('ocr_jobs')");
   });
   afterAll(async () => {
-    for (const t of ["list_submissions", "jobs", "consents"]) await pg.query(`delete from public.${t}`);
-    await pg.query("select pgmq.purge_queue('ocr_jobs')");
-    await pg.query("select pgmq.purge_queue('ocr_jobs_dlq')");
-    await pg.end();
+    if (pg) {
+      for (const t of ["list_submissions", "jobs", "consents"]) await pg.query(`delete from public.${t}`);
+      await pg.query("select pgmq.purge_queue('ocr_jobs')");
+      await pg.query("select pgmq.purge_queue('ocr_jobs_dlq')");
+      await pg.end();
+    }
     await cleanupUsers();
   });
 

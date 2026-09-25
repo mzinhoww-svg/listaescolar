@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getPipelineFlags } from "@/lib/env";
 import { assertPipelineEnv, isDemoEnabled } from "@/lib/pipeline-env";
-import { parseSlowMs } from "../../supabase/functions/_shared/demo-lock";
+import { demoEnabled, parseSlowMs } from "../../supabase/functions/_shared/demo-lock";
 import { extractionResultSchema, submitMetaSchema } from "@/features/submissions/schemas";
 
 const meta = {
@@ -50,6 +50,17 @@ describe("flags do pipeline (env)", () => {
       expect(isDemoEnabled()).toBe(false);
       expect(() => assertPipelineEnv()).toThrow(/APP_ENV/);
     }
+  });
+  it("VERCEL_ENV=production trava o demo mesmo com APP_ENV permitido; valores são aparados", () => {
+    vi.stubEnv("DEMO_PIPELINE", "1");
+    vi.stubEnv("APP_ENV", "local");
+    vi.stubEnv("VERCEL_ENV", "production");
+    expect(isDemoEnabled()).toBe(false);
+    expect(() => assertPipelineEnv()).toThrow(/VERCEL_ENV/);
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(isDemoEnabled()).toBe(true);
+    expect(demoEnabled({ DEMO_PIPELINE: " 1 ", APP_ENV: " staging " })).toBe(true);
+    expect(demoEnabled({ DEMO_PIPELINE: "1", APP_ENV: "local", VERCEL_ENV: " production " })).toBe(false);
   });
   it("NODE_ENV=production não libera o demo (só APP_ENV conta)", () => {
     vi.stubEnv("NODE_ENV", "production");

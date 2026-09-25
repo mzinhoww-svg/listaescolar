@@ -11,6 +11,7 @@ const FUNCS = [
   "jobs_defer(uuid)",
   "submissions_record_sync_result(uuid, jsonb, integer)",
   "submissions_reject(uuid, text)",
+  "submissions_create(uuid, uuid, submission_source, uuid, text, integer, text, text, text, bigint, boolean, text, text)",
   "jobs_read(integer, integer)",
   "jobs_ack(bigint)",
   "jobs_set_vt(bigint, integer)",

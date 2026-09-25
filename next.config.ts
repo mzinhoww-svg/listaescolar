@@ -4,9 +4,10 @@ import type { NextConfig } from "next";
 const dsn = process.env.SENTRY_DSN;
 
 const baseConfig: NextConfig = {
-  // Limite de corpo das Server Actions (padrão do Next: 1 MB): envio de lista (S07) aceita PDF/foto de até 10 MB
-  // (11 MB cobre o multipart); o CSV do INEP (S03) fica em 4 MB na própria action. Maiores: `pnpm import:inep`.
-  experimental: { serverActions: { bodySizeLimit: "11mb" } },
+  // Limite ÚNICO de corpo das Server Actions (padrão do Next: 1 MB): 4 MB, abaixo do teto de 4,5 MB da Vercel.
+  // Vale para o envio de lista (S07; fotos maiores são reduzidas no navegador) e para o CSV do INEP (S03).
+  // Maiores: `pnpm import:inep`.
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   ...(dsn ? { env: { NEXT_PUBLIC_SENTRY_DSN: dsn } } : {}),
 };
 

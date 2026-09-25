@@ -1,7 +1,11 @@
 /** Orçamento síncrono do pipeline de extração. Injetável em `submitList` para os testes. */
 export const SYNC_BUDGET_MS = 10_000;
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/**
+ * A Vercel limita o corpo da requisição a 4,5 MB, então o envio pela Server Action é de até 4 MB (decimais; sobra
+ * para o multipart). Fotos maiores são reduzidas no navegador. Upload direto ao Storage: dívida técnica (ledger).
+ */
+export const MAX_UPLOAD_BYTES = 4_000_000;
 /** Imagem acima disto (por lado ou em pixels) é recusada antes de chegar ao pipeline. */
 export const MAX_IMAGE_SIDE_PX = 12_000;
 export const MAX_IMAGE_PIXELS = 100_000_000;

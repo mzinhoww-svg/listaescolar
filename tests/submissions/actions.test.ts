@@ -69,7 +69,7 @@ describe("submitListAction", () => {
     expect(submitList).toHaveBeenCalledOnce();
   });
 
-  it("acima de 10 MB: recusa pelo tamanho sem ler os bytes", async () => {
+  it("acima de 4 MB: recusa pelo tamanho sem ler os bytes", async () => {
     const big = new File([new Uint8Array(1)], "grande.pdf", { type: "application/pdf" });
     Object.defineProperty(big, "size", { value: 11 * 1024 * 1024 });
     const arrayBuffer = vi.spyOn(big, "arrayBuffer");

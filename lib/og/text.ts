@@ -1,8 +1,10 @@
 /**
- * A fonte embutida cobre Latin (incl. estendido) e pontuação comum. Glifos fora disso (emoji, CJK) fariam o
- * next/og baixar fonte/emoji da rede: nesses casos devolvemos null e o chamador usa a imagem genérica.
+ * Só caracteres comprovadamente presentes no cmap da Plus Jakarta Sans ExtraBold (assets/fonts): ASCII imprimível,
+ * Latin-1 (sem o hífen suave U+00AD) e Latin Extended-A (sem U+0149 e U+017F), mais pontuação tipográfica comum.
+ * Latin Extended-B tem lacunas na fonte e fica de fora. Glifo ausente faria o next/og buscar fonte na rede:
+ * nesses casos devolvemos null e o chamador usa a imagem genérica.
  */
-const ALLOWED = /^[ -~ -ɏ–—‘’“”•…]*$/;
+const ALLOWED = /^[ -~\u00a0-\u00ac\u00ae-\u0148\u014a-\u017e\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026]*$/;
 export const OG_TEXT_MAX = 140;
 
 export function ogText(input: string): string | null {

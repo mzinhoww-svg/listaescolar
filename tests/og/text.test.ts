@@ -9,7 +9,7 @@ describe("ogText", () => {
   it("colapsa espaços e controles", () => {
     expect(ogText("  Escola \n  Modelo\t")).toBe("Escola Modelo");
   });
-  it.each(["Escola 🎒", "学校", "Ελλάδα", "Escola ‮gpj"])("%j cai na imagem genérica (null)", (v) => {
+  it.each(["Escola 🎒", "学校", "Ελλάδα", "Escola ‮gpj", "Escola Ǝ", "Escola Ș", "Escola\u00adX", "ŉ"])("%j cai na imagem genérica (null)", (v) => {
     expect(ogText(v)).toBeNull();
   });
   it("vazio vira null", () => {

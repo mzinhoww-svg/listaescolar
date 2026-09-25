@@ -12,7 +12,7 @@ describe("textos jurídicos preliminares", () => {
 
   it.each([
     ["/termos", ["data da última atualização", "e-mail do encarregado de dados"]],
-    ["/privacidade", ["razão social", "CNPJ", "prazo de retenção", "base legal", "operadores e contratos", "data da última atualização", "e-mail do encarregado de dados"]],
+    ["/privacidade", ["razão social", "CNPJ", "prazo de retenção", "prazo de guarda dos documentos de reivindicação", "prazo de guarda da trilha de auditoria", "base legal", "operadores e contratos", "data da última atualização", "e-mail do encarregado de dados"]],
   ] as const)("%s: faixa preliminar e cada placeholder em <mark>", async (route, labels) => {
     const Page = await loadPage(route);
     const { container } = await renderInSite(Page);
@@ -34,7 +34,7 @@ describe("textos jurídicos preliminares", () => {
     const Page = await loadPage("/privacidade");
     const { container } = await renderInSite(Page);
     const t = container.textContent ?? "";
-    for (const w of [/Supabase/, /Vercel/, /OpenRouter/, /arquivo da lista/i, /cliques em links de loja/i, /Pedidos de cotação/i, /consentimento/i, /carrinhos/i]) expect(t).toMatch(w);
+    for (const w of [/Supabase/, /Vercel/, /OpenRouter/, /arquivo da lista/i, /cliques em links de loja/i, /Pedidos de cotação/i, /consentimento/i, /carrinhos/i, /Reivindicação de escola/, /cargo, e-mail de contato e nota/, /o arquivo e o hash/, /versão do texto e data/, /Papelarias credenciadas: CNPJ, razão social, endereço, telefone, WhatsApp e e-mail/, /número do responsável fica visível para a papelaria/, /hash do endereço de IP/]) expect(t).toMatch(w);
     expect(t).not.toMatch(/\bcidade\b/i);
   });
 

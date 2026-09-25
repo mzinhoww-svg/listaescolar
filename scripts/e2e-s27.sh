@@ -18,6 +18,7 @@ SCHOOL=99001001; SERIE=ef-5; SCHOOL2=99001002; SERIE2=ef-1; SCHOOL3=99001003 # 3
 PASS=0; FAIL=0
 RUN=$(date +%s)
 SERVER_PID=""
+PRODSIM_DIRTY=0
 ok() { PASS=$((PASS+1)); echo "PASS  $1"; }
 bad() { FAIL=$((FAIL+1)); echo "FAIL  $1  ($2)"; }
 expect_eq() { if [ "$1" = "$2" ]; then ok "$3"; else bad "$3" "esperado '$2', veio '$1'"; fi; }
@@ -34,7 +35,12 @@ start_server() { # porta [env...]
   echo "servidor não subiu"; return 1
 }
 stop_server() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; SERVER_PID=""; }
-cleanup() { stop_server; for s in a b p; do ab $s close >/dev/null 2>&1; done; rm -rf "$TMP"; }
+cleanup() {
+  stop_server; for s in a b p; do ab $s close >/dev/null 2>&1; done
+  # fase k interrompida: o .next ficou com o build de produção simulado; restaura o build normal
+  if [ "$PRODSIM_DIRTY" = "1" ]; then echo "restaurando build normal…"; pnpm build >/dev/null 2>&1; fi
+  rm -rf "$TMP"
+}
 trap cleanup EXIT
 
 start_server "$PORT" || exit 1
@@ -110,11 +116,10 @@ ab a get text body | grep -qF "Compartilhar esta lista" && bad "cartão sem list
 echo "== f) 404 e 403 reais"
 expect_eq "$(status "$BASE/nao-existe")" 404 "/nao-existe = 404 (status HTTP)"
 curl -s "$BASE/nao-existe" | grep -q "Esta página não está na lista" && ok "404 mostra a tela Sis06" || bad "Sis06" "texto ausente"
-# Achado (ledger, S18): com `app/loading.tsx` a resposta já está em streaming quando `notFound()` roda em página dinâmica,
-# então escola/série inexistente sai com HTTP 200 + <meta robots noindex> (soft 404 tratado). Só rotas sem página são 404 de fato.
+# Sem `loading.tsx` forçando 200 (chore soft-404, #17), escola/série inexistente sai com HTTP 404 real + noindex.
 for p in /escolas/00000000 /escolas/$SCHOOL/serie-que-nao-existe; do
   curl -s "$BASE$p" -o "$TMP/nf.html" -w '%{http_code}' >"$TMP/nf.code"
-  expect_match "$(cat "$TMP/nf.code")" '^(200|404)$' "$p responde (HTTP $(cat "$TMP/nf.code"))"
+  expect_eq "$(cat "$TMP/nf.code")" 404 "$p responde HTTP 404"
   grep -q '<meta name="robots" content="noindex' "$TMP/nf.html" && ok "$p traz noindex" || bad "$p" "sem noindex"
 done
 ab a set viewport 390 844 >/dev/null
@@ -183,7 +188,7 @@ for p in / /como-funciona /sobre /termos /privacidade /escolas/$SCHOOL/$SERIE; d
     first=$(ab a eval "$FOCUS_JS" | tr -d '"')
     [[ "$first" == ok:A:*[Cc]onte* ]] && ok "$p: 1º Tab = skip link visível ($first)" || bad "$p skip link" "$first"
     ab a press Enter >/dev/null
-    expect_eq "$(ab a eval "location.hash.length > 1" | tr -d '"')" true "$p: Enter no skip link move para o conteúdo (#main)";;
+    expect_eq "$(ab a eval "location.hash" | tr -d '"')" "#conteudo" "$p: Enter no skip link move para o conteúdo (#conteudo)";;
   esac
   ab a open "$BASE$p" >/dev/null; sleep 1
   semfoco=0
@@ -218,6 +223,7 @@ stop_server
 if [ "${PRODSIM:-1}" = "1" ]; then
   echo "== k) simulação de produção (build com VERCEL_ENV=production; só robots.txt e sitemap.xml)"
   PROD_ORIGIN=https://listacerta.com.br
+  PRODSIM_DIRTY=1
   VERCEL_ENV=production NEXT_PUBLIC_SITE_URL=$PROD_ORIGIN pnpm build >"$TMP/build-prod.log" 2>&1 && ok "build simulando produção" || bad "build prodsim" "$(tail -3 "$TMP/build-prod.log")"
   start_server 3013 VERCEL_ENV=production NEXT_PUBLIC_SITE_URL=$PROD_ORIGIN
   P=http://127.0.0.1:3013
@@ -231,7 +237,7 @@ if [ "${PRODSIM:-1}" = "1" ]; then
   grep -Eq "9900100|/l/|/papelaria" "$TMP/sitemap-prod.xml" && bad "sitemap produção" "contém demo/lista" || ok "sitemap produção sem demo, listas nem papelarias"
   curl -s "$P/como-funciona" | grep -q "rel=\"canonical\" href=\"$PROD_ORIGIN/como-funciona\"" && ok "canonical produção = origem + caminho" || bad "canonical produção" "diferente"
   stop_server
-  pnpm build >"$TMP/build.log" 2>&1 && ok "build normal restaurado" || bad "rebuild" "$(tail -3 "$TMP/build.log")"
+  pnpm build >"$TMP/build.log" 2>&1 && { PRODSIM_DIRTY=0; ok "build normal restaurado"; } || bad "rebuild" "$(tail -3 "$TMP/build.log")"
 fi
 
 echo "== l) suíte anti open-redirect"

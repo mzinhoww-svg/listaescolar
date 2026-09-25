@@ -5,6 +5,8 @@ export type Legal = {
   dpoEmail: string | null;
   contactEmail: string | null;
   retention: string | null;
+  claimRetention: string | null;
+  auditRetention: string | null;
   legalBasis: string | null;
   operators: string | null;
   lastUpdated: string | null;
@@ -16,6 +18,8 @@ export const LEGAL: Legal = {
   dpoEmail: null,
   contactEmail: null,
   retention: null,
+  claimRetention: null,
+  auditRetention: null,
   legalBasis: null,
   operators: null,
   lastUpdated: null,
@@ -64,7 +68,10 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       ["Conta: e-mail (login por e-mail ou conta Google) e nome de exibição, quando existir."],
       ["Listas enviadas: o arquivo da lista (PDF ou imagem), a escola, a série e o ano, com o registro do seu consentimento (finalidade, versão do texto e data)."],
       ["Uso: carrinhos que você monta e cliques em links de loja, ligados à sua conta."],
-      ["Pedidos de cotação: escola, série, ano, número de itens, bairro (se informado) e o registro do consentimento. O pedido é compartilhado com a papelaria escolhida."],
+      ["Pedidos de cotação: escola, série, ano, número de itens, bairro (se informado) e o registro do consentimento. O pedido é compartilhado com a papelaria escolhida. Se o pedido seguir por WhatsApp, o número do responsável fica visível para a papelaria, e a conversa passa a ocorrer fora da ListaCerta, sob as regras do WhatsApp e da papelaria."],
+      ["Reivindicação de escola: nome, cargo, e-mail de contato e nota do solicitante, os documentos enviados como evidência (o arquivo e o hash dele), o registro do aceite (versão do texto e data) e os passos da análise. Prazo de guarda desses documentos: ", { key: "claimRetention", label: "prazo de guarda dos documentos de reivindicação" }, "."],
+      ["Papelarias credenciadas: CNPJ, razão social, endereço, telefone, WhatsApp e e-mail da papelaria, informados no credenciamento."],
+      ["Trilha de auditoria: registramos ações sensíveis com a data, o autor e um hash do endereço de IP (nunca o IP em claro). Prazo de guarda: ", { key: "auditRetention", label: "prazo de guarda da trilha de auditoria" }, "."],
       ["Não pedimos documento nem nome completo de estudante."],
     ],
   },

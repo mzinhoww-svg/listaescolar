@@ -19,6 +19,11 @@ describe("buildPageMetadata", () => {
     expect(m.twitter).toMatchObject({ card: "summary_large_image", title: "Sobre · ListaCerta" });
   });
 
+  it("declara a imagem OG e a do Twitter (metadata de página substitui a da raiz)", () => {
+    expect(m.openGraph).toMatchObject({ images: [{ url: "/opengraph-image", width: 1200, height: 630 }] });
+    expect(m.twitter).toMatchObject({ images: ["/twitter-image"] });
+  });
+
   it("indexável por padrão; noindex desliga index e follow continua", () => {
     expect(m.robots).toBeUndefined();
     const n = buildPageMetadata({ title: "t", description: "d", path: "/x", noindex: true });

@@ -27,3 +27,4 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: S01 aceita `auth_role()` executável por anon como RPC (advisor apontará; só revela o próprio papel) e ramos 'system' das políticas `to authenticated` como código inerte — revogar exigiria revisar todos os testes por anon; custo: baixo, revisar na S19.
 - Ruling: para a S02, o primeiro login cria `profiles` (role parent) por trigger SECURITY DEFINER em `auth.users` — a S01 não dá caminho de auto-criação de perfil de propósito — custo: nenhum.
 - Ruling: pepper do IP e escolha do cabeçalho (x-forwarded-for último vs x-real-ip) validados no staging antes da S20; preferir Supabase Vault ao GUC — custo: baixo.
+- Ruling: migration 0001 aplicada no staging pelo MCP como base_schema em 24/09/2026; advisor: auth_role anon (aceito) e rls_auto_enable (da plataforma, não alterado) — custo: nenhum.

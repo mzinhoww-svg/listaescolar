@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SearchIcon } from "@/components/auth/icons";
 import { outlineButton, primaryButton, Screen } from "@/components/auth/Screen";
+
+export const metadata: Metadata = {
+  title: "Página não encontrada · ListaCerta",
+  robots: { index: false, follow: false },
+};
 
 export default function NotFound() {
   return (
@@ -20,7 +26,7 @@ export default function NotFound() {
           </p>
         </div>
         <div className="flex-1" />
-        <Link href="/" className={primaryButton}>
+        <Link href="/escolas" className={primaryButton}>
           <SearchIcon />
           Buscar escola
         </Link>

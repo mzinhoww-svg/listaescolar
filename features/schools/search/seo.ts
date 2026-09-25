@@ -1,3 +1,5 @@
+import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
+
 import { isFilteredSearch } from "./query";
 import { NETWORK_LABEL, type SchoolProfile, type SearchInput } from "./types";
 
@@ -6,6 +8,7 @@ export type PageMetadata = {
   description: string;
   robots: { index: boolean; follow: boolean };
   alternates: { canonical: string };
+  openGraph?: { type: "website"; url: string; siteName: string; locale: string; title: string; description: string };
 };
 
 /** Indexável só com perfil reivindicado/verificado e não demonstrativo (Ruling: demais são noindex). */
@@ -17,11 +20,15 @@ export function buildSchoolMetadata(school: SchoolProfile): PageMetadata {
   const where = `${school.municipalityName}/${school.uf}`;
   const hood = school.neighborhood ? `, bairro ${school.neighborhood}` : "";
   const demo = school.isDemo;
+  const title = demo ? `${school.name} (Demonstração) · ListaCerta` : `${school.name} · ListaCerta`;
+  const description = `${demo ? "Demonstração: dados fictícios. " : ""}Perfil da escola ${school.name} (rede ${NETWORK_LABEL[school.network].toLowerCase()}) em ${where}${hood}. Consulte a lista de material escolar quando estiver disponível.`;
+  const canonical = `/escolas/${school.inep}`;
   return {
-    title: demo ? `${school.name} (Demonstração) · ListaCerta` : `${school.name} · ListaCerta`,
-    description: `${demo ? "Demonstração: dados fictícios. " : ""}Perfil da escola ${school.name} (rede ${NETWORK_LABEL[school.network].toLowerCase()}) em ${where}${hood}. Consulte a lista de material escolar quando estiver disponível.`,
+    title,
+    description,
     robots: { index: isIndexableSchool(school), follow: school.verificationStatus !== "suspended" },
-    alternates: { canonical: `/escolas/${school.inep}` },
+    alternates: { canonical },
+    openGraph: { type: "website", url: canonical, siteName: SITE_NAME, locale: SITE_LOCALE, title, description },
   };
 }
 

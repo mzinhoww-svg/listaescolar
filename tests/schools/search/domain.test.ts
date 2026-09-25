@@ -73,6 +73,18 @@ describe("buildSchoolMetadata", () => {
     expect(m.description.includes("Demonstração")).toBe(Boolean(over.isDemo));
   });
 
+  it("Open Graph replica título, descrição e canonical", () => {
+    const m = buildSchoolMetadata(school({ verificationStatus: "verified" }));
+    expect(m.openGraph).toMatchObject({
+      type: "website",
+      url: m.alternates.canonical,
+      siteName: "ListaCerta",
+      locale: "pt_BR",
+      title: m.title,
+      description: m.description,
+    });
+  });
+
   it("suspensa não segue links", () => {
     expect(buildSchoolMetadata(school({ verificationStatus: "suspended" })).robots.follow).toBe(false);
   });

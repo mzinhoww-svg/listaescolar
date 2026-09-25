@@ -10,7 +10,7 @@ export type ProtectedPrefix =
   | "/admin";
 export type AccessDecision = "allow" | "login" | "forbidden";
 
-const PREFIXES: readonly ProtectedPrefix[] = [
+export const PREFIXES: readonly ProtectedPrefix[] = [
   "/conta",
   "/carrinho",
   "/cotacao",

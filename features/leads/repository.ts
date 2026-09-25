@@ -175,7 +175,7 @@ export async function expireDue(admin: SupabaseClient, limit = 500): Promise<num
 // ---------------------------------------------------------------------------
 
 const REQUESTER_COLUMNS =
-  "id, code, status, stationery_id, cart_id, list_id, school_name, grade_label, school_year, item_count, expires_at, quoted_total_cents, quoted_at, created_at";
+  "id, code, status, stationery_id, cart_id, list_id, school_name, grade_label, school_year, item_count, expires_at, quoted_total_cents, quoted_at, is_demo, created_at";
 
 const requesterRowSchema = z.object({
   id: z.uuid(),
@@ -191,6 +191,7 @@ const requesterRowSchema = z.object({
   expires_at: date,
   quoted_total_cents: z.number().int().nullable(),
   quoted_at: nullableDate,
+  is_demo: z.boolean(),
   created_at: date,
 });
 
@@ -198,6 +199,7 @@ export type RequesterLeadRow = RequesterLead & {
   quotedTotalCents: number | null;
   quotedAt: Date | null;
   stationeryName: string | null;
+  isDemo: boolean;
 };
 
 function mapRequester(r: z.output<typeof requesterRowSchema>, names: ReadonlyMap<string, string>): RequesterLeadRow {
@@ -217,6 +219,7 @@ function mapRequester(r: z.output<typeof requesterRowSchema>, names: ReadonlyMap
     quotedTotalCents: r.quoted_total_cents,
     quotedAt: r.quoted_at,
     stationeryName: names.get(r.stationery_id) ?? null,
+    isDemo: r.is_demo,
   };
 }
 
@@ -253,8 +256,8 @@ export async function getForRequester(admin: SupabaseClient, actor: SessionActor
 }
 
 function toRequesterLead(row: RequesterLeadRow): RequesterLead {
-  const { quotedTotalCents: _q, quotedAt: _a, stationeryName: _n, ...lead } = row;
-  void [_q, _a, _n];
+  const { quotedTotalCents: _q, quotedAt: _a, stationeryName: _n, isDemo: _d, ...lead } = row;
+  void [_q, _a, _n, _d];
   return lead;
 }
 

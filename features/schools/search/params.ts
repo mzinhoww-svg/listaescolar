@@ -12,13 +12,18 @@ function first(v: unknown): string | undefined {
 }
 
 const uuid = z.uuid();
-const pageSchema = z.coerce.number().int().min(1).max(MAX_PAGE);
+const pageSchema = z
+  .string()
+  .regex(/^\d{1,3}$/)
+  .transform(Number)
+  .pipe(z.number().int().min(1).max(MAX_PAGE));
+const SEARCH_KEYS = ["q", "rede", "bairro", "municipio", "pagina"] as const;
 
 /** Fronteira dos searchParams: nunca lança; entrada inválida vira o padrão. */
 export function parseSearchParams(raw: Raw): SearchInput {
   // Corta antes de normalizar: 10 mil caracteres não devem custar CPU.
   const qRaw = cleanText(first(raw.q)?.slice(0, MAX_QUERY_LENGTH * 4)).slice(0, MAX_QUERY_LENGTH).trim();
-  const qNormalized = normalizeName(qRaw);
+  const qNormalized = normalizeName(qRaw).slice(0, MAX_QUERY_LENGTH).trim();
   const hasQ = qRaw.length > 0;
   const okQ = qNormalized.length >= 2;
   const inep = /^\d{8}$/.test(qRaw) ? qRaw : null;
@@ -42,5 +47,6 @@ export function parseSearchParams(raw: Raw): SearchInput {
     neighborhood,
     municipalityId: mun.success ? mun.data.toLowerCase() : null,
     page: page.success ? page.data : 1,
+    hasRawParams: SEARCH_KEYS.some((k) => raw[k] !== undefined),
   };
 }

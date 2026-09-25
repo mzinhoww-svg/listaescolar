@@ -36,6 +36,8 @@ export type SearchInput = {
   neighborhood: string | null;
   municipalityId: string | null;
   page: number;
+  /** true quando qualquer parâmetro de busca cru veio na URL (mesmo inválido): a página não deve ser indexada. */
+  hasRawParams: boolean;
 };
 
 export type SchoolListItem = {

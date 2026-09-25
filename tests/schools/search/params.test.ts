@@ -36,6 +36,10 @@ describe("parseSearchParams", () => {
     ["pagina 500", { pagina: "500" }, { page: 500 }],
     ["pagina decimal", { pagina: "1.5" }, { page: 1 }],
     ["pagina vazia", { pagina: "" }, { page: 1 }],
+    ["pagina 1e2", { pagina: "1e2" }, { page: 1 }],
+    ["pagina +5", { pagina: "+5" }, { page: 1 }],
+    ["pagina 1000", { pagina: "1000" }, { page: 1 }],
+    ["pagina hex", { pagina: "0x10" }, { page: 1 }],
     ["municipio uuid", { municipio: UUID.toUpperCase() }, { municipalityId: UUID }],
     ["municipio inválido", { municipio: "não-é-uuid" }, { municipalityId: null }],
     ["municipio injeção", { municipio: `${UUID}' or 1=1` }, { municipalityId: null }],
@@ -50,6 +54,20 @@ describe("parseSearchParams", () => {
     const r = parseSearchParams({ q: "escola ".repeat(1500) });
     expect(r.q?.length).toBeLessThanOrEqual(100);
     expect(r.qNormalized?.length).toBeLessThanOrEqual(100);
+  });
+
+  it("qNormalized é cortado em 100 depois da expansão de abreviações", () => {
+    const r = parseSearchParams({ q: "emeb ".repeat(19) });
+    expect(r.qNormalized?.length).toBeLessThanOrEqual(100);
+    expect(r.qNormalized).toBe(r.qNormalized?.trim());
+  });
+
+  it("hasRawParams reflete qualquer parâmetro de busca cru", () => {
+    expect(parseSearchParams({}).hasRawParams).toBe(false);
+    expect(parseSearchParams({ utm: "x" }).hasRawParams).toBe(false);
+    for (const raw of [{ q: "a" }, { pagina: "abc" }, { rede: "xyz" }, { bairro: "" }, { municipio: "x" }]) {
+      expect(parseSearchParams(raw).hasRawParams).toBe(true);
+    }
   });
 
   it("bairro gigante é truncado", () => {

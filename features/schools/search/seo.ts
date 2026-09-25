@@ -16,9 +16,10 @@ export function isIndexableSchool(s: Pick<SchoolProfile, "verificationStatus" | 
 export function buildSchoolMetadata(school: SchoolProfile): PageMetadata {
   const where = `${school.municipalityName}/${school.uf}`;
   const hood = school.neighborhood ? `, bairro ${school.neighborhood}` : "";
+  const demo = school.isDemo;
   return {
-    title: `${school.name} · ListaCerta`,
-    description: `Perfil da escola ${school.name} (rede ${NETWORK_LABEL[school.network].toLowerCase()}) em ${where}${hood}. Consulte a lista de material escolar quando estiver disponível.`,
+    title: demo ? `${school.name} (Demonstração) · ListaCerta` : `${school.name} · ListaCerta`,
+    description: `${demo ? "Demonstração: dados fictícios. " : ""}Perfil da escola ${school.name} (rede ${NETWORK_LABEL[school.network].toLowerCase()}) em ${where}${hood}. Consulte a lista de material escolar quando estiver disponível.`,
     robots: { index: isIndexableSchool(school), follow: school.verificationStatus !== "suspended" },
     alternates: { canonical: `/escolas/${school.inep}` },
   };

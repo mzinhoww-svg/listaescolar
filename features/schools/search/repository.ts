@@ -41,12 +41,23 @@ const profileRow = z.object({
   municipalities: z.object({ name: z.string(), uf: z.string() }),
 });
 
-/** Erro genérico: a mensagem do banco nunca chega à UI. */
+/** Erro genérico: a mensagem do banco nunca chega à UI; `code` e `cause` ficam para o servidor. */
 export class SchoolSearchError extends Error {
-  constructor() {
-    super("school_search_failed");
+  readonly code: string;
+  readonly issues: string[];
+  constructor(code: string, options: { cause?: unknown; issues?: string[] } = {}) {
+    super("school_search_failed", { cause: options.cause });
     this.name = "SchoolSearchError";
+    this.code = code;
+    this.issues = options.issues ?? [];
   }
+}
+
+/** Registra só código e caminhos/códigos do Zod (sem valores: podem conter PII) e devolve o erro genérico. */
+function fail(code: string, cause?: unknown, zod?: z.ZodError): SchoolSearchError {
+  const issues = zod?.issues.map((i) => `${i.path.join(".") || "(root)"}:${i.code}`) ?? [];
+  console.error("[school-search]", { code, issues });
+  return new SchoolSearchError(code, { cause, issues });
 }
 
 /** Município padrão sem hardcode: o primeiro habilitado por nome (a RLS só mostra habilitados). */
@@ -57,8 +68,9 @@ export async function getDefaultMunicipalityId(deps: SearchDeps = {}): Promise<s
     .select("id")
     .eq("is_enabled", true)
     .order("name")
+    .order("id")
     .limit(1);
-  if (error) throw new SchoolSearchError();
+  if (error) throw fail("default_municipality_failed", error);
   return data?.[0]?.id ?? null;
 }
 
@@ -73,10 +85,10 @@ export async function getSchoolByInep(inep: string, deps: SearchDeps = {}): Prom
     )
     .eq("inep", inep)
     .maybeSingle();
-  if (error) throw new SchoolSearchError();
+  if (error) throw fail("profile_query_failed", error);
   if (!data) return null;
   const r = profileRow.safeParse(data);
-  if (!r.success) throw new SchoolSearchError();
+  if (!r.success) throw fail("profile_invalid_shape", r.error, r.error);
   const v = r.data;
   return {
     id: v.id,
@@ -113,9 +125,9 @@ export async function searchSchools(input: SearchInput, deps: SearchDeps = {}): 
     p_limit: PAGE_SIZE,
     p_offset: (input.page - 1) * PAGE_SIZE,
   });
-  if (error) throw new SchoolSearchError();
+  if (error) throw fail("search_rpc_failed", error);
   const rows = z.array(rpcRow).safeParse(data ?? []);
-  if (!rows.success) throw new SchoolSearchError();
+  if (!rows.success) throw fail("search_invalid_shape", rows.error, rows.error);
 
   const schools: SchoolListItem[] = rows.data.map((r) => ({
     id: r.id,

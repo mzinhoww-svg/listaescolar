@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { siteBase } from "@/lib/site-base";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -10,6 +11,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteBase()),
   title: "ListaCerta",
   description:
     "Plataforma neutra de listas oficiais de material escolar: organiza, compara e redireciona.",

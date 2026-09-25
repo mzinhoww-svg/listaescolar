@@ -27,7 +27,7 @@ describe("statusLabel", () => {
   const cases: [VerificationStatus, boolean, string, boolean][] = [
     ["registered", false, "Cadastrada", false],
     ["claimed", false, "Reivindicada", false],
-    ["verified", false, "Verificada", true],
+    ["verified", false, "Escola verificada", true],
     ["suspended", false, "Suspensa", false],
     ["registered", true, "Cadastrada", false],
   ];
@@ -67,7 +67,10 @@ describe("buildSchoolMetadata", () => {
     expect(m.robots.index).toBe(index);
     expect(isIndexableSchool(school(over))).toBe(index);
     expect(m.alternates.canonical).toBe("/escolas/51001234");
-    expect(m.title).toBe("Escola Municipal Antônio Silva · ListaCerta");
+    expect(m.title).toBe(
+      over.isDemo ? "Escola Municipal Antônio Silva (Demonstração) · ListaCerta" : "Escola Municipal Antônio Silva · ListaCerta",
+    );
+    expect(m.description.includes("Demonstração")).toBe(Boolean(over.isDemo));
   });
 
   it("suspensa não segue links", () => {
@@ -88,7 +91,11 @@ describe("buildSearchMetadata", () => {
     ["com q", { q: "objetivo" }, false],
     ["com rede", { rede: "privada" }, false],
     ["página 2", { pagina: "2" }, false],
-    ["q curto (ignorado)", { q: "a" }, true],
+    ["q curto (ignorado)", { q: "a" }, false],
+    ["pagina inválida", { pagina: "abc" }, false],
+    ["rede inválida", { rede: "xyz" }, false],
+    ["param vazio", { q: "" }, false],
+    ["sem params", {}, true],
   ])("%s", (_n, raw, index) => {
     const m = buildSearchMetadata(parseSearchParams(raw));
     expect(m.robots.index).toBe(index);
@@ -96,9 +103,23 @@ describe("buildSearchMetadata", () => {
   });
 });
 
+function ld(over: Partial<SchoolProfile> = {}, base?: string): Record<string, unknown> {
+  const j = buildSchoolJsonLd(school(over), base);
+  if (!j) throw new Error("esperava JSON-LD");
+  return j;
+}
+
 describe("JSON-LD", () => {
+  it.each([
+    ["demo", { isDemo: true }],
+    ["cadastrada", { verificationStatus: "registered" as const }],
+    ["suspensa", { verificationStatus: "suspended" as const }],
+  ])("sem JSON-LD para escola %s", (_n, over) => {
+    expect(buildSchoolJsonLd(school(over))).toBeNull();
+  });
+
   it("só campos existentes e sem e-mail", () => {
-    const j = buildSchoolJsonLd(school(), "https://listacerta.example/");
+    const j = ld({}, "https://listacerta.example/");
     expect(j).toMatchObject({
       "@context": "https://schema.org",
       "@type": "School",
@@ -112,15 +133,15 @@ describe("JSON-LD", () => {
   });
 
   it("omite telefone, endereço e url ausentes", () => {
-    const j = buildSchoolJsonLd(school({ phone: null, address: null }));
+    const j = ld({ phone: null, address: null });
     expect(j).not.toHaveProperty("telephone");
     expect(j).not.toHaveProperty("url");
-    expect(j.address).not.toHaveProperty("streetAddress");
+    expect(j.address as object).not.toHaveProperty("streetAddress");
     expect(JSON.stringify(j)).not.toMatch(/null|undefined|""/);
   });
 
   it("escapa < na serialização", () => {
-    const s = serializeJsonLd(buildSchoolJsonLd(school({ name: "</script><script>alert(1)</script>" })));
+    const s = serializeJsonLd(ld({ name: "</script><script>alert(1)</script>" }));
     expect(s).not.toContain("<");
     expect(JSON.parse(s).name).toBe("</script><script>alert(1)</script>");
   });

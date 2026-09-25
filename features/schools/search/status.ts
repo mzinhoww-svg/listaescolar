@@ -21,7 +21,7 @@ const BASE: Record<VerificationStatus, { label: string; description: string; ver
     verified: false,
   },
   verified: {
-    label: "Verificada",
+    label: "Escola verificada",
     description: "A escola teve o vínculo do representante verificado.",
     verified: true,
   },

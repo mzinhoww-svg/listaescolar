@@ -1,9 +1,14 @@
+import { isIndexableSchool } from "./seo";
 import type { SchoolProfile } from "./types";
 
 type Json = Record<string, unknown>;
 
-/** JSON-LD `School` só com campos que existem; nunca e-mail. `baseUrl` (origem) é opcional. */
-export function buildSchoolJsonLd(school: SchoolProfile, baseUrl?: string): Json {
+/**
+ * JSON-LD `School` só com campos que existem; nunca e-mail. `baseUrl` (origem) é opcional.
+ * Null para escola demonstrativa ou não indexável (sem dados estruturados para o que não é indexado).
+ */
+export function buildSchoolJsonLd(school: SchoolProfile, baseUrl?: string): Json | null {
+  if (!isIndexableSchool(school)) return null;
   const address: Json = { "@type": "PostalAddress", addressCountry: "BR" };
   if (school.address) address.streetAddress = school.address;
   if (school.municipalityName) address.addressLocality = school.municipalityName;

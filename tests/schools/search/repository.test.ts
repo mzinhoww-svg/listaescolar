@@ -115,9 +115,9 @@ describe("searchSchools (banco real, anon)", () => {
   it("INEP de 8 dígitos existente redireciona; inexistente vira busca vazia", async () => {
     expect(await searchSchools(parseSearchParams({ q: "51990001" }), { client })).toEqual({ kind: "redirect", inep: "51990001" });
     const miss = await searchSchools(parseSearchParams({ q: "51990004" }), { client }); // município desabilitado
-    expect(miss.kind).toBe("results");
+    expect(miss).toMatchObject({ kind: "results", schools: [], total: 0 });
     const none = await searchSchools(parseSearchParams({ q: "12345678" }), { client });
-    expect(none.kind).toBe("results");
+    expect(none).toMatchObject({ kind: "results", schools: [], total: 0 });
   });
 
   it("padrão de município: primeiro habilitado, sem hardcode", async () => {

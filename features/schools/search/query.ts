@@ -17,5 +17,5 @@ export function buildSearchQuery(input: SearchInput, overrides: { page?: number 
 
 /** true quando a busca tem qualquer filtro ou página > 1 (não deve ser indexada). */
 export function isFilteredSearch(input: SearchInput): boolean {
-  return Boolean(input.q || input.network || input.neighborhood || input.municipalityId || input.page > 1);
+  return Boolean(input.q || input.network || input.neighborhood || input.municipalityId || input.page > 1 || input.hasRawParams);
 }

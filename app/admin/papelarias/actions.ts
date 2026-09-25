@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { getCurrentRole, getCurrentUser } from "@/features/auth/queries";
+import { getSessionActor } from "@/features/stationeries/actor";
 import { repositoryErrorMessage } from "@/features/stationeries/messages";
 import { transition } from "@/features/stationeries/repository";
 import { STATIONERY_STATUSES } from "@/features/stationeries/state";
@@ -23,9 +23,9 @@ const AdminMoveSchema = z.object({
 
 /** Aprovar, recusar, pausar, suspender ou reativar. Ator = admin da sessão; a função SQL confere de novo. */
 export async function adminTransitionAction(formData: FormData): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user) redirect("/entrar?next=%2Fadmin%2Fpapelarias");
-  if ((await getCurrentRole()) !== "admin") redirect("/403");
+  const actor = await getSessionActor();
+  if (!actor) redirect("/entrar?next=%2Fadmin%2Fpapelarias");
+  if (actor.role !== "admin") redirect("/403");
   const parsed = AdminMoveSchema.safeParse({
     id: formData.get("id"),
     to: formData.get("to"),
@@ -36,7 +36,7 @@ export async function adminTransitionAction(formData: FormData): Promise<void> {
   const { id, to, reason, back } = parsed.data;
   const base = back === "list" ? "/admin/papelarias" : `/admin/papelarias/${id}`;
   try {
-    await transition(createAdminClient(), { id, to, actorId: user.id, actorRole: "admin", reason });
+    await transition(createAdminClient(), actor, { id, to, ...(reason ? { reason } : {}) });
   } catch (error) {
     console.error("transição admin", error);
     redirect(`${base}?erro=${encodeURIComponent(repositoryErrorMessage(error))}`);

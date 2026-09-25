@@ -2,6 +2,7 @@ import type { LocalStationeryQuoteProvider, ProviderOptions } from "@/features/c
 import type { CartItemInput, LocalQuote } from "@/features/cart/types";
 
 import { CATALOG_PRICE_SOURCE, MAX_PRICE_CENTS } from "./catalog";
+import { normalizeNeighborhood } from "./neighborhood";
 import type { LocalCatalogCandidate, LocalCatalogSource, LocalLocation } from "./ports";
 
 export const DEFAULT_LOCAL_QUOTE_MAX_AGE_MS = 30 * 24 * 3_600_000; // 30 dias
@@ -9,12 +10,13 @@ const FUTURE_TOLERANCE_MS = 5 * 60_000;
 
 /** A papelaria atende o local? (área cadastrada, ou o bairro/município da própria papelaria.) */
 export function servesLocation(c: LocalCatalogCandidate, loc: LocalLocation): boolean {
-  const hood = loc.neighborhood?.trim().toLowerCase();
-  if (!hood) {
+  const hood = normalizeNeighborhood(loc.neighborhood ?? "");
+  if (hood === "") {
     return c.municipalityId === loc.municipalityId || c.areas.some((a) => a.municipalityId === loc.municipalityId);
   }
-  if (c.areas.some((a) => a.municipalityId === loc.municipalityId && a.neighborhood.toLowerCase() === hood)) return true;
-  return c.municipalityId === loc.municipalityId && (c.neighborhood?.trim().toLowerCase() ?? "") === hood;
+  // a mesma normalização (sem acento, caixa baixa) nos dois lados: o texto gravado pode ter qualquer grafia.
+  if (c.areas.some((a) => a.municipalityId === loc.municipalityId && normalizeNeighborhood(a.neighborhood) === hood)) return true;
+  return c.municipalityId === loc.municipalityId && normalizeNeighborhood(c.neighborhood ?? "") === hood;
 }
 
 /**

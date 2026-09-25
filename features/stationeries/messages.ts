@@ -21,7 +21,11 @@ const BY_CODE: Record<string, string> = {
   forbidden: "Você não tem acesso a esta papelaria.",
   invalid_state: "Esta ação não está disponível no status atual da papelaria.",
   transition_not_allowed: "Esta mudança de status não é permitida agora.",
+  precondition_failed: "Faltam dados obrigatórios do cadastro (razão social, bairro, WhatsApp, aceite ou área de atendimento).",
+  actor_invalid: "Não foi possível confirmar quem está fazendo esta ação. Entre de novo.",
   reason_required: "Informe o motivo.",
+  consent_required: "É preciso aceitar o tratamento de dados para continuar.",
+  limit_exceeded: "Passou do limite permitido. Divida em partes menores e tente de novo.",
   invalid_input: "Dados inválidos. Revise e tente de novo.",
 };
 

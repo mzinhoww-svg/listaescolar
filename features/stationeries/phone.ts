@@ -2,7 +2,10 @@
 export function normalizePhone(input: string): string | null {
   if (!/^[\d\s()+\-.]+$/.test(input)) return null;
   let digits = input.replace(/\D/g, "");
-  if (input.trim().startsWith("+") && !digits.startsWith("55")) return null;
+  const international = input.trim().startsWith("+");
+  if (international && !digits.startsWith("55")) return null;
+  // zero de tronco ("0 65 99999-8888"): DDD nunca começa com zero, então o zero inicial é descartado.
+  if (!international && digits.startsWith("0") && (digits.length === 11 || digits.length === 12)) digits = digits.slice(1);
   if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) digits = digits.slice(2);
   if (digits.length !== 10 && digits.length !== 11) return null;
   const ddd = Number(digits.slice(0, 2));

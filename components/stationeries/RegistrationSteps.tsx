@@ -24,13 +24,14 @@ const PAYMENT_LABEL: Record<(typeof PAYMENT_METHODS)[number], string> = {
 };
 
 export function StepBasics({ values, errors, municipalities }: { values: Values; errors: Errors; municipalities: Municipality[] }) {
-  const f = (id: string, label: string, opts: { hint?: string; inputMode?: "numeric" | "text"; autoComplete?: string } = {}) => (
+  const f = (id: string, label: string, opts: { hint?: string; inputMode?: "numeric" | "text"; autoComplete?: string; autoCapitalize?: "characters" } = {}) => (
     <Field id={id} label={label} error={errors[id]} {...(opts.hint ? { hint: opts.hint } : {})}>
       <input
         id={id}
         name={id}
         defaultValue={val(values, id)}
         inputMode={opts.inputMode}
+        autoCapitalize={opts.autoCapitalize}
         autoComplete={opts.autoComplete ?? "off"}
         aria-invalid={errors[id] !== undefined}
         aria-describedby={errors[id] ? `${id}-erro` : undefined}
@@ -42,7 +43,7 @@ export function StepBasics({ values, errors, municipalities }: { values: Values;
     <div className="grid gap-4 sm:grid-cols-2">
       {f("tradeName", "Nome fantasia")}
       {f("legalName", "Razão social")}
-      {f("cnpj", "CNPJ", { hint: "Só confere o formato: o cadastro passa por análise da equipe.", inputMode: "numeric" })}
+      {f("cnpj", "CNPJ", { hint: "Aceita CNPJ só com números ou com letras e números (novo formato). Só confere o formato: o cadastro passa por análise da equipe.", inputMode: "text", autoCapitalize: "characters" })}
       <Field id="municipalityId" label="Município" error={errors.municipalityId}>
         <select
           key={val(values, "municipalityId")} // React não reaplica o defaultValue de <select> depois do reset do formulário

@@ -64,8 +64,9 @@ export type CatalogItem = z.output<typeof CatalogItemInputSchema>;
 
 /** Neutraliza célula de planilha que o Excel/Sheets interpretaria como fórmula. */
 export function neutralizeFormula(value: string): string {
-  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return startsWithFormula(value) || /^[\t\r]/.test(value) ? `'${value}` : value;
 }
+/** O texto vira fórmula no Excel/Sheets? (espaços antes do `=` não escondem a fórmula.) */
 export function startsWithFormula(value: string): boolean {
   return /^[=+\-@\t\r]/.test(value.trimStart());
 }

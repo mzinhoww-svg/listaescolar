@@ -89,6 +89,9 @@ describe("S13 schema: papelarias, membros, eventos", () => {
         };
         await bad({ cnpj: "1234567890123" }, "cnpj 13 dígitos");
         await bad({ cnpj: "12.345.678/0001-95" }, "cnpj com máscara");
+        await bad({ cnpj: "12abc34501de35" }, "cnpj alfanumérico em caixa baixa");
+        await bad({ cnpj: "12ABC34501DE!5" }, "cnpj com símbolo");
+        await bad({ cnpj: "12ABC34501DE355" }, "cnpj alfanumérico com 15");
         await bad({ cnpj }, "cnpj duplicado");
         await bad({ service_radius_km: 51 }, "raio 51");
         await bad({ service_radius_km: -1 }, "raio -1");
@@ -220,19 +223,27 @@ describe("S13 schema: papelarias, membros, eventos", () => {
         expect(r.code).toBe("42501");
       });
     });
-    it("stationery_discard_orphan: só service_role; só signup sem membro nem evento", async () => {
-      await withClaims("stationery_member", async (c) => {
-        const id = await seedStationery(c, { status: "signup" });
-        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [id])).code).toBe("42501");
+    it("stationery_discard_orphan não existe mais; register, record_consent, replace_areas, upsert_catalog e candidates: só service_role", async () => {
+      await withSuperuser(async (c) => {
+        const gone = await c.query("select 1 from pg_proc where proname = 'stationery_discard_orphan'");
+        expect(gone.rows).toEqual([]);
+        for (const fn of ["stationery_register", "stationery_record_consent", "stationery_replace_areas", "stationery_upsert_catalog", "stationery_local_candidates"]) {
+          const r = await c.query(
+            `select has_function_privilege('anon', p.oid, 'execute') as anon,
+                    has_function_privilege('authenticated', p.oid, 'execute') as auth,
+                    has_function_privilege('service_role', p.oid, 'execute') as svc, p.prosecdef
+               from pg_proc p where p.proname = $1 and p.pronamespace = 'public'::regnamespace`,
+            [fn],
+          );
+          expect(r.rows, fn).toHaveLength(1);
+          expect(r.rows[0], fn).toMatchObject({ anon: false, auth: false, svc: true, prosecdef: true });
+        }
       });
-      await withClaims("system", async (c) => {
-        const orphan = await seedStationery(c, { status: "signup" });
-        const withOwner = await seedStationery(c, { status: "signup", ownerId: IDS.parent });
-        const approved = await seedStationery(c, { status: "approved" });
-        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [withOwner])).error).not.toBeNull();
-        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [approved])).error).not.toBeNull();
-        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [orphan])).error).toBeNull();
-        expect((await c.query("select 1 from public.stationeries where id = any($1::uuid[])", [[orphan, withOwner, approved]])).rows).toHaveLength(2);
+    });
+    it("cnpj aceita [0-9A-Z]{14} (alfanumérico)", async () => {
+      await inTx(async (c) => {
+        const ok = await seedStationery(c, { status: "signup", overrides: { cnpj: "12ABC34501DE35" } });
+        expect((await c.query("select cnpj from public.stationeries where id = $1", [ok])).rows[0].cnpj).toBe("12ABC34501DE35");
       });
     });
   });

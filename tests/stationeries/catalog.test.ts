@@ -60,6 +60,8 @@ describe("estoque e chave", () => {
     expect(neutralizeFormula("+1")).toBe("'+1");
     expect(neutralizeFormula("-1")).toBe("'-1");
     expect(neutralizeFormula("lápis")).toBe("lápis");
+    expect(neutralizeFormula("  =1+1")).toBe("'  =1+1"); // espaços antes da fórmula não escondem
+    expect(neutralizeFormula("\t@x")).toBe("'\t@x");
   });
   it("schema do item", () => {
     expect(CatalogItemInputSchema.safeParse({ name: "Lápis", priceCents: 0 }).success).toBe(false);

@@ -67,7 +67,7 @@ beforeEach(() => {
   getCurrentUser.mockResolvedValue({ id: USER });
   getCurrentRole.mockResolvedValue("parent");
   maybeSingle.mockResolvedValue({ data: { id: MUNI }, error: null });
-  registerStationery.mockResolvedValue({ id: STAT, slug: "papelaria-boa" });
+  registerStationery.mockResolvedValue({ id: STAT, slug: "papelaria-boa", created: true });
   transition.mockResolvedValue("under_review");
   getStationeryOfOwner.mockResolvedValue({ id: STAT, status: "approved" });
 });
@@ -75,8 +75,10 @@ beforeEach(() => {
 describe("registerStationeryAction", () => {
   it("parent: cria com o dono da sessão e envia à análise (accreditation, under_review)", async () => {
     expect(await run(registerStationeryAction({ status: "idle" }, form({ ...good, ownerId: OTHER })))).toBe("REDIRECT:/cadastrar-papelaria");
-    expect(registerStationery.mock.calls[0]?.[1].ownerId).toBe(USER);
-    expect(transition.mock.calls.map((c) => [c[1].to, c[1].actorId, c[1].actorRole])).toEqual([
+    expect(registerStationery.mock.calls[0]?.[1]).toMatchObject({ userId: USER, role: "parent" });
+    expect(registerStationery.mock.calls[0]?.[2]).not.toHaveProperty("ownerId");
+    expect(registerStationery.mock.calls[0]?.[2]).not.toHaveProperty("consent.lgpdTextVersion");
+    expect(transition.mock.calls.map((c) => [c[2].to, c[1].userId, c[2].as])).toEqual([
       ["accreditation", USER, "owner"],
       ["under_review", USER, "owner"],
     ]);
@@ -89,10 +91,32 @@ describe("registerStationeryAction", () => {
     expect(registerStationery).not.toHaveBeenCalled();
   });
 
+  it("sem aceite LGPD não cadastra; versão do texto enviada pelo cliente é ignorada", async () => {
+    const { lgpdAccepted: _omit, ...noConsent } = good;
+    void _omit;
+    const r = await registerStationeryAction({ status: "idle" }, form(noConsent));
+    expect(r).toMatchObject({ status: "error", errors: { lgpdAccepted: expect.any(String) } });
+    expect(registerStationery).not.toHaveBeenCalled();
+    await run(registerStationeryAction({ status: "idle" }, form({ ...good, lgpdTextVersion: "forjada" })));
+    expect(JSON.stringify(registerStationery.mock.calls[0]?.[2])).not.toContain("forjada");
+  });
+
   it("CNPJ inválido é bloqueado antes do banco", async () => {
     const r = await registerStationeryAction({ status: "idle" }, form({ ...good, cnpj: "11.111.111/1111-11" }));
     expect(r).toMatchObject({ status: "error", errors: { cnpj: expect.any(String) } });
     expect(registerStationery).not.toHaveBeenCalled();
+  });
+
+  it("duplo envio: papelaria já existia, vai ao credenciamento sem reenviar", async () => {
+    registerStationery.mockResolvedValue({ id: STAT, slug: "papelaria-boa", created: false });
+    expect(await run(registerStationeryAction({ status: "idle" }, form(good)))).toBe("REDIRECT:/cadastrar-papelaria");
+    expect(transition).not.toHaveBeenCalled();
+  });
+
+  it("duplo envio: papelaria já existia, vai ao credenciamento sem reenviar", async () => {
+    registerStationery.mockResolvedValue({ id: STAT, slug: "papelaria-boa", created: false });
+    expect(await run(registerStationeryAction({ status: "idle" }, form(good)))).toBe("REDIRECT:/cadastrar-papelaria");
+    expect(transition).not.toHaveBeenCalled();
   });
 
   it("município não habilitado é recusado", async () => {
@@ -124,7 +148,7 @@ describe("resubmitAction", () => {
   it("rejected: reabre e envia à análise; ator da sessão", async () => {
     getStationeryOfOwner.mockResolvedValue({ id: STAT, status: "rejected" });
     expect(await run(resubmitAction())).toBe("REDIRECT:/cadastrar-papelaria");
-    expect(transition.mock.calls.map((c) => c[1].to)).toEqual(["accreditation", "under_review"]);
+    expect(transition.mock.calls.map((c) => c[2].to)).toEqual(["accreditation", "under_review"]);
     expect(getStationeryOfOwner).toHaveBeenCalledWith(USER);
   });
   it("estado que não permite reenvio: nada acontece", async () => {
@@ -138,7 +162,8 @@ describe("ownerStatusAction", () => {
   beforeEach(() => getCurrentRole.mockResolvedValue("stationery_member"));
   it("publica a papelaria do dono da sessão (id nunca vem do formulário)", async () => {
     expect(await run(ownerStatusAction(form({ to: "active", id: OTHER })))).toBe("REDIRECT:/papelaria?ok=1");
-    expect(transition.mock.calls[0]?.[1]).toMatchObject({ id: STAT, to: "active", actorId: USER, actorRole: "owner" });
+    expect(transition.mock.calls[0]?.[1]).toMatchObject({ userId: USER });
+    expect(transition.mock.calls[0]?.[2]).toMatchObject({ id: STAT, to: "active", as: "owner" });
   });
   it("destino inválido (ex.: suspended) e papel parent não passam", async () => {
     expect(await run(ownerStatusAction(form({ to: "suspended" })))).toBe("REDIRECT:/papelaria?erro=invalido");
@@ -156,11 +181,12 @@ describe("adminTransitionAction", () => {
   beforeEach(() => getCurrentRole.mockResolvedValue("admin"));
   it("aprova com ator admin da sessão", async () => {
     expect(await run(adminTransitionAction(form({ id: STAT, to: "approved", back: "list" })))).toBe("REDIRECT:/admin/papelarias?ok=1");
-    expect(transition.mock.calls[0]?.[1]).toMatchObject({ id: STAT, to: "approved", actorId: USER, actorRole: "admin" });
+    expect(transition.mock.calls[0]?.[1]).toMatchObject({ userId: USER, role: "admin" });
+    expect(transition.mock.calls[0]?.[2]).toMatchObject({ id: STAT, to: "approved" });
   });
   it("suspende com motivo", async () => {
     await run(adminTransitionAction(form({ id: STAT, to: "suspended", reason: " fraude " })));
-    expect(transition.mock.calls[0]?.[1]).toMatchObject({ to: "suspended", reason: "fraude" });
+    expect(transition.mock.calls[0]?.[2]).toMatchObject({ to: "suspended", reason: "fraude" });
   });
   it.each(["parent", "stationery_member", "school_member"])("%s não passa", async (role) => {
     getCurrentRole.mockResolvedValue(role);
@@ -177,7 +203,8 @@ describe("areas e catálogo", () => {
   beforeEach(() => getCurrentRole.mockResolvedValue("stationery_member"));
   it("bairros da papelaria do dono", async () => {
     expect(await run(saveAreasAction(form({ areas: "Centro\nJardim" })))).toBe("REDIRECT:/papelaria/areas?ok=1");
-    expect(setAreas.mock.calls[0]?.slice(1)).toEqual([STAT, USER, ["Centro", "Jardim"]]);
+    expect(setAreas.mock.calls[0]?.[1]).toMatchObject({ userId: USER });
+    expect(setAreas.mock.calls[0]?.slice(2)).toEqual([STAT, ["Centro", "Jardim"]]);
   });
   it("parent não acessa", async () => {
     getCurrentRole.mockResolvedValue("parent");

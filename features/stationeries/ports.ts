@@ -19,7 +19,10 @@ export type LocalCatalogCandidate = {
   priceUpdatedAt: Date;
 };
 
-/** Fonte de dados do provedor local (implementada pelo repositório). */
+/**
+ * Fonte de dados do provedor local (implementada pelo repositório). Devolve TODOS os candidatos do local pedido ou
+ * falha; nunca uma lista cortada em silêncio.
+ */
 export interface LocalCatalogSource {
   findCandidates(
     query: { itemKeys: readonly string[]; location: LocalLocation },

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { UserRole } from "@/features/auth/access";
 import { getCurrentRole, getCurrentUser } from "@/features/auth/queries";
 
+import { getSessionActor, type SessionActor } from "./actor";
 import { getStationeryOfOwner } from "./queries";
 import type { AdminRow } from "./repository";
 
@@ -17,12 +18,14 @@ export async function requireSession(nextPath: string): Promise<{ userId: string
   return { userId: user.id, email: user.email, role };
 }
 
-export type OwnerContext = { userId: string; role: UserRole; stationery: AdminRow };
+export type OwnerContext = { userId: string; role: UserRole; actor: SessionActor; stationery: AdminRow };
 
 /** Dono da papelaria (vínculo `owner`): sem papelaria vinculada, `null`. */
 export async function getOwnerContext(nextPath: string): Promise<OwnerContext | null> {
   const { userId, role } = await requireSession(nextPath);
   if (role !== "parent" && role !== "stationery_member" && role !== "admin") return null;
+  const actor = await getSessionActor();
+  if (!actor) redirect("/403");
   const stationery = await getStationeryOfOwner(userId);
-  return stationery ? { userId, role, stationery } : null;
+  return stationery ? { userId, role, actor, stationery } : null;
 }

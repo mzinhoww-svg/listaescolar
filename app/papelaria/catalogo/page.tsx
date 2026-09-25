@@ -23,13 +23,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
       </>
     );
   }
-  const { stationery, userId } = ctx;
+  const { stationery, actor } = ctx;
   const writable = CATALOG_WRITABLE_STATUSES.includes(stationery.status);
 
   let rows: CatalogRow[] = [];
   let failed = false;
   try {
-    rows = await listCatalogItems(createAdminClient(), stationery.id, userId);
+    rows = await listCatalogItems(createAdminClient(), actor, stationery.id);
   } catch (error) {
     console.error("listar catálogo", error);
     failed = true;

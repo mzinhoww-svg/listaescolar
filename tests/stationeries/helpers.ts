@@ -1,13 +1,16 @@
-/** CNPJ válido a partir de 12 dígitos (implementação independente do domínio, para fixtures). */
+/**
+ * CNPJ (numérico ou alfanumérico, IN RFB 2.229/2024) a partir de 12 caracteres [0-9A-Z]. Implementação independente
+ * do domínio, para fixtures: valor de cada caractere = código ASCII - 48; pesos fixos por posição.
+ */
 export function makeCnpj(base12: string): string {
-  const calc = (digits: number[]): number => {
-    const weights = digits.length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-    const sum = digits.reduce((acc, d, i) => acc + d * (weights[i] ?? 0), 0);
-    const r = sum % 11;
+  const W1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const W2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const dv = (vals: number[], w: number[]): number => {
+    const r = vals.reduce((acc, v, i) => acc + v * (w[i] ?? 0), 0) % 11;
     return r < 2 ? 0 : 11 - r;
   };
-  const d = [...base12].map(Number);
-  const d1 = calc(d);
-  const d2 = calc([...d, d1]);
+  const vals = [...base12].map((ch) => ch.charCodeAt(0) - 48);
+  const d1 = dv(vals, W1);
+  const d2 = dv([...vals, d1], W2);
   return `${base12}${d1}${d2}`;
 }

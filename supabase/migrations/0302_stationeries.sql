@@ -18,7 +18,7 @@ create table public.stationeries (
   slug text not null unique check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and length(slug) <= 80),
   trade_name text not null check (btrim(trade_name) <> '' and length(trade_name) <= 120),
   legal_name text check (legal_name is null or (btrim(legal_name) <> '' and length(legal_name) <= 200)),
-  cnpj text not null unique check (cnpj ~ '^[0-9]{14}$'), -- só o formato aqui; dígitos verificadores no domínio
+  cnpj text not null unique check (cnpj ~ '^[0-9A-Z]{14}$'), -- numérico ou alfanumérico (IN RFB 2.229/2024); dígitos verificadores no domínio
   status public.stationery_status not null default 'signup',
   municipality_id uuid not null references public.municipalities (id) on delete restrict,
   neighborhood text check (neighborhood is null or length(neighborhood) <= 120),
@@ -64,7 +64,8 @@ create table public.stationery_areas (
   id uuid primary key default gen_random_uuid(),
   stationery_id uuid not null references public.stationeries (id) on delete cascade,
   municipality_id uuid not null references public.municipalities (id) on delete restrict,
-  neighborhood text not null check (neighborhood <> '' and neighborhood = lower(btrim(neighborhood)) and length(neighborhood) <= 120),
+  neighborhood text not null check (neighborhood <> '' and neighborhood = lower(btrim(neighborhood)) and length(neighborhood) <= 120), -- chave normalizada (sem acento, minúscula)
+  display_name text check (display_name is null or (btrim(display_name) <> '' and length(display_name) <= 120)), -- texto como o dono digitou
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (stationery_id, municipality_id, neighborhood)
@@ -177,21 +178,246 @@ as $$
   select exists (select 1 from public.stationeries s where s.id = p_id and s.status = 'active');
 $$;
 
--- Descarta o cadastro que acabou de ser criado quando o vínculo do dono falha (rollback do servidor).
--- Só apaga papelaria em signup, sem membro e sem evento; nada mais sai por aqui.
-create function public.stationery_discard_orphan(p_id uuid) returns void
+-- ---------------------------------------------------------------------------
+-- Escritas atômicas do servidor (SECURITY DEFINER, só service_role). Cada uma faz em UMA transação o que o
+-- repositório antes fazia em vários passos: cadastro completo, áreas, catálogo e aceite LGPD. O erro sai com
+-- errcode + hint estáveis (o repositório mapeia por hint): forbidden, invalid_state, not_found, invalid_input,
+-- consent_required, cnpj_taken, already_owner, limit_exceeded.
+-- ---------------------------------------------------------------------------
+
+-- Cadastro: papelaria (signup) + dono + áreas + aceite LGPD, tudo ou nada. O aceite é obrigatório; a data é do
+-- servidor (now()) e a versão do texto vem de constante do servidor. Mesmo dono + mesmo CNPJ (duplo envio) devolve o
+-- cadastro existente; outro CNPJ para quem já é dono é already_owner; CNPJ de outro dono é cnpj_taken.
+-- Áreas: jsonb [{"key": "sao jose", "label": "São José"}] (a normalização é do domínio, uma só).
+create function public.stationery_register(
+  p_owner_id uuid,
+  p_slug text,
+  p_trade_name text,
+  p_legal_name text,
+  p_cnpj text,
+  p_municipality_id uuid,
+  p_neighborhood text,
+  p_address text default null,
+  p_cep text default null,
+  p_whatsapp text default null,
+  p_phone text default null,
+  p_email text default null,
+  p_offers_pickup boolean default false,
+  p_offers_delivery boolean default false,
+  p_service_radius_km integer default 0,
+  p_opening_hours text default null,
+  p_payment_methods text[] default '{}',
+  p_areas jsonb default '[]',
+  p_lgpd_text_version text default null
+) returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_version text := nullif(btrim(coalesce(p_lgpd_text_version, '')), '');
+  v_existing public.stationeries%rowtype;
+  v_id uuid;
+  v_slug text;
+  v_try integer := 0;
+  v_constraint text;
 begin
-  delete from public.stationeries s
-   where s.id = p_id and s.status = 'signup'
-     and not exists (select 1 from public.stationery_members m where m.stationery_id = s.id)
-     and not exists (select 1 from public.stationery_status_events e where e.stationery_id = s.id);
-  if not found then
-    raise exception 'papelaria não pode ser descartada' using errcode = '23514';
+  if v_version is null then
+    raise exception 'aceite LGPD obrigatório' using errcode = '22023', hint = 'consent_required';
   end if;
+  if p_owner_id is null or not exists (select 1 from public.profiles p where p.id = p_owner_id) then
+    raise exception 'dono inválido' using errcode = '22023', hint = 'invalid_input';
+  end if;
+
+  -- duplo envio do mesmo dono se serializa aqui.
+  perform pg_advisory_xact_lock(hashtextextended('stationery_register:' || p_owner_id::text, 0));
+  select s.* into v_existing
+    from public.stationeries s join public.stationery_members m on m.stationery_id = s.id
+   where m.profile_id = p_owner_id and m.member_role = 'owner';
+  if found then
+    if v_existing.cnpj = p_cnpj then
+      return jsonb_build_object('id', v_existing.id, 'slug', v_existing.slug, 'created', false);
+    end if;
+    raise exception 'usuário já é dono de uma papelaria' using errcode = '23505', hint = 'already_owner';
+  end if;
+
+  loop
+    v_slug := case when v_try = 0 then p_slug else left(p_slug, 75) || '-' || substr(md5(random()::text || clock_timestamp()::text), 1, 4) end;
+    begin
+      insert into public.stationeries (
+        slug, trade_name, legal_name, cnpj, municipality_id, neighborhood, address, cep, whatsapp, phone, email,
+        offers_pickup, offers_delivery, service_radius_km, opening_hours, payment_methods,
+        lgpd_accepted_at, lgpd_text_version
+      ) values (
+        v_slug, p_trade_name, p_legal_name, p_cnpj, p_municipality_id, p_neighborhood, p_address, p_cep, p_whatsapp, p_phone, p_email,
+        coalesce(p_offers_pickup, false), coalesce(p_offers_delivery, false), coalesce(p_service_radius_km, 0), p_opening_hours,
+        coalesce(p_payment_methods, '{}'), now(), v_version
+      ) returning id into v_id;
+      exit;
+    exception when unique_violation then
+      get stacked diagnostics v_constraint = constraint_name;
+      if v_constraint = 'stationeries_cnpj_key' then
+        raise exception 'CNPJ já cadastrado' using errcode = '23505', hint = 'cnpj_taken';
+      end if;
+      if v_constraint is distinct from 'stationeries_slug_key' or v_try >= 5 then
+        raise;
+      end if;
+      v_try := v_try + 1;
+    end;
+  end loop;
+
+  insert into public.stationery_members (stationery_id, profile_id, member_role) values (v_id, p_owner_id, 'owner');
+
+  insert into public.stationery_areas (stationery_id, municipality_id, neighborhood, display_name)
+  select distinct on (a ->> 'key') v_id, p_municipality_id, a ->> 'key', nullif(btrim(a ->> 'label'), '')
+    from jsonb_array_elements(coalesce(p_areas, '[]'::jsonb)) a
+   where coalesce(a ->> 'key', '') <> ''
+   order by a ->> 'key';
+
+  return jsonb_build_object('id', v_id, 'slug', v_slug, 'created', true);
+end;
+$$;
+
+-- Aceite LGPD gravado depois do cadastro (quando faltou): só o dono, só antes da análise (signup, accreditation,
+-- rejected). Data do servidor; versão do texto vem da constante do servidor.
+create function public.stationery_record_consent(p_id uuid, p_actor_id uuid, p_text_version text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  s public.stationeries%rowtype;
+  v_version text := nullif(btrim(coalesce(p_text_version, '')), '');
+begin
+  if v_version is null then
+    raise exception 'versão do texto obrigatória' using errcode = '22023', hint = 'consent_required';
+  end if;
+  select * into s from public.stationeries where id = p_id for no key update;
+  if not found then
+    raise exception 'papelaria não encontrada' using errcode = 'P0002', hint = 'not_found';
+  end if;
+  if p_actor_id is null or not exists (
+    select 1 from public.stationery_members m where m.stationery_id = p_id and m.profile_id = p_actor_id and m.member_role = 'owner'
+  ) then
+    raise exception 'ator não é o dono desta papelaria' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if s.status not in ('signup', 'accreditation', 'rejected') then
+    raise exception 'aceite não pode ser registrado em %', s.status using errcode = '23514', hint = 'invalid_state';
+  end if;
+  update public.stationeries set lgpd_accepted_at = now(), lgpd_text_version = v_version where id = p_id;
+end;
+$$;
+
+-- Substitui as áreas atendidas do município da papelaria. Trava a linha (FOR SHARE: transição concorrente espera) e
+-- confere posse e estado na mesma transação da escrita, sem janela entre checagem e gravação.
+create function public.stationery_replace_areas(p_id uuid, p_actor_id uuid, p_areas jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  s public.stationeries%rowtype;
+  v_wanted jsonb := coalesce(p_areas, '[]'::jsonb);
+begin
+  select * into s from public.stationeries where id = p_id for share;
+  if not found then
+    raise exception 'papelaria não encontrada' using errcode = 'P0002', hint = 'not_found';
+  end if;
+  if p_actor_id is null or not exists (
+    select 1 from public.stationery_members m where m.stationery_id = p_id and m.profile_id = p_actor_id
+  ) then
+    raise exception 'papelaria não encontrada para este usuário' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if s.status not in ('signup', 'accreditation', 'approved', 'active', 'paused', 'rejected') then
+    raise exception 'áreas não podem mudar em %', s.status using errcode = '23514', hint = 'invalid_state';
+  end if;
+  delete from public.stationery_areas a
+   where a.stationery_id = p_id and a.municipality_id = s.municipality_id
+     and a.neighborhood not in (select w ->> 'key' from jsonb_array_elements(v_wanted) w where coalesce(w ->> 'key', '') <> '');
+  insert into public.stationery_areas (stationery_id, municipality_id, neighborhood, display_name)
+  select distinct on (w ->> 'key') p_id, s.municipality_id, w ->> 'key', nullif(btrim(w ->> 'label'), '')
+    from jsonb_array_elements(v_wanted) w
+   where coalesce(w ->> 'key', '') <> ''
+   order by w ->> 'key'
+  on conflict (stationery_id, municipality_id, neighborhood) do update set display_name = excluded.display_name;
+end;
+$$;
+
+-- Insere ou atualiza itens do catálogo por (papelaria, item_key), em uma transação, com posse e estado
+-- conferidos sob trava. Itens: jsonb [{"name","item_key","price_cents","stock_status"}]. Devolve quantos itens.
+create function public.stationery_upsert_catalog(p_id uuid, p_actor_id uuid, p_items jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  s public.stationeries%rowtype;
+  v_count integer;
+begin
+  select * into s from public.stationeries where id = p_id for share;
+  if not found then
+    raise exception 'papelaria não encontrada' using errcode = 'P0002', hint = 'not_found';
+  end if;
+  if p_actor_id is null or not exists (
+    select 1 from public.stationery_members m where m.stationery_id = p_id and m.profile_id = p_actor_id
+  ) then
+    raise exception 'papelaria não encontrada para este usuário' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if s.status not in ('approved', 'active', 'paused') then
+    raise exception 'catálogo não pode mudar em %', s.status using errcode = '23514', hint = 'invalid_state';
+  end if;
+  insert into public.catalog_items (stationery_id, name, item_key, price_cents, stock_status, is_active)
+  select p_id, i ->> 'name', i ->> 'item_key', (i ->> 'price_cents')::integer, (i ->> 'stock_status')::public.catalog_stock_status, true
+    from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) i
+  on conflict (stationery_id, item_key) do update
+    set name = excluded.name, price_cents = excluded.price_cents, stock_status = excluded.stock_status, is_active = true;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+-- Candidatos da cotação local: itens ativos, com estoque não zerado, de papelarias `active` que atendem o município
+-- (sede ou área cadastrada). O refinamento por bairro fica no domínio (uma só normalização). Devolve jsonb (uma
+-- linha, sem o teto de linhas do PostgREST) e FALHA se houver mais que p_limit candidatos: nunca lista parcial.
+create function public.stationery_local_candidates(p_municipality_id uuid, p_item_keys text[], p_limit integer default 5000)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_rows jsonb;
+  v_n integer;
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 20000 then
+    raise exception 'limite inválido' using errcode = '22023', hint = 'invalid_input';
+  end if;
+  with picked as (
+    select c.stationery_id, c.item_key, c.price_cents, c.price_source, c.stock_status, c.is_active, c.price_updated_at,
+           s.status, s.municipality_id, s.neighborhood as stationery_neighborhood, s.is_demo,
+           coalesce((select jsonb_agg(jsonb_build_object('municipality_id', a.municipality_id, 'neighborhood', a.neighborhood))
+                       from public.stationery_areas a where a.stationery_id = s.id), '[]'::jsonb) as areas
+      from public.catalog_items c
+      join public.stationeries s on s.id = c.stationery_id
+     where s.status = 'active'
+       and c.is_active
+       and c.stock_status <> 'out_of_stock'
+       and c.item_key = any (coalesce(p_item_keys, '{}'))
+       and (s.municipality_id = p_municipality_id
+            or exists (select 1 from public.stationery_areas a where a.stationery_id = s.id and a.municipality_id = p_municipality_id))
+     order by c.stationery_id, c.item_key
+     limit p_limit + 1
+  )
+  select coalesce(jsonb_agg(to_jsonb(p) order by p.stationery_id, p.item_key), '[]'::jsonb), count(*)
+    into v_rows, v_n from picked p;
+  if v_n > p_limit then
+    raise exception 'mais de % candidatos: restrinja a busca', p_limit using errcode = '54000', hint = 'limit_exceeded';
+  end if;
+  return v_rows;
 end;
 $$;
 
@@ -223,7 +449,7 @@ begin
     v_sub := null;
   end;
   if p_actor_role is null or p_actor_role not in ('owner', 'admin', 'system') then
-    raise exception 'ator inválido' using errcode = '22023';
+    raise exception 'ator inválido' using errcode = '22023', hint = 'actor_invalid';
   end if;
 
   -- com claim sub (chamada em nome de um usuário), o ator informado precisa ser esse usuário.
@@ -237,7 +463,7 @@ begin
 
   select * into s from public.stationeries where id = p_id for no key update;
   if not found then
-    raise exception 'papelaria não encontrada' using errcode = 'P0002';
+    raise exception 'papelaria não encontrada' using errcode = 'P0002', hint = 'not_found';
   end if;
   v_from := s.status::text;
 
@@ -247,7 +473,7 @@ begin
       select 1 from public.stationery_members m
       where m.stationery_id = p_id and m.profile_id = p_actor_id and m.member_role = 'owner'
     ) then
-      raise exception 'ator não é o dono desta papelaria' using errcode = '42501';
+      raise exception 'ator não é o dono desta papelaria' using errcode = '42501', hint = 'forbidden';
     end if;
   elsif p_actor_role = 'admin' then
     if p_actor_id is null or not exists (select 1 from public.profiles p where p.id = p_actor_id and p.role = 'admin') then
@@ -266,7 +492,7 @@ begin
       ('active', 'paused'), ('paused', 'active'), ('rejected', 'accreditation')
     );
     if v_allowed and v_from = 'paused' and s.paused_by is distinct from 'owner' then
-      raise exception 'papelaria pausada pela equipe: só a equipe reativa' using errcode = '23514';
+      raise exception 'papelaria pausada pela equipe: só a equipe reativa' using errcode = '23514', hint = 'transition_not_allowed';
     end if;
   else
     v_allowed := (v_from, v_to) in (
@@ -275,25 +501,25 @@ begin
     ) or (v_to = 'suspended' and v_from in ('signup', 'accreditation', 'under_review', 'approved', 'active', 'paused'));
   end if;
   if not v_allowed then
-    raise exception 'transição % -> % não permitida para %', v_from, v_to, p_actor_role using errcode = '23514';
+    raise exception 'transição % -> % não permitida para %', v_from, v_to, p_actor_role using errcode = '23514', hint = 'transition_not_allowed';
   end if;
 
   if v_to in ('rejected', 'suspended') and v_reason is null then
-    raise exception 'motivo obrigatório para %', v_to using errcode = '22023';
+    raise exception 'motivo obrigatório para %', v_to using errcode = '22023', hint = 'reason_required';
   end if;
 
   -- pré-condições do envio pelo dono.
   if p_actor_role = 'owner' and v_from = 'signup' and v_to = 'accreditation' then
     if s.legal_name is null or s.neighborhood is null or btrim(s.neighborhood) = '' then
-      raise exception 'dados básicos incompletos (razão social e bairro)' using errcode = '23514';
+      raise exception 'dados básicos incompletos (razão social e bairro)' using errcode = '23514', hint = 'precondition_failed';
     end if;
   elsif p_actor_role = 'owner' and v_from = 'accreditation' and v_to = 'under_review' then
     if s.lgpd_accepted_at is null or s.lgpd_text_version is null or s.whatsapp is null then
-      raise exception 'aceite LGPD e WhatsApp são obrigatórios' using errcode = '23514';
+      raise exception 'aceite LGPD e WhatsApp são obrigatórios' using errcode = '23514', hint = 'precondition_failed';
     end if;
     if not (s.offers_pickup or s.offers_delivery
             or exists (select 1 from public.stationery_areas a where a.stationery_id = p_id)) then
-      raise exception 'informe retirada, entrega ou ao menos um bairro' using errcode = '23514';
+      raise exception 'informe retirada, entrega ou ao menos um bairro' using errcode = '23514', hint = 'precondition_failed';
     end if;
   end if;
 
@@ -368,8 +594,18 @@ alter table public.catalog_items enable always trigger catalog_items_audit;
 revoke execute on function public.stationeries_guard_update() from public, anon, authenticated, service_role;
 revoke execute on function public.stationery_events_block_mutation() from public, anon, authenticated, service_role;
 revoke execute on function public.catalog_items_set_dates() from public, anon, authenticated, service_role;
-revoke execute on function public.stationery_discard_orphan(uuid) from public, anon, authenticated, service_role;
-grant execute on function public.stationery_discard_orphan(uuid) to service_role;
+revoke execute on function public.stationery_register(uuid, text, text, text, text, uuid, text, text, text, text, text, text, boolean, boolean, integer, text, text[], jsonb, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.stationery_register(uuid, text, text, text, text, uuid, text, text, text, text, text, text, boolean, boolean, integer, text, text[], jsonb, text)
+  to service_role;
+revoke execute on function public.stationery_record_consent(uuid, uuid, text) from public, anon, authenticated, service_role;
+grant execute on function public.stationery_record_consent(uuid, uuid, text) to service_role;
+revoke execute on function public.stationery_replace_areas(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
+grant execute on function public.stationery_replace_areas(uuid, uuid, jsonb) to service_role;
+revoke execute on function public.stationery_upsert_catalog(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
+grant execute on function public.stationery_upsert_catalog(uuid, uuid, jsonb) to service_role;
+revoke execute on function public.stationery_local_candidates(uuid, text[], integer) from public, anon, authenticated, service_role;
+grant execute on function public.stationery_local_candidates(uuid, text[], integer) to service_role;
 revoke execute on function public.stationery_is_active(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.stationery_is_active(uuid) to anon, authenticated, service_role;
 revoke execute on function public.stationery_transition(uuid, public.stationery_status, uuid, text, text)

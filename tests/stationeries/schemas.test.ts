@@ -5,7 +5,9 @@ import {
   StationeryConsentSchema,
   StationeryRegistrationSchema,
   StationeryServiceSchema,
+  StatusTransitionSchema,
 } from "@/features/stationeries/schemas";
+import { STATIONERY_STATUSES } from "@/features/stationeries/state";
 
 const MUNI = "11111111-1111-4111-8111-111111111111";
 const basics = {
@@ -45,7 +47,14 @@ describe("StationeryRegistrationSchema (por passo)", () => {
   });
   it("passo 3: exige aceite", () => {
     expect(StationeryConsentSchema.safeParse({ lgpdAccepted: false }).success).toBe(false);
-    expect(StationeryConsentSchema.parse({ lgpdAccepted: true }).lgpdTextVersion).toMatch(/lgpd/);
+    // a versão do texto é constante do servidor: nada vindo do cliente entra no resultado
+    const parsed = StationeryConsentSchema.parse({ lgpdAccepted: true, lgpdTextVersion: "forjada" });
+    expect(parsed).toEqual({ lgpdAccepted: true });
+    expect(StatusTransitionSchema.shape.to.options).toEqual([...STATIONERY_STATUSES]);
+  });
+  it("CNPJ alfanumérico entra no passo 1 (normalizado em caixa alta)", () => {
+    const r = StationeryBasicsSchema.parse({ ...basics, cnpj: "12.abc.345/01de-35" });
+    expect(r.cnpj).toBe("12ABC34501DE35");
   });
   it("cadastro completo", () => {
     const r = StationeryRegistrationSchema.safeParse({ basics, service, consent: { lgpdAccepted: true } });

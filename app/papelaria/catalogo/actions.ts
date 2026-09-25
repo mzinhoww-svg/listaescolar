@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { getCurrentRole, getCurrentUser } from "@/features/auth/queries";
+import { getSessionActor } from "@/features/stationeries/actor";
 import { CatalogItemInputSchema, parsePriceToCents, parseStockAnswer } from "@/features/stationeries/catalog";
 import { CSV_MAX_BYTES, parseCatalogCsv } from "@/features/stationeries/catalog-csv";
 import { buildErrorReport } from "@/features/stationeries/error-report";
@@ -17,18 +17,17 @@ export type ImportState =
   | { status: "done"; imported: number; totalRows: number; errorCount: number; reportHref: string | null; reportName: string };
 
 async function ownerOrRedirect() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/entrar?next=%2Fpapelaria%2Fcatalogo");
-  const role = await getCurrentRole();
-  if (role !== "stationery_member" && role !== "admin") redirect("/403");
-  const own = await getStationeryOfOwner(user.id);
+  const actor = await getSessionActor();
+  if (!actor) redirect("/entrar?next=%2Fpapelaria%2Fcatalogo");
+  if (actor.role !== "stationery_member" && actor.role !== "admin") redirect("/403");
+  const own = await getStationeryOfOwner(actor.userId);
   if (!own) redirect("/papelaria");
-  return { userId: user.id, stationery: own };
+  return { actor, stationery: own };
 }
 
 /** Novo item ou edição de preço/estoque (o nome é a chave). Origem sempre "informado pela papelaria". */
 export async function saveItemAction(formData: FormData): Promise<void> {
-  const { userId, stationery } = await ownerOrRedirect();
+  const { actor, stationery } = await ownerOrRedirect();
   const name = formData.get("name");
   const price = formData.get("price");
   const cents = typeof price === "string" ? parsePriceToCents(price) : null;
@@ -39,7 +38,7 @@ export async function saveItemAction(formData: FormData): Promise<void> {
     redirect(`/papelaria/catalogo?erro=${encodeURIComponent(msg)}`);
   }
   try {
-    await upsertCatalogItems(createAdminClient(), stationery.id, userId, [parsed.data]);
+    await upsertCatalogItems(createAdminClient(), actor, stationery.id, [parsed.data]);
   } catch (error) {
     console.error("salvar item", error);
     redirect(`/papelaria/catalogo?erro=${encodeURIComponent(repositoryErrorMessage(error))}`);
@@ -49,7 +48,7 @@ export async function saveItemAction(formData: FormData): Promise<void> {
 
 /** Importa a planilha: linhas boas entram, linhas ruins voltam num relatório baixável (neutralizado). */
 export async function importCatalogAction(_prev: ImportState, formData: FormData): Promise<ImportState> {
-  const { userId, stationery } = await ownerOrRedirect();
+  const { actor, stationery } = await ownerOrRedirect();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { status: "error", message: "Escolha uma planilha CSV." };
   if (file.size > CSV_MAX_BYTES) return { status: "error", message: "A planilha passa de 2 MB." };
@@ -59,8 +58,8 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
     try {
       await upsertCatalogItems(
         createAdminClient(),
+        actor,
         stationery.id,
-        userId,
         result.items.map((i) => ({ name: i.name, priceCents: i.priceCents, stock: i.stock })),
       );
     } catch (error) {

@@ -80,6 +80,13 @@ describe("CatalogLocalQuoteProvider", () => {
     expect(await provider([cand()], "centro").getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);
     expect(await provider([cand()], "Coxipó").getQuotes([item("Caderno")], { now: NOW })).toEqual([]);
   });
+  it("bairro com acento e caixa: a mesma normalização nos dois lados", async () => {
+    const c = cand({ neighborhood: "Coxipó da Ponte", areas: [{ municipalityId: MUNI, neighborhood: "sao jose" }] });
+    expect(await provider([c], "São José").getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);
+    expect(await provider([c], "  SAO   JOSE ").getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);
+    expect(await provider([c], "coxipo da ponte").getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);
+    expect(await provider([c], "Coxipó").getQuotes([item("Caderno")], { now: NOW })).toEqual([]);
+  });
   it("sem catálogo ou sem itens: nada (nunca inventa)", async () => {
     expect(await provider([]).getQuotes([item("Caderno")], { now: NOW })).toEqual([]);
     expect(await provider([cand()]).getQuotes([], { now: NOW })).toEqual([]);

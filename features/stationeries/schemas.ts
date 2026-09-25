@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import { isValidCnpj, cnpjDigits } from "./cnpj";
+import { cleanCnpj, isValidCnpj } from "./cnpj";
 import { normalizeCep, normalizePhone } from "./phone";
+import { STATIONERY_STATUSES } from "./state";
 
 export const PAYMENT_METHODS = ["pix", "credit_card", "debit_card", "cash", "boleto"] as const;
+/** Versão do texto de aceite: constante do servidor, gravada pelo banco junto com a data (nunca vem do cliente). */
 export const LGPD_TEXT_VERSION = "lgpd-papelaria-v1";
 
 const text = (max: number) => z.string().trim().max(max);
@@ -32,7 +34,7 @@ export const StationeryBasicsSchema = z.object({
     .string()
     .trim()
     .refine(isValidCnpj, "CNPJ inválido.")
-    .transform(cnpjDigits),
+    .transform(cleanCnpj),
   municipalityId: z.uuid("Selecione o município."),
   neighborhood: text(120).min(2, "Informe o bairro."),
   address: optionalText(200),
@@ -83,7 +85,6 @@ export const StationeryServiceSchema = z
 /** Passo 3: aceite LGPD. */
 export const StationeryConsentSchema = z.object({
   lgpdAccepted: z.literal(true, { error: "É preciso aceitar o tratamento de dados." }),
-  lgpdTextVersion: z.string().trim().min(1).default(LGPD_TEXT_VERSION),
 });
 
 /** Cadastro completo (soma dos passos). O envio à análise depende da equipe: cadastro não é verificação. */
@@ -104,6 +105,6 @@ export type StationeryConsent = z.output<typeof StationeryConsentSchema>;
 export type StationeryRegistration = z.output<typeof StationeryRegistrationSchema>;
 
 export const StatusTransitionSchema = z.object({
-  to: z.enum(["signup", "accreditation", "under_review", "approved", "active", "paused", "suspended", "rejected"]),
+  to: z.enum(STATIONERY_STATUSES),
   reason: z.string().trim().max(500).optional(),
 });

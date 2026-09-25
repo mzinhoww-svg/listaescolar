@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { getCurrentRole, getCurrentUser } from "@/features/auth/queries";
+import { getSessionActor } from "@/features/stationeries/actor";
 import { readValues, validateRegistration, type RegisterState } from "@/features/stationeries/form-data";
 import { repositoryErrorMessage, ROLE_BLOCK_MESSAGE } from "@/features/stationeries/messages";
 import { getStationeryOfOwner } from "@/features/stationeries/queries";
@@ -15,15 +15,16 @@ const NEXT = "/cadastrar-papelaria";
 
 /**
  * Cadastro da papelaria. Só o papel `parent` cadastra (a aprovação promove `parent` a `stationery_member`).
- * O dono é sempre o usuário da sessão; o cliente de serviço só entra depois de validar sessão, papel e entrada.
+ * O dono é sempre o ator da sessão (`getSessionActor`); o cliente de serviço só entra depois de validar sessão,
+ * papel e entrada. O aceite LGPD é obrigatório e a versão do texto é constante do servidor.
  */
 export async function registerStationeryAction(_prev: RegisterState, formData: FormData): Promise<RegisterState> {
-  const user = await getCurrentUser();
-  if (!user) redirect(`/entrar?next=${encodeURIComponent(NEXT)}`);
+  const actor = await getSessionActor();
+  if (!actor) redirect(`/entrar?next=${encodeURIComponent(NEXT)}`);
   const values = readValues(formData);
   const fail = (message: string, errors: Record<string, string> = {}): RegisterState => ({ status: "error", message, errors, values });
 
-  if ((await getCurrentRole()) !== "parent") return fail(ROLE_BLOCK_MESSAGE);
+  if (actor.role !== "parent") return fail(ROLE_BLOCK_MESSAGE);
   const parsed = validateRegistration(formData);
   if (!parsed.ok) return fail("Revise os campos destacados.", parsed.errors);
 
@@ -36,17 +37,19 @@ export async function registerStationeryAction(_prev: RegisterState, formData: F
     .maybeSingle();
   if (municipality.error || !municipality.data) return fail("Este município ainda não está habilitado.", { municipalityId: "Selecione um município habilitado." });
 
-  let createdId: string;
+  let created: { id: string; created: boolean };
   try {
-    createdId = (await registerStationery(admin, { ownerId: user.id, ...parsed.data })).id;
+    created = await registerStationery(admin, actor, parsed.data);
   } catch (error) {
     console.error("cadastrar papelaria", error);
     const code = error instanceof Error && "code" in error ? String((error as { code: unknown }).code) : "";
     if (code === "cnpj_taken") return fail(repositoryErrorMessage(error), { cnpj: "Já existe uma papelaria com este CNPJ." });
     return fail(repositoryErrorMessage(error));
   }
+  // duplo envio: a papelaria já existia; a página de credenciamento mostra o estado (nada é reenviado daqui).
+  if (!created.created) redirect(NEXT);
   try {
-    await submitForReview(admin, { id: createdId, from: "signup", actorId: user.id });
+    await submitForReview(admin, actor, { id: created.id, from: "signup" });
   } catch (error) {
     // O cadastro ficou salvo; a página de credenciamento oferece o reenvio.
     console.error("enviar para análise", error);
@@ -57,14 +60,13 @@ export async function registerStationeryAction(_prev: RegisterState, formData: F
 
 /** Reenvia o cadastro à análise (signup/accreditation/rejected → under_review). Dono = sessão. */
 export async function resubmitAction(): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user) redirect(`/entrar?next=${encodeURIComponent(NEXT)}`);
-  const role = await getCurrentRole();
-  if (role !== "parent" && role !== "stationery_member") redirect(NEXT);
-  const own = await getStationeryOfOwner(user.id);
+  const actor = await getSessionActor();
+  if (!actor) redirect(`/entrar?next=${encodeURIComponent(NEXT)}`);
+  if (actor.role !== "parent" && actor.role !== "stationery_member") redirect(NEXT);
+  const own = await getStationeryOfOwner(actor.userId);
   if (!own || !canSubmitForReview(own.status)) redirect(NEXT);
   try {
-    await submitForReview(createAdminClient(), { id: own.id, from: own.status, actorId: user.id });
+    await submitForReview(createAdminClient(), actor, { id: own.id, from: own.status });
   } catch (error) {
     console.error("reenviar para análise", error);
     redirect(`${NEXT}?erro=envio`);

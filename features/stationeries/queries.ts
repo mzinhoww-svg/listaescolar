@@ -63,11 +63,11 @@ export async function listStatusEvents(stationeryId: string): Promise<StatusEven
 export async function listOwnAreas(stationeryId: string): Promise<string[]> {
   const { data, error } = await createAdminClient()
     .from("stationery_areas")
-    .select("neighborhood")
+    .select("neighborhood, display_name")
     .eq("stationery_id", stationeryId)
     .order("neighborhood");
   if (error) throw new Error(`listar bairros: ${error.message}`);
-  return (data ?? []).map((r) => String(r.neighborhood));
+  return (data ?? []).map((r) => String(r.display_name ?? r.neighborhood)); // texto como o dono digitou
 }
 
 export type AdminListRow = {

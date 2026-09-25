@@ -1,7 +1,14 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { execFileSync } from "node:child_process";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+const authState = vi.hoisted(() => ({ userId: null as string | null, role: null as string | null }));
+vi.mock("@/features/auth/queries", () => ({
+  getCurrentUser: async () => (authState.userId ? { id: authState.userId } : null),
+  getCurrentRole: async () => authState.role,
+}));
+
+import { getSessionActor, type SessionActor } from "@/features/stationeries/actor";
 import { normalizeItemKey } from "@/features/cart/item-key";
 import { parseCatalogCsv } from "@/features/stationeries/catalog-csv";
 import { CatalogLocalQuoteProvider } from "@/features/stationeries/local-quote-provider";
@@ -11,6 +18,7 @@ import {
   getPublicProfile,
   listCatalogItems,
   listForAdmin,
+  recordConsent,
   registerStationery,
   setAreas,
   StationeryRepositoryError,
@@ -18,7 +26,7 @@ import {
   updateProfile,
   upsertCatalogItems,
 } from "@/features/stationeries/repository";
-import { StationeryRegistrationSchema } from "@/features/stationeries/schemas";
+import { LGPD_TEXT_VERSION, StationeryRegistrationSchema } from "@/features/stationeries/schemas";
 import {
   canTransition,
   STATIONERY_STATUSES,
@@ -60,6 +68,18 @@ let municipalityId: string;
 const userIds: string[] = [];
 const stationeryIds: string[] = [];
 
+type TestRole = "parent" | "admin" | "system" | "stationery_member" | "school_member";
+const roles = new Map<string, TestRole>();
+
+/** Único jeito de obter um ator: passa por getSessionActor (com a sessão simulada), como nas Server Actions. */
+async function actor(userId: string, role?: TestRole): Promise<SessionActor> {
+  authState.userId = userId;
+  authState.role = role ?? roles.get(userId) ?? "parent";
+  const a = await getSessionActor();
+  if (!a) throw new Error("sem ator");
+  return a;
+}
+
 async function makeUser(label: string, role: "parent" | "admin" | "system" = "parent"): Promise<string> {
   const created = await admin.auth.admin.createUser({
     email: `st-${label}-${RUN}@example.test`,
@@ -69,6 +89,7 @@ async function makeUser(label: string, role: "parent" | "admin" | "system" = "pa
   if (created.error || !created.data.user) throw new Error(`createUser: ${created.error?.message}`);
   const id = created.data.user.id;
   userIds.push(id);
+  roles.set(id, role);
   await withSuperuser((c) =>
     c.query(
       `insert into public.profiles (id, role, display_name) values ($1, $2, $3)
@@ -101,7 +122,7 @@ const registration = (over: { neighborhood?: string; areas?: string[] } = {}) =>
 
 async function register(ownerId: string, over: Parameters<typeof registration>[0] = {}) {
   const r = registration(over);
-  const created = await registerStationery(admin, { ownerId, ...r });
+  const created = await registerStationery(admin, await actor(ownerId), r);
   stationeryIds.push(created.id);
   return { ...created, cnpj: r.basics.cnpj };
 }
@@ -137,7 +158,7 @@ describe("matriz TS x banco (stationery_transition)", () => {
     const adminId = await makeUser("matrix-admin", "admin");
     const systemId = await makeUser("matrix-system", "system");
     const mismatches: string[] = [];
-    for (const actor of TRANSITION_ACTORS) {
+    for (const actorRole of TRANSITION_ACTORS) {
       for (const from of STATIONERY_STATUSES) {
         for (const to of STATIONERY_STATUSES) {
           const id = await withSuperuser(async (c) => {
@@ -150,17 +171,18 @@ describe("matriz TS x banco (stationery_transition)", () => {
             await c.query("commit");
             return sid;
           });
-          const actorId = actor === "owner" ? owner : actor === "admin" ? adminId : systemId;
+          const actorId = actorRole === "owner" ? owner : actorRole === "admin" ? adminId : systemId;
           let allowed = true;
           let code = "";
           try {
-            await transition(admin, { id, to, actorId, actorRole: actor, reason: "motivo de teste" });
+            const who = await actor(actorId, actorRole === "owner" ? "parent" : actorRole);
+            await transition(admin, who, { id, to, reason: "motivo de teste" });
           } catch (e) {
             allowed = false;
             code = e instanceof StationeryRepositoryError ? e.code : String(e);
           }
-          if (allowed !== canTransition(actor, from, to)) mismatches.push(`${actor}: ${from} -> ${to} (banco=${allowed} ${code})`);
-          if (!allowed && code !== "transition_not_allowed") mismatches.push(`${actor}: ${from} -> ${to} erro inesperado ${code}`);
+          if (allowed !== canTransition(actorRole, from, to)) mismatches.push(`${actorRole}: ${from} -> ${to} (banco=${allowed} ${code})`);
+          if (!allowed && code !== "transition_not_allowed") mismatches.push(`${actorRole}: ${from} -> ${to} erro inesperado ${code}`);
           await purgeStationeries([id]);
         }
       }
@@ -173,14 +195,17 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
   let ownerId: string;
   let otherId: string;
   let adminId: string;
+  let systemId: string;
   let st: { id: string; slug: string; cnpj: string };
   const CADERNO = "Caderno 96 folhas";
   const csv = `nome,preco,estoque\n${CADERNO},"12,50",sim\nLápis HB,"1,99",\nCola branca,"3,00",nao\n`;
 
+  const otherOwnerless = (): string => otherId; // usuário sem vínculo com a papelaria do teste
   beforeAll(async () => {
     ownerId = await makeUser("flow-owner");
     otherId = await makeUser("flow-other");
     adminId = await makeUser("flow-admin", "admin");
+    systemId = await makeUser("flow-system", "system");
   });
 
   it("registra em signup com dono, áreas, contato e aceite", async () => {
@@ -189,17 +214,69 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
     expect(own).toMatchObject({ id: st.id, status: "signup", cnpj: st.cnpj });
     const { data } = await admin.from("stationeries").select("whatsapp, lgpd_accepted_at, lgpd_text_version").eq("id", st.id).single();
     expect(data?.whatsapp).toBe("+5565999998888");
-    expect(data?.lgpd_accepted_at).toBeTruthy();
+    expect(data?.lgpd_text_version).toBe(LGPD_TEXT_VERSION); // constante do servidor
+    expect(Math.abs(Date.now() - new Date(String(data?.lgpd_accepted_at)).getTime())).toBeLessThan(60_000); // carimbo do servidor
     const areas = await admin.from("stationery_areas").select("neighborhood").eq("stationery_id", st.id);
     expect(areas.data?.map((a) => a.neighborhood)).toEqual(["jardim das flores"]);
+  });
+
+  it("duplo envio (mesmo dono, mesmo CNPJ) devolve a papelaria existente, sem duplicar", async () => {
+    const again = registration();
+    again.basics.cnpj = st.cnpj;
+    const r = await registerStationery(admin, await actor(ownerId), again);
+    expect(r).toMatchObject({ id: st.id, slug: st.slug, created: false });
+    const rows = await admin.from("stationeries").select("id").eq("cnpj", st.cnpj);
+    expect(rows.data).toHaveLength(1);
+  });
+
+  it("registro é atômico: falha nas áreas não deixa papelaria nem vínculo", async () => {
+    const fresh = await makeUser("atomic-owner");
+    const r = registration();
+    r.service.areas = ["x".repeat(130)]; // viola o limite de 120 do banco
+    await expect(registerStationery(admin, await actor(fresh), r)).rejects.toBeInstanceOf(StationeryRepositoryError);
+    expect((await admin.from("stationeries").select("id").eq("cnpj", r.basics.cnpj)).data).toEqual([]);
+    expect(await getOwnStationery(admin, fresh)).toBeNull();
+  });
+
+  it("consentimento: sem versão o banco recusa; recordConsent grava o aceite depois (dono, estado certo)", async () => {
+    const owner2 = await makeUser("consent-owner");
+    const { error } = await admin.rpc("stationery_register", {
+      p_owner_id: owner2,
+      p_slug: "sem-consentimento",
+      p_trade_name: "Sem Consentimento",
+      p_legal_name: "Sem Consentimento LTDA",
+      p_cnpj: nextCnpj(),
+      p_municipality_id: municipalityId,
+      p_neighborhood: "Centro",
+      p_lgpd_text_version: null,
+    });
+    expect(error?.hint).toBe("consent_required");
+    expect(await getOwnStationery(admin, owner2)).toBeNull();
+
+    const id = await withSuperuser(async (c) => {
+      await c.query("begin");
+      const sid = await seedStationery(c, { status: "accreditation", ownerId: owner2, complete: true });
+      await c.query("update public.stationeries set lgpd_accepted_at = null, lgpd_text_version = null where id = $1", [sid]);
+      await c.query("commit");
+      return sid;
+    });
+    stationeryIds.push(id);
+    await expectCode(transition(admin, await actor(owner2), { id, to: "under_review" }), "precondition_failed"); // sem aceite
+    await expectCode(recordConsent(admin, await actor(otherOwnerless()), id), "forbidden");
+    await recordConsent(admin, await actor(owner2), id);
+    const row = await admin.from("stationeries").select("lgpd_accepted_at, lgpd_text_version").eq("id", id).single();
+    expect(row.data?.lgpd_text_version).toBe(LGPD_TEXT_VERSION);
+    expect(row.data?.lgpd_accepted_at).toBeTruthy();
+    expect(await transition(admin, await actor(owner2), { id, to: "under_review" })).toBe("under_review");
+    await expectCode(recordConsent(admin, await actor(owner2), id), "invalid_state"); // em análise: travado
   });
 
   it("CNPJ duplicado e segundo cadastro do mesmo dono não deixam sobra", async () => {
     const dup = registration();
     dup.basics.cnpj = st.cnpj;
-    await expectCode(registerStationery(admin, { ownerId: otherId, ...dup }), "cnpj_taken");
+    await expectCode(registerStationery(admin, await actor(otherId), dup), "cnpj_taken");
     const fresh = registration();
-    await expectCode(registerStationery(admin, { ownerId, ...fresh }), "already_owner");
+    await expectCode(registerStationery(admin, await actor(ownerId), fresh), "already_owner");
     const left = await admin.from("stationeries").select("id").eq("cnpj", fresh.basics.cnpj);
     expect(left.data).toEqual([]);
   });
@@ -212,23 +289,33 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
   });
 
   it("dono edita cadastro e áreas; terceiro não; catálogo ainda não", async () => {
-    await updateProfile(admin, st.id, ownerId, { openingHours: "Seg a sex, 8h às 18h", offersDelivery: true });
-    await expectCode(updateProfile(admin, st.id, otherId, { openingHours: "x" }), "forbidden");
-    await setAreas(admin, st.id, ownerId, ["Jardim das Flores", "  Centro Sul "]);
-    await expectCode(setAreas(admin, st.id, otherId, ["x"]), "forbidden");
-    const areas = await admin.from("stationery_areas").select("neighborhood").eq("stationery_id", st.id).order("neighborhood");
-    expect(areas.data?.map((a) => a.neighborhood)).toEqual(["centro sul", "jardim das flores"]);
-    await expectCode(upsertCatalogItems(admin, st.id, ownerId, [{ name: CADERNO, priceCents: 1250 }]), "invalid_state");
+    await updateProfile(admin, await actor(ownerId), st.id, { openingHours: "Seg a sex, 8h às 18h", offersDelivery: true });
+    await expectCode(updateProfile(admin, await actor(otherId), st.id, { openingHours: "x" }), "forbidden");
+    await setAreas(admin, await actor(ownerId), st.id, ["Jardim das Flores", "  Centro Sul ", "São José", "sao jose"]);
+    await expectCode(setAreas(admin, await actor(otherId), st.id, ["x"]), "forbidden");
+    const areas = await admin.from("stationery_areas").select("neighborhood, display_name").eq("stationery_id", st.id).order("neighborhood");
+    // chave normalizada (sem acento, minúscula) + texto de exibição preservado; "sao jose" repetido não duplica
+    expect(areas.data?.map((a) => [a.neighborhood, a.display_name])).toEqual([
+      ["centro sul", "Centro Sul"],
+      ["jardim das flores", "Jardim das Flores"],
+      ["sao jose", "São José"],
+    ]);
+    // revalidação do patch: valor inválido e campo fora da lista são recusados antes do banco
+    await expectCode(updateProfile(admin, await actor(ownerId), st.id, { whatsapp: "123" }), "invalid_input");
+    await expectCode(updateProfile(admin, await actor(ownerId), st.id, { email: "x" }), "invalid_input");
+    await expectCode(updateProfile(admin, await actor(ownerId), st.id, { status: "active" } as never), "invalid_input");
+    await expectCode(updateProfile(admin, await actor(ownerId), st.id, { constructor: "x" } as never), "invalid_input");
+    await expectCode(upsertCatalogItems(admin, await actor(ownerId), st.id, [{ name: CADERNO, priceCents: 1250 }]), "invalid_state");
   });
 
   it("transições: dono envia, terceiro não age como dono, admin decide, motivo obrigatório", async () => {
-    await expectCode(transition(admin, { id: st.id, to: "accreditation", actorId: otherId, actorRole: "owner" }), "forbidden");
-    await expectCode(transition(admin, { id: st.id, to: "approved", actorId: ownerId, actorRole: "owner" }), "transition_not_allowed");
-    expect(await transition(admin, { id: st.id, to: "accreditation", actorId: ownerId, actorRole: "owner" })).toBe("accreditation");
-    expect(await transition(admin, { id: st.id, to: "under_review", actorId: ownerId, actorRole: "owner" })).toBe("under_review");
-    await expectCode(transition(admin, { id: st.id, to: "rejected", actorId: adminId, actorRole: "admin" }), "reason_required");
-    await expectCode(transition(admin, { id: st.id, to: "approved", actorId: ownerId, actorRole: "admin" }), "forbidden");
-    expect(await transition(admin, { id: st.id, to: "approved", actorId: adminId, actorRole: "admin" })).toBe("approved");
+    await expectCode(transition(admin, await actor(otherId), { id: st.id, to: "accreditation" }), "forbidden");
+    await expectCode(transition(admin, await actor(ownerId), { id: st.id, to: "approved" }), "transition_not_allowed");
+    expect(await transition(admin, await actor(ownerId), { id: st.id, to: "accreditation" })).toBe("accreditation");
+    expect(await transition(admin, await actor(ownerId), { id: st.id, to: "under_review" })).toBe("under_review");
+    await expectCode(transition(admin, await actor(adminId), { id: st.id, to: "rejected" }), "reason_required");
+    await expectCode(transition(admin, await actor(ownerId, "admin"), { id: st.id, to: "approved" }), "forbidden");
+    expect(await transition(admin, await actor(adminId), { id: st.id, to: "approved" })).toBe("approved");
     const role = await withSuperuser((c) => c.query("select role from public.profiles where id = $1", [ownerId]));
     expect(role.rows[0].role).toBe("stationery_member");
     const listed = await listForAdmin(admin, { status: "approved" });
@@ -241,16 +328,16 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
     if (!parsed.ok) throw new Error("csv");
     expect(parsed.errors).toEqual([]);
     const items = parsed.items.map((i) => ({ name: i.name, priceCents: i.priceCents, stock: i.stock }));
-    expect(await upsertCatalogItems(admin, st.id, ownerId, items)).toEqual({ upserted: 3 });
-    const first = await listCatalogItems(admin, st.id, ownerId);
+    expect(await upsertCatalogItems(admin, await actor(ownerId), st.id, items)).toEqual({ upserted: 3 });
+    const first = await listCatalogItems(admin, await actor(ownerId), st.id);
     expect(first).toHaveLength(3);
     await new Promise((r) => setTimeout(r, 20));
     // segundo envio, com um preço novo e o mesmo nome escrito de outro jeito
-    await upsertCatalogItems(admin, st.id, ownerId, [
+    await upsertCatalogItems(admin, await actor(ownerId), st.id, [
       ...items,
       { name: "  caderno   96 FOLHAS ", priceCents: 1300, stock: "in_stock" },
     ]);
-    const second = await listCatalogItems(admin, st.id, ownerId);
+    const second = await listCatalogItems(admin, await actor(ownerId), st.id);
     expect(second).toHaveLength(3);
     const caderno = second.find((i) => i.itemKey === normalizeItemKey(CADERNO));
     expect(caderno?.priceCents).toBe(1300);
@@ -260,24 +347,24 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
     const secondBatch = [...items, { name: "  caderno   96 FOLHAS ", priceCents: 1300, stock: "in_stock" as const }];
     const before = new Map(second.map((i) => [i.itemKey, i]));
     await new Promise((r) => setTimeout(r, 20));
-    await upsertCatalogItems(admin, st.id, ownerId, secondBatch.map((i) => ({ ...i, stock: "out_of_stock" as const })));
-    const third = await listCatalogItems(admin, st.id, ownerId);
+    await upsertCatalogItems(admin, await actor(ownerId), st.id, secondBatch.map((i) => ({ ...i, stock: "out_of_stock" as const })));
+    const third = await listCatalogItems(admin, await actor(ownerId), st.id);
     for (const row of third) {
       expect(row.stock).toBe("out_of_stock");
       expect(row.priceUpdatedAt.getTime(), row.itemKey).toBe(before.get(row.itemKey)!.priceUpdatedAt.getTime());
     }
-    await upsertCatalogItems(admin, st.id, ownerId, secondBatch); // volta ao estado anterior (estoque)
-    await expectCode(upsertCatalogItems(admin, st.id, otherId, items), "forbidden");
-    await expectCode(upsertCatalogItems(admin, st.id, ownerId, [{ name: "X", priceCents: 0 }]), "invalid_input");
+    await upsertCatalogItems(admin, await actor(ownerId), st.id, secondBatch); // volta ao estado anterior (estoque)
+    await expectCode(upsertCatalogItems(admin, await actor(otherId), st.id, items), "forbidden");
+    await expectCode(upsertCatalogItems(admin, await actor(ownerId), st.id, [{ name: "X", priceCents: 0 }]), "invalid_input");
   });
 
   it("publicada: perfil público sem dados sensíveis; cotação local respeita regras", async () => {
-    expect(await transition(admin, { id: st.id, to: "active", actorId: ownerId, actorRole: "owner" })).toBe("active");
+    expect(await transition(admin, await actor(ownerId), { id: st.id, to: "active" })).toBe("active");
     for (const client of [anon, admin]) {
       const p = await getPublicProfile(client, st.slug);
       expect(p).not.toBeNull();
       expect(p?.whatsapp).toBe("+5565999998888");
-      expect(p?.areas).toEqual(["centro sul", "jardim das flores"]);
+      expect(p?.areas).toEqual(["Centro Sul", "Jardim das Flores", "São José"]); // texto de exibição
       expect(p?.catalog.map((i) => i.priceSource)).toEqual(["informed_by_stationery", "informed_by_stationery", "informed_by_stationery"]);
       const keys = Object.keys(p ?? {});
       for (const forbidden of ["cnpj", "legalName", "email", "phone", "statusReason", "status", "members", "events"]) {
@@ -299,6 +386,9 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
     expect(quotes.map((q) => q.itemKey)).toEqual([normalizeItemKey(CADERNO)]);
     expect(quotes[0]).toMatchObject({ stationeryId: st.id, unitPriceCents: 1300, source: "informed_by_stationery", inStock: true });
     expect(quotes[0]?.checkedAt).toBeInstanceOf(Date);
+    // acento e caixa não atrapalham
+    expect(await local("SÃO JOSÉ").getQuotes(items, { now: NOW })).toHaveLength(1);
+    expect(await local("sao jose").getQuotes(items, { now: NOW })).toHaveLength(1);
     // bairro que a papelaria não atende
     expect(await local("Coxipó").getQuotes(items, { now: NOW })).toEqual([]);
     // município da papelaria + bairro da própria papelaria
@@ -316,15 +406,15 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
   it("pausada ou suspensa: some do perfil público e da cotação", async () => {
     const items = [{ itemKey: normalizeItemKey(CADERNO), name: CADERNO, quantity: 1 }];
     const provider = new CatalogLocalQuoteProvider(createLocalCatalogSource(admin), { municipalityId, neighborhood: "Centro" });
-    await transition(admin, { id: st.id, to: "paused", actorId: adminId, actorRole: "admin" });
+    await transition(admin, await actor(adminId), { id: st.id, to: "paused" });
     expect(await getPublicProfile(anon, st.slug)).toBeNull();
     expect(await provider.getQuotes(items)).toEqual([]);
     // pausada pela equipe: o dono não reativa
-    await expectCode(transition(admin, { id: st.id, to: "active", actorId: ownerId, actorRole: "owner" }), "transition_not_allowed");
-    await transition(admin, { id: st.id, to: "active", actorId: adminId, actorRole: "admin" });
+    await expectCode(transition(admin, await actor(ownerId), { id: st.id, to: "active" }), "transition_not_allowed");
+    await transition(admin, await actor(adminId), { id: st.id, to: "active" });
     expect(await provider.getQuotes(items)).toHaveLength(1);
-    await expectCode(transition(admin, { id: st.id, to: "suspended", actorId: null, actorRole: "system" }), "reason_required");
-    await transition(admin, { id: st.id, to: "suspended", actorId: null, actorRole: "system", reason: "denúncia em análise" });
+    await expectCode(transition(admin, await actor(systemId), { id: st.id, to: "suspended" }), "reason_required");
+    await transition(admin, await actor(systemId), { id: st.id, to: "suspended", reason: "denúncia em análise" });
     expect(await getPublicProfile(anon, st.slug)).toBeNull();
     expect(await provider.getQuotes(items)).toEqual([]);
     const own = await getOwnStationery(admin, ownerId);
@@ -339,4 +429,60 @@ describe("estados aceitos no tipo", () => {
     expect(a).toHaveLength(3);
     expect(s).toHaveLength(8);
   });
+});
+
+describe("mapeamento de erros distinto por causa", () => {
+  it("motivo, ator inválido, pré-condição e transição não permitida têm códigos próprios", async () => {
+    const owner = await makeUser("err-owner");
+    const adm = await makeUser("err-admin", "admin");
+    const id = await withSuperuser(async (c) => {
+      await c.query("begin");
+      const sid = await seedStationery(c, { status: "signup", ownerId: owner, complete: false });
+      await c.query("commit");
+      return sid;
+    });
+    stationeryIds.push(id);
+    // pré-condição do envio (dados incompletos) x transição fora da matriz x ator inválido x motivo
+    await expectCode(transition(admin, await actor(owner), { id, to: "accreditation" }), "precondition_failed");
+    await expectCode(transition(admin, await actor(owner), { id, to: "active" }), "transition_not_allowed");
+    const bogus = await admin.rpc("stationery_transition", { p_id: id, p_to: "accreditation", p_actor_id: owner, p_actor_role: "bogus" });
+    expect(bogus.error?.code).toBe("22023");
+    expect(bogus.error?.hint).toBe("actor_invalid");
+    await expectCode(transition(admin, await actor(adm), { id, to: "suspended" }), "reason_required");
+  });
+});
+
+describe("candidatos da cotação local (I1): sem truncar em silêncio", () => {
+  it("devolve todos os candidatos acima de 1000 linhas e falha alto no limite", async () => {
+    const owner = await makeUser("bulk-owner");
+    const N = 1200;
+    const id = await withSuperuser(async (c) => {
+      await c.query("begin");
+      const sid = await seedStationery(c, { status: "active", ownerId: owner });
+      await c.query(
+        `insert into public.catalog_items (stationery_id, name, item_key, price_cents, stock_status)
+         select $1, 'Item ' || g, 'item-bulk-' || g, 100 + g, case when g % 2 = 0 then 'in_stock'::public.catalog_stock_status else 'unknown' end
+           from generate_series(1, $2::int) g`,
+        [sid, N],
+      );
+      await c.query("update public.catalog_items set stock_status = 'out_of_stock' where stationery_id = $1 and item_key = 'item-bulk-1'", [sid]);
+      await c.query("commit");
+      return sid;
+    });
+    stationeryIds.push(id);
+    const keys = Array.from({ length: N }, (_, i) => `item-bulk-${i + 1}`);
+    const rows = await createLocalCatalogSource(admin).findCandidates({ itemKeys: keys, location: { municipalityId } });
+    const mine = rows.filter((r) => r.stationeryId === id);
+    expect(mine).toHaveLength(N - 1); // item-bulk-1 está fora de estoque: o SQL já não o devolve
+    expect(new Set(mine.map((r) => r.itemKey)).size).toBe(N - 1);
+    // lista do dono acima de 1000 itens: paginada, completa
+    expect(await listCatalogItems(admin, await actor(owner), id)).toHaveLength(N);
+    // limite atingido: erro claro, nunca lista parcial
+    await expect(
+      createLocalCatalogSource(admin, { limit: 100 }).findCandidates({ itemKeys: keys, location: { municipalityId } }),
+    ).rejects.toMatchObject({ code: "limit_exceeded" });
+    // município sem papelaria: nada
+    const none = await createLocalCatalogSource(admin).findCandidates({ itemKeys: keys, location: { municipalityId: "00000000-0000-4000-8000-000000000000" } });
+    expect(none).toEqual([]);
+  }, 120_000);
 });

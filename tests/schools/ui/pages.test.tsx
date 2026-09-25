@@ -15,6 +15,8 @@ vi.mock("@/features/lists/queries", () => ({
   getPublishedList: (...a: unknown[]) => getPublishedList(...a),
   listVersionHistory: vi.fn().mockResolvedValue([]),
 }));
+vi.mock("@/features/auth/actor", () => ({ getSessionActor: vi.fn().mockResolvedValue(null) }));
+vi.mock("@/features/claims/queries", () => ({ getMyClaimForSchool: vi.fn().mockResolvedValue(null) }));
 vi.mock("react", async (orig) => ({
   ...(await orig<typeof import("react")>()),
   cache: <T,>(f: T) => f,
@@ -124,12 +126,13 @@ describe("/escolas/[inep]", () => {
   });
 
   it("escola demo: selo Demonstração e sem JSON-LD; metadados noindex", async () => {
-    getSchoolByInep.mockResolvedValue(school({ isDemo: true }));
+    getSchoolByInep.mockResolvedValue(school({ isDemo: true, verificationStatus: "registered" }));
     const { container } = render(await SchoolPage(props()));
     expect(container.querySelector('script[type="application/ld+json"]')).toBeNull();
     expect(screen.getAllByText("Demonstração").length).toBeGreaterThan(0);
     expect(screen.getByText(/Demonstração: dados fictícios/)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Reivindicar escola" })).toBeNull();
+    expect(screen.getByText("Você trabalha nesta escola?")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Reivindicar escola" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
     const m = await schoolMeta(props());
     expect(m.robots).toMatchObject({ index: false });
     expect(String(m.title)).toContain("Demonstração");

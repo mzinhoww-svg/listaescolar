@@ -16,7 +16,7 @@ import { MySchoolsTable } from "@/components/claims/MySchoolsTable";
 import { TokenPanel } from "@/components/claims/TokenPanel";
 import { ok, failed, type ClaimActionState } from "@/features/claims/form-state";
 import type { ClaimStatusView, QueueRow, SchoolClaimContext } from "@/features/claims/types";
-import { decisionOptions } from "@/app/admin/reivindicacoes/[id]/page";
+import { decisionOptions } from "@/features/claims/decision";
 
 const CLAIM_ID = "11111111-1111-4111-8111-111111111111";
 const noop = vi.fn(async (): Promise<ClaimActionState> => ok("feito"));
@@ -35,14 +35,23 @@ describe("ClaimBlock (App14b)", () => {
   it("estado 2 (verified): texto sem botão", () => {
     render(<ClaimBlock inep="99001001" status="verified" />);
     expect(screen.getByText("Esta escola já tem administrador")).toBeInTheDocument();
+    expect(screen.queryByText(/co-admin|convite/i)).toBeNull();
+    expect(screen.queryByText(/^Estado \d/)).toBeNull();
+    expect(document.querySelector("[data-claim-state]")?.getAttribute("data-claim-state")).toBe("2");
     expect(screen.queryByRole("link")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
   it("estado 3: em análise com a data real e link para o status", () => {
     render(<ClaimBlock inep="99001001" status="claimed" claim={{ status: "awaiting_verification", createdAt: "2026-09-10T15:00:00Z", decisionReason: null }} />);
     expect(screen.getByText("Reivindicação em análise")).toBeInTheDocument();
+    expect(screen.queryByText(/^Estado \d/)).toBeNull();
     expect(screen.getByText(/Enviada em 10\/09\/2026/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ver status" })).toHaveAttribute("href", "/escolas/99001001/reivindicar");
+  });
+  it("estado 3 com pedido apenas iniciado (submitted): título de rascunho, não 'em análise'", () => {
+    render(<ClaimBlock inep="99001001" status="registered" claim={{ status: "submitted", createdAt: "2026-09-10T15:00:00Z", decisionReason: null }} />);
+    expect(screen.getByText("Pedido em preparo")).toBeInTheDocument();
+    expect(screen.queryByText("Reivindicação em análise")).toBeNull();
   });
   it("estado 4: motivo real e reivindicar de novo", () => {
     render(<ClaimBlock inep="99001001" status="registered" claim={{ status: "rejected", createdAt: "2026-09-10T15:00:00Z", decisionReason: "Documento ilegível" }} />);
@@ -90,7 +99,7 @@ describe("EvidenceUploader", () => {
     const evidence = Array.from({ length: 5 }, (_, i) => ({ id: `22222222-2222-4222-8222-22222222222${i}`, originalName: `doc${i}.pdf`, mimeType: "application/pdf", sizeBytes: 2048, createdAt: "2026-09-10T15:00:00Z" }));
     render(<EvidenceUploader {...props} evidence={evidence} />);
     expect(screen.getByText("Arquivos (5/5)")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Remover" })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /^Remover doc\d\.pdf$/ })).toHaveLength(5);
     expect(screen.getByRole("button", { name: "Enviar para análise" })).toBeEnabled();
     expect(screen.getByRole("button", { name: /Limite de 5 arquivos/ })).toBeDisabled();
   });
@@ -191,6 +200,8 @@ describe("Fila do admin", () => {
     expect(screen.getByText("Falta evidência: nenhum arquivo enviado.")).toBeInTheDocument();
     const reasons = screen.getAllByLabelText(/Motivo/);
     expect(reasons).toHaveLength(2);
+    expect(screen.getByLabelText(/Motivo para pedir mais evidências/)).toBeRequired();
+    expect(screen.getByLabelText(/Motivo da recusa/)).toBeRequired();
     for (const r of reasons) expect(r).toBeRequired();
   });
   it("envia a decisão e mostra a resposta", async () => {

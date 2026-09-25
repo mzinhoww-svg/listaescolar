@@ -2,7 +2,7 @@
 # E2E da S06 (reivindicação de escola) com agent-browser contra o build local da trilha 1. Só dados demonstrativos.
 # Pré-requisitos: `pnpm db:reset`; `.env.local` (só neste worktree, ignorado pelo git) com `node scripts/supa.mjs env` + APP_ENV=local;
 # `pnpm import:inep tests/fixtures/inep-demo.csv --demo`; `pnpm seed:demo-claims`; `pnpm build && PORT=3001 pnpm start`.
-# FASE 1: servidor SEM DEMO_CLAIM_DELIVERY (métodos por token "indisponíveis"). FASE 2: reinicie com `DEMO_CLAIM_DELIVERY=1 PORT=3001 pnpm start`
+# FASE 1: servidor SEM DEMO_CLAIM_DELIVERY (métodos por token "indisponíveis"). FASE 2: encerre só o servidor que VOCÊ abriu (`kill "$(lsof -ti tcp:3001 -sTCP:LISTEN)"`; nunca `pkill -f`) e reinicie com `DEMO_CLAIM_DELIVERY=1 APP_ENV=local PORT=3001 pnpm start`
 # e com o log em $SERVER_LOG (o link/código de demonstração é impresso lá). Uso: PHASE=1 scripts/e2e-s06.sh ; PHASE=2 scripts/e2e-s06.sh
 set -u
 cd "$(dirname "$0")/.."
@@ -24,7 +24,8 @@ expect_text() { local t; t=$(ab "$1" get text body 2>/dev/null); if grep -qF -- 
 expect_no_text() { local t; t=$(ab "$1" get text body 2>/dev/null); if grep -qF -- "$2" <<<"$t"; then bad "$3" "não deveria conter '$2'"; else ok "$3"; fi; }
 expect_eq() { if [ "$1" = "$2" ]; then ok "$3"; else bad "$3" "esperava '$2'; veio '$1'"; fi; }
 wait_status() { for _ in $(seq 1 "$3"); do [ "$(cstatus "$1")" = "$2" ] && return 0; sleep 1; done; return 1; }
-wait_text() { for _ in $(seq 1 "$3"); do ab "$1" get text body 2>/dev/null | grep -qF -- "$2" && return 0; sleep 1; done; return 1; }
+# wait_text é asserção: conta PASS/FAIL (não use com `&& ok || bad`).
+wait_text() { for _ in $(seq 1 "$3"); do ab "$1" get text body 2>/dev/null | grep -qF -- "$2" && { ok "aparece: $2"; return 0; }; sleep 1; done; bad "aparece: $2" "não apareceu em ${3}s"; return 1; }
 clickbtn() { ab "$1" eval "(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('$2') && !x.disabled); if (!b) return 'sem-botao'; b.click(); return 'ok'; })()" >/dev/null; }
 clicklink() { ab "$1" eval "(() => { const a = [...document.querySelectorAll('a')].find(x => x.textContent.includes('$2')); if (!a) return 'sem-link'; a.click(); return 'ok'; })()" >/dev/null; }
 shot() { ab "$1" screenshot "$OUT/S06-$2.png" >/dev/null 2>&1; }
@@ -59,8 +60,11 @@ add_file() { # sessão: injeta o PDF fictício por DataTransfer (o `upload` do a
     ab "$1" get text body | grep -q "Arquivos (0/5)" || return 0
   done
 }
+# Contato de TODAS as escolas demo (e-mails demoN@, telefones 3333000N e 999990003) e colunas internas (hash de token, decided_by).
+LEAK_ALL="demo[0-9]@exemplo|3333-?000[0-9]|99999-?0003|decided_by|actor_id|storage_path|token_hash|code_hash"
+LEAK_PROFILE="demo[0-9]@exemplo|decided_by|actor_id|storage_path|token_hash|code_hash" # o telefone público do perfil é da S04
 leak_check() { # sessão, rótulo [padrão]: HTML e RSC da página atual sem contato da escola nem decided_by (o telefone público do perfil é da S04)
-  local html rsc pat=${3:-"demo1@exemplo|33330001|3333-0001|999990003|decided_by|actor_id|storage_path"}
+  local html rsc pat=${3:-$LEAK_ALL}
   html=$(ab "$1" eval "document.documentElement.outerHTML" 2>/dev/null)
   rsc=$(ab "$1" eval "fetch(location.href,{headers:{RSC:'1'}}).then(r=>r.text())" 2>/dev/null)
   if grep -qiE "$pat" <<<"$html$rsc"; then bad "$2: sem contato da escola/decided_by no HTML e no RSC" "achou termo proibido"; else ok "$2: sem contato da escola/decided_by no HTML e no RSC"; fi
@@ -111,7 +115,7 @@ open p /escolas/99001001
 expect_text p "Reivindicação em análise" "bloco estado 3"
 expect_text p "Reivindicada" "perfil com selo reivindicada"
 shot p 05-bloco-estado3
-leak_check p "perfil (logado)" "demo1@exemplo|decided_by|actor_id|storage_path"
+leak_check p "perfil (logado)" "$LEAK_PROFILE"
 open p /escolas/99001003
 expect_text p "Reivindicação recusada" "bloco estado 4 (seed)"
 expect_text p "Motivo: Demonstração: o documento enviado" "estado 4 traz o motivo real"
@@ -135,8 +139,12 @@ open a "/admin/reivindicacoes/$(uid 99001001)"
 expect_text a "Abrir (link de 60 s)" "evidência com link assinado"
 expect_text a "Aprovar" "botão aprovar"
 shot a 08-detalhe-admin
-clicklink a "Abrir (link de 60 s)"; sleep 2
-ab a get url | grep -q "/storage/v1/object/sign/claim-evidence/" && ok "evidência abre por URL assinada do Storage" || bad "URL assinada" "$(ab a get url)"
+leak_check a "detalhe do admin"
+# O link abre em outra aba e o destino (PDF no Storage) aborta a navegação no headless; por isso o E2E prova só que a rota
+# do admin responde com REDIRECT (opaqueredirect) e não 403/404/200. Que o destino é a URL assinada de 60 s é coberto pelo
+# teste de unidade tests/claims/evidence-route.test.ts.
+EVID_HREF=$(ab a eval "document.querySelector('a[href*=\"/evidencia/\"]').getAttribute('href')" | tr -d '"')
+expect_eq "$(ab a eval "fetch('$EVID_HREF',{redirect:'manual'}).then(r=>r.type)" | tr -d '"')" "opaqueredirect" "rota da evidência (admin) responde com redirect"
 open a "/admin/reivindicacoes/$(uid 99001001)"
 clickbtn a "Aprovar"; wait_text a "Reivindicação aprovada." 15
 expect_eq "$(cstatus 99001001)" "approved" "claim approved"
@@ -194,10 +202,10 @@ ab p check 'input[value=institutional_whatsapp]' >/dev/null
 fill_claim p "Ana Demonstração" "Coordenadora"
 clickbtn p "Continuar"; wait_text p "Enviar código para o WhatsApp da escola registrado no INEP" 15
 expect_eq "$(cstatus 99001003)" "submitted" "nova claim (WhatsApp) em submitted"
-clickbtn p "Enviar código"; wait_text p "Enviamos o código" 15
+clickbtn p "Enviar código"; wait_text p "Modo demonstração: o código foi para o log local" 15
 CODE=$(grep -o "código de reivindicação (99001003): [0-9]*" "$SERVER_LOG" | tail -1 | grep -o "[0-9]*$")
 [ -n "$CODE" ] && ok "código impresso no log do servidor (demo)" || bad "código no log" "vazio"
-ab p fill 'input[name=code]' "000000" >/dev/null; clickbtn p "Confirmar código"; wait_text p "Link ou código inválido" 15 && ok "código errado recusado com texto fixo" || bad "código errado" ""
+ab p fill 'input[name=code]' "000000" >/dev/null; clickbtn p "Confirmar código"; wait_text p "Link ou código inválido" 15
 ab p fill 'input[name=code]' "$CODE" >/dev/null; clickbtn p "Confirmar código"; wait_text p "Canal confirmado" 15
 expect_eq "$(sql "select channel_confirmed_at is not null from public.claims where id='$(uid 99001003)'")" "t" "canal WhatsApp confirmado"
 shot p 12-token-confirmado
@@ -214,15 +222,17 @@ open p "/escolas/99001003/reivindicar?nova=1"
 ab p check 'input[value=institutional_email]' >/dev/null
 fill_claim p "Ana Demonstração" "Secretária"
 clickbtn p "Continuar"; wait_text p "Enviar link para o e-mail da escola registrado no INEP" 15
-clickbtn p "Enviar link"; wait_text p "Enviamos o link" 15
+clickbtn p "Enviar link"; wait_text p "Modo demonstração: o link foi para o log local" 15
 LINK=$(grep -o "http[^ ]*/escolas/99001003/reivindicar/confirmar?token=[A-Za-z0-9_-]*" "$SERVER_LOG" | tail -1)
 [ -n "$LINK" ] && ok "link impresso no log do servidor (demo)" || bad "link no log" "vazio"
 ab p open "$LINK" >/dev/null; sleep 2
 expect_text p "Confirmar e-mail da escola" "GET mostra o botão"
 expect_eq "$(sql "select channel_confirmed_at is null from public.claims where id='$(uid 99001003)'")" "t" "GET do link NÃO consome o token"
 shot p 13-confirmar-email
+leak_check p "/confirmar" "$LEAK_ALL"
 clickbtn p "Confirmar e-mail da escola"; wait_text p "Canal confirmado" 15
+leak_check p "e-mail confirmado"
 expect_eq "$(sql "select channel_confirmed_at is not null from public.claims where id='$(uid 99001003)'")" "t" "POST confirma o canal por e-mail"
-ab p open "$LINK" >/dev/null; sleep 1.5; clickbtn p "Confirmar e-mail da escola"; wait_text p "já foi confirmado" 15 && ok "reuso do link: já confirmado" || bad "reuso do link" ""
+ab p open "$LINK" >/dev/null; sleep 1.5; clickbtn p "Confirmar e-mail da escola"; wait_text p "já foi confirmado" 15
 echo "== resultado fase 2: $PASS ok, $FAIL falhas"
 exit $FAIL

@@ -14,7 +14,7 @@ export function ClaimLayout({ inep, title, crumb, children }: { inep: string; ti
   return (
     <div className="flex min-h-dvh flex-1 flex-col">
       <header className="flex items-center justify-between px-6 py-5 lg:px-10">
-        <Link href="/" aria-label="ListaCerta, início" className="flex"><Logo variant="horizontal" height={32} /></Link>
+        <Link href="/" aria-label="ListaCerta, início" className="block w-[142px]"><Logo variant="horizontal" height={32} /></Link>
         <Link href={`/escolas/${inep}`} className="text-[14px] font-extrabold">Cancelar</Link>
       </header>
       <main className="mx-auto flex w-full max-w-[1040px] flex-1 flex-col gap-5 px-6 pb-12 lg:px-10">

@@ -16,7 +16,7 @@ export type ClaimFlowActions = { upload: Act; remove: Act; submit: Act; request:
 export function ClaimFlow({ inep, claim, actions }: { inep: string; claim: ClaimStatusView; actions: ClaimFlowActions }) {
   const token = claim.method !== "documents";
   const needsDocs = !token && (claim.status === "submitted" || claim.status === "insufficient_evidence");
-  const needsToken = token && (claim.status === "submitted" || claim.status === "token_expired" || (claim.status === "awaiting_verification" && !claim.channelConfirmedAt));
+  const needsToken = token && (claim.status === "submitted" || claim.status === "token_expired" || claim.status === "awaiting_verification");
   return (
     <div className="flex flex-col gap-5">
       <ClaimStatusBadge status={claim.status} />
@@ -24,6 +24,11 @@ export function ClaimFlow({ inep, claim, actions }: { inep: string; claim: Claim
       <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">{STATUS_HINT[claim.status]}</p>
       {claim.decisionReason && (claim.status === "rejected" || claim.status === "insufficient_evidence" || claim.status === "approved") ? (
         <p className="bg-campo rounded-campo px-4 py-3 text-[14px] font-semibold">Motivo: {claim.decisionReason}</p>
+      ) : null}
+      {token && claim.status !== "rejected" ? (
+        <p data-channel-status={claim.channelConfirmedAt ? "confirmed" : "pending"} className="text-texto-2 text-[13px] font-extrabold">
+          {claim.channelConfirmedAt ? "Canal: confirmado" : "Canal: aguardando confirmação"}
+        </p>
       ) : null}
       <ClaimTimeline events={claim.events} status={claim.status} />
       {needsDocs ? (

@@ -13,6 +13,7 @@ import { loginPath } from "@/features/claims/action-support";
 import { ROLE_BLOCK_MESSAGE } from "@/features/claims/messages";
 import { getClaimStatusView, getMyClaimForSchool, getSchoolClaimContext } from "@/features/claims/queries";
 import { PRIVACY_TEXT_VERSION } from "@/features/claims/schemas";
+import { claimStep } from "@/features/claims/steps";
 
 import { createClaimAction, removeEvidenceAction, requestTokenAction, submitClaimAction, uploadEvidenceAction } from "./actions";
 import { confirmTokenAction } from "./confirmar/actions";
@@ -23,7 +24,6 @@ export const metadata: Metadata = { title: "Reivindicar escola · ListaCerta", r
 
 type Props = { params: Promise<{ inep: string }>; searchParams: Promise<{ nova?: string }> };
 const STEPS = ["Pedido", "Verificação", "Análise"] as const;
-const stepFor = (status: string | null) => (status === null ? 1 : status === "submitted" || status === "token_expired" || status === "insufficient_evidence" ? 2 : 3);
 
 export default async function ClaimPage({ params, searchParams }: Props) {
   const { inep } = await params;
@@ -51,7 +51,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
 
   return (
     <ClaimLayout inep={inep} title={showForm ? "Reivindicar escola" : "Sua reivindicação"} crumb={crumb}>
-      <ClaimStepper steps={STEPS} current={showForm ? 1 : stepFor(view?.status ?? null)} />
+      <ClaimStepper steps={STEPS} current={showForm ? 1 : claimStep(view)} />
       <SchoolSummaryCard school={school} />
       {showForm ? (
         context.blockedReason ? (

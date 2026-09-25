@@ -68,7 +68,7 @@ export function EvidenceUploader({ inep, claimId, evidence, evidenceNote, editab
                 <span className="block truncate">{e.originalName}</span>
                 <span className="text-texto-3 text-[12px] font-semibold">{formatBytes(e.sizeBytes)}</span>
               </span>
-              <ActionForm action={remove} submitLabel="Remover" pendingLabel="Removendo..." variant="danger" className="flex items-center">
+              <ActionForm action={remove} submitLabel="Remover" ariaLabel={`Remover ${e.originalName}`} pendingLabel="Removendo..." variant="danger" className="flex items-center">
                 <input type="hidden" name="inep" value={inep} />
                 <input type="hidden" name="evidenceId" value={e.id} />
               </ActionForm>

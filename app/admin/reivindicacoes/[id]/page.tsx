@@ -6,31 +6,20 @@ import { DemoBadge } from "@/components/admin/DemoBadge";
 import { channelLine } from "@/components/claims/ClaimQueueCard";
 import { ClaimStatusBadge } from "@/components/claims/ClaimStatusBadge";
 import { ClaimTimeline } from "@/components/claims/ClaimTimeline";
-import { DecisionForm, type DecisionOption } from "@/components/claims/DecisionForm";
+import { DecisionForm } from "@/components/claims/DecisionForm";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
+import { decisionOptions } from "@/features/claims/decision";
 import { formatBytes, formatDate } from "@/features/claims/format";
 import { METHOD_LABEL } from "@/features/claims/messages";
 import { getClaimForAdmin } from "@/features/claims/queries";
 import { uuidSchema } from "@/features/claims/schemas";
-import { canTransition } from "@/features/claims/state";
 import type { AdminClaimView } from "@/features/claims/types";
 
 import { decideClaimAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Reivindicação · ListaCerta" };
-
-/** Aprovar exige canal confirmado (token) ou ao menos um arquivo (documentos) além da transição permitida. */
-export function decisionOptions(c: AdminClaimView): DecisionOption[] {
-  const missing = c.method === "documents" ? (c.evidence.length === 0 ? "Falta evidência: nenhum arquivo enviado." : null) : c.channelConfirmedAt ? null : "Falta confirmar o canal da escola.";
-  const wrong = (to: "approved" | "insufficient_evidence" | "rejected") => (canTransition("admin", c.status, to) ? undefined : "Indisponível neste estado da reivindicação.");
-  return [
-    { to: "approved", allowed: !wrong("approved") && !missing, reason: wrong("approved") ?? missing ?? undefined },
-    { to: "insufficient_evidence", allowed: !wrong("insufficient_evidence"), reason: wrong("insufficient_evidence") },
-    { to: "rejected", allowed: !wrong("rejected"), reason: wrong("rejected") },
-  ];
-}
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { user } = await requireAccess("/admin/reivindicacoes");

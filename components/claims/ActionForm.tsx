@@ -11,6 +11,8 @@ type Props = {
   /** `disabled` desliga o botão; `disabledReason` aparece ao lado (nunca um botão mudo). */
   disabled?: boolean;
   disabledReason?: string;
+  /** Nome acessível do botão quando o rótulo visível é ambíguo (ex.: "Remover" em uma lista). */
+  ariaLabel?: string;
   variant?: "primary" | "outline" | "danger";
   className?: string;
   children?: ReactNode;
@@ -23,7 +25,7 @@ const BUTTON: Record<NonNullable<Props["variant"]>, string> = {
 };
 
 /** Formulário de Server Action com estado (`useActionState`) e mensagem fixa de sucesso/erro. */
-export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, variant = "primary", className, children }: Props) {
+export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, ariaLabel, variant = "primary", className, children }: Props) {
   const [state, formAction, pending] = useActionState(action, IDLE);
   return (
     <form action={formAction} className={className ?? "flex flex-col gap-3"}>
@@ -40,6 +42,7 @@ export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabl
       ) : null}
       <button
         type="submit"
+        aria-label={ariaLabel}
         disabled={disabled || pending}
         className={`rounded-botao focus-visible:outline-verde-fundo flex h-[52px] items-center justify-center px-6 text-base font-extrabold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 ${BUTTON[variant]}`}
       >

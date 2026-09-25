@@ -34,7 +34,7 @@ export const DEMO_CLAIM_PLANS: readonly DemoClaimPlan[] = [
   },
 ];
 
-/** O seed nunca roda fora de local/staging: não existe flag para produção. */
+/** O seed nunca roda fora de local/staging. */
 export type SeedArgs = { allowProduction: false };
 
 export function parseSeedArgs(argv: string[]): SeedArgs {
@@ -54,7 +54,7 @@ export function assertExistingClaimMatches(plan: DemoClaimPlan, actual: Existing
   }
   if (problems.length > 0) {
     throw new Error(
-      `Reivindicação demo ${plan.inep} existe em estado divergente: ${problems.join("; ")}. Um seed anterior pode ter falhado no meio ou o E2E já decidiu; rode pnpm db:reset (local) e o seed de novo.`,
+      `Reivindicação demo ${plan.inep} existe em estado divergente: ${problems.join("; ")}. Um seed anterior pode ter falhado no meio ou o E2E já decidiu; no banco local rode pnpm db:reset e o seed de novo; no staging corrija ou remova o pedido demo divergente antes.`,
     );
   }
 }

@@ -3,7 +3,7 @@
  * documentos (com o PDF fictício no bucket privado) e uma recusada com motivo, de contas @listacerta.test.
  * NUNCA aprova. Idempotente: pedido existente só vale se o estado bate com o plano; senão erro claro.
  * Exige `pnpm import:inep tests/fixtures/inep-demo.csv --demo` antes e as contas do supabase/seed.sql.
- * Uso: pnpm seed:demo-claims (sem opções; não há flag para produção). Só roda em banco local ou no staging.
+ * Uso: pnpm seed:demo-claims (sem opções). Só roda em banco local ou no staging.
  */
 import { readFile } from "node:fs/promises";
 
@@ -30,7 +30,7 @@ async function userIdByEmail(client: SupabaseClient, email: string): Promise<str
   const { data, error } = await client.auth.admin.listUsers({ page: 1, perPage: 200 });
   if (error) throw new Error("Não foi possível listar usuários de teste.");
   const user = data.users.find((u) => u.email === email);
-  if (!user) throw new Error(`Conta ${email} não encontrada: rode o supabase/seed.sql (pnpm db:reset).`);
+  if (!user) throw new Error(`Conta ${email} não encontrada: crie as contas de teste (supabase/seed.sql; no banco local, pnpm db:reset; no staging, aplique o seed de contas antes).`);
   return user.id;
 }
 

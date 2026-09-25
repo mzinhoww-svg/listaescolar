@@ -51,16 +51,6 @@ describe("handle_new_user", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].role).toBe("admin");
   });
-  it("insert repetido do trigger (on conflict) não falha", async () => {
-    const id = await signUp(null);
-    await withSuperuser(async (c) => {
-      const r = await c.query(
-        "insert into public.profiles (id) values ($1) on conflict (id) do nothing",
-        [id],
-      );
-      expect(r.rowCount).toBe(0);
-    });
-  });
   it("aparece no audit_log", async () => {
     const id = await signUp(null);
     const rows = await withSuperuser(

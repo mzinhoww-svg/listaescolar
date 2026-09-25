@@ -35,3 +35,14 @@ const tokensSchema = z.object({
 export type Tokens = z.infer<typeof tokensSchema>;
 
 export const tokens: Tokens = tokensSchema.parse(raw);
+
+/** Cores de estado da UI (selos e avisos), fora do tokens.json da marca; espelhadas em app/globals.css (teste de drift). */
+export const stateColors = {
+  "aviso-fundo": "#FDE9CC",
+  "aviso-texto": "#7A4A00",
+  "erro-fundo": "#FBDADA",
+  "erro-texto": "#8A1F1F",
+  "demo-fundo": "#FFF0B8",
+  "demo-texto": "#5C4700",
+  "linha-tracejada": "#BFB8A8",
+} as const;

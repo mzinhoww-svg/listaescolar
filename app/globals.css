@@ -10,6 +10,13 @@
   --texto-3: #5a6575;
   --linha: #e6e2d8;
   --campo: #ece8de;
+  --aviso-fundo: #fde9cc;
+  --aviso-texto: #7a4a00;
+  --erro-fundo: #fbdada;
+  --erro-texto: #8a1f1f;
+  --demo-fundo: #fff0b8;
+  --demo-texto: #5c4700;
+  --linha-tracejada: #bfb8a8;
   --radius-card: 24px;
   --radius-botao: 999px;
   --radius-campo: 14px;
@@ -25,6 +32,13 @@
   --color-texto-3: var(--texto-3);
   --color-linha: var(--linha);
   --color-campo: var(--campo);
+  --color-aviso-fundo: var(--aviso-fundo);
+  --color-aviso-texto: var(--aviso-texto);
+  --color-erro-fundo: var(--erro-fundo);
+  --color-erro-texto: var(--erro-texto);
+  --color-demo-fundo: var(--demo-fundo);
+  --color-demo-texto: var(--demo-texto);
+  --color-linha-tracejada: var(--linha-tracejada);
   --radius-card: var(--radius-card);
   --radius-botao: var(--radius-botao);
   --radius-campo: var(--radius-campo);

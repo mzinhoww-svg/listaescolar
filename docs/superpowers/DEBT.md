@@ -86,7 +86,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-049 | ledger.md (Ruling de E2E local); e2e/S00 | Nenhum E2E rodou no preview da Vercel (preview protegido); a infraestrutura da Vercel não é coberta | alta | S20 (humano libera o preview) | aberta |
+| D-049 | ledger.md (Ruling de E2E local); e2e/S00 | Nenhum E2E rodou no preview da Vercel: a proteção foi desativada em 2026-09-25 (Ruling de previews públicos) e o E2E de cada fatia passa a rodar no preview após o primeiro deploy verde; enquanto isso vale o E2E local | alta | Orquestrador (a cada fatia) → S20 | em andamento |
 | D-050 | ledger.md (ADR-004, itens 7 a 10); PR #8 | E2E parcial até a S11: fluxos ponta a ponta com listas reais (lista → carrinho → lead) não exercitados | alta | S11 | aberta |
 | D-051 | ledger-dados S03 T3 e S06 T3 | `agent-browser upload` trava o renderer; E2E injeta arquivo por `DataTransfer`, sem exercitar o seletor real | baixa | S20 | aberta |
 | D-052 | ledger-dados S06 revisão final | Reenvio por `add_file` no E2E da S06 não confirma o fim do upload (flakiness) | baixa | S18 | aberta |
@@ -107,12 +107,12 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-058 | checks dos PRs #4 a #17 | Deploy de preview da Vercel falha em todos os PRs desde o #4 (variáveis `NEXT_PUBLIC_SUPABASE_*` ausentes no projeto) | alta | Humano (antes da S11) | aberta |
-| D-059 | ledger.md (S01, S02) | Pepper do IP de auditoria (`app.audit_ip_pepper`) não configurado; sem ele `ip_hash` fica nulo; validar cabeçalho `x-forwarded-for` no staging | alta | Humano / S20 | aberta |
-| D-060 | ledger-pipeline S07 T2; PR #14 | Edge Function `ocr-worker` sem deploy, sem agendamento pg_cron/pg_net (fora de migration, com Vault) e sem secrets (`WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_*`) | alta | Humano / S11 | aberta |
+| D-058 | checks dos PRs #4 a #17; verificação de 2026-09-25 | Deploy de preview da Vercel falhava desde o PR #4 (`NEXT_PUBLIC_SUPABASE_*` ausentes). Resolvido: o humano criou as variáveis no projeto `listaescolare` (Preview, Production e Development) e os deploys de preview (S11 `32845a8`; `chore/staging-ops-indexing` `2b79000`) e de produção da `main` (`02dfe00`) ficaram READY; verificado por `curl` em 2026-09-25: o preview responde 200 sem login e com `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet` em `/`, `/sobre`, `/robots.txt` e `/escolas` | alta | Orquestrador | resolvida em 2026-09-25 (variáveis criadas; deploys READY) |
+| D-059 | ledger.md (S01, S02); verificação de 2026-09-25 | Pepper do IP de auditoria: o Supabase hospedado NÃO permite `alter database … set app.audit_ip_pepper` ao papel `postgres` (permission denied), então o GUC não pode ser definido. Criado o segredo `audit_ip_pepper` no Vault do staging (valor gerado no banco); falta a S11 (0601) fazer `audit_row_change` ler o pepper do Vault (com fallback ao GUC) e validar `x-forwarded-for` no staging; na produção, gerar outro pepper | alta | S11 (0601) / S20 | em andamento |
+| D-060 | ledger-pipeline S07 T2; PR #14; verificação de 2026-09-25 | Edge Function `ocr-worker` no staging. Resolvido em 2026-09-25: função implantada pelo MCP (v1, `verify_jwt=false`, 31 arquivos); `pg_cron`/`pg_net`; segredos `ocr_worker_url`, `ocr_worker_secret` e `audit_ip_pepper` no Vault; o humano redefiniu o `WORKER_SHARED_SECRET` (mesmo valor na função, no Vault, no `.env.local` e na Vercel); tick de teste devolveu 200 `{status: ok, read: 0, sweep: {found: 0}}` e o job `ocr-worker-tick` foi ATIVADO (`cron.alter_job(1, active := true)`, a cada minuto, `timeout_milliseconds` 120000). Resta o teste ponta a ponta no preview (link mágico + envio processado pelo worker) | alta | Orquestrador | resolvida em 2026-09-25 (tick 200; job ativo) |
 | D-061 | ledger.md (S01) | Histórico remoto de migrations do staging usa timestamps e nomes diferentes dos arquivos; reconciliar antes da S20 | média | S20 | aberta |
 | D-062 | ledger-comercio S12 T2 | Formato do link de afiliado do Mercado Livre (`matt_tool`/`matt_word`) não confirmado | média | Humano / S20 | aberta |
-| D-063 | ledger.md (S02) | Supabase Auth hospedado sem Site URL/redirects/templates/SMTP: o link mágico só funciona no mesmo navegador | alta | Humano / S20 | aberta |
+| D-063 | ledger.md (S02) | Supabase Auth hospedado: o humano configurou em 2026-09-25 Site URL, Redirect URLs (incl. `https://listaescolare-*.vercel.app/**`) e os templates `magic_link` e `confirmation`; falta validar o link mágico em outro navegador no preview e configurar SMTP próprio antes de produção (o SMTP padrão do Supabase tem limite de envio) | média | Orquestrador (validar) / S20 (SMTP) | em andamento |
 | D-064 | ledger-pipeline S07 T3 | `bodySizeLimit` de 11 MB divergia do teto da Vercel | média | S07 | resolvida em S07 onda final (teto único de 4 MB) |
 | D-065 | ledger-pipeline S09 (M-2) | `ocr-worker`: o ramo sem pipeline responde 500 `misconfigured`/`pipeline_unavailable` mesmo varrendo publicação; sem regressão em deploys hospedados | baixa | S11 | aberta |
 | D-066 | ledger-pipeline S09 (M-7) | Quando a porta publica e o envio já não está `approved` (`not_approved`), a versão fica órfã sem linha persistente própria; só alerta `published_not_recorded` | média | S11 | aberta |
@@ -122,6 +122,10 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-070 | ledger-pipeline S09 | `PortError` tipado (`transient`) obrigatório na porta real; versão real idempotente por `list_versions.submission_id`, perfil `system` e ajuste na 0600 (`p_actor_id` obrigatório) | alta | S11 | aberta |
 | D-071 | ledger-pipeline S09; OBRIGAÇÃO da S10 | `ReviewSummary` mostra "Publicada automaticamente" para qualquer status `published`; deve vir da linha `publication:published` automática (`actor_id` nulo), não só do status (aprovação humana também vira `published`) | alta | S10 | aberta |
 | D-072 | PR #20 (CI); ledger-comercio S27 (assets/fonts) | `pnpm build` do CI depende de `next/font/google` (busca Plus Jakarta Sans no Google Fonts): falhou uma vez ao obter a fonte do Google Fonts no build no PR #20 (rerun passou). Hospedar a fonte localmente (a S27 já commitou `assets/fonts` para a OG image) | média | S19 / S18 | aberta |
+| D-074 | Ruling de previews públicos (ledger.md) | Previews da Vercel públicos com o Supabase de staging (dados demo): reativar a Vercel Authentication (ou equivalente) ANTES de qualquer dado real; hoje só `X-Robots-Tag: noindex` os protege da indexação | alta | S20 (checklist de go-live; humano reativa) | aberta |
+| D-075 | Ruling de indexamento (ledger.md) | O deploy "de produção" da Vercel (`main`) aponta para o staging e seria indexável: passou a exigir `SITE_INDEXING=1` (além de `VERCEL_ENV=production`) para robots, sitemap e remoção do `X-Robots-Tag`; o humano liga `SITE_INDEXING=1` só no go-live | alta | S20 (checklist de go-live) | aberta |
+| D-076 | verificação de 2026-09-25 (env da Vercel) | Chaves `ASAAS_*` existem no projeto Vercel (PSP Asaas escolhido) e em `.env.local`, mas a S21 proíbe dinheiro real e credencial no código: usar só sandbox/fake até o go-live e revisar o adapter Pix (planejado genérico BACEN) contra a API do Asaas | média | S21/S23 | aberta |
+| D-077 | E2E de 2026-09-25 (staging, `listaescolare.vercel.app`) | Leitura por IA falha no staging com `http_401` do OpenRouter na `ocr-worker` (chave ausente/inválida nos secrets da função) e um `provider_timeout` de ~9 s na primeira decisão (provável leitura inline do app na Vercel); o teste de ponta a ponta não chegou aos itens lidos. Login por link mágico e envio de lista passaram (o link gerado por `admin.generateLink` precisa de `type=email` no `verifyOtp`, como nos templates; `type=magiclink` cai em `?erro=codigo`, sem ser bug do produto). Dados de teste no staging: usuário `e2e+worker@listacerta.invalid` e um envio `rejected` | alta | Humano (secret `OPENROUTER_KEY`) → orquestrador | aberta (ver PROGRESS > Aguardando humano) |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -129,7 +133,7 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 12 | 0 | 12 |
-| média | 25 | 4 | 29 |
+| alta | 12 | 2 | 14 |
+| média | 27 | 4 | 31 |
 | baixa | 30 | 1 | 31 |
-| **Total** | **67** | **5** | **72** |
+| **Total** | **69** | **7** | **76** |

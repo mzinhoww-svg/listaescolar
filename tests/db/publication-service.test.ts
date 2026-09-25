@@ -5,7 +5,7 @@ import { decideListPublication, resumePublication, type PublicationDeps } from "
 import { runPublicationSweep } from "../../supabase/functions/_shared/publication/sweep";
 import { createRpcPublicationStore } from "../../supabase/functions/_shared/publication/rpc-store";
 import type { ListPublisher, PublishRequest, PublishResult } from "../../supabase/functions/_shared/publication/ports";
-import { cleanupUsers, IDS, seedUsers, withSuperuser } from "./helpers";
+import { cleanupUsers, ensureSchool, IDS, seedUsers, withSuperuser } from "./helpers";
 import { goodResult } from "../publication/helpers";
 
 const SCHOOL = "50000000-0000-4000-8000-0000000000d1";
@@ -29,6 +29,8 @@ const rpc = {
       publication_complete: ["select public.publication_complete($1::uuid, $2::jsonb) as data", [args.p_submission_id, JSON.stringify(args.p_result)]],
       publication_fail: ["select public.publication_fail($1::uuid, $2::text) as data", [args.p_submission_id, args.p_reason]],
       publication_expire: ["select public.publication_expire($1::uuid, $2::int) as data", [args.p_submission_id, args.p_min_age_seconds]],
+      publication_context: ["select public.publication_context($1::jsonb) as data", [JSON.stringify(args.p_query)]],
+      list_publish_from_pipeline: ["select public.list_publish_from_pipeline($1::jsonb) as data", [JSON.stringify(args.p_request)]],
       publication_pending: ["select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) as data from public.publication_pending($1::int, $2::int) t", [args.p_limit, args.p_min_age_seconds]],
     };
     const q = Q[fn];
@@ -53,6 +55,7 @@ async function seed(opts: { source?: "school" | "parent"; status?: string; resul
   return withSuperuser(async (c) => {
     const id = randomUUID();
     const consent = randomUUID();
+    await ensureSchool(c, SCHOOL);
     await c.query("insert into public.consents (id, profile_id, purpose, text_version) values ($1, $2, 'list_upload', 'v1')", [consent, IDS.school_member]);
     await c.query(
       `insert into public.list_submissions (id, submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type, size_bytes, consent_id)
@@ -163,10 +166,13 @@ describe("decideListPublication contra o banco real (portas em memória)", () =>
     expect((await decideListPublication(id2, makeDeps())).status).toBe("auto_published");
   });
 
-  it("sem portas (produção até a S11): human_review registrado com publisher_unavailable e context_unavailable", async () => {
+  it("produção (S11): as portas são REAIS, nunca nulas: a escola não verificada vira human_review por regra, não por porta ausente", async () => {
     const id = await seed();
     await decideListPublication(id, createPublicationDeps({ env: { APP_ENV: "production", FAKE_PUBLICATION_FIXTURE: FIXTURE }, rpc, clock: systemClock }));
-    expect((await rows(id))[0].reasons).toEqual(expect.arrayContaining(["publisher_unavailable", "context_unavailable"]));
+    const reasons = (await rows(id))[0].reasons as string[];
+    expect(reasons).not.toContain("publisher_unavailable");
+    expect(reasons).not.toContain("context_unavailable");
+    expect(reasons.length).toBeGreaterThan(0);
   });
 
   it("varredor: decide o envio parado e retoma o approved (porta transitória, depois ok)", async () => {

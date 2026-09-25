@@ -1,13 +1,15 @@
-// Composição da publicação a partir do ambiente. Único lugar que liga as portas em memória: só com
-// FAKE_PUBLICATION_FIXTURE válido E APP_ENV local|development (NÃO preview/staging: o staging é o único Supabase real
-// e `ai_decisions` é append-only, então uma publicação falsa ali não se desfaz). Mais estrita que a trava do `fake`
-// da S08. Sem isso (produção, preview e staging até a S11) as portas são nulas e todo envio vai a human_review.
+// Composição da publicação a partir do ambiente. Desde a S11 as portas são REAIS sempre que há cliente de serviço (`rpc`):
+// ListPublisher = `list_publish_from_pipeline`, PublicationContextReader = `publication_context` (rpc-ports.ts). As portas
+// em memória só existem com FAKE_PUBLICATION_FIXTURE válido E APP_ENV local|development (NÃO preview/staging: o staging é o
+// único Supabase real e `ai_decisions` é append-only, então uma publicação falsa ali não se desfaz) e vencem as reais nesse
+// caso explícito (fixtures de E2E com escolas que não existem no banco). Em staging e produção nunca há porta nula.
 // O publicador em memória é UM por processo e por fixture (memoizado): app e worker são processos distintos e não
 // compartilham estado; dentro de cada um, versão anterior, lista atual e idempotência valem entre requisições.
 import { type EnvLike, isProductionEnv } from "../ai/env.ts";
 import { createValidatedRpc, type RawRpc } from "../ai/rpc.ts";
 import type { PublicationDeps } from "./decide.ts";
 import { MemoryListPublisher, MemoryPublicationContextReader, parsePublicationFixture } from "./memory.ts";
+import { createRpcPublicationPorts } from "./rpc-ports.ts";
 import { createRpcPublicationStore } from "./rpc-store.ts";
 import { createPublicationSettings } from "./settings.ts";
 
@@ -46,12 +48,13 @@ export function createPublicationDeps(o: {
   onAlert?: PublicationDeps["onAlert"];
 }): PublicationDeps {
   const fixture = publicationPortsAllowed(o.env) ? parsePublicationFixture(o.env.FAKE_PUBLICATION_FIXTURE) : null;
-  const publisher = fixture ? sharedPublisher(o.env.FAKE_PUBLICATION_FIXTURE ?? "") : null;
+  const memory = fixture ? sharedPublisher(o.env.FAKE_PUBLICATION_FIXTURE ?? "") : null;
+  const real = fixture ? null : createRpcPublicationPorts(o.rpc, { now: () => new Date(o.clock.now()) });
   return {
     store: createRpcPublicationStore(o.rpc),
     settings: createPublicationSettings({ rpc: createValidatedRpc(o.rpc), clock: o.clock }),
-    context: fixture ? new MemoryPublicationContextReader(fixture, publisher ?? undefined) : null,
-    publisher,
+    context: fixture ? new MemoryPublicationContextReader(fixture, memory ?? undefined) : (real?.context ?? null),
+    publisher: memory ?? real?.publisher ?? null,
     clock: o.clock,
     ...(o.onAlert ? { onAlert: o.onAlert } : {}),
   };

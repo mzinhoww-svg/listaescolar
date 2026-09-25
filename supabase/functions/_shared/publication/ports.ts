@@ -36,18 +36,23 @@ export type PublishItem = {
   category: string;
   quantity: number;
   unit: string | null;
-  confidence: number;
+  /** `null` = sem número da extração (item revisado/adicionado pela equipe): nunca inventar 1; a S11 decide a exibição. */
+  confidence: number | null;
+  /** Aditivo (S10): `reviewed` = conferido/editado/adicionado pela equipe; ausente equivale a `extracted` (publicação automática). */
+  origin?: "extracted" | "reviewed";
 };
 
 export type PublishRequest = {
-  /** = submissionId: a porta é idempotente por esta chave (repetir devolve o mesmo resultado). */
+  /** Publicação automática: = submissionId. Publicação humana (S10): = id da versão aprovada (`review_versions.id`). A porta é idempotente por esta chave (repetir devolve o mesmo resultado). */
   idempotencyKey: string;
   submissionId: string;
   schoolId: string;
   gradeSlug: string;
   schoolYear: number;
-  source: "school_upload";
-  actor: { kind: "system" };
+  /** `parent_upload` só na publicação humana de um envio de família (o motor automático nunca publica lista de pai). */
+  source: "school_upload" | "parent_upload";
+  /** `admin`: publicação humana (S10); o perfil vem da sessão do admin. */
+  actor: { kind: "system" } | { kind: "admin"; profileId: string };
   items: PublishItem[];
   /** Abortado no teto da chamada (45 s ou o que resta do tick): a implementação deve parar o que puder. */
   signal?: AbortSignal;

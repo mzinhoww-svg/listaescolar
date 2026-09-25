@@ -7,13 +7,15 @@ vi.mock("@/features/schools/search/sitemap", async (orig) => ({
 }));
 
 describe("app/sitemap", () => {
-  const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, vercel: process.env.VERCEL_ENV, url: process.env.VERCEL_URL };
+  const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, vercel: process.env.VERCEL_ENV, url: process.env.VERCEL_URL, idx: process.env.SITE_INDEXING };
   beforeEach(() => {
     listMock.mockReset();
     process.env.NEXT_PUBLIC_SITE_URL = "https://listacerta.example";
+    process.env.VERCEL_ENV = "production";
+    process.env.SITE_INDEXING = "1";
   });
   afterEach(() => {
-    for (const [k, v] of [["NEXT_PUBLIC_SITE_URL", saved.site], ["VERCEL_ENV", saved.vercel], ["VERCEL_URL", saved.url]] as const) {
+    for (const [k, v] of [["NEXT_PUBLIC_SITE_URL", saved.site], ["VERCEL_ENV", saved.vercel], ["VERCEL_URL", saved.url], ["SITE_INDEXING", saved.idx]] as const) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
@@ -29,6 +31,13 @@ describe("app/sitemap", () => {
     expect(urls).toContain("https://listacerta.example/escolas/51000002");
     expect(urls.every((u) => u.startsWith("https://listacerta.example/"))).toBe(true);
     expect(urls.some((u) => /\/l\/|papelaria|\/escolas\/\d{8}\/|\/conta|\/admin/.test(u))).toBe(false);
+  });
+
+  it("sem SITE_INDEXING=1 (staging por trás do deploy de produção) devolve [] e nem consulta o banco", async () => {
+    delete process.env.SITE_INDEXING;
+    const { default: sitemap } = await import("@/app/sitemap");
+    expect(await sitemap()).toEqual([]);
+    expect(listMock).not.toHaveBeenCalled();
   });
 
   it("sem base (deploy sem origem) devolve []", async () => {

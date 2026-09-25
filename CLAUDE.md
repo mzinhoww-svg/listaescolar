@@ -60,6 +60,8 @@ Todas as decisões são do Claude: produto, UX, arquitetura, banco, bibliotecas,
 
 Mesmo nesses casos: deixar tudo pronto, registrar em `docs/superpowers/PROGRESS.md` o que falta e continuar as outras fatias em paralelo, sem ficar parado.
 
+Bloqueio do classificador (merge, segredo, credencial ou qualquer ação barrada): não esperar pelo humano nem repetir por outro caminho. Registrar em `docs/superpowers/PROGRESS.md`, seção "Aguardando humano" (o que foi barrado, o comando ou passo exato e o PR/estado que fica pronto), deixar o PR pronto e seguir para a próxima tarefa ou fatia. O humano resolve a fila quando passar por aqui.
+
 ### Fluxo de mudança (vale também para docs e para este arquivo)
 Toda mudança, inclusive no CLAUDE.md, segue: branch, commit, PR, revisão e só então merge (squash). Nunca push direto na `main`, nunca force push. Sem revisão registrada no PR, não há merge.
 

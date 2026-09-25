@@ -6,6 +6,7 @@ import { submitListAction } from "@/app/enviar-lista/actions";
 import { clientCheck, formatSize } from "@/components/submissions/clientChecks";
 import { ConsentField } from "@/components/submissions/ConsentField";
 import { BoltIcon, CheckIcon, FileIcon, UploadIcon } from "@/components/submissions/icons";
+import { LinkedSchoolSelect, type LinkedSchool } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
 import { ACCEPT_ATTR } from "@/features/submissions/copy";
 import { idleState } from "@/features/submissions/form-schema";
@@ -17,7 +18,7 @@ const TIPS = [
 ];
 
 /** Escola08-UploadPDF (1280×800): área de envio, dados da lista e dicas. Sem porcentagem inventada. */
-export function SchoolUploadForm({ schoolId, years, defaultYear }: { schoolId: string; years: number[]; defaultYear: number }) {
+export function SchoolUploadForm({ schools, initialSchoolId, years, defaultYear }: { schools: readonly LinkedSchool[]; initialSchoolId: string | null; years: number[]; defaultYear: number }) {
   const [state, action, pending] = useActionState(submitListAction, idleState);
   const [picked, setPicked] = useState<{ name: string; size: number } | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
@@ -46,7 +47,6 @@ export function SchoolUploadForm({ schoolId, years, defaultYear }: { schoolId: s
 
   return (
     <form action={action} onSubmit={onSubmit} noValidate className="grid items-start gap-5 lg:grid-cols-[1fr_374px]">
-      <input type="hidden" name="schoolId" value={schoolId} />
       <div className="flex flex-col gap-5">
         <section
           aria-label="Área de envio"
@@ -95,6 +95,7 @@ export function SchoolUploadForm({ schoolId, years, defaultYear }: { schoolId: s
         ) : null}
 
         <section aria-label="Dados da lista" className="flex max-w-[560px] flex-col gap-4">
+          <LinkedSchoolSelect schools={schools} initialId={initialSchoolId} />
           <SeriesFields years={years} defaultYear={defaultYear} />
           <ConsentField invalid={message !== null && /consentimento/i.test(message)} />
           <div aria-live="polite">

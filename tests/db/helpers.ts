@@ -149,6 +149,12 @@ export async function seedUsers(): Promise<void> {
 export async function cleanupUsers(): Promise<void> {
   await withSuperuser(async (client) => {
     await client.query("delete from auth.users where id = any($1::uuid[])", [Object.values(IDS)]);
+    // escolas de fixture (ensureSchool) que ficaram sem envio nem lista: a FK da 0600 impede apagar as em uso
+    await client.query(
+      `delete from public.schools s where s.name = 'Escola Fixture'
+         and not exists (select 1 from public.list_submissions x where x.school_id = s.id)
+         and not exists (select 1 from public.school_lists l where l.school_id = s.id)`,
+    );
   });
 }
 
@@ -410,4 +416,19 @@ export async function purgeLeads(opts: { leadIds?: readonly string[]; requesterI
       throw e;
     }
   });
+}
+
+/**
+ * Garante uma linha em `schools` (S11/0600: list_submissions.school_id agora tem FK). Sem `id`, cria uma escola nova;
+ * com `id`, é idempotente. O INEP sai do próprio id (8 dígitos), sem colidir com os seeds dos testes (51999xxx).
+ */
+export async function ensureSchool(client: Client, id: string = crypto.randomUUID()): Promise<string> {
+  const inep = String(60_000_000 + (Number.parseInt(id.replace(/-/g, "").slice(0, 7), 16) % 39_000_000));
+  await client.query(
+    `insert into public.schools (id, inep, name, normalized_name, network, municipality_id)
+     select $1, $2, 'Escola Fixture', 'escola fixture', 'municipal', m.id from public.municipalities m order by m.ibge_code limit 1
+     on conflict (id) do nothing`,
+    [id, inep],
+  );
+  return id;
 }

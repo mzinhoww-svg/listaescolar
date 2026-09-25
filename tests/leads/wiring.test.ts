@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getCart = vi.fn();
 vi.mock("@/features/cart/repository", () => ({ getCart: (...a: unknown[]) => getCart(...a) }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: async () => ({ data: null, error: null }) }) }));
 vi.mock("@/features/leads/repository", () => ({ createLeadStore: () => ({}) }));
 vi.mock("@/lib/site-url", () => ({ getSiteOrigin: () => "https://listacerta.example" }));
 vi.mock("@/features/cart/service", () => ({ readServiceEnv: () => ({ DEMO_RETAILERS: undefined }) }));
@@ -23,7 +23,7 @@ describe("wiring do serviço de leads", () => {
     });
   });
 
-  it("DEMO desligado: sem leitor de contexto, o pedido falha com list_unavailable", async () => {
+  it("DEMO desligado: o leitor real não conhece a lista (banco sem ela), o pedido falha com list_unavailable", async () => {
     const svc = getLeadService();
     const err = await svc
       .createLead({ userId: USER, role: "parent" } as never, {

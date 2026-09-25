@@ -28,3 +28,7 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: para a S02, o primeiro login cria `profiles` (role parent) por trigger SECURITY DEFINER em `auth.users` — a S01 não dá caminho de auto-criação de perfil de propósito — custo: nenhum.
 - Ruling: pepper do IP e escolha do cabeçalho (x-forwarded-for último vs x-real-ip) validados no staging antes da S20; preferir Supabase Vault ao GUC — custo: baixo.
 - Ruling: migration 0001 aplicada no staging pelo MCP como base_schema em 24/09/2026; advisor: auth_role anon (aceito) e rls_auto_enable (da plataforma, não alterado) — custo: nenhum.
+- Ruling: papel do usuário lido sempre de `profiles` (RLS), nunca de user_metadata do JWT — metadata é editável pelo usuário — custo: uma query por request protegido (cache curto se preciso).
+- Ruling: proxy do Next 16 (`proxy.ts`, sucessor de `middleware.ts`) e função pura `canAccess` compartilhada com os layouts — dupla checagem sem duplicar regra — custo: baixo.
+- Ruling: login com link mágico é o caminho verificável no E2E local (Mailpit); Google OAuth fica codificado e desligado até o humano criar as credenciais no console Google e ativá-las no Supabase — credencial só do humano — custo: nenhum código a refazer.
+- Ruling: `/termos` e `/privacidade` respondem 404 da marca até a S27 (links já existem na tela de login) — as páginas jurídicas pertencem à S27 — custo: nenhum.

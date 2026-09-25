@@ -8,15 +8,15 @@ type Props = {
 };
 
 /**
- * Barra de ações: fixa no rodapé no toque e em telas estreitas (uso com uma mão,
- * fundo Papel com degradê por cima do conteúdo, safe-area do iOS); com mouse em
- * tela larga (`sm` + `pointer-fine`) volta ao fluxo, logo após o conteúdo, para o
- * botão não ficar longe do que a pessoa acabou de ler.
+ * Barra de ações: fixa no rodapé em tela estreita (uso com uma mão no celular,
+ * fundo Papel com degradê por cima do conteúdo, safe-area do iOS); a partir de
+ * `sm` (640px) volta ao fluxo, logo após o conteúdo, para o botão não ficar longe
+ * do que a pessoa acabou de ler.
  */
 export function BarraAcoes({ onPrimario, primarioLabel, primarioDesabilitado, secundario }: Props) {
   if (!primarioLabel && !secundario) return null;
   return (
-    <div className="from-papel via-papel sticky bottom-0 -mx-5 mt-auto bg-gradient-to-t to-transparent px-5 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pointer-fine:static sm:pointer-fine:mx-0 sm:pointer-fine:mt-0 sm:pointer-fine:bg-none sm:pointer-fine:px-0 sm:pointer-fine:pt-2 sm:pointer-fine:pb-0">
+    <div className="from-papel via-papel sticky bottom-0 -mx-5 mt-auto bg-gradient-to-t to-transparent px-5 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:mt-0 sm:bg-none sm:px-0 sm:pt-2 sm:pb-0">
       <div className="flex flex-col items-center gap-3">
         {primarioLabel ? (
           <button

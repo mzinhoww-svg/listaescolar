@@ -5,19 +5,22 @@ import { Logo } from "@/components/brand/Logo";
 const NAV = [
   { href: "/admin", label: "Visão geral" },
   { href: "/admin/importacoes", label: "Importações" },
+  { href: "/admin/papelarias", label: "Papelarias" },
 ] as const;
 
 type Props = {
-  active: "/admin" | "/admin/importacoes";
+  active: "/admin" | "/admin/importacoes" | "/admin/papelarias";
   /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
   email: string | null | undefined;
   breadcrumb: string;
   title: string;
+  /** Ações ao lado do título (busca, voltar). */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 };
 
 /** Casca do admin: barra lateral escura e área de conteúdo, como nas telas Admin02/03. */
-export function AdminShell({ active, email, breadcrumb, title, children }: Props) {
+export function AdminShell({ active, email, breadcrumb, title, actions, children }: Props) {
   const initials = (email ?? "?").slice(0, 2).toUpperCase();
   return (
     <div className="flex min-h-screen flex-1">
@@ -48,9 +51,12 @@ export function AdminShell({ active, email, breadcrumb, title, children }: Props
         )}
       </aside>
       <main className="flex min-w-0 flex-1 flex-col gap-6 px-10 py-9">
-        <header>
-          <p className="text-texto-3 text-[13px] font-semibold">{breadcrumb}</p>
-          <h1 className="text-[32px] leading-[1.1] font-extrabold tracking-[-0.035em]">{title}</h1>
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-texto-3 text-[13px] font-semibold">{breadcrumb}</p>
+            <h1 className="text-[32px] leading-[1.1] font-extrabold tracking-[-0.035em]">{title}</h1>
+          </div>
+          {actions}
         </header>
         {children}
       </main>

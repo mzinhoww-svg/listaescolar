@@ -11,6 +11,9 @@ export default async function Page() {
       <Link href="/admin/importacoes" className="text-verde-fundo mx-auto pb-10 text-[15px] font-extrabold underline">
         Importações de escolas
       </Link>
+      <Link href="/admin/papelarias" className="text-verde-fundo mx-auto pb-10 text-[15px] font-extrabold underline">
+        Papelarias
+      </Link>
     </>
   );
 }

@@ -78,7 +78,7 @@ Produção: nenhuma migration (o projeto não existe).
 ## Pendências humanas (consolidadas)
 
 Ambiente e deploy:
-- Vercel: variáveis de ambiente CONFIGURADAS pelo humano em 2026-09-25 17:31 UTC no projeto `listaescolare` (o conectado ao GitHub; `listaescolar` sem `e` não recebe os deploys). Falta confirmar o primeiro deploy de preview verde (D-058).
+- Vercel: verificado pela API em 2026-09-25 17:58 UTC: o projeto `listaescolare` (o conectado ao GitHub) NÃO tem variáveis de ambiente (a proteção está desativada, confirmado); o projeto `listaescolar` (sem `e`) tem as 4 variáveis só no ambiente Production. Criar no `listaescolare` as variáveis para Preview e Production (D-058); o preview continua falhando no build até lá.
 - Vercel: a proteção dos previews foi DESATIVADA pelo humano em 2026-09-25 (previews públicos; `X-Robots-Tag: noindex` em tudo fora da produção). REATIVAR antes de entrar dado real: checklist da S20 (D-074).
 - Vercel: `CRON_SECRET` (16 caracteres ou mais) nos ambientes e aceite do cron diário `/api/cron/leads-expire` no plano da conta (S14).
 - Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio; canonical, JSON-LD, links de login e do lead, OG, sitemap e QR dependem dele).

@@ -47,3 +47,4 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: layouts protegidos usam `requireAccess` (features/auth/guard.ts) que redireciona a `/403` (200 na navegação direta); o status 403 real vem do proxy — custo: baixo.
 - Ruling: `/auth/confirm` aceita `token_hash` (`type` email|magiclink|signup) e, como fallback, `code` (PKCE, mesmo navegador) — o hospedado usa o template padrão até o humano configurar o painel, e usuário novo recebe o template de confirmação — custo: baixo.
 - Ruling: `getCurrentUser`/`getCurrentRole` usam `cache()` do React e `requireAccess` decide `login` sem sessão e `/403` com sessão sem papel — o gate dos layouts precisa coincidir com o proxy e não multiplicar chamadas ao GoTrue — custo: baixo.
+- Ruling: migration 0002 aplicada no staging pelo MCP como profile_on_signup (staging sem usuários, sem backfill); seed.sql NÃO foi aplicado — advisor sem alertas novos — custo: nenhum.

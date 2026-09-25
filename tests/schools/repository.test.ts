@@ -35,7 +35,7 @@ const gateway: AdminGateway = {
   },
   async selectBatch(id) {
     const r = await client.query(
-      "select id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count from public.import_batches where id = $1",
+      "select id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count,unchanged_count from public.import_batches where id = $1",
       [id],
     );
     return r.rows[0] ?? null;
@@ -87,7 +87,7 @@ describe("repositório real (service_role) + fixture demo", () => {
     const repo = createSchoolsRepository(gateway);
     const r = await run(FIXTURE);
     expect(r).toMatchObject({ alreadyExisted: false, status: "completed", fileErrors: [] });
-    expect(r.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3 });
+    expect(r.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
     const errs = await repo.getErrorRows(r.batchId);
     expect(errs.map((e) => [e.rowNumber, e.action, e.errors[0]?.code])).toEqual([
       [4, "duplicate", "duplicate_inep_in_file"],
@@ -148,6 +148,6 @@ describe("repositório real (service_role) + fixture demo", () => {
     expect(failed.totals.total).toBe(3);
     const resumed = await importInepFile(input, { repo: createSchoolsRepository(gateway), chunkSize: 3 });
     expect(resumed).toMatchObject({ batchId: failed.batchId, alreadyExisted: true, status: "completed" });
-    expect(resumed.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3 });
+    expect(resumed.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
   });
 });

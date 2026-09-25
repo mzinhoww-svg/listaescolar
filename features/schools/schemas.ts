@@ -107,7 +107,7 @@ export function parseInepRow(raw: RawInepRow): ParsedRow {
 // --- Respostas do banco (Zod permissivo em `errors`: lista aberta de {code, message}) ---
 const int = z.number().int().nonnegative();
 export const rowErrorSchema = z.object({ code: z.string(), message: z.string() });
-export const totalsSchema = z.object({ inserted: int, updated: int, duplicate: int, rejected: int });
+export const totalsSchema = z.object({ inserted: int, updated: int, duplicate: int, rejected: int, unchanged: int });
 const statusSchema = z.enum(["pending", "processing", "completed", "failed"]);
 export const claimResponseSchema = z
   .array(z.object({ batch_id: z.string().uuid(), already_exists: z.boolean(), status: statusSchema }))
@@ -121,6 +121,7 @@ export const batchRowSchema = z.object({
   updated_count: int,
   duplicate_count: int,
   rejected_count: int,
+  unchanged_count: int,
 });
 export const errorRowSchema = z.object({
   row_number: z.number().int().positive(),

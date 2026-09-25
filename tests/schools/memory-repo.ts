@@ -47,8 +47,12 @@ export class MemoryRepo implements SchoolsImportRepository {
   }
 
   private totalsOf(b: Batch, only?: number[]): Totals {
-    const t: Totals = { inserted: 0, updated: 0, duplicate: 0, rejected: 0 };
-    for (const [n, r] of b.rows) if (!only || only.includes(n)) t[r.action] += 1;
+    const t: Totals = { inserted: 0, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 };
+    for (const [n, r] of b.rows) {
+      if (only && !only.includes(n)) continue;
+      if (r.action === "duplicate" && r.errors.some((e) => e.code === "already_up_to_date")) t.unchanged += 1;
+      else t[r.action] += 1;
+    }
     return t;
   }
 
@@ -75,7 +79,7 @@ export class MemoryRepo implements SchoolsImportRepository {
       else if (!r.ibge_code || !this.enabled.has(r.ibge_code)) {
         action = "rejected";
         errors = [{ code: "municipality_not_enabled", message: "Município não habilitado" }];
-      } else if ([...b.rows.values()].some((x) => x.inep === r.inep && (x.action === "inserted" || x.action === "updated"))) {
+      } else if ([...b.rows.values()].some((x) => x.inep === r.inep && x.action !== "rejected")) {
         action = "duplicate";
         errors = [{ code: "duplicate_inep_in_file", message: "INEP repetido" }];
       } else {

@@ -53,6 +53,7 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
           updated: b.updated_count,
           duplicate: b.duplicate_count,
           rejected: b.rejected_count,
+          unchanged: b.unchanged_count,
         },
       };
     },
@@ -71,6 +72,7 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
         updated_count: totals.updated,
         duplicate_count: totals.duplicate,
         rejected_count: totals.rejected,
+        unchanged_count: totals.unchanged,
       });
     },
 

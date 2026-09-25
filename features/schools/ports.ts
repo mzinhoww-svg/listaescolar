@@ -6,7 +6,8 @@ export type FileError = { code: string; message: string; column?: string };
 export type BatchStatus = "pending" | "processing" | "completed" | "failed";
 export type RowAction = "inserted" | "updated" | "duplicate" | "rejected";
 
-export type Totals = { inserted: number; updated: number; duplicate: number; rejected: number };
+/** `unchanged`: escola já igual ao arquivo (gravada como duplicate/already_up_to_date, contada à parte). */
+export type Totals = { inserted: number; updated: number; duplicate: number; rejected: number; unchanged: number };
 export type BatchTotals = Totals & { total: number };
 
 export type ClaimInput = { fileHash: string; fileName: string; importedBy: string | null; isDemo: boolean };

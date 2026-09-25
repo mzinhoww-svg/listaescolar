@@ -6,7 +6,7 @@ import { createSchoolsRepository, type AdminGateway } from "./repository";
 import type { SchoolsImportRepository } from "./ports";
 
 const BATCH_COLUMNS =
-  "id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count";
+  "id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count,unchanged_count";
 
 /** Gateway real: supabase-js com a chave secreta (só servidor). */
 export function createSupabaseGateway(client = createAdminClient()): AdminGateway {

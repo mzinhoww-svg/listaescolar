@@ -10,10 +10,10 @@ export type ImportInput = { fileName: string; buffer: Buffer; importedBy: string
 export type ImportDeps = { repo: SchoolsImportRepository; hash?: (b: Buffer) => string; chunkSize?: number };
 
 const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
-const ZERO: Totals = { inserted: 0, updated: 0, duplicate: 0, rejected: 0 };
+const ZERO: Totals = { inserted: 0, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 };
 const withTotal = (t: Totals): BatchTotals => ({
   ...t,
-  total: t.inserted + t.updated + t.duplicate + t.rejected,
+  total: t.inserted + t.updated + t.duplicate + t.rejected + t.unchanged,
 });
 
 function toApplyRow(raw: RawInepRow, rowNumber: number, isDemo: boolean): ApplyRow {
@@ -104,6 +104,7 @@ export async function importInepFile(input: ImportInput, deps: ImportDeps): Prom
       totals.updated += t.updated;
       totals.duplicate += t.duplicate;
       totals.rejected += t.rejected;
+      totals.unchanged += t.unchanged;
     }
   } catch (e) {
     status = "failed";

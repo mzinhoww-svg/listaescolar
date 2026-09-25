@@ -23,7 +23,7 @@ const row = (n: number, inep: string | null, name: string, extra: Row = {}): Row
   ...extra,
 });
 
-type Totals = { inserted: number; updated: number; duplicate: number; rejected: number };
+type Totals = { inserted: number; updated: number; duplicate: number; rejected: number; unchanged: number };
 
 async function newBatch(c: Client): Promise<string> {
   const r = await c.query<{ id: string }>(
@@ -80,7 +80,7 @@ describe("import_apply_rows e import_claim_batch", () => {
     await withClaims("system", async (c) => {
       const b = await newBatch(c);
       const t = await apply(c, b, [row(1, "51000001", "Escola Um")]);
-      expect(t).toEqual({ inserted: 1, updated: 0, duplicate: 0, rejected: 0 });
+      expect(t).toEqual({ inserted: 1, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
       const s = await c.query(
         `select s.verification_status, s.registry_source, s.source_batch_id, s.network, s.normalized_name, s.email,
                 m.ibge_code from public.schools s join public.municipalities m on m.id = s.municipality_id
@@ -115,7 +115,7 @@ describe("import_apply_rows e import_claim_batch", () => {
       await seedSchool(c, "51000001", "Nome Antigo", "verified");
       const b = await newBatch(c);
       const t = await apply(c, b, [row(1, "51000001", "Nome Novo", { address: "Rua Nova, 9" })]);
-      expect(t).toEqual({ inserted: 0, updated: 1, duplicate: 0, rejected: 0 });
+      expect(t).toEqual({ inserted: 0, updated: 1, duplicate: 0, rejected: 0, unchanged: 0 });
       const s = await c.query(
         "select name, normalized_name, address, verification_status, source_batch_id from public.schools where inep = '51000001'",
       );
@@ -130,18 +130,234 @@ describe("import_apply_rows e import_claim_batch", () => {
     });
   });
 
-  it("dados idênticos a escola existente: duplicate (already_up_to_date), sem mudar updated_at", async () => {
+  it("dados idênticos a escola existente: unchanged (already_up_to_date), sem UPDATE nem auditoria de UPDATE", async () => {
     await withClaims("system", async (c) => {
       const b1 = await newBatch(c);
       await apply(c, b1, [row(1, "51000001", "Escola Um")]);
-      await c.query("update public.schools set updated_at = now() - interval '1 day' where inep = '51000001'");
-      const before = await c.query<{ updated_at: Date }>("select updated_at from public.schools where inep = '51000001'");
+      const xminBefore = (await c.query("select xmin::text as x from public.schools where inep = '51000001'")).rows[0]?.x;
       const b2 = await newBatch(c);
       const t = await apply(c, b2, [row(1, "51000001", "Escola Um")]);
-      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 1, rejected: 0 });
-      expect((await actions(c, b2))[1]?.errors[0]?.code).toBe("already_up_to_date");
-      const after = await c.query<{ updated_at: Date }>("select updated_at from public.schools where inep = '51000001'");
-      expect(after.rows[0]?.updated_at).toEqual(before.rows[0]?.updated_at);
+      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 0, unchanged: 1 });
+      const a = (await actions(c, b2))[1];
+      expect(a?.action).toBe("duplicate");
+      expect(a?.errors[0]?.code).toBe("already_up_to_date");
+      expect((await c.query("select xmin::text as x from public.schools where inep = '51000001'")).rows[0]?.x).toBe(xminBefore);
+      const upd = await c.query(
+        "select 1 from public.audit_log where entity_table = 'schools' and action = 'UPDATE' and after ->> 'inep' = '51000001'",
+      );
+      expect(upd.rowCount).toBe(0);
+      const bt = await c.query("select unchanged_count, duplicate_count from public.import_batches where id = $1", [b2]);
+      expect(bt.rows[0]).toEqual({ unchanged_count: 1, duplicate_count: 0 });
+    });
+  });
+
+  it("INEP repetido após linha já atualizada/sem alteração: segunda linha é duplicate e a escola mantém os dados", async () => {
+    await withClaims("system", async (c) => {
+      const b1 = await newBatch(c);
+      await apply(c, b1, [row(1, "51000001", "Escola Um")]);
+      const b2 = await newBatch(c);
+      const t = await apply(c, b2, [row(1, "51000001", "Escola Um"), row(2, "51000001", "Escola Outra", { address: "Rua Z" })]);
+      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 1, rejected: 0, unchanged: 1 });
+      const a = await actions(c, b2);
+      expect(a[2]?.action).toBe("duplicate");
+      expect(a[2]?.errors[0]?.code).toBe("duplicate_inep_in_file");
+      const s = await c.query("select name, address from public.schools where inep = '51000001'");
+      expect(s.rows[0]).toEqual({ name: "Escola Um", address: "Rua A, 1" });
+    });
+  });
+
+  it("isolamento demo/real: arquivo demo com INEP de escola real é rejected demo_real_conflict", async () => {
+    await withClaims("system", async (c) => {
+      await seedSchool(c, "51000001", "Escola Real");
+      const b = await newBatch(c);
+      const t = await apply(c, b, [row(1, "51000001", "Escola Real Nova", { is_demo: true })]);
+      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 1, unchanged: 0 });
+      expect((await actions(c, b))[1]?.errors[0]?.code).toBe("demo_real_conflict");
+      expect((await c.query("select name, is_demo from public.schools where inep = '51000001'")).rows[0]).toEqual({
+        name: "Escola Real",
+        is_demo: false,
+      });
+    });
+  });
+
+  it("isolamento demo/real: arquivo real com INEP de escola demo é rejected demo_real_conflict", async () => {
+    await withClaims("system", async (c) => {
+      await c.query(
+        `insert into public.schools (inep, name, normalized_name, network, municipality_id, is_demo)
+         select '51000001', 'Escola Demo', 'escola demo', 'municipal', m.id, true from public.municipalities m where m.ibge_code = $1`,
+        [CUIABA],
+      );
+      const b = await newBatch(c);
+      const t = await apply(c, b, [row(1, "51000001", "Escola Demo Nova")]);
+      expect(t.rejected).toBe(1);
+      expect((await actions(c, b))[1]?.errors[0]?.code).toBe("demo_real_conflict");
+      expect((await c.query("select name, is_demo from public.schools where inep = '51000001'")).rows[0]).toEqual({
+        name: "Escola Demo",
+        is_demo: true,
+      });
+    });
+  });
+
+  it("lote demo nunca cria escola não-demo, mesmo com is_demo=false na linha", async () => {
+    await withClaims("system", async (c) => {
+      const b = (
+        await c.query<{ id: string }>(
+          "insert into public.import_batches (file_name, file_hash, is_demo) values ('d.csv', $1, true) returning id",
+          [randomUUID()],
+        )
+      ).rows[0]?.id ?? "";
+      await apply(c, b, [row(1, "51000001", "Escola X", { is_demo: false })]);
+      expect((await c.query("select is_demo from public.schools where inep = '51000001'")).rows[0]?.is_demo).toBe(true);
+    });
+  });
+
+  it.each(["claimed", "verified", "suspended"])(
+    "reimport de escola %s mantém município/email/phone, atualiza identificação e avisa municipality_change_ignored",
+    async (status) => {
+      await withClaims("system", async (c) => {
+        await c.query(
+          "insert into public.municipalities (ibge_code, uf, name, is_enabled) values ('5100102', 'MT', 'Acorizal', true)",
+        );
+        await seedSchool(c, "51000001", "Nome Antigo", status);
+        await c.query("update public.schools set email = 'antigo@x.invalid', phone = '111' where inep = '51000001'");
+        const b = await newBatch(c);
+        const t = await apply(c, b, [row(1, "51000001", "Nome Novo", { ibge_code: "5100102", address: "Rua Nova" })]);
+        expect(t).toMatchObject({ updated: 1, rejected: 0 });
+        const s = await c.query(
+          `select s.name, s.address, s.email, s.phone, s.verification_status, m.ibge_code
+             from public.schools s join public.municipalities m on m.id = s.municipality_id where s.inep = '51000001'`,
+        );
+        expect(s.rows[0]).toMatchObject({
+          name: "Nome Novo",
+          address: "Rua Nova",
+          email: "antigo@x.invalid",
+          phone: "111",
+          verification_status: status,
+          ibge_code: CUIABA,
+        });
+        expect((await actions(c, b))[1]?.errors.map((e) => e.code)).toEqual(["municipality_change_ignored"]);
+      });
+    },
+  );
+
+  it("reimport de escola verified sem outras mudanças de identificação: unchanged mesmo com email/phone/município diferentes", async () => {
+    await withClaims("system", async (c) => {
+      const b1 = await newBatch(c);
+      await apply(c, b1, [row(1, "51000001", "Escola Um")]);
+      await c.query("update public.schools set verification_status = 'verified' where inep = '51000001'");
+      const b2 = await newBatch(c);
+      const t = await apply(c, b2, [row(1, "51000001", "Escola Um", { email: "novo@x.invalid", phone: "999" })]);
+      expect(t).toMatchObject({ unchanged: 1, updated: 0 });
+    });
+  });
+
+  it("escola registered pode mudar de município habilitado, com aviso municipality_changed", async () => {
+    await withClaims("system", async (c) => {
+      await c.query(
+        "insert into public.municipalities (ibge_code, uf, name, is_enabled) values ('5100102', 'MT', 'Acorizal', true)",
+      );
+      await seedSchool(c, "51000001", "Escola Um");
+      const b = await newBatch(c);
+      const t = await apply(c, b, [row(1, "51000001", "Escola Um", { ibge_code: "5100102" })]);
+      expect(t).toMatchObject({ updated: 1 });
+      const s = await c.query(
+        "select m.ibge_code from public.schools s join public.municipalities m on m.id = s.municipality_id where s.inep = '51000001'",
+      );
+      expect(s.rows[0]?.ibge_code).toBe("5100102");
+      expect((await actions(c, b))[1]?.errors.map((e) => e.code)).toEqual(["municipality_changed"]);
+    });
+  });
+
+  it("mover/renomear escola para nome+município já ocupado por outra escola: duplicate, sem update", async () => {
+    await withClaims("system", async (c) => {
+      await c.query(
+        "insert into public.municipalities (ibge_code, uf, name, is_enabled) values ('5100102', 'MT', 'Acorizal', true)",
+      );
+      await seedSchool(c, "51000001", "Escola Um");
+      await seedSchool(c, "51000002", "Escola Dois", "registered", "5100102");
+      await seedSchool(c, "51000003", "Escola Tres");
+      const b = await newBatch(c);
+      // mover 51000001 para Acorizal com nome de 51000002; renomear 51000003 para o nome de 51000001.
+      const t = await apply(c, b, [
+        row(1, "51000001", "Escola Dois", { ibge_code: "5100102" }),
+        row(2, "51000003", "Escola Um"),
+      ]);
+      expect(t).toMatchObject({ updated: 0, duplicate: 2 });
+      const a = await actions(c, b);
+      expect(a[1]?.errors[0]?.code).toBe("duplicate_name_municipality");
+      expect(a[2]?.errors[0]?.code).toBe("duplicate_name_municipality");
+      expect((await c.query("select name from public.schools where inep = '51000001'")).rows[0]?.name).toBe("Escola Um");
+    });
+  });
+
+  it("erros de cast: row_number não inteiro, elemento não objeto e p_rows não array são atômicos", async () => {
+    await withClaims("system", async (c) => {
+      const b = await newBatch(c);
+      const bad1 = await attempt(c, "select public.import_apply_rows($1, $2::jsonb)", [
+        b,
+        JSON.stringify([row(1, "51000001", "Escola Um"), row(2, "51000002", "Escola Dois", { row_number: "abc" })]),
+      ]);
+      expect(bad1.code).toMatch(/^(22023|22P02)$/);
+      const bad2 = await attempt(c, "select public.import_apply_rows($1, $2::jsonb)", [
+        b,
+        JSON.stringify([row(1, "51000001", "Escola Um"), "texto"]),
+      ]);
+      expect(bad2.code).toMatch(/^(22023|22P02)$/);
+      const bad3 = await attempt(c, "select public.import_apply_rows($1, $2::jsonb)", [b, JSON.stringify({ a: 1 })]);
+      expect(bad3.code).toMatch(/^(22023|22P02)$/);
+      expect((await c.query("select count(*)::int as n from public.import_rows where batch_id = $1", [b])).rows[0]?.n).toBe(0);
+      expect((await c.query("select count(*)::int as n from public.schools")).rows[0]?.n).toBe(0);
+    });
+  });
+
+  it("limite de 1000 linhas por chamada", async () => {
+    await withClaims("system", async (c) => {
+      const b = await newBatch(c);
+      const rows = Array.from({ length: 1001 }, (_, i) => ({ row_number: i + 1 }));
+      const r = await attempt(c, "select public.import_apply_rows($1, $2::jsonb)", [b, JSON.stringify(rows)]);
+      expect(r.code).toBe("22023");
+    });
+  });
+
+  it("campos longos demais viram rejected field_too_long", async () => {
+    await withClaims("system", async (c) => {
+      const b = await newBatch(c);
+      const t = await apply(c, b, [row(1, "51000001", "N".repeat(301)), row(2, "51000002", "Escola Dois", { address: "A".repeat(301) })]);
+      expect(t.rejected).toBe(2);
+      expect((await actions(c, b))[1]?.errors[0]?.code).toBe("field_too_long");
+    });
+  });
+
+  it("normalized guarda só chaves da whitelist", async () => {
+    await withClaims("system", async (c) => {
+      const b = await newBatch(c);
+      await apply(c, b, [row(1, "51000001", "Escola Um", { lixo: "x".repeat(50), outro: { a: 1 } })]);
+      const r = await c.query<{ normalized: Record<string, unknown> }>("select normalized from public.import_rows where batch_id = $1", [b]);
+      expect(Object.keys(r.rows[0]?.normalized ?? {}).sort()).toEqual(
+        ["address", "cep", "email", "ibge_code", "inep", "is_demo", "name", "network", "neighborhood", "normalized_name", "phone", "row_number"].sort(),
+      );
+    });
+  });
+
+  it("lote completed rejeita import_apply_rows (22023)", async () => {
+    await withClaims("system", async (c) => {
+      const b = await newBatch(c);
+      await c.query("update public.import_batches set status = 'completed' where id = $1", [b]);
+      const r = await attempt(c, "select public.import_apply_rows($1, $2::jsonb)", [b, JSON.stringify([row(1, "51000001", "Escola Um")])]);
+      expect(r.code).toBe("22023");
+    });
+  });
+
+  it("admin autenticado não consegue INSERT em import_batches nem import_rows", async () => {
+    await withClaims("admin", async (c) => {
+      const a = await attempt(c, "insert into public.import_batches (file_name, file_hash) values ('x.csv', $1)", [randomUUID()]);
+      expect(a.code).toBe("42501");
+      const b = await attempt(
+        c,
+        "insert into public.import_rows (batch_id, row_number, action) values ($1, 1, 'rejected')",
+        [randomUUID()],
+      );
+      expect(b.code).toBe("42501");
     });
   });
 
@@ -150,7 +366,7 @@ describe("import_apply_rows e import_claim_batch", () => {
       await seedSchool(c, "51000001", "Escola Um");
       const b = await newBatch(c);
       const t = await apply(c, b, [row(1, "51000002", "Escola Um")]);
-      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 1, rejected: 0 });
+      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 1, rejected: 0, unchanged: 0 });
       expect((await actions(c, b))[1]?.errors[0]?.code).toBe("duplicate_name_municipality");
       expect((await c.query("select 1 from public.schools where inep = '51000002'")).rowCount).toBe(0);
     });
@@ -172,7 +388,7 @@ describe("import_apply_rows e import_claim_batch", () => {
     await withClaims("system", async (c) => {
       const b = await newBatch(c);
       const t = await apply(c, b, [row(1, "51000001", "Escola Um"), row(2, "51000001", "Escola Um Bis")]);
-      expect(t).toEqual({ inserted: 1, updated: 0, duplicate: 1, rejected: 0 });
+      expect(t).toEqual({ inserted: 1, updated: 0, duplicate: 1, rejected: 0, unchanged: 0 });
       const a = await actions(c, b);
       expect(a[2]?.action).toBe("duplicate");
       expect(a[2]?.errors[0]?.code).toBe("duplicate_inep_in_file");
@@ -196,7 +412,7 @@ describe("import_apply_rows e import_claim_batch", () => {
         row(1, "52000001", "Escola Goiânia", { ibge_code: DISABLED_IBGE }),
         row(2, "99000001", "Escola Fantasma", { ibge_code: "9999999" }),
       ]);
-      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 2 });
+      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 2, unchanged: 0 });
       const a = await actions(c, b);
       expect(a[1]?.errors[0]?.code).toBe("municipality_not_enabled");
       expect(a[2]?.errors[0]?.code).toBe("municipality_not_enabled");
@@ -214,7 +430,7 @@ describe("import_apply_rows e import_claim_batch", () => {
         row(4, "51000004", "Escola Rede Ruim", { network: "xyz" }),
         row(5, "51000005", "Escola Erro Zod", { errors: [{ code: "invalid_cep", message: "CEP inválido" }] }),
       ]);
-      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 5 });
+      expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 5, unchanged: 0 });
       const a = await actions(c, b);
       expect(a[1]?.errors[0]?.code).toBe("invalid_inep");
       expect(a[3]?.errors[0]?.code).toBe("invalid_name");
@@ -246,7 +462,7 @@ describe("import_apply_rows e import_claim_batch", () => {
         row(4, "1", "Ruim"),
       ];
       const first = await apply(c, b, rows);
-      expect(first).toEqual({ inserted: 1, updated: 1, duplicate: 1, rejected: 1 });
+      expect(first).toEqual({ inserted: 1, updated: 1, duplicate: 1, rejected: 1, unchanged: 0 });
       const again = await apply(c, b, rows);
       expect(again).toEqual(first);
       expect((await c.query("select count(*)::int as n from public.import_rows where batch_id = $1", [b])).rows[0]?.n).toBe(4);

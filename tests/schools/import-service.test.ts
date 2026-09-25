@@ -19,7 +19,7 @@ describe("importInepFile", () => {
   it("insere escolas novas e completa o lote", async () => {
     const r = await importInepFile(input(csv("51000001;Escola A;5103403;3", "51000002;Escola B;5103403;2")), { repo });
     expect(r).toMatchObject({ alreadyExisted: false, status: "completed", fileErrors: [] });
-    expect(r.totals).toEqual({ total: 2, inserted: 2, updated: 0, duplicate: 0, rejected: 0 });
+    expect(r.totals).toEqual({ total: 2, inserted: 2, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
     expect(await repo.countSchools()).toBe(2);
   });
 
@@ -27,6 +27,13 @@ describe("importInepFile", () => {
     const buffer = csv("51000001;Escola A;5103403;3");
     await importInepFile(input(buffer), { repo });
     expect([...repo.batches.values()][0]?.hash).toBe(createHash("sha256").update(buffer).digest("hex"));
+  });
+
+  it("escola já igual ao arquivo conta como unchanged, não duplicate, e fica fora de getErrorRows", async () => {
+    repo.seedSchool({ inep: "51000001", name: "Escola Um", verification: "registered" });
+    const r = await importInepFile(input(csv("51000001;Escola Um;5103403;3")), { repo });
+    expect(r.totals).toEqual({ total: 1, inserted: 0, updated: 0, duplicate: 0, rejected: 0, unchanged: 1 });
+    expect(await repo.getErrorRows(r.batchId)).toEqual([]);
   });
 
   it("atualiza escola existente sem mudar verification_status", async () => {
@@ -42,7 +49,7 @@ describe("importInepFile", () => {
       input(csv("51000001;Escola A;5103403;3", "51000001;Escola A;5103403;3", "51000002;ESCOLA EXISTENTE;5103403;3")),
       { repo },
     );
-    expect(r.totals).toEqual({ total: 3, inserted: 1, updated: 0, duplicate: 2, rejected: 0 });
+    expect(r.totals).toEqual({ total: 3, inserted: 1, updated: 0, duplicate: 2, rejected: 0, unchanged: 0 });
     const errs = await repo.getErrorRows(r.batchId);
     expect(errs.flatMap((e) => e.errors.map((x) => x.code)).sort()).toEqual(["duplicate_inep_in_file", "duplicate_name_municipality"]);
   });
@@ -106,7 +113,7 @@ describe("importInepFile", () => {
     repo.failOnApplyCall = null;
     const again = await importInepFile(input(buffer), { repo, chunkSize: 3 });
     expect(again).toMatchObject({ batchId: failed.batchId, alreadyExisted: true, status: "completed" });
-    expect(again.totals).toEqual({ total: 7, inserted: 7, updated: 0, duplicate: 0, rejected: 0 });
+    expect(again.totals).toEqual({ total: 7, inserted: 7, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
     expect(await repo.countSchools()).toBe(7);
     expect(repo.batches.size).toBe(1);
   });
@@ -129,7 +136,7 @@ describe("importInepFile", () => {
   it("reimportar dados idênticos não gera linhas de erro (already_up_to_date não é erro)", async () => {
     await importInepFile(input(csv("51000001;Escola A;5103403;3")), { repo });
     const r = await importInepFile(input(csv("51000001;Escola A;5103403;3", "51000002;Outra;5103403;3")), { repo });
-    expect(r.totals).toMatchObject({ duplicate: 1, inserted: 1 });
+    expect(r.totals).toMatchObject({ unchanged: 1, inserted: 1 });
     expect(await repo.getErrorRows(r.batchId)).toEqual([]);
   });
 
@@ -156,7 +163,7 @@ describe("importInepFile", () => {
     const utf8 = readFileSync("tests/fixtures/inep-demo.csv");
     const latin = iconv.encode(utf8.toString("utf8"), "latin1");
     const r = await importInepFile(input(latin, true), { repo });
-    expect(r.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3 });
+    expect(r.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
     expect(repo.schools.get("51990001")?.name).toBe("Escola Demonstração 1");
   });
 });

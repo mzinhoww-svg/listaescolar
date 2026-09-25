@@ -23,6 +23,7 @@ create table public.import_batches (
   updated_count integer not null default 0 check (updated_count >= 0),
   duplicate_count integer not null default 0 check (duplicate_count >= 0),
   rejected_count integer not null default 0 check (rejected_count >= 0),
+  unchanged_count integer not null default 0 check (unchanged_count >= 0), -- escolas já iguais (duplicate/already_up_to_date)
   status public.import_status not null default 'pending',
   imported_by uuid references public.profiles (id) on delete set null,
   started_at timestamptz,
@@ -171,9 +172,13 @@ security definer
 set search_path = ''
 as $$
 declare
+  c_max_rows constant integer := 1000;
+  c_keys constant text[] := array['row_number', 'inep', 'name', 'normalized_name', 'network', 'neighborhood',
+                                  'address', 'cep', 'phone', 'email', 'ibge_code', 'is_demo'];
   r jsonb;
   rn integer;
   v_batch_demo boolean;
+  v_batch_status public.import_status;
   v_inep text;
   v_name text;
   v_norm text;
@@ -187,20 +192,34 @@ declare
   v_muni_id uuid;
   v_muni_enabled boolean;
   v_school public.schools%rowtype;
+  v_locked boolean;
+  v_eff_muni uuid;
+  v_eff_phone text;
+  v_eff_email text;
+  v_warn jsonb;
   v_action public.import_row_action;
   v_errors jsonb;
+  v_normalized jsonb;
   v_numbers integer[] := '{}';
   v_result jsonb;
 begin
   if p_rows is null or jsonb_typeof(p_rows) <> 'array' then
     raise exception 'p_rows deve ser um array JSON' using errcode = '22023';
   end if;
+  if jsonb_array_length(p_rows) > c_max_rows then
+    raise exception 'p_rows excede % linhas', c_max_rows using errcode = '22023';
+  end if;
 
-  perform pg_advisory_xact_lock(hashtext('public.import_apply_rows'));
+  -- duas chaves constantes (namespace do módulo + função): não colide com hashtext de outros usos.
+  perform pg_advisory_xact_lock(101, 1);
 
-  select b.is_demo into v_batch_demo from public.import_batches b where b.id = p_batch_id for update;
+  select b.is_demo, b.status into v_batch_demo, v_batch_status
+    from public.import_batches b where b.id = p_batch_id for update;
   if not found then
     raise exception 'lote % não encontrado', p_batch_id using errcode = 'P0002';
+  end if;
+  if v_batch_status = 'completed' then
+    raise exception 'lote % já concluído', p_batch_id using errcode = '22023';
   end if;
 
   update public.import_batches
@@ -208,8 +227,12 @@ begin
    where id = p_batch_id and status in ('pending', 'failed');
 
   for r in
-    select e.value from jsonb_array_elements(p_rows) as e(value) order by (e.value ->> 'row_number')::integer
+    select e.value from jsonb_array_elements(p_rows) as e(value)
+     order by case when jsonb_typeof(e.value) = 'object' then (e.value ->> 'row_number')::integer end
   loop
+    if jsonb_typeof(r) <> 'object' then
+      raise exception 'elemento de p_rows deve ser objeto' using errcode = '22023';
+    end if;
     rn := (r ->> 'row_number')::integer;
     if rn is null or rn <= 0 then
       raise exception 'row_number inválido' using errcode = '22023';
@@ -229,9 +252,14 @@ begin
     v_cep := nullif(btrim(r ->> 'cep'), '');
     v_phone := nullif(btrim(r ->> 'phone'), '');
     v_email := nullif(btrim(r ->> 'email'), '');
-    v_demo := coalesce((r ->> 'is_demo')::boolean, v_batch_demo);
+    -- lote demo nunca cria/atualiza escola real; linha demo em lote real também é demo.
+    v_demo := v_batch_demo or coalesce((r ->> 'is_demo')::boolean, false);
     v_action := null;
+    v_muni_id := null;
+    v_warn := '[]'::jsonb;
     v_errors := case when jsonb_typeof(r -> 'errors') = 'array' then r -> 'errors' else '[]'::jsonb end;
+    v_normalized := (select coalesce(jsonb_object_agg(k.key, k.value), '{}'::jsonb)
+                       from jsonb_each(r) as k(key, value) where k.key = any (c_keys));
 
     if jsonb_array_length(v_errors) = 0 then
       if v_inep is null or v_inep !~ '^[0-9]{8}$' then
@@ -240,6 +268,9 @@ begin
         v_errors := jsonb_build_array(jsonb_build_object('code', 'invalid_name', 'message', 'Nome da escola vazio'));
       elsif v_network is null or v_network not in ('federal', 'state', 'municipal', 'private') then
         v_errors := jsonb_build_array(jsonb_build_object('code', 'invalid_network', 'message', 'Rede inválida'));
+      elsif length(v_name) > 300 or length(v_norm) > 300 or length(v_address) > 300 or length(v_neighborhood) > 300
+            or length(v_cep) > 20 or length(v_phone) > 50 or length(v_email) > 254 then
+        v_errors := jsonb_build_array(jsonb_build_object('code', 'field_too_long', 'message', 'Campo acima do tamanho máximo'));
       else
         select m.id, m.is_enabled into v_muni_id, v_muni_enabled
           from public.municipalities m where m.ibge_code = (r ->> 'ibge_code');
@@ -254,7 +285,7 @@ begin
       v_action := 'rejected';
     elsif exists (
       select 1 from public.import_rows x
-       where x.batch_id = p_batch_id and x.normalized ->> 'inep' = v_inep and x.action in ('inserted', 'updated')
+       where x.batch_id = p_batch_id and x.normalized ->> 'inep' = v_inep and x.action <> 'rejected'
     ) then
       v_action := 'duplicate';
       v_errors := jsonb_build_array(jsonb_build_object(
@@ -262,21 +293,47 @@ begin
     else
       select * into v_school from public.schools s where s.inep = v_inep;
       if found then
-        if (v_school.name, v_school.normalized_name, v_school.network::text, v_school.neighborhood, v_school.address,
-            v_school.cep, v_school.phone, v_school.email, v_school.municipality_id)
-           is distinct from
-           (v_name, v_norm, v_network, v_neighborhood, v_address, v_cep, v_phone, v_email, v_muni_id) then
-          -- nunca toca verification_status nem registry_source: cadastro INEP não é verificação.
-          update public.schools
-             set name = v_name, normalized_name = v_norm, network = v_network::public.school_network,
-                 neighborhood = v_neighborhood, address = v_address, cep = v_cep, phone = v_phone,
-                 email = v_email, municipality_id = v_muni_id, source_batch_id = p_batch_id
-           where id = v_school.id;
-          v_action := 'updated';
-        else
-          v_action := 'duplicate';
+        v_locked := v_school.verification_status <> 'registered';
+        if v_school.is_demo is distinct from v_demo then
+          v_action := 'rejected';
           v_errors := jsonb_build_array(jsonb_build_object(
-            'code', 'already_up_to_date', 'message', 'Escola já cadastrada com os mesmos dados'));
+            'code', 'demo_real_conflict', 'message', 'INEP existente com natureza diferente (demonstração x real)'));
+        else
+          -- escola reivindicada/verificada/suspensa: município e contatos são preservados (só identificação muda).
+          v_eff_muni := case when v_locked then v_school.municipality_id else v_muni_id end;
+          v_eff_phone := case when v_locked then v_school.phone else v_phone end;
+          v_eff_email := case when v_locked then v_school.email else v_email end;
+          if v_muni_id is distinct from v_school.municipality_id then
+            v_warn := jsonb_build_array(jsonb_build_object(
+              'code', case when v_locked then 'municipality_change_ignored' else 'municipality_changed' end,
+              'message', case when v_locked then 'Município do arquivo difere; escola não é movida'
+                              else 'Escola movida para outro município' end));
+          end if;
+
+          if (v_school.name, v_school.normalized_name, v_school.network::text, v_school.neighborhood, v_school.address,
+              v_school.cep, v_school.phone, v_school.email, v_school.municipality_id)
+             is not distinct from
+             (v_name, v_norm, v_network, v_neighborhood, v_address, v_cep, v_eff_phone, v_eff_email, v_eff_muni) then
+            v_action := 'duplicate';
+            v_errors := jsonb_build_array(jsonb_build_object(
+              'code', 'already_up_to_date', 'message', 'Escola já cadastrada com os mesmos dados')) || v_warn;
+          elsif exists (
+            select 1 from public.schools s
+             where s.id <> v_school.id and s.municipality_id = v_eff_muni and s.normalized_name = v_norm
+          ) then
+            v_action := 'duplicate';
+            v_errors := jsonb_build_array(jsonb_build_object(
+              'code', 'duplicate_name_municipality', 'message', 'Já existe escola com o mesmo nome no município'));
+          else
+            -- nunca toca verification_status nem registry_source: cadastro INEP não é verificação.
+            update public.schools
+               set name = v_name, normalized_name = v_norm, network = v_network::public.school_network,
+                   neighborhood = v_neighborhood, address = v_address, cep = v_cep, phone = v_eff_phone,
+                   email = v_eff_email, municipality_id = v_eff_muni, source_batch_id = p_batch_id
+             where id = v_school.id;
+            v_action := 'updated';
+            v_errors := v_warn;
+          end if;
         end if;
       elsif exists (
         select 1 from public.schools s where s.municipality_id = v_muni_id and s.normalized_name = v_norm
@@ -294,30 +351,35 @@ begin
     end if;
 
     insert into public.import_rows (batch_id, row_number, raw, normalized, errors, action)
-    values (p_batch_id, rn, r -> 'raw', r - 'raw' - 'errors', v_errors, v_action);
+    values (p_batch_id, rn, r -> 'raw', v_normalized, v_errors, v_action);
   end loop;
 
   -- contadores do lote sempre recalculados do que está gravado (consistente e idempotente).
+  -- "sem alteração" é gravado como duplicate + already_up_to_date (enum fixo) e contado à parte.
   update public.import_batches b
      set total_rows = c.total, inserted_count = c.ins, updated_count = c.upd,
-         duplicate_count = c.dup, rejected_count = c.rej
+         duplicate_count = c.dup, rejected_count = c.rej, unchanged_count = c.unc
     from (
       select count(*)::integer as total,
              (count(*) filter (where action = 'inserted'))::integer as ins,
              (count(*) filter (where action = 'updated'))::integer as upd,
-             (count(*) filter (where action = 'duplicate'))::integer as dup,
-             (count(*) filter (where action = 'rejected'))::integer as rej
-        from public.import_rows where batch_id = p_batch_id
+             (count(*) filter (where action = 'duplicate' and not unch))::integer as dup,
+             (count(*) filter (where action = 'rejected'))::integer as rej,
+             (count(*) filter (where action = 'duplicate' and unch))::integer as unc
+        from (select action, errors @> '[{"code":"already_up_to_date"}]'::jsonb as unch
+                from public.import_rows where batch_id = p_batch_id) q
     ) c
    where b.id = p_batch_id;
 
   select jsonb_build_object(
            'inserted', (count(*) filter (where action = 'inserted'))::integer,
            'updated', (count(*) filter (where action = 'updated'))::integer,
-           'duplicate', (count(*) filter (where action = 'duplicate'))::integer,
-           'rejected', (count(*) filter (where action = 'rejected'))::integer)
+           'duplicate', (count(*) filter (where action = 'duplicate' and not unch))::integer,
+           'rejected', (count(*) filter (where action = 'rejected'))::integer,
+           'unchanged', (count(*) filter (where action = 'duplicate' and unch))::integer)
     into v_result
-    from public.import_rows where batch_id = p_batch_id and row_number = any (v_numbers);
+    from (select action, errors @> '[{"code":"already_up_to_date"}]'::jsonb as unch
+            from public.import_rows where batch_id = p_batch_id and row_number = any (v_numbers)) q;
   return v_result;
 end;
 $$;

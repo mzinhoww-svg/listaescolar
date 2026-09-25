@@ -1,0 +1,32 @@
+# E2E · Pesquisa com mães
+
+Executado nesta sessão (2026-09-25) com `agent-browser`, viewport 390×844, contra o deploy de preview da branch `claude/vigilant-einstein-75bp5d` (`https://listaescolare-git-claude-vig-b62656-mzinhoww-gmailcoms-projects.vercel.app`). Dados de teste em `public.survey_responses`/`public.survey_leads` sempre com `source_group = 'e2e-teste'`, conferidos via Supabase MCP (`execute_sql`, só leitura/correção da própria tag — nunca DDL). Repetido em produção após o merge (seção final).
+
+**Nota de ambiente:** `agent-browser` roda Chromium sem confiar na CA do proxy de saída deste container por padrão. Resolvido instalando a CA (`/usr/local/share/ca-certificates/ccr-agent-proxy*.crt`, já presente no container) como política gerenciada do Chromium (`/etc/chromium/policies/managed/ccr-ca.json`, certificados em DER/base64) — TLS continua verificado normalmente, só passa a confiar numa CA que o próprio container já confiava no nível de SO. Nenhuma verificação foi desativada.
+
+## Cenário 1 · Fluxo completo com lead
+As 12 telas respondidas (Cuiabá, 1 filho, Particular, escola preenchida + Fundamental 1, Foto/PDF WhatsApp, Papelaria do bairro + Internet, R$200-400, 1-3h, Sim várias lojas, Preço alto + Achar itens, Com certeza → Internet com entrega, frase + "pode citar"), tela final com nome, WhatsApp válido e consentimento marcado → `POST /api/pesquisa/lead` 200. Botão "Enviar para outra mãe": `href` decodificado é exatamente `Estou respondendo uma pesquisa rápida sobre a compra da lista de material escolar. Leva 3 minutos: <origin>/pesquisa?ref=<session_id>&g=indicacao` (o `g` desta sessão específica de teste ficou vazio porque uma navegação de diagnóstico anterior, sem `?g=`, já tinha criado a sessão local antes do `?g=e2e-teste` — comportamento correto do app: "g e ref só são capturados na primeira visita"; por isso a tag `e2e-teste` desta linha foi corrigida manualmente via `update ... where session_id = ...` logo em seguida, não apagada). Banco: 1 linha em `survey_responses` com `last_step = 12` e `completed_at`, 1 linha em `survey_leads` com o texto de consentimento exato. **Verde.**
+
+## Cenário 2 · Abandono
+Respondidas as telas 1-6, parado na tela 7 (`last_step = 6` no banco nesse momento — a tela 7 em si nunca foi respondida). `reload()`: a tela volta a mostrar exatamente a pergunta 7 ("Quanto você gastou..."), sem perder nada do que já foi respondido (retomada é 100% local via `localStorage`, independente do banco). Nota sobre a redação do critério de aceite da spec ("confirmar no banco que last_step = 7"): com o desenho implementado — `last_step` grava o **último step respondido e salvo**, nunca um step ainda não respondido — o valor correto ao parar *na* tela 7 (ainda não respondida) é 6, não 7; forçar 7 exigiria gravar uma resposta vazia para uma pergunta obrigatória ainda não vista, o que quebraria a garantia "nunca reduz/adiciona sem responder". Tratado como nuance de redação da spec, não como falha: a retomada exata (parte que importa para quem abandona e volta) foi confirmada visualmente e por snapshot. **Verde**, com a ressalva acima registrada.
+
+## Cenário 3 · Opcionais (pular escola, frase e lead)
+Campo "Nome da escola" deixado em branco na tela 4 (só etapa marcada) — aceito, sem bloquear. Tela 12: botão "Pular" (não "Continuar") usado, sem preencher frase. Tela final: "Agora não" (sem preencher WhatsApp). Banco: resposta completa (`last_step = 12`, `completed_at` preenchido), `answers` sem as chaves `escola`, `canal` (usaria = nao) nem `compra_ideal`/`pode_citar`, e **zero** linhas em `survey_leads` para essa sessão. **Verde.**
+
+## Cenário 4 · Condicional (tela 11)
+"Com certeza" revela a sub-pergunta "E onde preferiria comprar?" (testado no cenário 1). "Não" avança direto para a tela 12 sem mostrar a sub-pergunta (testado duas vezes, cenário 3 e sua repetição para screenshots). `answers.canal` ausente quando `usaria = nao` (confirmado no CSV exportado). **Verde.**
+
+## Cenário 5 · Validação do lead
+Na tela final: WhatsApp incompleto (`(65) 99`) + consentimento marcado → botão "Quero receber" permanece desabilitado. WhatsApp completo e válido + consentimento **desmarcado** → também desabilitado. Só com os dois certos o botão habilita. **Verde.**
+
+## Cenário 6 · Resultados
+Acesso direto a `/pesquisa/resultados` sem cookie → redireciona para `/pesquisa/resultados/login`. Senha errada → 401, mensagem "Senha incorreta." exibida, sem cookie gravado. Senha certa (`PESQUISA_RESULTS_PASSWORD`) → cookie gravado, acesso liberado, números batem com o banco no momento da captura (3 iniciadas, 3 completas, 100% conclusão, mediana 1:24, 1 lead, 33% taxa de lead; funil, "por pergunta" com percentuais corretos, "por origem" com `e2e-teste: 3/3`, frase citável exibida). Os dois botões de export baixam CSV UTF-8 com BOM, cabeçalho e conteúdo corretos (`;` unindo múltipla escolha, `source_group`/`started_at`/`completed_at`/`last_step` nas respostas; `name`/`whatsapp_e164`/`consent_at`/`source_group` nos leads, este último via join). **Verde.**
+
+## Cenário 7 · Screenshots
+25 telas capturadas em `docs/superpowers/evidencias/pesquisa/`, todas 390×844: as 12 perguntas (incluindo a sub-pergunta "canal" e as variantes "usaria = não" e "pular"), boas-vindas, validação de lead (inválido/válido), tela final de compartilhamento, retomada após abandono, login de resultados (redirecionamento, senha errada, autenticado), seção de frases dos resultados e a página de privacidade. **Verde.**
+
+## CI (GitHub Actions, commit `a965b06`)
+`verify` (typecheck, lint, `pnpm test` — 2578 testes, `pnpm build`) e `db` (`supabase db reset` + `pnpm test:db` contra Postgres real) verdes. Um teste de outra fatia (`tests/extraction/pipeline.test.ts`, S08, sem relação com esta feature) tinha falhado por flakiness de tempo num commit anterior; confirmado que não é desta fatia (não toca nenhum arquivo do diff) e que passa isoladamente (2578/2578 localmente, e green no rerun do CI).
+
+## Produção (pós-merge)
+Preenchido depois do merge, repetindo os cenários 1-6 na URL de produção da Vercel — ver `docs/superpowers/PROGRESS.md` e o relatório final da sessão.

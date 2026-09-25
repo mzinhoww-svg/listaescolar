@@ -171,6 +171,9 @@
 ### S18 · Estados e acessibilidade
 **Prompt:**
 > Revisar todas as rotas: loading, sucesso, erro, vazio e retry. Contraste AA, foco visível e rótulos. Quebrar componente acima de 250 linhas.
+> Refatorar os arquivos acima de 250 linhas listados em `docs/superpowers/DEBT.md` (D-057) sem mudar comportamento (suítes verdes), e pagar as dívidas de severidade alta atribuídas à S18.
+
+**Aceite:** nenhum arquivo de D-057 acima de 250 linhas; `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` verdes sem alterar testes de comportamento; itens de `DEBT.md` com dono S18 marcados como resolvidos ou com Ruling.
 
 ### S19 · Segurança e observabilidade
 **Prompt:**
@@ -243,6 +246,8 @@
 ### S20 · Produção e suíte E2E final
 **Prompt:**
 > Rodar as migrations em staging e depois em produção. Suíte agent-browser completa cobrindo os fluxos pai, escola, admin e papelaria. Checklist de go-live em `docs/GO-LIVE.md`. Importar o CSV oficial em produção e registrar a contagem real.
+
+**Aceite (go-live):** `docs/superpowers/DEBT.md` sem itens de severidade alta abertos, ou cada um com Ruling explícito no `docs/superpowers/ledger.md`.
 
 ## Ordem de execução (escopo completo, ADR-002 rejeitado)
 1. S00, S01, S02.

@@ -123,6 +123,12 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# S07: bucket privado das listas enviadas (a migration 0201 também o cria/atualiza, para staging e produção).
+[storage.buckets.list-uploads]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

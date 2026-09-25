@@ -2,3 +2,13 @@
 
 Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orquestrador consolida em ledger.md na S11.
 
+
+## S07 · Task 1 (migration 0201)
+- Ruling: pgmq entra por `create extension if not exists pgmq` (schema próprio `pgmq`, versão 1.5.1 no local; disponível no hospedado), sem `pgmq_public`; o app e o worker falam com a fila só por `public.jobs_enqueue/claim/complete/fail/read/ack/set_vt` (SECURITY DEFINER, EXECUTE só service_role); schema pgmq sem USAGE para anon/authenticated e RLS ligada nas tabelas das filas — pgmq não vira API pública e o worker não precisa de grants no schema — custo se errada: trocar por `pgmq_public` exige nova migration.
+- Ruling: o bucket `list-uploads` é criado/atualizado pela própria migration (upsert em `storage.buckets`) e também declarado em `config.toml` — o staging recebe migrations pelo MCP, sem config.toml; o limite de 10 MiB e os tipos são aplicados pela Storage API (verificado com 413/415 no local), o banco só guarda a configuração — custo se errada: bucket criado à mão no hospedado.
+- Ruling: estados coerentes no envio: job `dead` ou tentativas esgotadas por crash → `list_submissions.status = 'rejected'` (único valor de erro do enum usado pela S07); `jobs_complete` → `review_needed`; só transiciona a partir de `submitted/processing/processing_async` — não sobrescreve estados adiante — custo se errada: trocar para `human_review` numa migration.
+- Ruling: `jobs_claim` reivindica `running` com `locked_at` > 5 min (crash do worker) e respeita `run_after` para `retrying`; `running` antigo sem tentativas restantes vira `dead` — evita job preso para sempre — custo se errada: ajustar a janela de 5 min.
+- Ruling: `jobs_fail` devolve o novo `job_status` (`retrying`/`dead`) e é no-op se o job não estiver `running`; `jobs_complete` idem — idempotência contra mensagem duplicada e crash antes do ack — custo se errada: baixo.
+- Ruling: `[functions.ocr-worker]` NÃO entra no config.toml nesta task (a pasta da função só nasce na Task 2; declarar antes arrisca quebrar `db:start`); a Task 2 adiciona; pg_cron/pg_net do agendamento do worker também ficam para a Task 2 — custo se errada: nenhum.
+- Ruling: consentimento é exigido também no banco (política de INSERT em `list_submissions` exige `consents` próprio, `list_upload` e não revogado); dono só revoga (`revoked_at`) — defesa em profundidade além da Server Action — custo se errada: relaxar a política.
+- Ruling: `jobs` sem INSERT/DELETE para authenticated; dono só edita `notify_channel/notify_target` (grant de coluna + política); `ocr_jobs` só leitura para dono/admin; `audit_log` recebe consents e list_submissions (sem `file_name`); jobs não são auditados (alto volume e `notify_target` é PII) — custo se errada: adicionar trigger depois.

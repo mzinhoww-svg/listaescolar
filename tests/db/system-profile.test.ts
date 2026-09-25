@@ -13,14 +13,15 @@ function localEnv(): Record<string, string> {
 }
 
 describe("0601: perfil técnico system", () => {
-  it("existe em auth.users com o UUID fixo, sem senha, sem identidade, banido e com e-mail reservado", async () => {
+  it("existe em auth.users com o UUID fixo, sem senha, banido e com e-mail reservado", async () => {
     await withSuperuser(async (c) => {
       const u = (await c.query("select email, encrypted_password, banned_until::text as banned, raw_app_meta_data from auth.users where id = $1", [SYSTEM_ID])).rows[0];
       expect(u.email).toBe("system@listacerta.invalid");
       expect(u.encrypted_password ?? "").toBe("");
-      expect(u.banned).toBe("infinity");
-      expect(u.raw_app_meta_data).toMatchObject({ provider: "system" });
-      expect((await c.query("select count(*)::int as n from auth.identities where user_id = $1", [SYSTEM_ID])).rows[0].n).toBe(0);
+      expect(u.banned).toMatch(/^2999-01-01/); // data finita: 'infinity' derruba o listUsers do GoTrue hospedado
+      expect(u.raw_app_meta_data).toBeTruthy(); // o GoTrue pode regravar o provider ao receber um pedido de OTP; o usuário segue banido
+      // identidade: a migration não cria nenhuma; o GoTrue pode criar a de e-mail ao receber um pedido de OTP (o usuário segue banido)
+      expect((await c.query("select count(*)::int as n from auth.identities where user_id = $1 and provider <> 'email'", [SYSTEM_ID])).rows[0].n).toBe(0);
       expect((await c.query("select role::text as r from public.profiles where id = $1", [SYSTEM_ID])).rows[0].r).toBe("system");
     });
   });
@@ -41,6 +42,16 @@ describe("0601: perfil técnico system", () => {
     expect(MIGRATION).toMatch(/update public\.profiles set role = 'system'/);
   });
 
+  it("o GoTrue local segue saudável com o usuário banido: getUserById e listUsers respondem 200", async () => {
+    const env = localEnv();
+    const headers = { apikey: env.SECRET_KEY || env.SERVICE_ROLE_KEY!, authorization: `Bearer ${env.SECRET_KEY || env.SERVICE_ROLE_KEY}` };
+    const one = await fetch(`${env.API_URL}/auth/v1/admin/users/${SYSTEM_ID}`, { headers });
+    expect(one.status).toBe(200);
+    expect((await one.json()).email).toBe("system@listacerta.invalid");
+    const list = await fetch(`${env.API_URL}/auth/v1/admin/users?per_page=1000`, { headers });
+    expect(list.status).toBe(200);
+  });
+
   it("não aparece como usuário comum: aceitar uma sessão exigiria senha ou OTP, e ambos são recusados pelo GoTrue local", async () => {
     const env = localEnv();
     const api = env.API_URL;
@@ -52,17 +63,24 @@ describe("0601: perfil técnico system", () => {
         headers: { apikey: key!, "content-type": "application/json" },
         body: JSON.stringify({ email: "system@listacerta.invalid", password: password || "x" }),
       });
-      expect(res.ok).toBe(false);
+      expect([400, 401]).toContain(res.status); // recusa de credencial, não erro 5xx
     }
     await fetch(`${api}/auth/v1/otp`, {
       method: "POST",
       headers: { apikey: key!, "content-type": "application/json" },
       body: JSON.stringify({ email: "system@listacerta.invalid", create_user: false }),
     });
-    await withSuperuser(async (c) => {
-      const tokens = await c.query("select count(*)::int as n from auth.one_time_tokens where user_id = $1", [SYSTEM_ID]);
-      expect(tokens.rows[0].n).toBe(0);
-    });
+    // Se o GoTrue emitir o código (usuário banido, mas o pedido é aceito), o código NÃO abre sessão: a verificação é recusada.
+    const mail = env.MAILPIT_URL || env.INBUCKET_URL;
+    const list = (await (await fetch(`${mail}/api/v1/messages`)).json()) as { messages?: { ID: string; To: { Address: string }[] }[] };
+    const mine = (list.messages ?? []).filter((m) => m.To.some((t) => t.Address === "system@listacerta.invalid"));
+    for (const m of mine) {
+      const body = (await (await fetch(`${mail}/api/v1/message/${m.ID}`)).json()) as { Text?: string };
+      const code = /\b(\d{6})\b/.exec(body.Text ?? "")?.[1];
+      if (!code) continue;
+      const res = await fetch(`${api}/auth/v1/verify`, { method: "POST", headers: { apikey: key!, "content-type": "application/json" }, body: JSON.stringify({ type: "email", email: "system@listacerta.invalid", token: code }) });
+      expect(res.ok).toBe(false);
+    }
     // nenhuma sessão nasce da tentativa
     await inTx(async (c) => {
       expect((await c.query("select count(*)::int as n from auth.sessions where user_id = $1", [SYSTEM_ID])).rows[0].n).toBe(0);

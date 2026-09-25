@@ -20,7 +20,7 @@ import { runListReaderContract } from "../integration/list-reader.contract";
 import { runPublicationContextContract } from "../integration/publication-context.contract";
 import { runSchoolLabelsContract } from "../integration/school-labels.contract";
 import { cleanupUsers, ensureSchool, IDS, seedUsers, withSuperuser } from "./helpers";
-import { purgeSchools } from "./integration-fixtures";
+import { ensurePublishableSubmission, purgeSchools } from "./integration-fixtures";
 import { purgeSubmissions, seedSubmission } from "./review-fixtures";
 
 const { url, key } = localApi();
@@ -67,9 +67,12 @@ beforeAll(async () => {
     world.copyWithSchool = (await open(withSchool)).copyId;
     world.copyNoSchool = (await open(noSchool)).copyId;
   });
+  const publishableSub = randomUUID();
+  await withSuperuser((c) => ensurePublishableSubmission(c, { id: publishableSub, schoolId: world.school, gradeSlug: "ef-4", schoolYear: 2027 }));
+  world.submissions.push(publishableSub);
   const published = await createRealListPublisher(sb).publish({
     idempotencyKey: `k-${randomUUID()}`,
-    submissionId: randomUUID(),
+    submissionId: publishableSub,
     schoolId: world.school,
     gradeSlug: "ef-4",
     schoolYear: 2027,

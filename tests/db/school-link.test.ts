@@ -86,4 +86,22 @@ describe("review_assign_school", () => {
       void save; void rpc;
     });
   });
+
+  it("escola suspensa e município desabilitado são recusados (22023 com hint estável)", async () => {
+    await tx(async (c) => {
+      const suspended = await ensureSchool(c);
+      const disabled = await ensureSchool(c);
+      const id = await seedSubmission(c, { status: "human_review", source: "parent", owner: "parent", schoolId: null });
+      await c.query("update public.schools set verification_status = 'suspended' where id = $1", [suspended]);
+      await asService(c);
+      await open(c, id);
+      expect(await assign(c, id, 1, suspended)).toMatchObject({ code: "22023", hint: "school_suspended" });
+      await asSuper(c);
+      await c.query("update public.municipalities set is_enabled = false where id = (select municipality_id from public.schools where id = $1)", [disabled]);
+      await asService(c);
+      expect(await assign(c, id, 1, disabled)).toMatchObject({ code: "22023", hint: "municipality_not_enabled" });
+      await asSuper(c);
+      expect((await c.query("select school_id from public.list_submissions where id = $1", [id])).rows[0].school_id).toBeNull();
+    });
+  });
 });

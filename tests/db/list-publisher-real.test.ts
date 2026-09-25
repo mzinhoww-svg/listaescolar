@@ -8,7 +8,7 @@ import { type ListPublisher, type PublishRequest } from "../../supabase/function
 import { localApi } from "../helpers/local-api";
 import { runListPublisherContract, request } from "../publication/list-publisher.contract";
 import { cleanupUsers, ensureSchool, IDS, seedUsers, withSuperuser } from "./helpers";
-import { purgeSchools, SYSTEM_ID } from "./integration-fixtures";
+import { ensurePublishableSubmission, purgeSchools, SYSTEM_ID, uuidFrom } from "./integration-fixtures";
 
 const { url, key } = localApi();
 const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -22,7 +22,7 @@ afterAll(async () => {
   await cleanupUsers();
 });
 
-type Harness = { publisher: ListPublisher; schoolId: string; failNext: () => void; raw: ListPublisher };
+type Harness = { publisher: ListPublisher; schoolId: string; failNext: () => void; raw: ListPublisher; direct: ListPublisher };
 
 /** Uma escola e um espaço de chaves por teste (o banco é compartilhado): o contrato usa ids fixos, o harness os isola. */
 async function harness(): Promise<Harness> {
@@ -40,9 +40,21 @@ async function harness(): Promise<Harness> {
       return sb.rpc(fn, args);
     },
   };
-  const { publisher: raw } = createRpcPublicationPorts(rpc as never, { now: () => new Date("2026-09-25T12:00:00Z") });
+  const { publisher: real } = createRpcPublicationPorts(rpc as never, { now: () => new Date("2026-09-25T12:00:00Z") });
+  // ator system só publica de um envio da escola (mesma escola, série, ano; remetente vinculado): semeia um por (escola, série, ano, id original)
+  const seeded = new Map<string, Promise<void>>();
+  const raw: ListPublisher = {
+    async publish(r) {
+      if (r.actor.kind !== "system") return real.publish(r);
+      const id = uuidFrom(`${r.schoolId}|${r.gradeSlug}|${r.schoolYear}|${r.submissionId}`);
+      const key = `${r.schoolId}|${id}`;
+      if (!seeded.has(key)) seeded.set(key, withSuperuser((c) => ensurePublishableSubmission(c, { id, schoolId: r.schoolId, gradeSlug: r.gradeSlug, schoolYear: r.schoolYear })).then(() => undefined, () => undefined));
+      await seeded.get(key); // escola inexistente etc.: a função recusa com o código certo
+      return real.publish({ ...r, submissionId: id });
+    },
+  };
   const rewrite = (r: PublishRequest): PublishRequest => ({ ...r, schoolId: r.schoolId === request().schoolId ? schoolId : r.schoolId, idempotencyKey: `${ns}:${r.idempotencyKey}` });
-  return { raw, schoolId, failNext: () => void (failNext = true), publisher: { publish: (r) => raw.publish(rewrite(r)) } };
+  return { raw, direct: real, schoolId, failNext: () => void (failNext = true), publisher: { publish: (r) => raw.publish(rewrite(r)) } };
 }
 
 runListPublisherContract("real (list_publish_from_pipeline)", async () => {
@@ -59,6 +71,7 @@ runListPublisherContract("real (list_publish_from_pipeline)", async () => {
   };
 });
 
+const real = (h: Harness): ListPublisher => h.direct;
 const rows = async <T = Record<string, unknown>>(sql: string, p: unknown[] = []): Promise<T[]> => withSuperuser(async (c) => (await c.query(sql, p)).rows as T[]);
 const codeOf = async (p: Promise<unknown>): Promise<{ code: string; transient: boolean }> => {
   try {
@@ -170,5 +183,40 @@ describe("ListPublisher real: efeitos no banco", () => {
     const rawReq = { key: "k", submissionId: randomUUID(), schoolId: h.schoolId, gradeSlug: "ef-4", schoolYear: 2027, source: "school_upload", actor: "system", items: [{ position: 1, originalName: "X", normalizedName: "x", category: "c", quantity: 1, unit: null, confidence: 0.5 }] };
     expect((await sb.rpc("list_publish_from_pipeline", { p_request: { ...rawReq, extra: 1 } })).error?.hint).toBe("invalid_request");
     expect((await sb.rpc("list_publish_from_pipeline", { p_request: { ...rawReq, actorId: IDS.admin } })).error?.hint).toBe("invalid_request");
+  });
+
+  it("ator system só publica envio da escola: lista de pai, envio de outra escola/série/ano e remetente sem vínculo são recusas fechadas", async () => {
+    const h = await harness();
+    const k = () => `k-${randomUUID()}`;
+    const other = randomUUID();
+    await withSuperuser((c) => ensureSchool(c, other));
+    created.push(other);
+    const sub = (over: Partial<Parameters<typeof ensurePublishableSubmission>[1]> = {}) => {
+      const id = randomUUID();
+      return withSuperuser((c) => ensurePublishableSubmission(c, { id, schoolId: h.schoolId, gradeSlug: "ef-4", schoolYear: 2027, ...over })).then(() => id);
+    };
+    const pub = (over: Partial<PublishRequest>) => codeOf(real(h).publish(request({ schoolId: h.schoolId, idempotencyKey: k(), ...over })));
+    // 1. lista de pai pedida pelo system
+    expect(await pub({ source: "parent_upload", submissionId: await sub() })).toMatchObject({ code: "invalid_source", transient: false });
+    // 2. envio inexistente, de família, de outra escola, de outra série e de outro ano
+    expect(await pub({ submissionId: randomUUID() })).toMatchObject({ code: "submission_mismatch", transient: false });
+    const parentSub = randomUUID();
+    await withSuperuser(async (c) => {
+      await ensurePublishableSubmission(c, { id: parentSub, schoolId: h.schoolId, gradeSlug: "ef-4", schoolYear: 2027 });
+      await c.query("alter table public.list_submissions disable trigger list_submissions_guard_update");
+      await c.query("update public.list_submissions set source = 'parent' where id = $1", [parentSub]);
+      await c.query("alter table public.list_submissions enable trigger list_submissions_guard_update");
+    });
+    expect(await pub({ submissionId: parentSub })).toMatchObject({ code: "submission_mismatch" });
+    expect(await pub({ submissionId: await sub({ schoolId: other }) })).toMatchObject({ code: "submission_mismatch" });
+    expect(await pub({ submissionId: await sub({ gradeSlug: "ef-5" }) })).toMatchObject({ code: "submission_mismatch" });
+    expect(await pub({ submissionId: await sub({ schoolYear: 2028 }) })).toMatchObject({ code: "submission_mismatch" });
+    // 3. remetente sem vínculo com a escola
+    const unlinked = await sub();
+    await withSuperuser((c) => c.query("delete from public.school_members where school_id = $1", [h.schoolId]));
+    expect(await pub({ submissionId: unlinked })).toMatchObject({ code: "sender_not_linked", transient: false });
+    // o ator admin (publicação humana da S10) não depende do envio nem do vínculo
+    const human = await h.raw.publish(request({ schoolId: h.schoolId, idempotencyKey: k(), actor: { kind: "admin", profileId: IDS.admin }, source: "parent_upload", submissionId: randomUUID() }));
+    expect(human.newVersionId).toBeTruthy();
   });
 });

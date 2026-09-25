@@ -144,6 +144,29 @@ describe("lead_list_context", () => {
   });
 });
 
+describe("lead_list_context: escola suspensa e município desabilitado", () => {
+  it("oficial e cópia do pai: null nos dois casos", async () => {
+    await tx(async (c) => {
+      const school = await ensureSchool(c);
+      const { out } = await publishOk(c, { schoolId: school });
+      const sub = await seedSubmission(c, { status: "human_review", source: "parent", owner: "parent", schoolId: school, grade: "5º ano", year: 2027 });
+      await asService(c);
+      const copy = ((await rpc(c, "parent_copy_open", "$1::uuid, $2::uuid", [sub, IDS.parent])).rows[0]!.r as { copyId: string }).copyId;
+      await asSuper(c);
+      expect(await leadCtx(c, out.newVersionId, IDS.parent)).not.toBeNull();
+      expect(await leadCtx(c, copy, IDS.parent)).not.toBeNull();
+      await c.query("update public.schools set verification_status = 'suspended' where id = $1", [school]);
+      expect(await leadCtx(c, out.newVersionId, IDS.parent)).toBeNull();
+      expect(await leadCtx(c, copy, IDS.parent)).toBeNull();
+      await c.query("update public.schools set verification_status = 'verified' where id = $1", [school]);
+      expect(await leadCtx(c, copy, IDS.parent)).not.toBeNull();
+      await c.query("update public.municipalities set is_enabled = false where id = (select municipality_id from public.schools where id = $1)", [school]);
+      expect(await leadCtx(c, out.newVersionId, IDS.parent)).toBeNull();
+      expect(await leadCtx(c, copy, IDS.parent)).toBeNull();
+    });
+  });
+});
+
 describe("privilégios das funções novas", () => {
   const fns: [string, string, unknown[]][] = [
     ["list_publish_from_pipeline", "$1::jsonb", ["{}"]],

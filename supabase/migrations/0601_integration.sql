@@ -27,11 +27,12 @@ comment on column public.list_items.origin is 'S11: extracted = veio da extraç�
 -- ---------------------------------------------------------------------------
 -- 2. Perfil técnico `system` (UUID fixo; sem senha, sem identidade, banido, papel system)
 -- ---------------------------------------------------------------------------
+-- `banned_until` é uma data FINITA: 'infinity' derruba o listUsers do GoTrue hospedado (500 ao serializar).
 -- Risco de versão do GoTrue: só colunas estáveis de auth.users, e as de token com '' (versões antigas do GoTrue leem
 -- NULL como erro). O usuário é banido para sempre, sem senha e sem identidade: nenhum login (senha, OTP, OAuth) o alcança.
-insert into auth.users (id, aud, role, email, encrypted_password, banned_until, raw_app_meta_data, raw_user_meta_data,
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, banned_until, raw_app_meta_data, raw_user_meta_data,
                         confirmation_token, recovery_token, email_change_token_new, email_change, created_at, updated_at)
-values ('00000000-0000-4000-8000-00000000c0de', 'authenticated', 'authenticated', 'system@listacerta.invalid', null, 'infinity',
+values ('00000000-0000-0000-0000-000000000000', '00000000-0000-4000-8000-00000000c0de', 'authenticated', 'authenticated', 'system@listacerta.invalid', null, '2999-01-01 00:00:00+00',
         '{"provider":"system","providers":["system"]}'::jsonb, '{}'::jsonb, '', '', '', '', now(), now())
 on conflict (id) do nothing;
 -- o gatilho da 0002 cria o perfil `parent`; a promoção é explícita (o guard da 0001 a permite ao dono do banco).
@@ -271,6 +272,19 @@ begin
 end;
 $$;
 
+-- Escola atribuível: existe, não está suspensa e o município está habilitado (fora do prefixo review_: a trilha Pipeline não lê `schools`, ADR-004).
+create function public.school_assignable(p_school_id uuid) returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    (select case when s.verification_status = 'suspended' then 'school_suspended' when not m.is_enabled then 'municipality_not_enabled' else 'ok' end
+       from public.schools s join public.municipalities m on m.id = s.municipality_id where s.id = p_school_id),
+    'school_not_found');
+$$;
+
 create function public.review_assign_school(p_submission_id uuid, p_actor_id uuid, p_expected_version int, p_school_id uuid) returns text
 language plpgsql
 security definer
@@ -280,6 +294,7 @@ declare
   st public.list_status;
   sid uuid;
   latest record;
+  v_code text;
 begin
   perform public.review_assert_admin(p_actor_id);
   select status, school_id into st, sid from public.list_submissions where id = p_submission_id for update;
@@ -296,7 +311,10 @@ begin
   if p_school_id is null then
     raise exception 'escola inexistente' using errcode = '22023', hint = 'school_not_found';
   end if;
-  -- a existência da escola é garantida pela FK da 0600 (a trilha Pipeline não lê `schools`: ADR-004).
+  v_code := public.school_assignable(p_school_id);
+  if v_code <> 'ok' then
+    raise exception 'escola não pode ser atribuída' using errcode = '22023', hint = v_code;
+  end if;
   begin
     update public.list_submissions set school_id = p_school_id where id = p_submission_id;
   exception when foreign_key_violation then
@@ -343,6 +361,7 @@ declare
   v_prev uuid;
   v_version uuid;
   v_existing record;
+  v_subrow record;
 begin
   if p_request is null or jsonb_typeof(p_request) <> 'object' then
     raise exception 'pedido inválido' using errcode = '22023', hint = 'invalid_request';
@@ -385,6 +404,9 @@ begin
   else
     if p_request ? 'actorId' then
       raise exception 'pedido inválido: actorId só com ator admin' using errcode = '22023', hint = 'invalid_request';
+    end if;
+    if v_source <> 'school_upload' then
+      raise exception 'o ator system só publica lista de escola' using errcode = '22023', hint = 'invalid_source';
     end if;
     v_actor := public.system_profile_id();
     if not exists (select 1 from public.profiles p where p.id = v_actor and p.role = 'system') then
@@ -447,8 +469,22 @@ begin
   if not found then
     raise exception 'série desconhecida' using errcode = '22023', hint = 'grade_unknown';
   end if;
-  select s.is_demo into v_sub_demo from public.list_submissions s where s.id = v_sub;
-  if not found then
+  select s.is_demo, s.school_id, s.school_year, s.grade, s.source::text, s.submitted_by into v_subrow
+    from public.list_submissions s where s.id = v_sub;
+  v_sub_demo := v_subrow.is_demo;
+  if v_actor_kind = 'system' then
+    -- ator system: envio existente DA ESCOLA, mesma escola, série e ano, e remetente com vínculo confirmado (D-002).
+    if v_subrow.source is distinct from 'school' or v_subrow.school_id is distinct from v_school or v_subrow.school_year is distinct from v_year
+       or not exists (select 1 from public.grades g where g.id = v_grade
+                       and (g.slug = lower(btrim(v_subrow.grade))
+                            or regexp_replace(lower(btrim(g.name)), '\s+', ' ', 'g') = regexp_replace(lower(btrim(v_subrow.grade)), '\s+', ' ', 'g'))) then
+      raise exception 'envio não corresponde à lista' using errcode = '22023', hint = 'submission_mismatch';
+    end if;
+    if not exists (select 1 from public.school_members m where m.school_id = v_school and m.profile_id = v_subrow.submitted_by) then
+      raise exception 'remetente sem vínculo com a escola' using errcode = '22023', hint = 'sender_not_linked';
+    end if;
+  end if;
+  if v_subrow.source is null then
     v_sub := null; -- publicação sem envio de origem (ex.: importação): a versão não aponta para envio algum
   end if;
 
@@ -637,7 +673,8 @@ begin
     join public.schools s on s.id = l.school_id
     join public.grades g on g.id = l.grade_id
     join public.municipalities m on m.id = s.municipality_id
-   where v.id = p_list_id and v.status in ('published', 'superseded') and l.status = 'published' and m.is_enabled;
+   where v.id = p_list_id and v.status in ('published', 'superseded') and l.status = 'published' and m.is_enabled
+     and s.verification_status <> 'suspended';
   if found then
     select coalesce(jsonb_agg(jsonb_build_object('name', i.original_name, 'quantity', public.cart_quantity(i.quantity)) order by i.position), '[]'::jsonb)
       into v_items from public.list_items i where i.version_id = p_list_id;
@@ -649,7 +686,8 @@ begin
       from public.parent_list_copies pc
       join public.list_submissions sub on sub.id = pc.submission_id
       join public.schools s on s.id = sub.school_id
-     where pc.id = p_list_id and pc.owner_id = p_actor_id and sub.grade is not null and sub.school_year is not null;
+      join public.municipalities m on m.id = s.municipality_id
+     where m.is_enabled and s.verification_status <> 'suspended' and pc.id = p_list_id and pc.owner_id = p_actor_id and sub.grade is not null and sub.school_year is not null;
     if found then
       select coalesce(jsonb_agg(jsonb_build_object('name', e.item ->> 'name', 'quantity', public.cart_quantity(case when jsonb_typeof(e.item -> 'quantity') = 'number' then (e.item ->> 'quantity')::numeric end)) order by e.n), '[]'::jsonb)
         into v_items from jsonb_array_elements(r.items) with ordinality as e(item, n);
@@ -672,7 +710,6 @@ comment on column public.leads.list_kind is 'S11: origem de list_id, herdada do 
 
 create function public.leads_set_list_kind() returns trigger
 language plpgsql
-security definer
 set search_path = ''
 as $$
 begin
@@ -683,6 +720,13 @@ begin
 end;
 $$;
 create trigger leads_set_list_kind before insert on public.leads for each row execute function public.leads_set_list_kind();
+alter table public.leads enable always trigger leads_set_list_kind;
+
+-- ---------------------------------------------------------------------------
+-- O dono não edita origem nem identidade do carrinho: UPDATE só em `strategy` e `options_snapshot` (o fluxo legítimo); o servidor
+-- (service_role) grava is_demo/list_kind/list_id. O lead nunca confia no cliente: is_demo vem do contexto lido no servidor.
+revoke update on public.carts from authenticated;
+grant update (strategy, options_snapshot) on public.carts to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 8. audit_row_change: pepper do GUC ou, na falta dele, do Vault (D-059)
@@ -748,7 +792,7 @@ $$;
 revoke execute on function
   public.system_profile_id(), public.publication_orphan_pending(uuid), public.publication_reconcile_orphan(uuid, uuid),
   public.review_assign_school(uuid, uuid, int, uuid), public.list_publish_from_pipeline(jsonb), public.publication_context(jsonb),
-  public.school_labels(uuid[]), public.cart_quantity(numeric), public.list_reader_get(uuid, uuid), public.lead_list_context(uuid, uuid),
+  public.school_labels(uuid[]), public.cart_quantity(numeric), public.school_assignable(uuid), public.list_reader_get(uuid, uuid), public.lead_list_context(uuid, uuid),
   public.leads_set_list_kind()
   from public, anon, authenticated, service_role;
 grant execute on function

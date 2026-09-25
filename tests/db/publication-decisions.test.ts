@@ -67,6 +67,8 @@ const NEW_FNS = [
   ["publication_complete", "($1::uuid, '{}'::jsonb)", [randomUUID()]],
   ["publication_fail", "($1::uuid, 'x')", [randomUUID()]],
   ["publication_pending", "(10, 0)", []],
+  ["publication_begin_publish", "($1::uuid, 60)", [randomUUID()]],
+  ["publication_expire", "($1::uuid, 0)", [randomUUID()]],
 ] as const;
 
 describe("0203: ai_settings.auto_publish_enabled", () => {

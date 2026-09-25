@@ -1,0 +1,92 @@
+// Suíte de contrato da porta `ListPublisher` (ADR-004). Reutilizável: a S11 a roda contra a implementação real
+// (lists/versions de verdade); a S09 a roda contra `MemoryListPublisher`.
+import { describe, expect, it } from "vitest";
+import type { ListPublisher, PublishRequest } from "../../supabase/functions/_shared/publication/ports";
+
+export type PublisherHarness = {
+  publisher: ListPublisher;
+  /** Arquiva a lista-alvo (escola, série, ano) para provar que a porta recusa lista arquivada. */
+  archiveList(target: { schoolId: string; gradeSlug: string; schoolYear: number }): Promise<void> | void;
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function request(over: Partial<PublishRequest> = {}): PublishRequest {
+  const id = over.submissionId ?? "10000000-0000-4000-8000-0000000000c1";
+  return {
+    idempotencyKey: id,
+    submissionId: id,
+    schoolId: "50000000-0000-4000-8000-0000000000c1",
+    gradeSlug: "ef-4",
+    schoolYear: 2027,
+    source: "school_upload",
+    actor: { kind: "system" },
+    items: [{ position: 1, originalName: "Caderno", normalizedName: "caderno", category: "papelaria", quantity: 2, unit: "un", confidence: 0.9 }],
+    ...over,
+  };
+}
+
+async function rejection(p: Promise<unknown>): Promise<{ name?: string; code?: string; transient?: boolean }> {
+  try {
+    await p;
+  } catch (e) {
+    return e as { name?: string; code?: string; transient?: boolean };
+  }
+  throw new Error("a porta deveria ter recusado");
+}
+
+export function runListPublisherContract(name: string, make: () => PublisherHarness | Promise<PublisherHarness>): void {
+  describe(`contrato ListPublisher: ${name}`, () => {
+    it("publica e devolve listId, previousVersionId nulo na primeira e newVersionId uuid", async () => {
+      const { publisher } = await make();
+      const r = await publisher.publish(request());
+      expect(r.previousVersionId).toBeNull();
+      expect(r.newVersionId).toMatch(UUID);
+      expect(r.listId).toMatch(UUID);
+    });
+
+    it("idempotente pela chave: repetir devolve o mesmo resultado e não cria outra versão", async () => {
+      const { publisher } = await make();
+      const a = await publisher.publish(request());
+      const b = await publisher.publish(request());
+      expect(b).toEqual(a);
+      const next = await publisher.publish(request({ idempotencyKey: "10000000-0000-4000-8000-0000000000c2", submissionId: "10000000-0000-4000-8000-0000000000c2" }));
+      expect(next.previousVersionId).toBe(a.newVersionId); // só houve UMA versão antes: a repetição não criou outra
+    });
+
+    it("a versão anterior é a publicada antes na mesma lista", async () => {
+      const { publisher } = await make();
+      const a = await publisher.publish(request());
+      const b = await publisher.publish(request({ idempotencyKey: "10000000-0000-4000-8000-0000000000c3", submissionId: "10000000-0000-4000-8000-0000000000c3" }));
+      const c = await publisher.publish(request({ idempotencyKey: "10000000-0000-4000-8000-0000000000c4", submissionId: "10000000-0000-4000-8000-0000000000c4" }));
+      expect(b.previousVersionId).toBe(a.newVersionId);
+      expect(c.previousVersionId).toBe(b.newVersionId);
+      expect(b.listId).toBe(a.listId);
+    });
+
+    it("listas diferentes (escola, série ou ano) não compartilham versões", async () => {
+      const { publisher } = await make();
+      const a = await publisher.publish(request());
+      const other = await publisher.publish(request({ idempotencyKey: "k-outra", submissionId: "10000000-0000-4000-8000-0000000000c5", gradeSlug: "ef-5" }));
+      expect(other.previousVersionId).toBeNull();
+      expect(other.listId).not.toBe(a.listId);
+    });
+
+    it("lista arquivada é recusada com erro permanente", async () => {
+      const h = await make();
+      await h.publisher.publish(request());
+      await h.archiveList({ schoolId: request().schoolId, gradeSlug: "ef-4", schoolYear: 2027 });
+      const e = await rejection(h.publisher.publish(request({ idempotencyKey: "10000000-0000-4000-8000-0000000000c6", submissionId: "10000000-0000-4000-8000-0000000000c6" })));
+      expect(e.name).toBe("PortError");
+      expect(e.transient).toBe(false);
+      expect(e.code).toMatch(/^[a-z][a-z0-9_]{0,59}$/);
+    });
+
+    it("sem itens é recusado com erro permanente", async () => {
+      const { publisher } = await make();
+      const e = await rejection(publisher.publish(request({ items: [] })));
+      expect(e.name).toBe("PortError");
+      expect(e.transient).toBe(false);
+    });
+  });
+}

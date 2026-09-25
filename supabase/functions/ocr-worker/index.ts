@@ -9,6 +9,9 @@ import { DemoExtractionPipeline } from "../_shared/demo-pipeline.ts";
 import { aiPipelineAvailable, createAiPipeline, type AiEnv } from "../_shared/ai/composition.ts";
 import { createValidatedRpc, type RawRpc } from "../_shared/ai/rpc.ts";
 import { extractionResultSchema } from "../_shared/extraction-schema.ts";
+import { createPublicationDeps } from "../_shared/publication/composition.ts";
+import { decideListPublication } from "../_shared/publication/decide.ts";
+import { runPublicationSweep } from "../_shared/publication/sweep.ts";
 import {
   createRpcWorkerJobs,
   createRpcWorkerQueue,
@@ -74,8 +77,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
-  const kind = pipelineKind();
-  if (!kind) return json({ status: "pipeline_unavailable" }); // não lê a fila: as mensagens ficam para depois
+  const kind = pipelineKind(); // sem pipeline: não lê a fila, mas o varredor da publicação ainda roda
 
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -85,13 +87,37 @@ Deno.serve(async (req) => {
 
   // Pipeline real: decisões de IA (`ai_decisions`) pelo mesmo cliente de serviço; teto = o que o tick der (por chamada).
   const pipeline =
-    kind === "demo"
-      ? new DemoExtractionPipeline({ slowMs: parseSlowMs(Deno.env.get("DEMO_SLOW_MS")) })
-      : createAiPipeline({
-          env: aiEnv(),
-          rpc: createValidatedRpc(client as unknown as RawRpc),
-          budgetMs: 90_000,
-        });
+    kind === null
+      ? null
+      : kind === "demo"
+        ? new DemoExtractionPipeline({ slowMs: parseSlowMs(Deno.env.get("DEMO_SLOW_MS")) })
+        : createAiPipeline({
+            env: aiEnv(),
+            rpc: createValidatedRpc(client as unknown as RawRpc),
+            budgetMs: 90_000,
+          });
+
+  // Decisão de publicação (S09): mesmo motor do app (_shared/publication). As portas em memória só com
+  // FAKE_PUBLICATION_FIXTURE + APP_ENV não produtivo; sem elas todo envio vai a human_review, registrado.
+  const clock = {
+    now: () => Date.now(),
+    delay: (ms: number, signal?: AbortSignal) =>
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, ms);
+        signal?.addEventListener("abort", () => clearTimeout(t), { once: true });
+      }),
+  };
+  const publication = createPublicationDeps({
+    env: {
+      NODE_ENV: Deno.env.get("NODE_ENV"),
+      APP_ENV: Deno.env.get("APP_ENV"),
+      VERCEL_ENV: Deno.env.get("VERCEL_ENV"),
+      FAKE_PUBLICATION_FIXTURE: Deno.env.get("FAKE_PUBLICATION_FIXTURE"),
+    },
+    rpc: client as unknown as RawRpc,
+    clock,
+    onAlert: (a) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", ...a })),
+  });
 
   const jobs = createRpcWorkerJobs(rpc, async (id) => {
     const { data } = await client
@@ -125,18 +151,13 @@ Deno.serve(async (req) => {
     pipeline,
     resultSchema: extractionResultSchema, // a saída do pipeline é validada antes de jobs_complete
     loadInput,
-    clock: {
-      now: () => Date.now(),
-      delay: (ms, signal) =>
-        new Promise<void>((resolve) => {
-          const t = setTimeout(resolve, ms);
-          signal?.addEventListener("abort", () => clearTimeout(t), { once: true });
-        }),
-    },
+    clock,
     random: Math.random,
+    decide: (submissionId) => decideListPublication(submissionId, publication),
   }, {
+    sweep: (remainingMs) => runPublicationSweep(publication, { limit: 10, deadlineMs: remainingMs }),
     // erro de infra do tick: sem PII (o core já sanitiza) e sem derrubar a resposta
     onError: (e) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", ...e })),
   });
-  return json({ status: "ok", ...summary });
+  return json({ status: kind ? "ok" : "pipeline_unavailable", ...summary });
 });

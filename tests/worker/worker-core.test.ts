@@ -511,3 +511,78 @@ describe("adaptador RPC de jobs_fail", () => {
     expect(calls[0]).toEqual({ fn: "jobs_complete", args: { p_job_id: "j1", p_result: RESULT, p_duration_ms: 12, p_attempts: 3, p_is_demo: true } });
   });
 });
+
+describe("handleTick: publicação automática (S09)", () => {
+  it("decide é chamado com o id do envio depois de jobs.complete; job segue done", async () => {
+    const { deps, db, clock } = setup();
+    const order: string[] = [];
+    const decide = vi.fn(async (sub: string) => { order.push(`decide:${sub}:${db.effects.join(",")}`); return { status: "auto_published" }; });
+    const q = fakeQueue(clock, ["j1"]);
+    const s = await handleTick(q.queue, { ...deps, decide });
+    expect(s).toMatchObject({ done: 1, errors: 0 });
+    expect(order).toEqual(["decide:sub-j1:requeueStale,complete:j1"]);
+  });
+
+  it("exceção do decide vai a onError (sanitizada), o job continua done e a mensagem é confirmada", async () => {
+    const { deps, db, clock } = setup();
+    const errors: { stage: string; message: string }[] = [];
+    const decide = async () => { throw new Error("falha para a@b.com"); };
+    const q = fakeQueue(clock, ["j1"]);
+    const s = await handleTick(q.queue, { ...deps, decide }, { onError: (e) => errors.push(e) });
+    expect(s).toMatchObject({ done: 1, errors: 1 });
+    expect(db.jobs.get("j1")?.status).toBe("succeeded");
+    expect(q.acked).toEqual([1]);
+    expect(errors[0]?.stage).toBe("decide");
+    expect(errors[0]?.message).not.toContain("a@b.com");
+  });
+
+  it("sem decide, o comportamento é o de sempre", async () => {
+    const { deps, clock } = setup();
+    const q = fakeQueue(clock, ["j1"]);
+    expect(await handleTick(q.queue, deps)).toMatchObject({ done: 1, errors: 0 });
+  });
+
+  it("decide não roda para mensagem duplicada (skipped) nem para job que falhou", async () => {
+    const { deps, db, clock } = setup();
+    db.jobs.get("j1")!.submissionId = null;
+    const decide = vi.fn(async () => ({}));
+    const q = fakeQueue(clock, ["j1"]);
+    await handleTick(q.queue, { ...deps, decide });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("sweep roda no fim do tick com o prazo restante; o erro do sweep é reportado sem derrubar", async () => {
+    const { deps, clock } = setup();
+    const budgets: number[] = [];
+    const sweep = vi.fn(async (remainingMs: number) => { budgets.push(remainingMs); });
+    const q = fakeQueue(clock, []);
+    await handleTick(q.queue, deps, { deadlineMs: 100_000, sweep });
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]).toBeGreaterThan(0);
+    expect(budgets[0]).toBeLessThanOrEqual(100_000);
+    const errors: { stage: string }[] = [];
+    const bad = await handleTick(q.queue, deps, { sweep: async () => { throw new Error("pending fora"); }, onError: (e) => errors.push(e) });
+    expect(bad.errors).toBe(1);
+    expect(errors[0]?.stage).toBe("sweep");
+  });
+
+  it("sweep não roda quando o prazo do tick acabou", async () => {
+    const { deps, db, clock } = setup({ extract: async () => { clock.advance(95_000); return RESULT; } });
+    db.add("j2");
+    const sweep = vi.fn(async () => undefined);
+    const q = fakeQueue(clock, ["j1", "j2"]);
+    await handleTick(q.queue, deps, { batch: 2, sweep });
+    expect(sweep).not.toHaveBeenCalled();
+  });
+
+  it("sem pipeline: não lê a fila, mas roda o sweep", async () => {
+    const { deps, clock } = setup();
+    const q = fakeQueue(clock, ["j1"]);
+    const read = vi.spyOn(q.queue, "read");
+    const sweep = vi.fn(async () => undefined);
+    const s = await handleTick(q.queue, { ...deps, pipeline: null }, { sweep });
+    expect(read).not.toHaveBeenCalled();
+    expect(sweep).toHaveBeenCalledTimes(1);
+    expect(s).toMatchObject({ read: 0, done: 0 });
+  });
+});

@@ -13,6 +13,7 @@ export type FormErrorCode =
   | "invalid_input"
   | "no_file"
   | "forbidden"
+  | "school_not_linked"
   | "unexpected"
   | "pdf_too_large"
   | "image_undecodable"
@@ -23,6 +24,7 @@ export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
   invalid_input: "Confira a série e o ano letivo.",
   no_file: "Escolha um arquivo (PDF ou foto) para enviar.",
   forbidden: "Seu perfil não pode enviar listas por aqui.",
+  school_not_linked: "Você ainda não tem vínculo confirmado com esta escola. Reivindique a escola antes de enviar a lista.",
   unexpected: "Não foi possível enviar agora. Tente novamente em instantes.",
   empty_file: "O arquivo está vazio. Escolha outro.",
   file_too_large: "O arquivo passa de 4 MB. Envie um arquivo menor.",

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.hoisted(() => ({ actor: null as unknown }));
-const svc = vi.hoisted(() => ({ save: vi.fn(), approveAndPublish: vi.fn(), publish: vi.fn(), reject: vi.fn() }));
+const svc = vi.hoisted(() => ({ save: vi.fn(), approveAndPublish: vi.fn(), publish: vi.fn(), reject: vi.fn(), assignSchool: vi.fn(), reconcile: vi.fn() }));
 const revalidatePath = vi.hoisted(() => vi.fn());
 const redirect = vi.hoisted(() => vi.fn((to: string) => { throw new Error(`REDIRECT:${to}`); }));
 vi.mock("next/navigation", () => ({ redirect }));
@@ -9,7 +9,7 @@ vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: async () => session.actor }));
 vi.mock("@/features/review/deps", () => ({ buildReviewService: () => svc }));
 
-import { approveAndPublishAction, publishAction, rejectAction, saveReviewAction } from "@/app/admin/revisao/actions";
+import { approveAndPublishAction, assignSchoolAction, publishAction, reconcileAction, rejectAction, saveReviewAction } from "@/app/admin/revisao/actions";
 import { IDLE } from "@/app/admin/revisao/state";
 import { ReviewError } from "@/features/review/errors";
 
@@ -35,6 +35,8 @@ const all = [
   ["approveAndPublishAction", approveAndPublishAction, { submissionId: ID, expectedVersion: "1" }],
   ["publishAction", publishAction, { submissionId: ID }],
   ["rejectAction", rejectAction, { submissionId: ID, expectedVersion: "1", reason: "illegible_document" }],
+  ["assignSchoolAction", assignSchoolAction, { submissionId: ID, expectedVersion: "1", schoolId: "50000000-0000-4000-8000-0000000000c1" }],
+  ["reconcileAction", reconcileAction, { submissionId: ID }],
 ] as const;
 
 describe("papel e sessão", () => {
@@ -155,5 +157,37 @@ describe("publishAction e rejectAction", () => {
   it("rejectAction: stale traduzido", async () => {
     svc.reject.mockResolvedValue({ status: "stale" });
     expect((await rejectAction(IDLE, form({ submissionId: ID, expectedVersion: "1", reason: "other" }))).kind).toBe("stale");
+  });
+});
+
+describe("assignSchoolAction e reconcileAction (S11)", () => {
+  const SCHOOL = "50000000-0000-4000-8000-0000000000c1";
+  it("atribui a escola com o ator da sessão e revalida; escola inválida não chama o serviço", async () => {
+    svc.assignSchool.mockResolvedValue({ status: "school_assigned" });
+    expect(await assignSchoolAction(IDLE, form({ submissionId: ID, expectedVersion: "2", schoolId: SCHOOL, actorId: "forjado" }))).toEqual({ kind: "assigned", message: "Escola atribuída ao envio." });
+    expect(svc.assignSchool).toHaveBeenCalledWith(ADMIN, ID, { schoolId: SCHOOL, expectedVersion: 2 });
+    expect(revalidatePath).toHaveBeenCalled();
+    svc.assignSchool.mockClear();
+    expect((await assignSchoolAction(IDLE, form({ submissionId: ID, expectedVersion: "2", schoolId: "x" }))).kind).toBe("error");
+    expect(svc.assignSchool).not.toHaveBeenCalled();
+  });
+  it("stale e não revisável têm frases próprias", async () => {
+    svc.assignSchool.mockResolvedValue({ status: "stale" });
+    expect((await assignSchoolAction(IDLE, form({ submissionId: ID, expectedVersion: "2", schoolId: SCHOOL }))).kind).toBe("stale");
+    svc.assignSchool.mockResolvedValue({ status: "not_reviewable" });
+    expect((await assignSchoolAction(IDLE, form({ submissionId: ID, expectedVersion: "2", schoolId: SCHOOL }))).kind).toBe("error");
+  });
+  it("conciliar: cada resultado tem a sua frase e o clique é do admin da sessão", async () => {
+    svc.reconcile.mockResolvedValue("reconciled");
+    expect(await reconcileAction(IDLE, form({ submissionId: ID }))).toMatchObject({ kind: "reconciled", message: expect.stringMatching(/conciliada/) });
+    expect(svc.reconcile).toHaveBeenCalledWith(ADMIN, ID);
+    svc.reconcile.mockResolvedValue("orphan_not_found");
+    expect(await reconcileAction(IDLE, form({ submissionId: ID }))).toMatchObject({ kind: "reconciled", message: expect.stringMatching(/liberada/) });
+    svc.reconcile.mockResolvedValue("not_orphaned");
+    expect((await reconcileAction(IDLE, form({ submissionId: ID }))).kind).toBe("error");
+  });
+  it("erro do serviço vira frase fixa (sem vazar detalhe)", async () => {
+    svc.reconcile.mockRejectedValue(new ReviewError("unavailable"));
+    expect(await reconcileAction(IDLE, form({ submissionId: ID }))).toEqual({ kind: "error", message: "Não foi possível concluir. Tente de novo." });
   });
 });

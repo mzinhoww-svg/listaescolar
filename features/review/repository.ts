@@ -110,6 +110,9 @@ export function createReviewRepository(client: SupabaseClient) {
     completePublish: (id, actorId, r) =>
       rpc("review_complete_publish", { p_submission_id: id, p_actor_id: actorId, p_result: { newVersionId: r.newVersionId, previousVersionId: r.previousVersionId, listId: r.listId } }, z.enum(["completed", "already_completed", "not_approved", "orphaned"])),
     failPublish: (id, actorId, reason) => rpc("review_publish_fail", { p_submission_id: id, p_actor_id: actorId, p_reason: reason }, z.enum(["failed", "not_approved", "busy"])),
+    assignSchool: (id, actorId, expected, schoolId) =>
+      rpc("review_assign_school", { p_submission_id: id, p_actor_id: actorId, p_expected_version: expected, p_school_id: schoolId }, z.enum(["assigned", "stale", "not_reviewable"])),
+    reconcileOrphan: (id, actorId) => rpc("publication_reconcile_orphan", { p_submission_id: id, p_actor_id: actorId }, z.enum(["reconciled", "orphan_not_found", "not_orphaned"])),
   };
   return { store, latestVersion, resultOf, client };
 }

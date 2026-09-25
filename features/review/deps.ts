@@ -1,5 +1,6 @@
 import "server-only";
 
+import { SupabaseSchoolLabelReader } from "@/features/integration/school-labels";
 import { buildPublicationDeps } from "@/features/publication/factory";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -20,7 +21,10 @@ export function buildReviewService() {
 
 export function buildSchoolLabelReader(): SchoolLabelReader | null {
   const e = process.env;
-  return createSchoolLabelReader({ NODE_ENV: e.NODE_ENV, APP_ENV: e.APP_ENV, VERCEL_ENV: e.VERCEL_ENV, FAKE_PUBLICATION_FIXTURE: e.FAKE_PUBLICATION_FIXTURE });
+  return createSchoolLabelReader(
+    { NODE_ENV: e.NODE_ENV, APP_ENV: e.APP_ENV, VERCEL_ENV: e.VERCEL_ENV, FAKE_PUBLICATION_FIXTURE: e.FAKE_PUBLICATION_FIXTURE },
+    new SupabaseSchoolLabelReader(createAdminClient()),
+  );
 }
 
 export const buildParentCopyService = () => createParentCopyService(createAdminClient({ fresh: true }));

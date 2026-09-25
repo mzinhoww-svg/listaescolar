@@ -47,7 +47,7 @@ export async function loadQuoteView(actor: SessionActor, cartId: string, neighbo
   if (!cart) return { status: "not_found" };
   const contexts = createContextReader();
   if (cart.listId === null || contexts === null) return { status: "unavailable" };
-  const context = await contexts.getContext(cart.listId);
+  const context = await contexts.getContext(cart.listId, { actorId: actor.userId });
   if (!context) return { status: "unavailable" };
   const municipalityId = await resolveMunicipality(context);
   if (municipalityId === null) return { status: "unavailable" };

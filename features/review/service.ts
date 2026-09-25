@@ -8,8 +8,8 @@ import { ReviewError } from "./errors";
 import { CRITICAL_ACK_REASON, type BlockerCode } from "./codes";
 import { approvalBlockers, criticalAlertsIn, publicationBlockers, type CriticalAck, type GateInput } from "./gate";
 import { publishApproved, type OnAlert, type ReviewPublicationDeps } from "./publish";
-import { approveSchema, rejectSchema, reviewPayloadSchema, submissionIdSchema } from "./schemas";
-import type { PublishOutcome, ReviewContext, ReviewOutcome, ReviewStore } from "./types";
+import { approveSchema, assignSchoolSchema, rejectSchema, reviewPayloadSchema, submissionIdSchema } from "./schemas";
+import type { PublishOutcome, ReconcileOutcome, ReviewContext, ReviewOutcome, ReviewStore } from "./types";
 
 export { ReviewError };
 
@@ -118,6 +118,21 @@ export function createReviewService(deps: ReviewServiceDeps) {
       const approval = await approveWith(actor, id, raw, true);
       if (approval.status !== "approved") return { approval, publication: null };
       return { approval, publication: await publishApproved({ store, publication, actorId: actor.userId, submissionId: id, ...(deps.onAlert ? { onAlert: deps.onAlert } : {}) }) };
+    },
+
+    /** S11: atribui a escola a um envio em revisão que não tem (obrigação da S10 para envio de pai sem escola). */
+    async assignSchool(actor: SessionActor, submissionId: string, raw: unknown): Promise<ReviewOutcome> {
+      assertAdmin(actor);
+      const id = idOf(submissionId);
+      const p = parse(assignSchoolSchema.safeParse(raw));
+      const r = await store.assignSchool(id, actor.userId, p.expectedVersion, p.schoolId);
+      return r === "assigned" ? { status: "school_assigned" } : { status: r };
+    },
+
+    /** S11: "Conciliar publicação" (D-066). Só o admin, por clique: conciliar sozinho arriscaria vincular a versão errada. */
+    async reconcile(actor: SessionActor, submissionId: string): Promise<ReconcileOutcome> {
+      assertAdmin(actor);
+      return store.reconcileOrphan(idOf(submissionId), actor.userId);
     },
 
     /** Bloqueios para a tela (mesmo cálculo do "Aprovar e publicar"). */

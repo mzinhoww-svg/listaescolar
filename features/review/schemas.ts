@@ -41,3 +41,4 @@ export type ParentCopyPayload = z.infer<typeof parentCopyPayloadSchema>;
 export const rejectSchema = z.object({ reason: z.enum(REJECT_REASONS), expectedVersion: versionNumber }).strict();
 export const approveSchema = z.object({ expectedVersion: versionNumber, acknowledged: z.boolean() }).strict();
 export const submissionIdSchema = z.uuid();
+export const assignSchoolSchema = z.object({ schoolId: z.uuid(), expectedVersion: versionNumber }).strict();

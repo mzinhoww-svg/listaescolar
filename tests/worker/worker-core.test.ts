@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  MAX_PAID_ATTEMPTS,
+  PIPELINE_ABORT_MARGIN_MS,
   createRpcWorkerJobs,
   detectMime,
   handleTick,
@@ -126,6 +128,11 @@ describe("nextDelaySeconds", () => {
 });
 
 describe("processJob", () => {
+  it("entrega ao pipeline o id do envio (entity_id das decisões de IA) e o teto desta extração", async () => {
+    const { deps, extract } = setup();
+    await processJob("j1", { ...deps, timeoutMs: 42_000 });
+    expect(extract).toHaveBeenCalledWith(expect.objectContaining({ submissionId: "sub-j1" }), expect.objectContaining({ budgetMs: 42_000 - PIPELINE_ABORT_MARGIN_MS }));
+  });
   it("sucesso: done, um único efeito", async () => {
     const { deps, db, extract } = setup();
     await expect(processJob("j1", deps)).resolves.toBe("done");
@@ -193,6 +200,62 @@ describe("processJob", () => {
     expect(failSpy).toHaveBeenCalledWith("j1", "invalid_file", 30, true, 1);
     expect(db.jobs.get("j1")?.status).toBe("dead");
     expect(extract).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["provider_error 401", { name: "AiError", code: "provider_error", transient: false }],
+    ["vision_model_missing", { name: "AiError", code: "vision_model_missing", transient: false }],
+    ["ai_not_configured", { name: "AiError", code: "ai_not_configured", transient: false }],
+    ["invalid_output após escalada", { name: "AiError", code: "invalid_output", transient: true }],
+  ])("erro de IA não transitório (%s): dead direto, sem repetir cobrança", async (_n, props) => {
+    const err = Object.assign(new Error("x"), props);
+    const { deps, db, extract } = setup({ extract: async () => { throw err; } });
+    expect(await processMessage("j1", deps)).toEqual({ outcome: "dead", ack: true });
+    expect(db.jobs.get("j1")?.status).toBe("dead");
+    expect(extract).toHaveBeenCalledTimes(1);
+  });
+
+  it("erro de IA transitório: retry, mas com teto de tentativas pagas por job", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "provider_timeout", transient: true });
+    const { deps, db, clock, extract } = setup({ extract: async () => { throw err; } });
+    db.jobs.get("j1")!.maxAttempts = 10;
+    const outcomes: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const r = await processMessage("j1", deps);
+      outcomes.push(r.outcome);
+      if (r.outcome === "dead") break;
+      clock.advance(900_000);
+    }
+    expect(outcomes).toEqual(Array(MAX_PAID_ATTEMPTS - 1).fill("retry").concat("dead"));
+    expect(extract).toHaveBeenCalledTimes(MAX_PAID_ATTEMPTS);
+  });
+
+  it("RPC de settings/prompt falhou (transitório, sem chamada paga): retry sempre, além do teto pago", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "provider_error", transient: true, detail: "settings_unavailable" });
+    const { deps, db, clock } = setup({ extract: async () => { throw err; } });
+    db.jobs.get("j1")!.maxAttempts = 10;
+    for (let i = 0; i < MAX_PAID_ATTEMPTS + 2; i++) {
+      expect((await processMessage("j1", deps)).outcome).toBe("retry");
+      clock.advance(900_000);
+    }
+  });
+
+  it("falha da RPC ao gravar a decisão (chamada paga): retry e conta no teto", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "provider_error", transient: true, detail: "decision_record_failed" });
+    const { deps, db, clock } = setup({ extract: async () => { throw err; } });
+    db.jobs.get("j1")!.maxAttempts = 10;
+    const outcomes: string[] = [];
+    for (let i = 0; i < MAX_PAID_ATTEMPTS; i++) {
+      outcomes.push((await processMessage("j1", deps)).outcome);
+      clock.advance(900_000);
+    }
+    expect(outcomes).toEqual(Array(MAX_PAID_ATTEMPTS - 1).fill("retry").concat("dead"));
+  });
+
+  it("linha de configuração ausente (P0002 -> ai_not_configured): dead sem retry", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "ai_not_configured", transient: false, detail: "settings_invalid" });
+    const { deps } = setup({ extract: async () => { throw err; } });
+    expect((await processMessage("j1", deps)).outcome).toBe("dead");
   });
 
   it("arquivo ausente no storage: falha transitória (retry)", async () => {

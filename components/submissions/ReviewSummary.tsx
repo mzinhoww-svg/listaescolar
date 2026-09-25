@@ -1,0 +1,48 @@
+import Link from "next/link";
+
+import { REVIEW_NOTICE } from "@/features/submissions/copy";
+import type { ExtractionResult } from "@/features/submissions/schemas";
+
+/** Resumo do que a leitura encontrou (a revisão do responsável é a S10). Só mostra o que veio do resultado. */
+export function ReviewSummary({ result, isDemo }: { result?: ExtractionResult; isDemo: boolean }) {
+  const items = result?.items ?? [];
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
+      <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Lista lida</h1>
+      {isDemo ? (
+        <p className="bg-campo text-texto-2 w-fit rounded-full px-3 py-1 text-xs font-extrabold">Demonstração</p>
+      ) : null}
+      <p className="text-texto-2 rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-semibold">{REVIEW_NOTICE}</p>
+      {items.length === 0 ? (
+        <p className="text-texto-2 text-[15px] font-semibold">Nenhum item foi identificado neste arquivo.</p>
+      ) : (
+        <section aria-label="Itens lidos">
+          <h2 className="mb-2 flex justify-between text-[13px] font-extrabold">
+            Itens <span className="text-texto-3">{items.length === 1 ? "1 item" : `${items.length} itens`}</span>
+          </h2>
+          <ul className="flex flex-col gap-2">
+            {items.map((item, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3.5">
+                <span className="text-[15px] font-bold">{item.name}</span>
+                <span className="text-texto-2 shrink-0 text-sm font-extrabold">
+                  {item.quantity ?? "—"} {item.unit ?? ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {result?.warnings.map((w) => (
+        <p key={w} className="text-texto-3 text-xs font-semibold">
+          {w}
+        </p>
+      ))}
+      <Link
+        href="/enviar-lista"
+        className="border-tinta text-tinta mt-auto flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold"
+      >
+        Enviar outra lista
+      </Link>
+    </main>
+  );
+}

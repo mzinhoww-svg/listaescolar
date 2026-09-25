@@ -6,6 +6,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { demoConfigError, demoEnabled, parseSlowMs } from "../_shared/demo-lock.ts";
 import { DemoExtractionPipeline } from "../_shared/demo-pipeline.ts";
+import { aiPipelineAvailable, createAiPipeline, type AiEnv } from "../_shared/ai/composition.ts";
+import { createValidatedRpc, type RawRpc } from "../_shared/ai/rpc.ts";
 import { extractionResultSchema } from "../_shared/extraction-schema.ts";
 import {
   createRpcWorkerJobs,
@@ -42,27 +44,54 @@ function authorized(req: Request): boolean {
   return [serviceKey, secretKey].some((k) => !!k && bearer !== "" && safeEqual(bearer, k));
 }
 
-// Pipeline: a S08 troca por a implementação real. Demonstração só com DEMO_PIPELINE=1 E APP_ENV explícito em
-// {local, development, preview, staging}; APP_ENV ausente ou outro = desligado (mesma regra do app Node).
-function pipelineOrNull() {
+// Pipeline: demonstração só com DEMO_PIPELINE=1 E APP_ENV explícito em {local, development, preview, staging}
+// (mesma regra do app Node). Senão, o pipeline real da S08 (roteador + adapters), só se houver chave e modelos
+// (secrets da função: OPENROUTER_KEY, AI_MODEL_CHEAP/STRONG/VISION) ou o provedor fake de teste
+// (FAKE_AI_SCRIPT + APP_ENV não produtivo; nunca em produção). Nada configurado = `pipeline_unavailable`.
+function aiEnv(): AiEnv {
+  const g = (k: string) => Deno.env.get(k);
+  return {
+    NODE_ENV: g("NODE_ENV"),
+    APP_ENV: g("APP_ENV"),
+    VERCEL_ENV: g("VERCEL_ENV"),
+    OPENROUTER_KEY: g("OPENROUTER_KEY"),
+    AI_MODEL_CHEAP: g("AI_MODEL_CHEAP"),
+    AI_MODEL_STRONG: g("AI_MODEL_STRONG"),
+    AI_MODEL_VISION: g("AI_MODEL_VISION"),
+    FAKE_AI_SCRIPT: g("FAKE_AI_SCRIPT"),
+  };
+}
+
+function pipelineKind(): "demo" | "real" | null {
   const env = { DEMO_PIPELINE: Deno.env.get("DEMO_PIPELINE"), APP_ENV: Deno.env.get("APP_ENV") };
   const bad = demoConfigError(env);
   if (bad) console.error(JSON.stringify({ level: "error", fn: "ocr-worker", message: bad }));
-  return demoEnabled(env) ? new DemoExtractionPipeline({ slowMs: parseSlowMs(Deno.env.get("DEMO_SLOW_MS")) }) : null;
+  if (demoEnabled(env)) return "demo";
+  return aiPipelineAvailable(aiEnv()) ? "real" : null;
 }
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
-  const pipeline = pipelineOrNull();
-  if (!pipeline) return json({ status: "pipeline_unavailable" }); // não lê a fila: as mensagens ficam para depois
+  const kind = pipelineKind();
+  if (!kind) return json({ status: "pipeline_unavailable" }); // não lê a fila: as mensagens ficam para depois
 
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) return json({ error: "misconfigured" }, 500);
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const rpc: RpcFn = (fn, args) => client.rpc(fn, args) as unknown as ReturnType<RpcFn>;
+
+  // Pipeline real: decisões de IA (`ai_decisions`) pelo mesmo cliente de serviço; teto = o que o tick der (por chamada).
+  const pipeline =
+    kind === "demo"
+      ? new DemoExtractionPipeline({ slowMs: parseSlowMs(Deno.env.get("DEMO_SLOW_MS")) })
+      : createAiPipeline({
+          env: aiEnv(),
+          rpc: createValidatedRpc(client as unknown as RawRpc),
+          budgetMs: 90_000,
+        });
 
   const jobs = createRpcWorkerJobs(rpc, async (id) => {
     const { data } = await client

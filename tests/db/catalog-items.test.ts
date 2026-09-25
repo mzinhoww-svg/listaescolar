@@ -30,6 +30,10 @@ describe("S13 catalog_items e stationery_areas", () => {
         expect(stock.error).not.toBeNull();
         const blank = await attempt(c, `insert into public.catalog_items (stationery_id, name, item_key, price_cents) values ($1, ' ', 'w', 100)`, [id]);
         expect(blank.error).not.toBeNull();
+        const upper = await attempt(c, `insert into public.catalog_items (stationery_id, name, item_key, price_cents) values ($1, 'V', 'Caderno', 100)`, [id]);
+        expect(upper.error, "item_key com maiúscula").not.toBeNull();
+        const padded = await attempt(c, `insert into public.catalog_items (stationery_id, name, item_key, price_cents) values ($1, 'V', ' v ', 100)`, [id]);
+        expect(padded.error, "item_key com espaço nas pontas").not.toBeNull();
         const noKey = await attempt(c, `insert into public.catalog_items (stationery_id, name, item_key, price_cents) values ($1, 'W', ' ', 100)`, [id]);
         expect(noKey.error).not.toBeNull();
       });
@@ -45,13 +49,104 @@ describe("S13 catalog_items e stationery_areas", () => {
         expect(row).toMatchObject({ price_source: "informed_by_stationery", s: "unknown", is_active: true });
       });
     });
-    it("apagar a papelaria apaga catálogo, áreas e vínculos (cascade)", async () => {
+    it("catálogo, áreas e vínculos saem em cascata só num DELETE de papelaria sem eventos (superuser); service_role não apaga", async () => {
+      await withSuperuser(async (c) => {
+        await c.query("begin");
+        try {
+          const id = await seedStationery(c, { ownerId: IDS.parent });
+          await c.query(INSERT, [id]);
+          const d = await attempt(c, "delete from public.stationeries where id = $1", [id]);
+          expect(d.error).toBeNull();
+          expect((await c.query("select 1 from public.catalog_items where stationery_id = $1", [id])).rows).toHaveLength(0);
+          expect((await c.query("select 1 from public.stationery_members where stationery_id = $1", [id])).rows).toHaveLength(0);
+        } finally {
+          await c.query("rollback");
+        }
+      });
       await withClaims("system", async (c) => {
-        const id = await seedStationery(c, { ownerId: IDS.parent });
-        await attempt(c, INSERT, [id]);
-        const d = await attempt(c, "delete from public.stationeries where id = $1", [id]);
-        expect(d.error).toBeNull();
-        expect((await c.query("select 1 from public.catalog_items where stationery_id = $1", [id])).rows).toHaveLength(0);
+        const id = await seedStationery(c);
+        expect((await attempt(c, "delete from public.stationeries where id = $1", [id])).code).toBe("42501");
+      });
+    });
+  });
+
+  describe("datas do catálogo (trigger) e grants por coluna", () => {
+    const tick = (c: import("pg").Client) => c.query("select pg_sleep(0.02)");
+    it("insert força created_at/updated_at/price_updated_at, mesmo com valores forjados", async () => {
+      await withSuperuser(async (c) => {
+        await c.query("begin");
+        try {
+          const id = await seedStationery(c);
+          const r = await c.query(
+            `insert into public.catalog_items (stationery_id, name, item_key, price_cents, created_at, updated_at, price_updated_at)
+             values ($1, 'a', 'a', 100, '2000-01-01', '2000-01-01', '2000-01-01')
+             returning extract(epoch from (clock_timestamp() - created_at)) as c, extract(epoch from (clock_timestamp() - updated_at)) as u,
+                       extract(epoch from (clock_timestamp() - price_updated_at)) as p`,
+            [id],
+          );
+          for (const k of ["c", "u", "p"]) expect(Number(r.rows[0][k]), k).toBeLessThan(5);
+        } finally {
+          await c.query("rollback");
+        }
+      });
+    });
+    it("price_updated_at muda só quando price_cents muda; created_at não muda; estoque e nome não renovam", async () => {
+      await withSuperuser(async (c) => {
+        await c.query("begin");
+        try {
+          const id = await seedStationery(c);
+          const item = (await c.query(INSERT, [id])).rows[0].id as string;
+          const read = async () =>
+            (await c.query("select created_at, updated_at, price_updated_at from public.catalog_items where id = $1", [item])).rows[0];
+          const first = await read();
+          await tick(c);
+          await c.query("update public.catalog_items set stock_status = 'in_stock', name = 'Caderno novo' where id = $1", [item]);
+          const second = await read();
+          expect(second.price_updated_at.getTime()).toBe(first.price_updated_at.getTime());
+          expect(second.updated_at.getTime()).toBeGreaterThan(first.updated_at.getTime());
+          await tick(c);
+          await c.query("update public.catalog_items set price_cents = 1250 where id = $1", [item]); // mesmo preço
+          expect((await read()).price_updated_at.getTime()).toBe(first.price_updated_at.getTime());
+          await tick(c);
+          await c.query("update public.catalog_items set price_cents = 1300, created_at = '2000-01-01', price_updated_at = '2000-01-01' where id = $1", [item]);
+          const third = await read();
+          expect(third.price_updated_at.getTime()).toBeGreaterThan(first.price_updated_at.getTime());
+          expect(third.created_at.getTime()).toBe(first.created_at.getTime());
+        } finally {
+          await c.query("rollback");
+        }
+      });
+    });
+    it("authenticated não escreve id, created_at, updated_at, price_updated_at, price_source, stationery_id (grant por coluna)", async () => {
+      await withSuperuser(async (c) => {
+        const can = async (col: string, priv: string) =>
+          (await c.query("select has_column_privilege('authenticated', 'public.catalog_items', $1, $2) as ok", [col, priv])).rows[0].ok as boolean;
+        for (const col of ["name", "item_key", "price_cents", "stock_status", "is_active"]) {
+          expect(await can(col, "update"), `update ${col}`).toBe(true);
+          expect(await can(col, "insert"), `insert ${col}`).toBe(true);
+        }
+        expect(await can("stationery_id", "insert")).toBe(true);
+        for (const col of ["id", "created_at", "updated_at", "price_updated_at", "price_source", "stationery_id"]) {
+          expect(await can(col, "update"), `update ${col}`).toBe(false);
+        }
+        for (const col of ["id", "created_at", "updated_at", "price_updated_at", "price_source"]) {
+          expect(await can(col, "insert"), `insert ${col}`).toBe(false);
+        }
+      });
+    });
+    it("dono recebe permission denied ao forjar datas ou id no insert e no update", async () => {
+      await withClaims("stationery_member", async (c) => {
+        const id = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+        for (const col of ["created_at", "updated_at", "price_updated_at"]) {
+          const r = await attempt(c, `insert into public.catalog_items (stationery_id, name, item_key, price_cents, ${col}) values ($1, 'f', 'f', 100, '2000-01-01')`, [id]);
+          expect(r.code, `insert ${col}`).toBe("42501");
+        }
+        expect((await attempt(c, `insert into public.catalog_items (id, stationery_id, name, item_key, price_cents) values (gen_random_uuid(), $1, 'g', 'g', 100)`, [id])).code).toBe("42501");
+        const own = await attempt(c, INSERT, [id]);
+        for (const set of ["created_at = '2000-01-01'", "updated_at = '2000-01-01'", "price_updated_at = '2000-01-01'", "id = gen_random_uuid()", "price_source = 'informed_by_stationery'"]) {
+          const r = await attempt(c, `update public.catalog_items set ${set} where id = $1`, [own.rows[0]?.id]);
+          expect(r.code, set).toBe("42501");
+        }
       });
     });
   });
@@ -173,7 +268,7 @@ describe("S13 catalog_items e stationery_areas", () => {
         expect((await attempt(c, AREA, [id, " "])).error).not.toBeNull();
       });
     });
-    it.each(WRITABLE.concat(["signup", "accreditation"]))("dono gerencia áreas em %s", async (status) => {
+    it.each(WRITABLE.concat(["signup", "accreditation", "rejected"]))("dono gerencia áreas em %s", async (status) => {
       await withClaims("stationery_member", async (c) => {
         const id = await seedStationery(c, { status, ownerId: IDS.stationery_member, pausedBy: status === "paused" ? "owner" : null });
         const ins = await attempt(c, AREA, [id, "jardim"]);
@@ -181,7 +276,7 @@ describe("S13 catalog_items e stationery_areas", () => {
         expect((await attempt(c, "delete from public.stationery_areas where stationery_id = $1", [id])).rowCount).toBe(1);
       });
     });
-    it.each(["under_review", "suspended", "rejected"] as StationeryStatus[])("dono não altera áreas em %s", async (status) => {
+    it.each(["under_review", "suspended"] as StationeryStatus[])("dono não altera áreas em %s", async (status) => {
       await withClaims("stationery_member", async (c) => {
         const id = await seedStationery(c, { status, ownerId: IDS.stationery_member });
         expect((await attempt(c, AREA, [id, "jardim"])).error).not.toBeNull();

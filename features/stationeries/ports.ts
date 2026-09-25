@@ -15,7 +15,8 @@ export type LocalCatalogCandidate = {
   priceSource: string;
   stock: CatalogStock;
   itemActive: boolean;
-  updatedAt: Date;
+  /** `catalog_items.price_updated_at`: data do preço informado (não muda com estoque ou nome). */
+  priceUpdatedAt: Date;
 };
 
 /** Fonte de dados do provedor local (implementada pelo repositório). */

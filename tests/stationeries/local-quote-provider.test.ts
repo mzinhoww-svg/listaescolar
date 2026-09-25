@@ -24,7 +24,7 @@ const cand = (over: Partial<LocalCatalogCandidate> = {}): LocalCatalogCandidate 
   priceSource: "informed_by_stationery",
   stock: "in_stock",
   itemActive: true,
-  updatedAt: day(1),
+  priceUpdatedAt: day(1),
   ...over,
 });
 const source = (rows: LocalCatalogCandidate[]): LocalCatalogSource => ({ findCandidates: async () => rows });
@@ -59,9 +59,9 @@ describe("CatalogLocalQuoteProvider", () => {
     ["em análise", cand({ status: "under_review" })],
     ["item inativo", cand({ itemActive: false })],
     ["out_of_stock", cand({ stock: "out_of_stock" })],
-    ["updated_at velho (31 dias)", cand({ updatedAt: day(31) })],
-    ["updated_at no futuro", cand({ updatedAt: new Date(NOW.getTime() + 3_600_000) })],
-    ["data inválida", cand({ updatedAt: new Date("x") })],
+    ["price_updated_at velho (31 dias)", cand({ priceUpdatedAt: day(31) })],
+    ["price_updated_at no futuro", cand({ priceUpdatedAt: new Date(NOW.getTime() + 3_600_000) })],
+    ["data inválida", cand({ priceUpdatedAt: new Date("x") })],
     ["preço zero", cand({ priceCents: 0 })],
     ["preço negativo", cand({ priceCents: -1 })],
     ["preço fracionado", cand({ priceCents: 1.5 })],
@@ -72,8 +72,8 @@ describe("CatalogLocalQuoteProvider", () => {
     expect(await provider([row]).getQuotes([item("Caderno")], { now: NOW })).toEqual([]);
   });
   it("validade configurável e 30 dias inclusivos", async () => {
-    expect(await provider([cand({ updatedAt: day(30) })]).getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);
-    expect(await provider([cand({ updatedAt: day(2) })], undefined, 24 * 3_600_000).getQuotes([item("Caderno")], { now: NOW })).toEqual([]);
+    expect(await provider([cand({ priceUpdatedAt: day(30) })]).getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);
+    expect(await provider([cand({ priceUpdatedAt: day(2) })], undefined, 24 * 3_600_000).getQuotes([item("Caderno")], { now: NOW })).toEqual([]);
   });
   it("fora da área: bairro atendido (área ou bairro da papelaria) x não atendido", async () => {
     expect(await provider([cand()], "Jardim").getQuotes([item("Caderno")], { now: NOW })).toHaveLength(1);

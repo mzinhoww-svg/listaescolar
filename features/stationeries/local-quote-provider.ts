@@ -19,8 +19,8 @@ export function servesLocation(c: LocalCatalogCandidate, loc: LocalLocation): bo
 
 /**
  * Cotação local a partir do catálogo informado pelas papelarias. Só entra papelaria `active` que atende o
- * local, item ativo, não `out_of_stock`, com preço válido e `updated_at` dentro da validade. Nunca completa
- * item sem catálogo. `source` e `checkedAt` (= `catalog_items.updated_at`) sempre presentes.
+ * local, item ativo, não `out_of_stock`, com preço válido e `price_updated_at` dentro da validade. Nunca completa
+ * item sem catálogo. `source` e `checkedAt` (= `catalog_items.price_updated_at`) sempre presentes.
  */
 export class CatalogLocalQuoteProvider implements LocalStationeryQuoteProvider {
   constructor(
@@ -46,14 +46,14 @@ export class CatalogLocalQuoteProvider implements LocalStationeryQuoteProvider {
       if (c.stock === "out_of_stock") continue;
       if (!servesLocation(c, this.location)) continue;
       if (!Number.isSafeInteger(c.priceCents) || c.priceCents <= 0 || c.priceCents > MAX_PRICE_CENTS) continue;
-      const t = c.updatedAt.getTime();
+      const t = c.priceUpdatedAt.getTime();
       if (!Number.isFinite(t) || now - t > maxAge || t - now > FUTURE_TOLERANCE_MS) continue;
       quotes.push({
         stationeryId: c.stationeryId,
         itemKey: c.itemKey,
         unitPriceCents: c.priceCents,
         source: CATALOG_PRICE_SOURCE,
-        checkedAt: c.updatedAt,
+        checkedAt: c.priceUpdatedAt,
         ...(c.stock === "in_stock" ? { inStock: true } : {}),
         ...(c.isDemo ? { isDemo: true } : {}),
       });

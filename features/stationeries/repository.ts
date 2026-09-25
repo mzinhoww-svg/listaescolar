@@ -116,7 +116,8 @@ export async function registerStationery(
       .from("stationery_members")
       .insert({ stationery_id: created.id, profile_id: input.ownerId, member_role: "owner" });
     if (member.error) {
-      const del = await client.from("stationeries").delete().eq("id", created.id);
+      // papelaria não é apagada pelo cliente: só esta função (recusa se houver membro, evento ou estado != signup).
+      const del = await client.rpc("stationery_discard_orphan", { p_id: created.id });
       const cleanup = del.error ? ` (limpeza falhou: ${del.error.message})` : "";
       if (member.error.code === "23505") {
         throw new StationeryRepositoryError(`usuário já é dono de uma papelaria${cleanup}`, "already_owner", "23505");
@@ -254,7 +255,8 @@ const UPSERT_CHUNK = 500;
 
 /**
  * Insere ou atualiza itens por (papelaria, item_key). Idempotente: repetir o envio não duplica linhas e
- * renova `updated_at` (data do preço informado). Nome repetido no lote: vale o último.
+ * renova `price_updated_at` só nos itens cujo preço mudou (o banco decide, por trigger; estoque e nome não renovam).
+ * Nome repetido no lote: vale o último.
  */
 export async function upsertCatalogItems(
   client: SupabaseClient,
@@ -298,7 +300,8 @@ export type CatalogRow = {
   priceSource: string;
   stock: CatalogStock;
   isActive: boolean;
-  updatedAt: Date;
+  /** Data do preço informado (`catalog_items.price_updated_at`): muda só quando o preço muda. */
+  priceUpdatedAt: Date;
 };
 
 const catalogRowSchema = z.object({
@@ -309,7 +312,7 @@ const catalogRowSchema = z.object({
   price_source: z.string(),
   stock_status: z.enum(["in_stock", "out_of_stock", "unknown"]),
   is_active: z.boolean(),
-  updated_at: z.string(),
+  price_updated_at: z.string(),
 });
 const mapCatalog = (r: z.output<typeof catalogRowSchema>): CatalogRow => ({
   id: r.id,
@@ -319,9 +322,9 @@ const mapCatalog = (r: z.output<typeof catalogRowSchema>): CatalogRow => ({
   priceSource: r.price_source,
   stock: r.stock_status,
   isActive: r.is_active,
-  updatedAt: new Date(r.updated_at),
+  priceUpdatedAt: new Date(r.price_updated_at),
 });
-const CATALOG_COLUMNS = "id, name, item_key, price_cents, price_source, stock_status, is_active, updated_at";
+const CATALOG_COLUMNS = "id, name, item_key, price_cents, price_source, stock_status, is_active, price_updated_at";
 
 /** Catálogo da papelaria (todos os itens, para o dono). */
 export async function listCatalogItems(
@@ -522,7 +525,7 @@ const candidateSchema = z.object({
   price_source: z.string(),
   stock_status: z.enum(["in_stock", "out_of_stock", "unknown"]),
   is_active: z.boolean(),
-  updated_at: z.string(),
+  price_updated_at: z.string(),
   stationeries: z.object({
     status: z.string(),
     municipality_id: z.uuid(),
@@ -541,7 +544,7 @@ export function createLocalCatalogSource(client: SupabaseClient): LocalCatalogSo
       const q = client
         .from("catalog_items")
         .select(
-          "stationery_id, item_key, price_cents, price_source, stock_status, is_active, updated_at, stationeries!inner(status, municipality_id, neighborhood, is_demo, stationery_areas(municipality_id, neighborhood))",
+          "stationery_id, item_key, price_cents, price_source, stock_status, is_active, price_updated_at, stationeries!inner(status, municipality_id, neighborhood, is_demo, stationery_areas(municipality_id, neighborhood))",
         )
         .in("item_key", [...query.itemKeys])
         .eq("is_active", true)
@@ -566,7 +569,7 @@ export function createLocalCatalogSource(client: SupabaseClient): LocalCatalogSo
           priceSource: r.price_source,
           stock: r.stock_status,
           itemActive: r.is_active,
-          updatedAt: new Date(r.updated_at),
+          priceUpdatedAt: new Date(r.price_updated_at),
         };
       });
     },

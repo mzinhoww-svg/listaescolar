@@ -5,6 +5,7 @@ import {
   cleanupUsers,
   DATABASE_URL,
   IDS,
+  purgeStationeries,
   seedStationery,
   seedUsers,
   withClaims,
@@ -50,7 +51,8 @@ const ALLOWED: Record<Actor, Set<string>> = {
 };
 ALLOWED.system = ALLOWED.admin;
 
-const ACTOR_ID: Record<Actor, string | null> = { owner: IDS.stationery_member, admin: IDS.admin, system: null };
+// approved/rejected exigem ator identificado, então o system da matriz age com um perfil system.
+const ACTOR_ID: Record<Actor, string | null> = { owner: IDS.stationery_member, admin: IDS.admin, system: IDS.system };
 const CALL = "select public.stationery_transition($1::uuid, $2::public.stationery_status, $3::uuid, $4::text, $5::text)::text as s";
 
 async function statusOf(c: Client, id: string): Promise<{ status: string; reason: string | null; paused_by: string | null }> {
@@ -157,7 +159,7 @@ describe("S13 stationery_transition", () => {
         expect(await statusOf(c, id)).toMatchObject({ status: to, reason: "Documento ilegível" });
       });
     });
-    it("aprovar e reenviar limpam o motivo anterior", async () => {
+    it("reenviar (rejected -> accreditation) limpa o motivo anterior", async () => {
       await withClaims("system", async (c) => {
         const id = await seedStationery(c, { status: "rejected", ownerId: IDS.stationery_member, overrides: { status_reason: "faltou doc" } });
         expect((await attempt(c, CALL, [id, "accreditation", IDS.stationery_member, "owner", null])).error).toBeNull();
@@ -194,8 +196,54 @@ describe("S13 stationery_transition", () => {
           expect(r.error, `${actorId}/${role}`).not.toBeNull();
           expect((await statusOf(c, id)).status).toBe("under_review");
         }
-        // system com perfil system, ou sem perfil (processo interno), é aceito.
+        // system com perfil system é aceito.
         expect((await attempt(c, CALL, [id, "approved", IDS.system, "system", null])).error).toBeNull();
+      });
+    });
+    it("approved e rejected exigem ator identificado (p_actor_id não nulo), inclusive para system", async () => {
+      await withClaims("system", async (c) => {
+        for (const to of ["approved", "rejected"] as const) {
+          for (const role of ["admin", "system"] as const) {
+            await c.query("savepoint n");
+            const id = await seedStationery(c, { status: "under_review" });
+            const r = await attempt(c, CALL, [id, to, null, role, "motivo"]);
+            expect(r.error, `${role} -> ${to}`).not.toBeNull();
+            expect((await statusOf(c, id)).status).toBe("under_review");
+            await c.query("rollback to savepoint n");
+          }
+        }
+        // suspender sem ator (processo interno) continua permitido
+        const id = await seedStationery(c, { status: "active" });
+        expect((await attempt(c, CALL, [id, "suspended", null, "system", "denúncia"])).error).toBeNull();
+      });
+    });
+    it("com claim sub no JWT, p_actor_id precisa ser o mesmo usuário (sem sub, vale o parâmetro)", async () => {
+      await withClaims("system", async (c) => {
+        const id = await seedStationery(c, { status: "under_review" });
+        const withSub = (sub: string) => c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role", sub })]);
+        await withSub(IDS.parent);
+        const forged = await attempt(c, CALL, [id, "approved", IDS.admin, "admin", null]);
+        expect(forged.code).toBe("42501");
+        expect((await statusOf(c, id)).status).toBe("under_review");
+        await withSub(IDS.admin);
+        expect((await attempt(c, CALL, [id, "approved", IDS.admin, "admin", null])).error).toBeNull();
+      });
+    });
+    it("papelaria approved pausada pelo admin volta a active só pelo admin (sem passar por approved)", async () => {
+      await withClaims("system", async (c) => {
+        const id = await seedStationery(c, { status: "approved", ownerId: IDS.stationery_member });
+        expect((await attempt(c, CALL, [id, "paused", IDS.admin, "admin", null])).error).toBeNull();
+        expect(await statusOf(c, id)).toMatchObject({ status: "paused", paused_by: "admin" });
+        expect((await attempt(c, CALL, [id, "active", IDS.stationery_member, "owner", null])).error).not.toBeNull();
+        expect((await attempt(c, CALL, [id, "active", IDS.admin, "admin", null])).error).toBeNull();
+        expect((await events(c, id)).map((e) => `${e.from_status}>${e.to_status}`)).toEqual(["approved>paused", "paused>active"]);
+      });
+    });
+    it("a transição trava a linha com FOR NO KEY UPDATE", async () => {
+      await withSuperuser(async (c) => {
+        const src = (await c.query("select prosrc from pg_proc where proname = 'stationery_transition' and pronamespace = 'public'::regnamespace")).rows[0].prosrc as string;
+        expect(src).toMatch(/for no key update/i);
+        expect(src).not.toMatch(/for update/i);
       });
     });
     it("papelaria inexistente devolve erro", async () => {
@@ -296,7 +344,7 @@ describe("S13 stationery_transition", () => {
         expect(await roleOf(c, IDS.system)).toBe("system");
       });
     });
-    it("rejeitar, suspender ou publicar não promove ninguém", async () => {
+    it("rejeitar, suspender, pausar ou publicar não promovem ninguém (só a aprovação promove)", async () => {
       await withClaims("system", async (c) => {
         const id = await seedStationery(c, { status: "under_review", ownerId: IDS.parent });
         expect((await attempt(c, CALL, [id, "rejected", IDS.admin, "admin", "motivo"])).error).toBeNull();
@@ -304,6 +352,11 @@ describe("S13 stationery_transition", () => {
         const other = await seedStationery(c, { status: "signup", ownerId: IDS.school_member });
         await attempt(c, CALL, [other, "suspended", IDS.admin, "admin", "motivo"]);
         expect(await roleOf(c, IDS.school_member)).toBe("school_member");
+        // publicar (dono) e pausar (admin) uma papelaria approved semeada direto não mexe em papel algum
+        const pub = await seedStationery(c, { status: "approved", ownerId: IDS.stationery_member });
+        expect((await attempt(c, CALL, [pub, "active", IDS.stationery_member, "owner", null])).error).toBeNull();
+        expect((await attempt(c, CALL, [pub, "paused", IDS.admin, "admin", null])).error).toBeNull();
+        expect(await roleOf(c, IDS.parent)).toBe("parent");
       });
     });
     it("a promoção da aprovação não depende do papel do chamador (função definer) e é auditada em profiles", async () => {
@@ -342,7 +395,7 @@ describe("S13 stationery_transition", () => {
       return withSuperuser((c) => seedStationery(c, { status: "under_review", ownerId: IDS.stationery_member }));
     }
     async function drop(id: string): Promise<void> {
-      await withSuperuser((c) => c.query("delete from public.stationeries where id = $1", [id]));
+      await purgeStationeries([id]);
     }
 
     it("aprovar e rejeitar em paralelo: a segunda espera o lock, relê o estado e erra", async () => {

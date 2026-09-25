@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Client } from "pg";
@@ -176,7 +177,28 @@ export type SeedStationery = {
   overrides?: Record<string, unknown>;
 };
 
-let stationerySeq = 0;
+/**
+ * Remove papelarias (e o que depende delas) de testes que confirmaram dados (commit). O banco recusa DELETE de
+ * papelaria com eventos (FK restrict, eventos imutáveis), então a limpeza usa `session_replication_role = replica`
+ * (só superuser) e apaga os filhos na mão.
+ */
+export async function purgeStationeries(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      await c.query("set local session_replication_role = replica");
+      for (const t of ["stationery_status_events", "catalog_items", "stationery_areas", "stationery_members"]) {
+        await c.query(`delete from public.${t} where stationery_id = any($1::uuid[])`, [ids]);
+      }
+      await c.query("delete from public.stationeries where id = any($1::uuid[])", [ids]);
+      await c.query("commit");
+    } catch (e) {
+      await c.query("rollback");
+      throw e;
+    }
+  });
+}
 
 /**
  * Cria uma papelaria (e o owner) como superuser, mesmo dentro de uma transação de withClaims:
@@ -186,8 +208,8 @@ export async function seedStationery(client: Client, opts: SeedStationery = {}):
   const prev = (await client.query("select current_user as u")).rows[0].u as string;
   await client.query("reset role");
   try {
-    stationerySeq += 1;
-    const n = `${Date.now() % 1_000_000_000}${stationerySeq}`.padStart(14, "0").slice(-14);
+    // 14 dígitos aleatórios: não colidem entre execuções concorrentes nem com dados confirmados de outra rodada.
+    const n = Array.from({ length: 14 }, () => String(randomInt(0, 10))).join("");
     const muni = await client.query("select id from public.municipalities order by ibge_code limit 1");
     const complete = opts.complete ?? true;
     const row: Record<string, unknown> = {

@@ -4,6 +4,8 @@
 -- dados de contato e cadastro (cnpj, razão social, e-mail, telefone, motivo) nunca chegam ao público.
 -- Escrita de status só pela função stationery_transition (SECURITY DEFINER, só service_role): o cliente
 -- (dono ou admin) nunca escreve status direto. Cadastro (insert de papelaria/membro) é do servidor (service_role).
+-- Papelaria não é apagada: sai por status (suspended/rejected). O rastro de eventos é imutável (FK restrict).
+-- O cliente (authenticated) escreve só colunas cadastrais (grants por coluna); datas e chaves são do banco.
 
 create type public.stationery_member_role as enum ('owner', 'staff');
 create type public.catalog_stock_status as enum ('in_stock', 'out_of_stock', 'unknown');
@@ -46,7 +48,7 @@ create table public.stationery_members (
   id uuid primary key default gen_random_uuid(),
   stationery_id uuid not null references public.stationeries (id) on delete cascade,
   profile_id uuid not null references public.profiles (id) on delete cascade,
-  member_role public.stationery_member_role not null default 'owner',
+  member_role public.stationery_member_role not null, -- sem default: o papel é sempre explícito
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (stationery_id, profile_id)
@@ -73,19 +75,21 @@ create table public.catalog_items (
   id uuid primary key default gen_random_uuid(),
   stationery_id uuid not null references public.stationeries (id) on delete cascade,
   name text not null check (btrim(name) <> '' and length(name) <= 200),
-  item_key text not null check (btrim(item_key) <> '' and length(item_key) <= 200), -- nome normalizado (mesma regra da S12)
+  item_key text not null check (btrim(item_key) <> '' and item_key = lower(btrim(item_key)) and length(item_key) <= 200), -- nome normalizado (mesma regra da S12)
   price_cents integer not null check (price_cents > 0 and price_cents <= 100000000),
   price_source text not null default 'informed_by_stationery' check (price_source = 'informed_by_stationery'),
   stock_status public.catalog_stock_status not null default 'unknown',
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(), -- data do preço informado, exibida ao público
+  price_updated_at timestamptz not null default now(), -- data do preço informado: só o trigger escreve (insert e mudança de price_cents)
+  updated_at timestamptz not null default now(),
   unique (stationery_id, item_key)
 );
+create index catalog_items_item_key_idx on public.catalog_items (item_key);
 
 create table public.stationery_status_events (
   id uuid primary key default gen_random_uuid(),
-  stationery_id uuid not null references public.stationeries (id) on delete cascade,
+  stationery_id uuid not null references public.stationeries (id) on delete restrict,
   from_status public.stationery_status not null,
   to_status public.stationery_status not null,
   actor_id uuid, -- sem FK: o rastro sobrevive à remoção do usuário
@@ -106,7 +110,7 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  caller public.user_role := public.auth_role();
+  caller text := coalesce(public.auth_role()::text, ''); -- sem profile: '' (falha fechado)
   privileged boolean := current_user in ('postgres', 'supabase_admin');
 begin
   if not privileged and (
@@ -131,16 +135,35 @@ begin
 end;
 $$;
 
--- eventos são imutáveis; a única remoção permitida é a cascata da papelaria (trigger aninhado).
+-- eventos são imutáveis (update, delete e truncate); a FK restrict impede apagar a papelaria com histórico.
 create function public.stationery_events_block_mutation() returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
-  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
-    return old;
-  end if;
   raise exception 'stationery_status_events é imutável (% bloqueado)', tg_op using errcode = '42501';
+end;
+$$;
+
+-- Datas do catálogo, só do banco (roda para todos, inclusive service_role): insert nasce com created_at,
+-- updated_at e price_updated_at = agora; update preserva created_at e só renova price_updated_at se o preço mudar
+-- (estoque e nome não renovam). clock_timestamp: cada comando enxerga a própria hora, mesmo dentro de uma transação.
+create function public.catalog_items_set_dates() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.created_at := clock_timestamp();
+    new.updated_at := new.created_at;
+    new.price_updated_at := new.created_at;
+  else
+    new.created_at := old.created_at;
+    new.updated_at := clock_timestamp();
+    new.price_updated_at := case when new.price_cents is distinct from old.price_cents
+                                 then clock_timestamp() else old.price_updated_at end;
+  end if;
+  return new;
 end;
 $$;
 
@@ -154,8 +177,26 @@ as $$
   select exists (select 1 from public.stationeries s where s.id = p_id and s.status = 'active');
 $$;
 
+-- Descarta o cadastro que acabou de ser criado quando o vínculo do dono falha (rollback do servidor).
+-- Só apaga papelaria em signup, sem membro e sem evento; nada mais sai por aqui.
+create function public.stationery_discard_orphan(p_id uuid) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.stationeries s
+   where s.id = p_id and s.status = 'signup'
+     and not exists (select 1 from public.stationery_members m where m.stationery_id = s.id)
+     and not exists (select 1 from public.stationery_status_events e where e.stationery_id = s.id);
+  if not found then
+    raise exception 'papelaria não pode ser descartada' using errcode = '23514';
+  end if;
+end;
+$$;
+
 -- Transição de status: única porta de escrita de status. Aplica a matriz por ator, exige motivo,
--- trava a linha (transições concorrentes se serializam e a segunda relê o estado), grava o evento
+-- trava a linha com FOR NO KEY UPDATE (transições concorrentes se serializam e a segunda relê o estado), grava o evento
 -- e, na aprovação, promove os membros parent -> stationery_member (sem rebaixar outros papéis).
 create function public.stationery_transition(
   p_id uuid,
@@ -174,12 +215,27 @@ declare
   v_from text;
   v_to text := p_to::text;
   v_allowed boolean;
+  v_sub text;
 begin
+  begin
+    v_sub := nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub';
+  exception when others then
+    v_sub := null;
+  end;
   if p_actor_role is null or p_actor_role not in ('owner', 'admin', 'system') then
     raise exception 'ator inválido' using errcode = '22023';
   end if;
 
-  select * into s from public.stationeries where id = p_id for update;
+  -- com claim sub (chamada em nome de um usuário), o ator informado precisa ser esse usuário.
+  if v_sub is not null and v_sub is distinct from p_actor_id::text then
+    raise exception 'ator diferente do usuário autenticado' using errcode = '42501';
+  end if;
+  -- aprovar e rejeitar são decisões da equipe: exigem ator identificado, mesmo para system.
+  if p_to in ('approved', 'rejected') and p_actor_id is null then
+    raise exception 'ator obrigatório para %', p_to using errcode = '42501';
+  end if;
+
+  select * into s from public.stationeries where id = p_id for no key update;
   if not found then
     raise exception 'papelaria não encontrada' using errcode = 'P0002';
   end if;
@@ -281,8 +337,8 @@ create trigger stationery_members_set_updated_at before update on public.station
   for each row execute function public.set_updated_at();
 create trigger stationery_areas_set_updated_at before update on public.stationery_areas
   for each row execute function public.set_updated_at();
-create trigger catalog_items_set_updated_at before update on public.catalog_items
-  for each row execute function public.set_updated_at();
+create trigger catalog_items_set_dates before insert or update on public.catalog_items
+  for each row execute function public.catalog_items_set_dates();
 create trigger stationery_status_events_set_updated_at before update on public.stationery_status_events
   for each row execute function public.set_updated_at();
 
@@ -311,6 +367,9 @@ alter table public.catalog_items enable always trigger catalog_items_audit;
 -- ---------------------------------------------------------------------------
 revoke execute on function public.stationeries_guard_update() from public, anon, authenticated, service_role;
 revoke execute on function public.stationery_events_block_mutation() from public, anon, authenticated, service_role;
+revoke execute on function public.catalog_items_set_dates() from public, anon, authenticated, service_role;
+revoke execute on function public.stationery_discard_orphan(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.stationery_discard_orphan(uuid) to service_role;
 revoke execute on function public.stationery_is_active(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.stationery_is_active(uuid) to anon, authenticated, service_role;
 revoke execute on function public.stationery_transition(uuid, public.stationery_status, uuid, text, text)
@@ -320,14 +379,23 @@ grant execute on function public.stationery_transition(uuid, public.stationery_s
 revoke all on public.stationeries, public.stationery_members, public.stationery_areas, public.catalog_items,
   public.stationery_status_events, public.stationery_public from public, anon, authenticated, service_role;
 -- base: anon sem acesso algum; público lê pela view.
-grant select, update on public.stationeries to authenticated;
-grant select, insert, update, delete on public.stationeries to service_role;
+-- authenticated atualiza só colunas cadastrais: nada de id, status*, lgpd_*, created_at/updated_at, municipality_id.
+-- (is_demo, slug e cnpj entram porque o trigger de guarda os restringe a admin/system ou ao estado certo.)
+grant select on public.stationeries to authenticated;
+grant update (slug, trade_name, legal_name, cnpj, neighborhood, address, cep, whatsapp, phone, email,
+              offers_pickup, offers_delivery, service_radius_km, opening_hours, payment_methods, is_demo)
+  on public.stationeries to authenticated;
+grant select, insert, update on public.stationeries to service_role; -- sem DELETE: a papelaria sai por status
 grant select on public.stationery_members to authenticated;
 grant select, insert, update, delete on public.stationery_members to service_role;
 grant select on public.stationery_areas, public.catalog_items to anon;
 grant select, insert, delete on public.stationery_areas to authenticated;
 grant select, insert, update, delete on public.stationery_areas to service_role;
-grant select, insert, update, delete on public.catalog_items to authenticated, service_role;
+grant select, delete on public.catalog_items to authenticated;
+-- sem id, created_at, updated_at, price_updated_at e price_source (default fixo): datas e origem são do banco.
+grant insert (stationery_id, name, item_key, price_cents, stock_status, is_active) on public.catalog_items to authenticated;
+grant update (name, item_key, price_cents, stock_status, is_active) on public.catalog_items to authenticated;
+grant select, insert, update, delete on public.catalog_items to service_role;
 grant select on public.stationery_status_events to authenticated, service_role; -- escrita só pela função
 grant select on public.stationery_public to anon, authenticated, service_role;
 
@@ -349,11 +417,12 @@ create policy stationeries_select_member on public.stationeries
 -- admin/system leem todas.
 create policy stationeries_select_admin on public.stationeries
   for select to authenticated using ((select public.auth_role()) in ('admin', 'system'));
--- membro edita dados cadastrais só enquanto o estado permite (o trigger guarda status, cnpj, is_demo e slug).
+-- membro edita dados cadastrais enquanto o estado permite; em rejected corrige o cadastro para o reenvio
+-- (o trigger guarda status, cnpj, is_demo e slug; under_review e suspended ficam travados).
 create policy stationeries_update_member on public.stationeries
   for update to authenticated
   using (
-    status in ('signup', 'accreditation', 'approved', 'active', 'paused')
+    status in ('signup', 'accreditation', 'approved', 'active', 'paused', 'rejected')
     and exists (select 1 from public.stationery_members m
                 where m.stationery_id = stationeries.id and m.profile_id = (select auth.uid()))
   )
@@ -378,7 +447,7 @@ create policy stationery_members_select_admin on public.stationery_members
 -- stationery_areas: leitura pública só de papelaria active; membro gerencia enquanto o estado permite.
 -- público lê áreas de papelarias active.
 create policy stationery_areas_select_public on public.stationery_areas
-  for select to anon, authenticated using (public.stationery_is_active(stationery_id));
+  for select to anon, authenticated using ((select public.stationery_is_active(stationery_areas.stationery_id)));
 -- membro lê as áreas da própria papelaria.
 create policy stationery_areas_select_member on public.stationery_areas
   for select to authenticated
@@ -387,23 +456,23 @@ create policy stationery_areas_select_member on public.stationery_areas
 -- admin/system leem todas as áreas.
 create policy stationery_areas_select_admin on public.stationery_areas
   for select to authenticated using ((select public.auth_role()) in ('admin', 'system'));
--- membro inclui área na própria papelaria (não em análise, suspensa ou rejeitada).
+-- membro inclui área na própria papelaria (não em análise nem suspensa; rejeitada pode, para o reenvio).
 create policy stationery_areas_insert_member on public.stationery_areas
   for insert to authenticated
   with check (exists (select 1 from public.stationery_members m join public.stationeries s on s.id = m.stationery_id
                       where m.stationery_id = stationery_areas.stationery_id and m.profile_id = (select auth.uid())
-                        and s.status in ('signup', 'accreditation', 'approved', 'active', 'paused')));
+                        and s.status in ('signup', 'accreditation', 'approved', 'active', 'paused', 'rejected')));
 -- membro remove área da própria papelaria no mesmo conjunto de estados.
 create policy stationery_areas_delete_member on public.stationery_areas
   for delete to authenticated
   using (exists (select 1 from public.stationery_members m join public.stationeries s on s.id = m.stationery_id
                  where m.stationery_id = stationery_areas.stationery_id and m.profile_id = (select auth.uid())
-                   and s.status in ('signup', 'accreditation', 'approved', 'active', 'paused')));
+                   and s.status in ('signup', 'accreditation', 'approved', 'active', 'paused', 'rejected')));
 
 -- catalog_items: leitura pública só de item ativo de papelaria active; membro escreve em approved, active e paused.
 -- público lê itens ativos de papelarias active.
 create policy catalog_items_select_public on public.catalog_items
-  for select to anon, authenticated using (is_active and public.stationery_is_active(stationery_id));
+  for select to anon, authenticated using (is_active and (select public.stationery_is_active(catalog_items.stationery_id)));
 -- membro lê todos os itens da própria papelaria, inclusive inativos.
 create policy catalog_items_select_member on public.catalog_items
   for select to authenticated

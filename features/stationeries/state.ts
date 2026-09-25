@@ -45,13 +45,14 @@ export const transitionTable: Readonly<Record<TransitionActor, readonly Edge[]>>
   system: STAFF_EDGES,
 };
 
-/** Estados em que o dono altera o cadastro (RLS e repositório). */
+/** Estados em que o dono altera o cadastro (RLS e repositório). `rejected` entra para o reenvio corrigido. */
 export const OWNER_EDITABLE_STATUSES: readonly StationeryStatus[] = [
   "signup",
   "accreditation",
   "approved",
   "active",
   "paused",
+  "rejected",
 ];
 /** Estados em que o dono escreve o catálogo (antes de publicar e depois). */
 export const CATALOG_WRITABLE_STATUSES: readonly StationeryStatus[] = ["approved", "active", "paused"];

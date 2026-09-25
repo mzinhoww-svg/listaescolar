@@ -27,7 +27,7 @@ import {
   type TransitionActor,
 } from "@/features/stationeries/state";
 
-import { seedStationery, withSuperuser } from "../db/helpers";
+import { purgeStationeries, seedStationery, withSuperuser } from "../db/helpers";
 import { makeCnpj } from "./helpers";
 
 // Roda em `pnpm test:db` (Supabase local da trilha). Chaves lidas de `scripts/supa.mjs env` em tempo de execução.
@@ -60,7 +60,7 @@ let municipalityId: string;
 const userIds: string[] = [];
 const stationeryIds: string[] = [];
 
-async function makeUser(label: string, role: "parent" | "admin" = "parent"): Promise<string> {
+async function makeUser(label: string, role: "parent" | "admin" | "system" = "parent"): Promise<string> {
   const created = await admin.auth.admin.createUser({
     email: `st-${label}-${RUN}@example.test`,
     password: "senha-de-teste-local-123",
@@ -127,9 +127,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await withSuperuser(async (c) => {
-    if (stationeryIds.length > 0) await c.query("delete from public.stationeries where id = any($1::uuid[])", [stationeryIds]);
-  });
+  await purgeStationeries(stationeryIds);
   for (const id of userIds) await admin.auth.admin.deleteUser(id);
 });
 
@@ -137,6 +135,7 @@ describe("matriz TS x banco (stationery_transition)", () => {
   it("canTransition/transitionTable coincidem com a função SQL em todas as 192 combinações", async () => {
     const owner = await makeUser("matrix-owner");
     const adminId = await makeUser("matrix-admin", "admin");
+    const systemId = await makeUser("matrix-system", "system");
     const mismatches: string[] = [];
     for (const actor of TRANSITION_ACTORS) {
       for (const from of STATIONERY_STATUSES) {
@@ -151,7 +150,7 @@ describe("matriz TS x banco (stationery_transition)", () => {
             await c.query("commit");
             return sid;
           });
-          const actorId = actor === "owner" ? owner : actor === "admin" ? adminId : null;
+          const actorId = actor === "owner" ? owner : actor === "admin" ? adminId : systemId;
           let allowed = true;
           let code = "";
           try {
@@ -162,7 +161,7 @@ describe("matriz TS x banco (stationery_transition)", () => {
           }
           if (allowed !== canTransition(actor, from, to)) mismatches.push(`${actor}: ${from} -> ${to} (banco=${allowed} ${code})`);
           if (!allowed && code !== "transition_not_allowed") mismatches.push(`${actor}: ${from} -> ${to} erro inesperado ${code}`);
-          await withSuperuser((c) => c.query("delete from public.stationeries where id = $1", [id]));
+          await purgeStationeries([id]);
         }
       }
     }
@@ -209,7 +208,7 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
     const other = await register(otherId);
     expect(other.slug).not.toBe(st.slug);
     expect(other.slug.startsWith(st.slug)).toBe(true);
-    await withSuperuser((c) => c.query("delete from public.stationeries where id = $1", [other.id]));
+    await purgeStationeries([other.id]);
   });
 
   it("dono edita cadastro e áreas; terceiro não; catálogo ainda não", async () => {
@@ -256,7 +255,18 @@ describe("cadastro, transições, perfil público, catálogo e cotação local",
     const caderno = second.find((i) => i.itemKey === normalizeItemKey(CADERNO));
     expect(caderno?.priceCents).toBe(1300);
     expect(caderno?.priceSource).toBe("informed_by_stationery");
-    expect(caderno!.updatedAt.getTime()).toBeGreaterThan(first.find((i) => i.itemKey === caderno!.itemKey)!.updatedAt.getTime());
+    expect(caderno!.priceUpdatedAt.getTime()).toBeGreaterThan(first.find((i) => i.itemKey === caderno!.itemKey)!.priceUpdatedAt.getTime());
+    // reenviar só com estoque diferente NÃO renova a data do preço (o banco só renova quando o preço muda)
+    const secondBatch = [...items, { name: "  caderno   96 FOLHAS ", priceCents: 1300, stock: "in_stock" as const }];
+    const before = new Map(second.map((i) => [i.itemKey, i]));
+    await new Promise((r) => setTimeout(r, 20));
+    await upsertCatalogItems(admin, st.id, ownerId, secondBatch.map((i) => ({ ...i, stock: "out_of_stock" as const })));
+    const third = await listCatalogItems(admin, st.id, ownerId);
+    for (const row of third) {
+      expect(row.stock).toBe("out_of_stock");
+      expect(row.priceUpdatedAt.getTime(), row.itemKey).toBe(before.get(row.itemKey)!.priceUpdatedAt.getTime());
+    }
+    await upsertCatalogItems(admin, st.id, ownerId, secondBatch); // volta ao estado anterior (estoque)
     await expectCode(upsertCatalogItems(admin, st.id, otherId, items), "forbidden");
     await expectCode(upsertCatalogItems(admin, st.id, ownerId, [{ name: "X", priceCents: 0 }]), "invalid_input");
   });

@@ -4,6 +4,7 @@ import {
   cleanupUsers,
   IDS,
   inTx,
+  purgeStationeries,
   seedStationery,
   seedUsers,
   withClaims,
@@ -27,8 +28,9 @@ const PUBLIC_VIEW_COLUMNS = [
   "whatsapp",
 ];
 const SENSITIVE = ["legal_name", "cnpj", "email", "phone", "status_reason", "paused_by", "lgpd_accepted_at", "address", "cep"];
-const EDITABLE = ["signup", "accreditation", "approved", "active", "paused"] as const;
-const LOCKED = ["under_review", "suspended", "rejected"] as const;
+// rejected é editável: o dono corrige o cadastro antes de reenviar (rejected -> accreditation).
+const EDITABLE = ["signup", "accreditation", "approved", "active", "paused", "rejected"] as const;
+const LOCKED = ["under_review", "suspended"] as const;
 
 describe("S13 schema: papelarias, membros, eventos", () => {
   beforeAll(seedUsers);
@@ -135,6 +137,102 @@ describe("S13 schema: papelarias, membros, eventos", () => {
           [b, IDS.parent],
         );
         expect(dup.error).not.toBeNull();
+      });
+    });
+  });
+
+  describe("grants por coluna e integridade", () => {
+    it("authenticated só atualiza colunas cadastrais (sem id, status, lgpd_*, created_at, updated_at, municipality_id)", async () => {
+      await withSuperuser(async (c) => {
+        const can = async (col: string) =>
+          (await c.query("select has_column_privilege('authenticated', 'public.stationeries', $1, 'update') as ok", [col])).rows[0].ok as boolean;
+        for (const col of ["trade_name", "legal_name", "cnpj", "neighborhood", "address", "cep", "whatsapp", "phone", "email",
+          "offers_pickup", "offers_delivery", "service_radius_km", "opening_hours", "payment_methods", "slug", "is_demo"]) {
+          expect(await can(col), col).toBe(true);
+        }
+        for (const col of ["id", "status", "status_reason", "paused_by", "lgpd_accepted_at", "lgpd_text_version",
+          "created_at", "updated_at", "municipality_id"]) {
+          expect(await can(col), col).toBe(false);
+        }
+        const ins = await c.query("select has_table_privilege('authenticated', 'public.stationeries', 'insert') as i, has_table_privilege('authenticated', 'public.stationeries', 'delete') as d");
+        expect(ins.rows[0]).toEqual({ i: false, d: false });
+      });
+    });
+    it("dono e admin não forjam id, created_at, updated_at, lgpd_*, município (permission denied)", async () => {
+      for (const who of ["stationery_member", "admin"] as Identity[]) {
+        await withClaims(who, async (c) => {
+          const id = await seedStationery(c, { status: "active", ownerId: who === "admin" ? IDS.parent : IDS.stationery_member });
+          for (const set of [
+            "created_at = '2000-01-01'",
+            "updated_at = '2000-01-01'",
+            "lgpd_accepted_at = null",
+            "lgpd_text_version = 'forjada'",
+            "id = gen_random_uuid()",
+            "municipality_id = (select id from public.municipalities order by ibge_code desc limit 1)",
+          ]) {
+            const r = await attempt(c, `update public.stationeries set ${set} where id = $1`, [id]);
+            expect(r.code, `${who}: ${set}`).toBe("42501");
+          }
+        });
+      }
+    });
+    it("caller sem profile (auth_role NULL) falha fechado no guard: is_demo, slug e cnpj não mudam", async () => {
+      await withClaims("stationery_member", async (c) => {
+        const id = await seedStationery(c, { status: "approved", ownerId: IDS.stationery_member });
+        // deixa o vínculo de pé e tira o profile (sem RI): o dono passa na RLS, mas auth_role() vira NULL
+        await c.query("reset role");
+        await c.query("set local session_replication_role = replica");
+        await c.query("delete from public.profiles where id = $1", [IDS.stationery_member]);
+        await c.query("set local session_replication_role = origin");
+        await c.query("set local role authenticated");
+        expect((await c.query("select public.auth_role() as r")).rows[0].r).toBeNull();
+        for (const set of ["is_demo = true", "slug = 'forjado'", "cnpj = '11444777000161'"]) {
+          const r = await attempt(c, `update public.stationeries set ${set} where id = $1`, [id]);
+          expect(r.code, set).toBe("42501");
+        }
+        expect((await attempt(c, "update public.stationeries set trade_name = 'Ok' where id = $1", [id])).rowCount).toBe(1);
+      });
+    });
+    it("FK dos eventos é restrict e member_role não tem default", async () => {
+      await withSuperuser(async (c) => {
+        const fk = await c.query(
+          "select confdeltype from pg_constraint where contype = 'f' and conrelid = 'public.stationery_status_events'::regclass and confrelid = 'public.stationeries'::regclass",
+        );
+        expect(fk.rows).toEqual([{ confdeltype: "r" }]);
+        const d = await c.query(
+          "select column_default from information_schema.columns where table_schema='public' and table_name='stationery_members' and column_name='member_role'",
+        );
+        expect(d.rows[0]?.column_default).toBeNull();
+      });
+    });
+    it("catalog_items tem índice em item_key (busca da cotação local)", async () => {
+      await withSuperuser(async (c) => {
+        const r = await c.query(
+          "select 1 from pg_indexes where schemaname='public' and tablename='catalog_items' and indexdef ~ '\\(item_key\\)$'",
+        );
+        expect(r.rows).toHaveLength(1);
+      });
+    });
+    it("service_role não apaga papelaria (sem grant de DELETE)", async () => {
+      await withClaims("system", async (c) => {
+        const id = await seedStationery(c, { status: "signup" });
+        const r = await attempt(c, "delete from public.stationeries where id = $1", [id]);
+        expect(r.code).toBe("42501");
+      });
+    });
+    it("stationery_discard_orphan: só service_role; só signup sem membro nem evento", async () => {
+      await withClaims("stationery_member", async (c) => {
+        const id = await seedStationery(c, { status: "signup" });
+        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [id])).code).toBe("42501");
+      });
+      await withClaims("system", async (c) => {
+        const orphan = await seedStationery(c, { status: "signup" });
+        const withOwner = await seedStationery(c, { status: "signup", ownerId: IDS.parent });
+        const approved = await seedStationery(c, { status: "approved" });
+        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [withOwner])).error).not.toBeNull();
+        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [approved])).error).not.toBeNull();
+        expect((await attempt(c, "select public.stationery_discard_orphan($1)", [orphan])).error).toBeNull();
+        expect((await c.query("select 1 from public.stationeries where id = any($1::uuid[])", [[orphan, withOwner, approved]])).rows).toHaveLength(2);
       });
     });
   });
@@ -284,12 +382,15 @@ describe("S13 schema: papelarias, membros, eventos", () => {
           expect(r.code, set).toBe("42501");
         }
       });
-      await withClaims("stationery_member", async (c) => {
-        const id = await seedStationery(c, { status: "accreditation", ownerId: IDS.stationery_member });
-        const r = await attempt(c, "update public.stationeries set cnpj = '11444777000161' where id = $1", [id]);
-        expect(r.error).toBeNull();
-        expect(r.rowCount).toBe(1);
-      });
+      // cnpj é editável enquanto o cadastro pode ser corrigido: accreditation e rejected (reenvio)
+      for (const status of ["accreditation", "rejected"] as const) {
+        await withClaims("stationery_member", async (c) => {
+          const id = await seedStationery(c, { status, ownerId: IDS.stationery_member });
+          const r = await attempt(c, "update public.stationeries set cnpj = '11444777000161' where id = $1", [id]);
+          expect(r.error, status).toBeNull();
+          expect(r.rowCount, status).toBe(1);
+        });
+      }
     });
     it("nem service_role nem admin escrevem status direto (só a função)", async () => {
       for (const who of ["system", "admin", "system_profile"] as Identity[]) {
@@ -387,7 +488,7 @@ describe("S13 schema: papelarias, membros, eventos", () => {
         });
       }
     });
-    it("imutáveis: update/delete/truncate bloqueados até para superuser; cascata da papelaria passa", async () => {
+    it("imutáveis: update/delete/truncate bloqueados até para superuser; papelaria com evento não é apagada (restrict)", async () => {
       await inTx(async (c) => {
         const sid = await seedStationery(c);
         await seedEvent(c, sid);
@@ -398,9 +499,26 @@ describe("S13 schema: papelarias, membros, eventos", () => {
         const tr = await attempt(c, "truncate public.stationery_status_events");
         expect(tr.error).not.toBeNull();
         const casc = await attempt(c, "delete from public.stationeries where id = $1", [sid]);
-        expect(casc.error).toBeNull();
+        expect(casc.code).toBe("23503");
         const left = await c.query("select 1 from public.stationery_status_events where stationery_id = $1", [sid]);
-        expect(left.rows).toHaveLength(0);
+        expect(left.rows).toHaveLength(1);
+      });
+    });
+    it("a função de bloqueio não tem exceção por profundidade de trigger", async () => {
+      await withSuperuser(async (c) => {
+        const src = (await c.query("select prosrc from pg_proc where proname = 'stationery_events_block_mutation'")).rows[0].prosrc as string;
+        expect(src).not.toMatch(/pg_trigger_depth/);
+      });
+    });
+    it("purgeStationeries limpa papelaria com evento confirmado (helper de teste)", async () => {
+      const id = await withSuperuser(async (c) => {
+        const sid = await seedStationery(c);
+        await seedEvent(c, sid);
+        return sid;
+      });
+      await purgeStationeries([id]);
+      await withSuperuser(async (c) => {
+        expect((await c.query("select 1 from public.stationeries where id = $1", [id])).rows).toHaveLength(0);
       });
     });
   });

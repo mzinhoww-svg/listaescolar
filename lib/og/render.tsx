@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { ImageResponse } from "next/og";
 
+import { headlineFontSize, ogText } from "./text";
+
 export const OG_SIZE = { width: 1200, height: 630 } as const;
 export const OG_CONTENT_TYPE = "image/png";
 export const OG_TAGLINE = "A lista oficial da escola, pronta para comprar.";
@@ -21,7 +23,13 @@ async function loadAssets() {
 type Props = { headline?: string; detail?: string };
 
 /** Imagem 1200×630: fundo Tinta, logo negativo, frase e (opcional) escola/série. Sem número nem imagem remota. */
-export async function renderOgImage({ headline = OG_TAGLINE, detail }: Props = {}) {
+export async function renderOgImage(props: Props = {}) {
+  // Texto com glifo fora da fonte (emoji, CJK) ou vazio: imagem genérica, sem baixar nada da rede.
+  const safeHeadline = props.headline === undefined ? OG_TAGLINE : ogText(props.headline);
+  const safeDetail = props.detail === undefined ? undefined : ogText(props.detail);
+  const generic = safeHeadline === null || safeDetail === null;
+  const headline = generic ? OG_TAGLINE : safeHeadline;
+  const detail = generic ? undefined : safeDetail;
   const { font, logoUri } = await loadAssets();
   return new ImageResponse(
     (
@@ -41,10 +49,20 @@ export async function renderOgImage({ headline = OG_TAGLINE, detail }: Props = {
         {/* eslint-disable-next-line @next/next/no-img-element -- next/og não usa next/image */}
         <img src={logoUri} width={434} height={98} alt="" />
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ fontSize: 68, fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.035em", display: "flex" }}>
+          <div
+            style={{
+              fontSize: headlineFontSize(headline.length),
+              fontWeight: 800,
+              lineHeight: 1.1,
+              letterSpacing: "-0.035em",
+              display: "block",
+              lineClamp: 3,
+              overflow: "hidden",
+            }}
+          >
             {headline}
           </div>
-          {detail ? <div style={{ fontSize: 32, color: "#2FCB86", fontWeight: 800, display: "flex" }}>{detail}</div> : null}
+          {detail ? <div style={{ fontSize: 32, color: "#2FCB86", fontWeight: 800, display: "block", lineClamp: 1 }}>{detail}</div> : null}
         </div>
       </div>
     ),

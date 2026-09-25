@@ -24,6 +24,23 @@ function rasterize(matrix: boolean[][]) {
   return { data, side };
 }
 
+/** Rasteriza o SVG real (retângulos do atributo `d` do único <path>) em vez de reusar a matriz. */
+function rasterizeSvg(svg: string, scale = 4) {
+  const n = Number(/viewBox="0 0 (\d+) \d+"/.exec(svg)?.[1]);
+  const d = /<path [^>]*d="([^"]+)"/.exec(svg)?.[1] ?? "";
+  const side = n * scale;
+  const data = new Uint8ClampedArray(side * side * 4).fill(255);
+  for (const m of d.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) {
+    const [x, y, w] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    for (let dy = 0; dy < scale; dy++)
+      for (let dx = 0; dx < w * scale; dx++) {
+        const i = (((y * scale + dy) * side) + x * scale + dx) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 0;
+      }
+  }
+  return { data, side };
+}
+
 describe("qrMatrix", () => {
   it("decodifica de volta exatamente a URL do link curto", () => {
     const url = shortLinkUrl(encodeShortCode({ inep: "51000123", gradeSlug: "ef-1" }), "https://listacerta.com.br");
@@ -36,6 +53,12 @@ describe("qrMatrix", () => {
 });
 
 describe("renderQrSvg", () => {
+  it("o SVG rasterizado decodifica para a URL do link curto", () => {
+    const url = shortLinkUrl(encodeShortCode({ inep: "51000123", gradeSlug: "ef-1" }), "https://listacerta.com.br");
+    const { data, side } = rasterizeSvg(renderQrSvg(qrMatrix(url), { size: 240, color: "#0F1B2D" }));
+    expect(jsQR(data, side, side)?.data).toBe(url);
+  });
+
   const matrix = qrMatrix("https://listacerta.com.br/l/ABCDEFGH");
   const svg = renderQrSvg(matrix, { size: 240, color: "#0F1B2D" });
 

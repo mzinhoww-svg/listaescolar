@@ -24,10 +24,19 @@ describe("robots", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "https://listacerta.example";
     const disallow = [rule().disallow].flat();
     expect(rule().allow).toBe("/");
-    for (const p of PREFIXES) expect(disallow).toContain(`${p}/`);
+    for (const p of PREFIXES) {
+      expect(disallow).toContain(`${p}/`);
+      expect(disallow).toContain(`${p}$`); // raiz exata, sem tocar em /escolas
+    }
     for (const extra of ["/auth/", "/api/", "/l/", "/cadastrar-papelaria", "/403"]) expect(disallow).toContain(extra);
     // "/escola/" não é prefixo de "/escolas/", e nada bloqueia as páginas públicas noindex.
     expect(disallow.some((d) => "/escolas/51000123/ef-1".startsWith(d as string))).toBe(false);
+    // Casamento à la Google: prefixo, com `$` ancorando o fim.
+    const blocked = (path: string) => disallow.some((d) => (d as string).endsWith("$") ? path === (d as string).slice(0, -1) : path.startsWith(d as string));
+    for (const p of PREFIXES) expect(blocked(p)).toBe(true);
+    expect(blocked("/escola")).toBe(true);
+    expect(blocked("/escolas")).toBe(false);
+    expect(blocked("/escolas/51000123")).toBe(false);
     expect(disallow.some((d) => "/papelarias".startsWith(d as string))).toBe(false);
     expect(robots().sitemap).toBe("https://listacerta.example/sitemap.xml");
   });

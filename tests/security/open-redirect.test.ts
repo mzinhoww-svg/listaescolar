@@ -4,6 +4,7 @@ import { safeNextPath } from "@/features/auth/redirect";
 import { buildSearchUrl, type RetailerTarget } from "@/features/cart/redirect-target";
 import { buildLeadWhatsappUrl } from "@/features/leads/message";
 import { encodeShortCode } from "@/features/short-links/code";
+import { SHORT_GRADE_CODES } from "@/features/short-links/grade-codes";
 import { resolveShortLink } from "@/features/short-links/resolve";
 
 const VECTORS = [
@@ -39,9 +40,42 @@ describe("/l/[code]", () => {
     expect(loadSchool).not.toHaveBeenCalled();
   });
 
-  it("um código válido só produz /escolas/<8 dígitos>[/slug] relativo", async () => {
-    const res = await resolveShortLink(good, { loadSchool: async () => ({ inep: "51000123" }) });
-    expect(res.headers.get("location")).toMatch(/^\/escolas\/\d{8}(\/[a-z0-9-]+)?$/);
+  /** PRNG determinístico (mulberry32): a propriedade roda sobre muitas entradas e falha de forma reproduzível. */
+  function rng(seed: number) {
+    let a = seed;
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  it("propriedade: para INEP/série válidos aleatórios, Location casa ^/escolas/\\d{8}(/slug)?$ e a série é a pedida", async () => {
+    const rand = rng(27);
+    const slugs = Object.keys(SHORT_GRADE_CODES);
+    for (let i = 0; i < 300; i++) {
+      const inep = String(Math.floor(rand() * 100_000_000)).padStart(8, "0");
+      const gradeSlug = rand() < 0.2 ? null : (slugs[Math.floor(rand() * slugs.length)] as string);
+      const code = encodeShortCode({ inep, gradeSlug });
+      const res = await resolveShortLink(code, { loadSchool: async (i2) => ({ inep: i2 }) });
+      const location = res.headers.get("location") as string;
+      expect(location).toMatch(/^\/escolas\/\d{8}(\/[a-z0-9-]+)?$/);
+      expect(location).toBe(gradeSlug === null ? `/escolas/${inep}` : `/escolas/${inep}/${gradeSlug}`);
+    }
+  });
+
+  it("propriedade: entradas aleatórias com comprimento != 8 símbolos são 404 sem Location", async () => {
+    const rand = rng(28);
+    const chars = "0123456789ABCDEFGHJKMNPQRSTVWXYZabc/\\.%-:@";
+    for (let i = 0; i < 300; i++) {
+      let len = Math.floor(rand() * 40);
+      if (len === 8) len = 9;
+      const code = Array.from({ length: len }, () => chars[Math.floor(rand() * chars.length)]).join("");
+      const res = await resolveShortLink(code, { loadSchool: async (i2) => ({ inep: i2 }) });
+      expect(res.status).toBe(404);
+      expect(res.headers.get("location")).toBeNull();
+    }
   });
 });
 

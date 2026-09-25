@@ -7,7 +7,7 @@ import { siteBase } from "@/lib/site-base";
 const EXTRA_DISALLOW = ["/auth/", "/api/", "/l/", "/cadastrar-papelaria", "/403"] as const;
 
 /**
- * Só produção (com origem válida) libera rastreamento. Prefixos com "/" final: `/escola/` não cobre `/escolas/`.
+ * Só produção (com origem válida) libera rastreamento. Prefixos com "/" final mais a raiz exata (`/escola$`): nenhum dos dois cobre `/escolas`.
  * Páginas públicas `noindex` (listas, papelarias, busca filtrada) ficam liberadas: o robô precisa ler o `noindex`.
  */
 export default function robots(): MetadataRoute.Robots {
@@ -16,7 +16,7 @@ export default function robots(): MetadataRoute.Robots {
     return { rules: { userAgent: "*", disallow: "/" } };
   }
   return {
-    rules: { userAgent: "*", allow: "/", disallow: [...PREFIXES.map((p) => `${p}/`), ...EXTRA_DISALLOW] },
+    rules: { userAgent: "*", allow: "/", disallow: [...PREFIXES.flatMap((p) => [`${p}/`, `${p}$`]), ...EXTRA_DISALLOW] },
     sitemap: `${base}/sitemap.xml`,
   };
 }

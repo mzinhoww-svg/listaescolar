@@ -47,3 +47,20 @@ describe("cartão Compartilhar na página da lista", () => {
     expect(screen.queryByText("Compartilhar esta lista")).toBeNull();
   });
 });
+
+describe("cartão Compartilhar sem origem confiável", () => {
+  it("some quando não há origem (produção fora da Vercel sem NEXT_PUBLIC_SITE_URL) e nunca mostra localhost", async () => {
+    getPublishedList.mockResolvedValue(published);
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    delete process.env.VERCEL_URL;
+    delete process.env.VERCEL_ENV;
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const { container } = render(await ListPage(props));
+      expect(screen.queryByText("Compartilhar esta lista")).toBeNull();
+      expect(container.innerHTML).not.toContain("localhost");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});

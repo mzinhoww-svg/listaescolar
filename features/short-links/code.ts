@@ -37,12 +37,12 @@ export function encodeShortCode({ inep, gradeSlug }: { inep: string; gradeSlug?:
 const rawSchema = z
   .string()
   .max(64)
-  .transform((v) => v.toUpperCase().replaceAll("-", "").replaceAll("O", "0").replace(/[IL]/g, "1"))
+  .transform((v) => v.toUpperCase().replace(/[\s-]/g, "").replaceAll("O", "0").replace(/[IL]/g, "1"))
   .refine((v) => v.length === DATA_LENGTH + 1 && [...v].every((c) => ALPHABET.includes(c)));
 
 export type ParsedShortCode = { inep: string; gradeSlug: string | null };
 
-/** Normaliza (maiúsculas, `O→0`, `I/L→1`, sem hífen) e valida; qualquer falha vira `null`. */
+/** Normaliza (maiúsculas, `O→0`, `I/L→1`, sem hífen nem espaço) e valida; qualquer falha vira `null`. */
 export function parseShortCode(input: unknown): ParsedShortCode | null {
   const parsed = rawSchema.safeParse(input);
   if (!parsed.success) return null;

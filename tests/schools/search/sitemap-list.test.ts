@@ -16,8 +16,8 @@ function fakeClient(rows: Row[], error: unknown = null) {
   const calls: string[] = [];
   const builder = {
     select: (c: string) => (calls.push(`select:${c}`), builder),
-    in: () => builder,
-    eq: () => builder,
+    in: (col: string, vals: string[]) => (calls.push(`in:${col}:${vals.join("|")}`), builder),
+    eq: (col: string, v: unknown) => (calls.push(`eq:${col}:${String(v)}`), builder),
     order: () => builder,
     range: (a: number, b: number) => Promise.resolve({ data: error ? null : rows.slice(a, b + 1), error }),
   };
@@ -34,6 +34,36 @@ describe("listIndexableSchools", () => {
     ]);
     expect(calls[0]).toBe("from:schools");
     expect(calls.join()).not.toMatch(/email|cep/);
+    expect(calls).toContain("in:verification_status:claimed|verified");
+    expect(calls).toContain("eq:is_demo:false");
+  });
+
+  it("pagina de verdade: mais de 1000 linhas exigem várias requisições", async () => {
+    const many: Row[] = Array.from({ length: 2500 }, (_, i) => ({
+      inep: String(51000000 + i),
+      updated_at: "2026-01-01T00:00:00Z",
+      verification_status: "verified",
+      is_demo: false,
+    }));
+    const { client } = fakeClient(many);
+    const out = await listIndexableSchools({ limit: 5000 }, { client });
+    expect(out).toHaveLength(2500);
+    expect(out[2499]?.inep).toBe("51002499");
+  });
+
+  it("linha fora do contrato (status desconhecido, inep ruim) é ignorada", async () => {
+    const bad = [
+      { inep: "123", updated_at: "x", verification_status: "verified", is_demo: false },
+      { inep: "51000009", updated_at: "x", verification_status: "weird", is_demo: false },
+      ROWS[2],
+    ] as Row[];
+    const { client } = fakeClient(bad);
+    expect(await listIndexableSchools({ limit: 10 }, { client })).toEqual([{ inep: "51000003", updatedAt: "2026-01-03T00:00:00Z" }]);
+  });
+
+  it("erro do banco vira exceção", async () => {
+    const { client } = fakeClient([], { name: "PostgrestError" });
+    await expect(listIndexableSchools({ limit: 10 }, { client })).rejects.toThrow("sitemap_schools_failed");
   });
 
   it("respeita o limite", async () => {

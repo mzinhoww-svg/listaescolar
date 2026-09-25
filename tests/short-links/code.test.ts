@@ -63,6 +63,8 @@ describe("encodeShortCode / parseShortCode", () => {
     const expected = { inep: "51000123", gradeSlug: "ef-1" };
     expect(parseShortCode(code.toLowerCase())).toEqual(expected);
     expect(parseShortCode(`${code.slice(0, 4)}-${code.slice(4)}`)).toEqual(expected);
+    expect(parseShortCode(`${code.slice(0, 4)} ${code.slice(4)}`)).toEqual(expected);
+    expect(parseShortCode(` ${code.slice(0, 2)}  ${code.slice(2, 6)}\t${code.slice(6)} `)).toEqual(expected);
     const zero = encodeShortCode({ inep: "10000000" });
     expect(parseShortCode(zero.replaceAll("0", "o"))).toEqual({ inep: "10000000", gradeSlug: null });
     const ones = encodeShortCode({ inep: "11111111", gradeSlug: "ei-maternal-1" });

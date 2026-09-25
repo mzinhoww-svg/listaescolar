@@ -1,42 +1,67 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
-import { outlineButton, primaryButton, Screen } from "@/components/auth/Screen";
-import { loadSchool } from "@/features/schools/search/load-school";
+import { ClaimFlow } from "@/components/claims/ClaimFlow";
+import { ClaimLayout } from "@/components/claims/ClaimLayout";
+import { ClaimStepper } from "@/components/claims/ClaimStepper";
+import { CreateClaimForm } from "@/components/claims/CreateClaimForm";
+import { SchoolSummaryCard } from "@/components/claims/SchoolSummaryCard";
+import { getSessionActor } from "@/features/auth/actor";
+import { getCurrentUser } from "@/features/auth/queries";
+import { loginPath } from "@/features/claims/action-support";
+import { ROLE_BLOCK_MESSAGE } from "@/features/claims/messages";
+import { getClaimStatusView, getMyClaimForSchool, getSchoolClaimContext } from "@/features/claims/queries";
+import { PRIVACY_TEXT_VERSION } from "@/features/claims/schemas";
+import { claimStep } from "@/features/claims/steps";
+
+import { createClaimAction, removeEvidenceAction, requestTokenAction, submitClaimAction, uploadEvidenceAction } from "./actions";
+import { confirmTokenAction } from "./confirmar/actions";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+export const metadata: Metadata = { title: "Reivindicar escola · ListaCerta", robots: { index: false, follow: false } };
 
-type Props = { params: Promise<{ inep: string }> };
+type Props = { params: Promise<{ inep: string }>; searchParams: Promise<{ nova?: string }> };
+const STEPS = ["Pedido", "Verificação", "Análise"] as const;
 
-export const metadata: Metadata = {
-  title: "Reivindicar perfil · ListaCerta",
-  robots: { index: false, follow: false },
-};
-
-/** Página honesta até a S06: sem formulário, sem promessa de prazo. */
-export default async function ClaimPage({ params }: Props) {
+export default async function ClaimPage({ params, searchParams }: Props) {
   const { inep } = await params;
-  const school = await loadSchool(inep);
-  if (!school) notFound();
+  const context = await getSchoolClaimContext(inep);
+  if (!context) notFound();
+  const actor = await getSessionActor();
+  if (!actor) redirect(loginPath(inep));
+  const user = await getCurrentUser();
+  const { school } = context;
+  const crumb = `Escola / ${school.name} / Reivindicar`;
+
+  if (actor.role !== "parent" && actor.role !== "school_member") {
+    return (
+      <ClaimLayout inep={inep} title="Reivindicar escola" crumb={crumb}>
+        <p role="alert" className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-3 text-[14px] font-bold">{ROLE_BLOCK_MESSAGE}</p>
+        <Link href={`/escolas/${inep}`} className="text-verde-fundo text-[14px] font-extrabold">Voltar ao perfil da escola</Link>
+      </ClaimLayout>
+    );
+  }
+
+  const mine = await getMyClaimForSchool(actor, inep);
+  const view = mine ? await getClaimStatusView(actor, mine.id) : null;
+  const restart = (await searchParams).nova === "1" && (view === null || view.status === "rejected");
+  const showForm = view === null || restart;
+
   return (
-    <Screen>
-      <div className="flex flex-1 flex-col gap-3.5">
-        <div className="flex-1" />
-        <p className="text-verde-fundo text-xs font-extrabold tracking-[0.15em] uppercase">Reivindicar perfil</p>
-        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Reivindicação em implantação</h1>
-        <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">
-          O envio de pedidos para administrar o perfil de {school.name} ainda não está disponível. Nenhum dado é
-          coletado nesta página.
-        </p>
-        <div className="flex-1" />
-        <Link href={`/escolas/${school.inep}`} className={primaryButton}>
-          Voltar ao perfil da escola
-        </Link>
-        <Link href="/escolas" className={outlineButton}>
-          Buscar outra escola
-        </Link>
-      </div>
-    </Screen>
+    <ClaimLayout inep={inep} title={showForm ? "Reivindicar escola" : "Sua reivindicação"} crumb={crumb}>
+      <ClaimStepper steps={STEPS} current={showForm ? 1 : claimStep(view)} />
+      <SchoolSummaryCard school={school} />
+      {showForm ? (
+        context.blockedReason ? (
+          <p role="note" className="bg-campo rounded-campo px-4 py-3 text-[14px] font-bold">{context.blockedReason}</p>
+        ) : (
+          <CreateClaimForm action={createClaimAction} inep={inep} methods={context.methods} accountEmail={user?.email ?? null} privacyVersion={PRIVACY_TEXT_VERSION} />
+        )
+      ) : view ? (
+        <ClaimFlow inep={inep} claim={view} actions={{ upload: uploadEvidenceAction, remove: removeEvidenceAction, submit: submitClaimAction, request: requestTokenAction, confirm: confirmTokenAction }} />
+      ) : null}
+    </ClaimLayout>
   );
 }

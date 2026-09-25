@@ -4,7 +4,7 @@ import Link from "next/link";
 import { HomeIcon, LockIcon } from "@/components/auth/icons";
 import { outlineButton, primaryButton, Screen } from "@/components/auth/Screen";
 
-export const metadata: Metadata = { title: "Erro 403 · ListaCerta" };
+export const metadata: Metadata = { title: "Erro 403 · ListaCerta", robots: { index: false, follow: false } };
 
 export default function ForbiddenPage() {
   return (

@@ -19,6 +19,12 @@ describe("siteBase", () => {
     expect(siteBase()).toBe("http://localhost:3000");
   });
 
+  it("build de produção fora da Vercel sem origem: null (nunca localhost)", () => {
+    env({});
+    vi.stubEnv("NODE_ENV", "production");
+    expect(siteBase()).toBeNull();
+  });
+
   it("em deploy (VERCEL_ENV) sem origem válida: null, nunca localhost", () => {
     env({ VERCEL_ENV: "production" });
     expect(siteBase()).toBeNull();

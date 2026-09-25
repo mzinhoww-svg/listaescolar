@@ -40,6 +40,15 @@ describe("parsePriceToCents", () => {
   });
 });
 
+describe("nome de item (fórmula)", () => {
+  it.each(["=CMD()", "+1", "-x", "@soma", " =A1"])("recusa %j", (name) => {
+    expect(CatalogItemInputSchema.safeParse({ name, priceCents: 100 }).success).toBe(false);
+  });
+  it("aceita nome comum", () => {
+    expect(CatalogItemInputSchema.safeParse({ name: "Lápis HB", priceCents: 100 }).success).toBe(true);
+  });
+});
+
 describe("estoque e chave", () => {
   it.each([
     ["sim", "in_stock"],

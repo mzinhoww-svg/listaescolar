@@ -1,6 +1,6 @@
 import { Field } from "@/components/stationeries/fields";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
-import { STATUS_LABEL } from "@/features/stationeries/messages";
+import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
 import { listOwnAreas } from "@/features/stationeries/queries";
 import { getOwnerContext } from "@/features/stationeries/session";
 import { AREAS_WRITABLE_STATUSES } from "@/features/stationeries/state";
@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
     <>
       <PageHeader crumb="Papelaria / Bairros" title="Bairros atendidos" />
       {ok ? <Notice kind="ok">Bairros salvos.</Notice> : null}
-      {erro ? <Notice kind="error">{erro}</Notice> : null}
+      {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       {!writable ? (
         <Notice kind="info">Edição bloqueada no status “{STATUS_LABEL[ctx.stationery.status]}”.</Notice>
       ) : null}

@@ -2,18 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
+import { AdminShell } from "@/components/admin/AdminShell";
+import { Notice } from "@/components/stationeries/PanelShell";
 import { formatDateTime } from "@/components/stationeries/StatusPanel";
 import { requireAccess } from "@/features/auth/guard";
 import { formatCnpj } from "@/features/stationeries/cnpj";
-import { STATUS_LABEL } from "@/features/stationeries/messages";
+import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
 import { getAdminDetail, listStatusEvents } from "@/features/stationeries/queries";
 import { adminActions } from "@/features/stationeries/admin-actions";
 
 import { adminTransitionAction } from "../actions";
 
 export default async function Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; erro?: string }> }) {
-  await requireAccess("/admin");
+  const { user } = await requireAccess("/admin");
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const sp = await searchParams;
@@ -32,12 +33,15 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     ["Cadastro", formatDateTime(detail.createdAt)],
   ];
   return (
-    <>
-      <PageHeader crumb="Admin / Papelarias" title={detail.tradeName}>
-        <Link href="/admin/papelarias" className="text-verde-fundo text-[14px] font-extrabold underline">Voltar à fila</Link>
-      </PageHeader>
+    <AdminShell
+      active="/admin/papelarias"
+      email={user.email}
+      breadcrumb="Admin / Papelarias"
+      title={detail.tradeName}
+      actions={<Link href="/admin/papelarias" className="text-verde-fundo text-[14px] font-extrabold underline">Voltar à fila</Link>}
+    >
       {sp.ok ? <Notice kind="ok">Status atualizado.</Notice> : null}
-      {sp.erro ? <Notice kind="error">{sp.erro === "invalido" ? "Ação inválida." : sp.erro}</Notice> : null}
+      {sp.erro ? <Notice kind="error">{errorMessageForCode(sp.erro)}</Notice> : null}
       <p className="mb-4 text-[15px] font-extrabold">
         Status: <span data-testid="status-label">{STATUS_LABEL[detail.status]}</span>
         {detail.statusReason ? <span className="text-texto-2 font-bold"> · {detail.statusReason}</span> : null}
@@ -87,6 +91,6 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           </ul>
         )}
       </section>
-    </>
+    </AdminShell>
   );
 }

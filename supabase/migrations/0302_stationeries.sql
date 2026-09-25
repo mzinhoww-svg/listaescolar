@@ -228,6 +228,10 @@ begin
   if p_owner_id is null or not exists (select 1 from public.profiles p where p.id = p_owner_id) then
     raise exception 'dono inválido' using errcode = '22023', hint = 'invalid_input';
   end if;
+  -- só conta de responsável (parent) cadastra papelaria; o servidor confere, o SQL confere de novo.
+  if not exists (select 1 from public.profiles p where p.id = p_owner_id and p.role = 'parent') then
+    raise exception 'só responsável (parent) cadastra papelaria' using errcode = '42501', hint = 'forbidden';
+  end if;
 
   -- duplo envio do mesmo dono se serializa aqui.
   perform pg_advisory_xact_lock(hashtextextended('stationery_register:' || p_owner_id::text, 0));
@@ -561,6 +565,22 @@ create trigger stationeries_set_updated_at before update on public.stationeries
   for each row execute function public.set_updated_at();
 create trigger stationery_members_set_updated_at before update on public.stationery_members
   for each row execute function public.set_updated_at();
+-- municipality_id da área é sempre o da papelaria (cliente não escolhe o município).
+create function public.stationery_areas_fill_municipality() returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.municipality_id is null then
+    select s.municipality_id into new.municipality_id from public.stationeries s where s.id = new.stationery_id;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.stationery_areas_fill_municipality() from public, anon, authenticated, service_role;
+create trigger stationery_areas_fill_municipality before insert on public.stationery_areas
+  for each row execute function public.stationery_areas_fill_municipality();
 create trigger stationery_areas_set_updated_at before update on public.stationery_areas
   for each row execute function public.set_updated_at();
 create trigger catalog_items_set_dates before insert or update on public.catalog_items
@@ -625,7 +645,9 @@ grant select, insert, update on public.stationeries to service_role; -- sem DELE
 grant select on public.stationery_members to authenticated;
 grant select, insert, update, delete on public.stationery_members to service_role;
 grant select on public.stationery_areas, public.catalog_items to anon;
-grant select, insert, delete on public.stationery_areas to authenticated;
+grant select, delete on public.stationery_areas to authenticated;
+-- sem id, municipality_id (vem da papelaria, por trigger), created_at e updated_at.
+grant insert (stationery_id, neighborhood, display_name) on public.stationery_areas to authenticated;
 grant select, insert, update, delete on public.stationery_areas to service_role;
 grant select, delete on public.catalog_items to authenticated;
 -- sem id, created_at, updated_at, price_updated_at e price_source (default fixo): datas e origem são do banco.

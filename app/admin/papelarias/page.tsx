@@ -1,9 +1,11 @@
 import Link from "next/link";
 
+import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminTable } from "@/components/stationeries/AdminTable";
-import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
+import { Notice } from "@/components/stationeries/PanelShell";
 import { requireAccess } from "@/features/auth/guard";
 import { ADMIN_TABS, filterRows, parseTab } from "@/features/stationeries/admin-filter";
+import { errorMessageForCode } from "@/features/stationeries/messages";
 import { listAdminRows, type AdminListRow } from "@/features/stationeries/queries";
 
 import { adminTransitionAction } from "./actions";
@@ -11,7 +13,7 @@ import { adminTransitionAction } from "./actions";
 type SP = { aba?: string; q?: string; ok?: string; erro?: string };
 
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
-  await requireAccess("/admin");
+  const { user } = await requireAccess("/admin");
   const sp = await searchParams;
   const tab = parseTab(sp.aba);
   const q = (sp.q ?? "").slice(0, 80);
@@ -32,8 +34,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
     { n: count("suspended"), label: "suspensas", cls: "bg-white" },
   ];
   return (
-    <>
-      <PageHeader crumb="Admin / Papelarias" title="Papelarias">
+    <AdminShell
+      active="/admin/papelarias"
+      email={user.email}
+      breadcrumb="Admin / Papelarias"
+      title="Papelarias"
+      actions={
         <form action="/admin/papelarias" role="search" className="flex">
           <input type="hidden" name="aba" value={tab} />
           <input
@@ -44,9 +50,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
             className="h-12 w-[280px] rounded-botao bg-white px-5 text-[14px] font-bold outline-none focus-visible:ring-2 focus-visible:ring-verde-fundo"
           />
         </form>
-      </PageHeader>
+      }
+    >
       {sp.ok ? <Notice kind="ok">Status atualizado.</Notice> : null}
-      {sp.erro ? <Notice kind="error">{sp.erro === "invalido" ? "Ação inválida." : sp.erro}</Notice> : null}
+      {sp.erro ? <Notice kind="error">{errorMessageForCode(sp.erro)}</Notice> : null}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {cards.map((c) => (
           <div key={c.label} className={`rounded-card p-5 ${c.cls}`}>
@@ -75,6 +82,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
       ) : (
         <AdminTable rows={rows} approve={adminTransitionAction} />
       )}
-    </>
+    </AdminShell>
   );
 }

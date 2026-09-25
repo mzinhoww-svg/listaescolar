@@ -27,14 +27,35 @@ const BY_CODE: Record<string, string> = {
   consent_required: "É preciso aceitar o tratamento de dados para continuar.",
   limit_exceeded: "Passou do limite permitido. Divida em partes menores e tente de novo.",
   invalid_input: "Dados inválidos. Revise e tente de novo.",
+  // códigos de validação das telas (o `?erro=` nunca carrega texto livre)
+  invalido: "Ação inválida.",
+  preco_invalido: "Preço inválido. Use o formato 12,90.",
+  item_invalido: "Item inválido. Revise o nome e o preço.",
+  nome_formula: "O nome do item não pode começar com =, +, - ou @.",
+  areas_invalidas: "Cada bairro deve ter de 2 a 120 caracteres (até 100 bairros).",
+  desconhecido: "Não foi possível concluir agora. Tente de novo.",
 };
+
+/** Mensagem do `?erro=<código>` da URL: só códigos conhecidos viram texto; qualquer outra coisa vira a mensagem genérica. */
+export function errorMessageForCode(code: string | undefined): string | null {
+  if (!code) return null;
+  return Object.hasOwn(BY_CODE, code) ? (BY_CODE[code] ?? BY_CODE.desconhecido ?? null) : (BY_CODE.desconhecido ?? null);
+}
+
+/** Código do erro do repositório (para redirecionar com `?erro=<código>`). */
+export function repositoryErrorCode(error: unknown): string {
+  if (error instanceof Error && error.name === "StationeryRepositoryError") {
+    const code = (error as Error & { code?: string }).code ?? "";
+    return Object.hasOwn(BY_CODE, code) ? code : "desconhecido";
+  }
+  return "desconhecido";
+}
 
 /** Mensagem para o usuário; o detalhe técnico fica no log do servidor. */
 export function repositoryErrorMessage(error: unknown): string {
   // Duck typing: `StationeryRepositoryError` vive em módulo server-only; aqui só lemos o `code`.
   if (error instanceof Error && error.name === "StationeryRepositoryError") {
-    const code = (error as Error & { code?: string }).code ?? "";
-    return BY_CODE[code] ?? "Não foi possível concluir agora. Tente de novo.";
+    return errorMessageForCode(repositoryErrorCode(error)) ?? BY_CODE.desconhecido ?? "";
   }
-  return "Não foi possível concluir agora. Tente de novo.";
+  return BY_CODE.desconhecido ?? "";
 }

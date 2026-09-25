@@ -8,6 +8,9 @@ const transition = vi.fn();
 const setAreas = vi.fn();
 const upsertCatalogItems = vi.fn();
 const maybeSingle = vi.fn();
+const revalidatePath = vi.fn();
+
+vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
 
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
@@ -63,7 +66,7 @@ const good = {
 };
 
 beforeEach(() => {
-  for (const m of [getCurrentUser, getCurrentRole, getStationeryOfOwner, registerStationery, transition, setAreas, upsertCatalogItems, maybeSingle]) m.mockReset();
+  for (const m of [getCurrentUser, getCurrentRole, getStationeryOfOwner, registerStationery, transition, setAreas, upsertCatalogItems, maybeSingle, revalidatePath]) m.mockReset();
   getCurrentUser.mockResolvedValue({ id: USER });
   getCurrentRole.mockResolvedValue("parent");
   maybeSingle.mockResolvedValue({ data: { id: MUNI }, error: null });
@@ -173,7 +176,7 @@ describe("ownerStatusAction", () => {
   });
   it("transição negada mostra mensagem clara", async () => {
     transition.mockRejectedValue(Object.assign(new Error("x"), { name: "StationeryRepositoryError", code: "transition_not_allowed" }));
-    expect(await run(ownerStatusAction(form({ to: "active" })))).toContain("REDIRECT:/papelaria?erro=");
+    expect(await run(ownerStatusAction(form({ to: "active" })))).toBe("REDIRECT:/papelaria?erro=transition_not_allowed");
   });
 });
 
@@ -217,8 +220,16 @@ describe("areas e catálogo", () => {
     expect(upsertCatalogItems.mock.calls[0]?.[3]).toEqual([{ name: "Lápis HB", priceCents: 150, stock: "in_stock" }]);
   });
   it("preço inválido não grava", async () => {
-    expect(await run(saveItemAction(form({ name: "Lápis", price: "abc" })))).toContain("erro=");
+    expect(await run(saveItemAction(form({ name: "Lápis", price: "abc" })))).toBe("REDIRECT:/papelaria/catalogo?erro=preco_invalido");
     expect(upsertCatalogItems).not.toHaveBeenCalled();
+  });
+  it("nome que começa com fórmula não grava (cadastro manual)", async () => {
+    expect(await run(saveItemAction(form({ name: "=CMD()", price: "1,50" })))).toBe("REDIRECT:/papelaria/catalogo?erro=nome_formula");
+    expect(upsertCatalogItems).not.toHaveBeenCalled();
+  });
+  it("erro do repositório vai por código, nunca por texto", async () => {
+    upsertCatalogItems.mockRejectedValue(Object.assign(new Error("segredo"), { name: "StationeryRepositoryError", code: "limit_exceeded" }));
+    expect(await run(saveItemAction(form({ name: "Lápis", price: "1,50" })))).toBe("REDIRECT:/papelaria/catalogo?erro=limit_exceeded");
   });
   it("importação: linhas boas entram; ruins voltam no relatório neutralizado", async () => {
     const csv = 'nome;preco;estoque\nLápis;1,50;sim\n=CMD();2,00;\nCaneta;xx;\n';
@@ -228,6 +239,13 @@ describe("areas e catálogo", () => {
     expect(r).toMatchObject({ status: "done", imported: 1, errorCount: 2 });
     expect(upsertCatalogItems.mock.calls[0]?.[3]).toEqual([{ name: "Lápis", priceCents: 150, stock: "in_stock" }]);
     if (r.status === "done") expect(decodeURIComponent(r.reportHref ?? "")).toContain("'=CMD()");
+    expect(revalidatePath).toHaveBeenCalledWith("/papelaria/catalogo");
+  });
+  it("importação sem nenhuma linha boa não revalida nada", async () => {
+    const fd = new FormData();
+    fd.set("file", new File(["nome;preco\n=X;1\n"], "c.csv", { type: "text/csv" }));
+    await importCatalogAction({ status: "idle" }, fd);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
   it("planilha sem colunas: erro fatal, nada gravado; sem arquivo: erro", async () => {
     const fd = new FormData();

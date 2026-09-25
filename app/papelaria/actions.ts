@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getSessionActor } from "@/features/stationeries/actor";
-import { repositoryErrorMessage } from "@/features/stationeries/messages";
+import { repositoryErrorCode } from "@/features/stationeries/messages";
 import { getStationeryOfOwner } from "@/features/stationeries/queries";
 import { transition } from "@/features/stationeries/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,7 +24,7 @@ export async function ownerStatusAction(formData: FormData): Promise<void> {
     await transition(createAdminClient(), actor, { id: own.id, to: parsed.data.to, as: "owner" });
   } catch (error) {
     console.error("status da papelaria", error);
-    redirect(`/papelaria?erro=${encodeURIComponent(repositoryErrorMessage(error))}`);
+    redirect(`/papelaria?erro=${repositoryErrorCode(error)}`);
   }
   redirect("/papelaria?ok=1");
 }

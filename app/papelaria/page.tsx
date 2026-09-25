@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { StatusPanel } from "@/components/stationeries/StatusPanel";
-import { STATUS_LABEL } from "@/features/stationeries/messages";
+import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
 import { listStatusEvents } from "@/features/stationeries/queries";
 import { getOwnerContext } from "@/features/stationeries/session";
 
@@ -40,7 +40,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
         </span>
       </PageHeader>
       {ok ? <Notice kind="ok">Status atualizado.</Notice> : null}
-      {erro ? <Notice kind="error">{erro === "invalido" ? "Ação inválida." : erro}</Notice> : null}
+      {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       <div className="mb-6 flex flex-wrap gap-3">
         {stationery.status === "approved" ? move("active", "Publicar papelaria") : null}
         {stationery.status === "active" ? move("paused", "Pausar", true) : null}

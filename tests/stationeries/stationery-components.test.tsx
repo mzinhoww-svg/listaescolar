@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/papelaria/catalogo" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/papelaria/catalogo", useRouter: () => ({ replace: vi.fn() }) }));
 
 import { AdminTable } from "@/components/stationeries/AdminTable";
 import { CatalogTable } from "@/components/stationeries/CatalogTable";
@@ -117,6 +117,16 @@ describe("ImportForm", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Importar" }).closest("form")!);
     await waitFor(() => expect(screen.getByTestId("import-result")).toHaveTextContent("3 de 5 linhas importadas. 2 com erro."));
     expect(screen.getByRole("link", { name: "Baixar relatório de erros" })).toHaveAttribute("download", "erros-catalogo.csv");
+  });
+  it("arquivo acima de 2 MB é recusado no cliente, sem enviar", () => {
+    const action = vi.fn(async () => ({ status: "idle" as const }));
+    render(<ImportForm action={action} />);
+    const big = new File(["x"], "grande.csv", { type: "text/csv" });
+    Object.defineProperty(big, "size", { value: 2 * 1024 * 1024 + 1 });
+    fireEvent.change(screen.getByLabelText("Planilha CSV"), { target: { files: [big] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("passa de 2 MB");
+    expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
+    expect(action).not.toHaveBeenCalled();
   });
   it("erro fatal mostra alerta", async () => {
     render(<ImportForm action={async () => ({ status: "error", message: "A planilha está vazia." })} />);

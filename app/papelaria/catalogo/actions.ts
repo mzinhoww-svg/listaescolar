@@ -1,12 +1,13 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getSessionActor } from "@/features/stationeries/actor";
 import { CatalogItemInputSchema, parsePriceToCents, parseStockAnswer } from "@/features/stationeries/catalog";
 import { CSV_MAX_BYTES, parseCatalogCsv } from "@/features/stationeries/catalog-csv";
 import { buildErrorReport } from "@/features/stationeries/error-report";
-import { repositoryErrorMessage } from "@/features/stationeries/messages";
+import { repositoryErrorCode, repositoryErrorMessage } from "@/features/stationeries/messages";
 import { getStationeryOfOwner } from "@/features/stationeries/queries";
 import { upsertCatalogItems } from "@/features/stationeries/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,14 +35,15 @@ export async function saveItemAction(formData: FormData): Promise<void> {
   const stock = parseStockAnswer(typeof formData.get("stock") === "string" ? String(formData.get("stock")) : "") ?? "unknown";
   const parsed = CatalogItemInputSchema.safeParse({ name: typeof name === "string" ? name : "", priceCents: cents, stock });
   if (!parsed.success) {
-    const msg = cents === null ? "Preço inválido. Use o formato 12,90." : (parsed.error.issues[0]?.message ?? "Item inválido.");
-    redirect(`/papelaria/catalogo?erro=${encodeURIComponent(msg)}`);
+    const nameMsg = parsed.error.issues.find((i) => i.path[0] === "name")?.message ?? "";
+    const code = cents === null ? "preco_invalido" : nameMsg.startsWith("O nome não pode começar") ? "nome_formula" : "item_invalido";
+    redirect(`/papelaria/catalogo?erro=${code}`);
   }
   try {
     await upsertCatalogItems(createAdminClient(), actor, stationery.id, [parsed.data]);
   } catch (error) {
     console.error("salvar item", error);
-    redirect(`/papelaria/catalogo?erro=${encodeURIComponent(repositoryErrorMessage(error))}`);
+    redirect(`/papelaria/catalogo?erro=${repositoryErrorCode(error)}`);
   }
   redirect("/papelaria/catalogo?ok=item");
 }
@@ -66,6 +68,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
       console.error("importar catálogo", error);
       return { status: "error", message: repositoryErrorMessage(error) };
     }
+    revalidatePath("/papelaria/catalogo");
   }
   const report = result.errors.length > 0 ? buildErrorReport(result.errors) : null;
   return {

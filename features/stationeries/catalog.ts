@@ -51,7 +51,8 @@ export const CatalogItemInputSchema = z.object({
     .trim()
     .min(1, "Informe o nome do item.")
     .max(200, "Nome com até 200 caracteres.")
-    .refine((n) => catalogItemKey(n) !== "", "Nome inválido."),
+    .refine((n) => catalogItemKey(n) !== "", "Nome inválido.")
+    .refine((n) => !startsWithFormula(n), "O nome não pode começar com =, +, - ou @."),
   priceCents: z
     .number()
     .int("Preço em centavos.")

@@ -308,7 +308,7 @@ describe("S13 stationery_transition", () => {
         const prev = (await c.query("select current_user as u")).rows[0].u as string;
         await c.query("reset role");
         await c.query(
-          "insert into public.stationery_areas (stationery_id, municipality_id, neighborhood) select $1, municipality_id, 'centro' from public.stationeries where id = $1",
+          "insert into public.stationery_areas (stationery_id, neighborhood) values ($1, 'centro')",
           [id],
         );
         await c.query(`set local role ${prev}`);

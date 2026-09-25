@@ -240,7 +240,7 @@ describe("S13 catalog_items e stationery_areas", () => {
         const id = await seedStationery(c, { status: "active" });
         await c.query("reset role");
         await c.query("insert into public.catalog_items (stationery_id, name, item_key, price_cents) values ($1,'a','a',100)", [id]);
-        await c.query("insert into public.stationery_areas (stationery_id, municipality_id, neighborhood) select $1, municipality_id, 'centro' from public.stationeries where id = $1", [id]);
+        await c.query("insert into public.stationery_areas (stationery_id, neighborhood) values ($1, 'centro')", [id]);
         await c.query("set local role anon");
         expect((await attempt(c, "select 1 from public.catalog_items where stationery_id = $1", [id])).rows).toHaveLength(1);
         expect((await attempt(c, "select 1 from public.stationery_areas where stationery_id = $1", [id])).rows).toHaveLength(1);
@@ -258,7 +258,7 @@ describe("S13 catalog_items e stationery_areas", () => {
   });
 
   describe("áreas atendidas", () => {
-    const AREA = `insert into public.stationery_areas (stationery_id, municipality_id, neighborhood) select $1, id, $2 from public.municipalities order by ibge_code limit 1`;
+    const AREA = `insert into public.stationery_areas (stationery_id, neighborhood) values ($1, $2)`;
     it("neighborhood normalizado e único por papelaria/município", async () => {
       await withClaims("system", async (c) => {
         const id = await seedStationery(c);
@@ -274,6 +274,18 @@ describe("S13 catalog_items e stationery_areas", () => {
         const ins = await attempt(c, AREA, [id, "jardim"]);
         expect(ins.error).toBeNull();
         expect((await attempt(c, "delete from public.stationery_areas where stationery_id = $1", [id])).rowCount).toBe(1);
+      });
+    });
+    it("dono não escolhe município nem datas da área; município vem da papelaria", async () => {
+      await withClaims("stationery_member", async (c) => {
+        const id = await seedStationery(c, { status: "approved", ownerId: IDS.stationery_member });
+        const denied = await attempt(c, "insert into public.stationery_areas (stationery_id, municipality_id, neighborhood) select $1, municipality_id, 'x1' from public.stationeries where id = $1", [id]);
+        expect(denied.error).not.toBeNull();
+        const denied2 = await attempt(c, "insert into public.stationery_areas (stationery_id, neighborhood, created_at) values ($1, 'x2', now())", [id]);
+        expect(denied2.error).not.toBeNull();
+        expect((await attempt(c, AREA, [id, "jardim"])).error).toBeNull();
+        const r = await attempt(c, "select (a.municipality_id = s.municipality_id) as same from public.stationery_areas a join public.stationeries s on s.id = a.stationery_id where a.stationery_id = $1", [id]);
+        expect(r.rows[0]?.same).toBe(true);
       });
     });
     it.each(["under_review", "suspended"] as StationeryStatus[])("dono não altera áreas em %s", async (status) => {

@@ -240,6 +240,20 @@ describe("S13 schema: papelarias, membros, eventos", () => {
         }
       });
     });
+    it("stationery_register só aceita dono com papel parent", async () => {
+      await withClaims("system", async (c) => {
+        const call = (owner: string, cnpj: string) =>
+          attempt(
+            c,
+            "select public.stationery_register($1, 'p-x', 'Papelaria X', 'X Ltda', $2, (select id from public.municipalities limit 1), 'centro', null, null, '+5565999991234', null, null, true, false, 0, null, '{}', '[]', 'v1')",
+            [owner, cnpj],
+          );
+        const bad = await call(IDS.school_member, "11222333000181");
+        expect(bad.code).toBe("42501");
+        const ok = await call(IDS.parent, "11222333000181");
+        expect(ok.error).toBeNull();
+      });
+    });
     it("cnpj aceita [0-9A-Z]{14} (alfanumérico)", async () => {
       await inTx(async (c) => {
         const ok = await seedStationery(c, { status: "signup", overrides: { cnpj: "12ABC34501DE35" } });

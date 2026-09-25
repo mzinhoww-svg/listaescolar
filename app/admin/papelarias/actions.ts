@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getSessionActor } from "@/features/stationeries/actor";
-import { repositoryErrorMessage } from "@/features/stationeries/messages";
+import { repositoryErrorCode } from "@/features/stationeries/messages";
 import { transition } from "@/features/stationeries/repository";
 import { STATIONERY_STATUSES } from "@/features/stationeries/state";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,7 +39,7 @@ export async function adminTransitionAction(formData: FormData): Promise<void> {
     await transition(createAdminClient(), actor, { id, to, ...(reason ? { reason } : {}) });
   } catch (error) {
     console.error("transição admin", error);
-    redirect(`${base}?erro=${encodeURIComponent(repositoryErrorMessage(error))}`);
+    redirect(`${base}?erro=${repositoryErrorCode(error)}`);
   }
   redirect(`${base}?ok=1`);
 }

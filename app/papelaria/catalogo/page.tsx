@@ -4,7 +4,7 @@ import { CatalogTable } from "@/components/stationeries/CatalogTable";
 import { ImportForm } from "@/components/stationeries/ImportForm";
 import { ItemForm } from "@/components/stationeries/ItemForm";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
-import { STATUS_LABEL } from "@/features/stationeries/messages";
+import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
 import { listCatalogItems, type CatalogRow } from "@/features/stationeries/repository";
 import { getOwnerContext } from "@/features/stationeries/session";
 import { CATALOG_WRITABLE_STATUSES } from "@/features/stationeries/state";
@@ -40,7 +40,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
     <>
       <PageHeader crumb="Papelaria / Catálogo" title="Catálogo" />
       {ok ? <Notice kind="ok">Item salvo.</Notice> : null}
-      {erro ? <Notice kind="error">{erro}</Notice> : null}
+      {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       {!writable ? (
         <Notice kind="info">
           Catálogo bloqueado: sua papelaria está em “{STATUS_LABEL[stationery.status]}”.{" "}

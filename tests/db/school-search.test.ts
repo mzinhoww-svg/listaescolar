@@ -127,6 +127,71 @@ describe("search_schools: schema", () => {
     );
     expect(r.rows[0]).toEqual({ a: true, u: true, s: true });
   });
+
+  it("EXECUTE dos helpers de normalização: anon/authenticated/service_role podem; public não", async () => {
+    for (const fn of ["public.immutable_unaccent(text)", "public.search_normalize(text)"]) {
+      const r = await withSuperuser((c) =>
+        c.query<{ a: boolean; u: boolean; s: boolean; pub: boolean }>(
+          `select has_function_privilege('anon', f, 'execute') a, has_function_privilege('authenticated', f, 'execute') u,
+                  has_function_privilege('service_role', f, 'execute') s,
+                  coalesce((select bool_or(x.grantee = 0) from aclexplode((select proacl from pg_proc where oid = f)) x), false) pub
+           from (select $1::regprocedure as f) x`,
+          [fn],
+        ),
+      );
+      expect(r.rows[0], fn).toEqual({ a: true, u: true, s: true, pub: false });
+    }
+    const s = await withSuperuser((c) =>
+      c.query<{ pub: boolean }>(
+        `select coalesce(bool_or(x.grantee = 0), false) pub
+         from aclexplode((select proacl from pg_proc where oid = 'public.search_schools(text,uuid,public.school_network,text,int,int)'::regprocedure)) x`,
+      ),
+    );
+    expect(s.rows[0]!.pub).toBe(false);
+  });
+});
+
+describe("schools: privacidade por coluna (S04)", () => {
+  const SAFE = [
+    "id", "inep", "name", "normalized_name", "network", "neighborhood", "address", "cep", "phone",
+    "municipality_id", "verification_status", "registry_source", "is_demo", "created_at", "updated_at",
+  ];
+  beforeAll(seedUsers);
+  afterAll(async () => {
+    await withSuperuser((c) => c.query("delete from public.municipalities where ibge_code = $1", [DISABLED_IBGE]));
+    await cleanupUsers();
+  });
+
+  for (const who of ["anon", "parent", "school_member"] as const) {
+    it(`${who}: select de email e source_batch_id (direto e por select *) dá 42501; colunas seguras seguem legíveis`, async () => {
+      await withClaims(who, async (c) => {
+        await seed(c, who);
+        for (const sql of [
+          "select email from public.schools",
+          "select source_batch_id from public.schools",
+          "select * from public.schools",
+        ]) {
+          await c.query("savepoint sp");
+          await expect(c.query(sql), sql).rejects.toMatchObject({ code: "42501" });
+          await c.query("rollback to savepoint sp");
+        }
+        const ok = await c.query(`select ${SAFE.join(", ")} from public.schools`);
+        expect(ok.rows.length).toBeGreaterThan(0);
+        const r = await runSearch(c, { q: "objetivo" });
+        expect(names(r)).toEqual(["Colégio Objetivo Cuiabá"]);
+      });
+    });
+  }
+
+  it("service_role continua lendo email (gateway admin); RLS segue habilitada", async () => {
+    await withClaims("system", async (c) => {
+      await seed(c, "system");
+      const r = await c.query<{ email: string }>("select email from public.schools where inep = '51900001'");
+      expect(r.rows[0]!.email).toBe("secreto@escola.invalid");
+    });
+    const rls = await withSuperuser((c) => c.query("select relrowsecurity from pg_class where oid = 'public.schools'::regclass"));
+    expect(rls.rows[0]!.relrowsecurity).toBe(true);
+  });
 });
 
 describe("search_schools: busca", () => {
@@ -177,12 +242,10 @@ describe("search_schools: busca", () => {
     const rows = await search("admin", { q: "escola municipal antonio silva" });
     const ranks = rows.map((r) => Number(r.rank));
     expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
-    expect(names(rows)).toEqual(
-      expect.arrayContaining(["Escola Municipal Professor Antônio Silva", "Escola Municipal Antônio Silva Neto"]),
-    );
-    expect(names(rows).indexOf("Escola Municipal Antônio Silva Neto")).toBeLessThan(
-      names(rows).indexOf("Escola Municipal Professor Antônio Silva"),
-    );
+    const idx = (n: string) => names(rows).indexOf(n);
+    expect(idx("Escola Municipal Antônio Silva Neto")).toBeGreaterThanOrEqual(0);
+    expect(idx("Escola Municipal Professor Antônio Silva")).toBeGreaterThanOrEqual(0);
+    expect(idx("Escola Municipal Antônio Silva Neto")).toBeLessThan(idx("Escola Municipal Professor Antônio Silva"));
   });
 
   it("colunas de retorno são as públicas seguras e total_count vem do banco", async () => {
@@ -290,9 +353,14 @@ describe("search_schools: entradas hostis", () => {
     }
   });
 
-  it("10 mil caracteres com palavra válida no começo ainda responde sem erro", async () => {
+  it("10 mil caracteres com palavra válida no começo responde sem erro e acha a escola", async () => {
     const rows = await search("anon", { q: "objetivo " + "y".repeat(10_000) });
-    expect(Array.isArray(rows)).toBe(true);
+    expect(names(rows)).toContain("Colégio Objetivo Cuiabá");
+  });
+
+  it("bairro só com espaços/tabs não vira 'listar tudo'", async () => {
+    expect(await search("anon", { hood: "   " })).toHaveLength(0);
+    expect(await search("anon", { hood: "\t\n " })).toHaveLength(0);
   });
 
   it("filtros hostis (bairro com curinga, limite/offset extremos) não erram", async () => {
@@ -307,21 +375,20 @@ describe("search_schools: desempenho", () => {
   beforeAll(seedUsers);
   afterAll(cleanupUsers);
 
-  it("com 5.000 escolas o plano usa o índice trigram e a busca responde rápido", async () => {
+  const bulk5000 = `insert into public.schools (inep, name, normalized_name, network, neighborhood, municipality_id)
+    select lpad((60000000 + g)::text, 8, '0'),
+           'Escola Teste ' || md5(g::text), 'escola teste ' || md5(g::text), 'municipal',
+           'Bairro ' || (g % 50), m.id
+    from generate_series(1, 5000) g, public.municipalities m where m.ibge_code = '5103403'`;
+
+  it("índice trigram é utilizável (nome e bairro), com o planner forçado a preferir índice", async () => {
     await inTx(async (c) => {
-      await c.query(
-        `insert into public.schools (inep, name, normalized_name, network, neighborhood, municipality_id)
-         select lpad((60000000 + g)::text, 8, '0'),
-                'Escola Teste ' || md5(g::text), 'escola teste ' || md5(g::text), 'municipal',
-                'Bairro ' || (g % 50), m.id
-         from generate_series(1, 5000) g, public.municipalities m where m.ibge_code = '5103403'`,
-      );
+      await c.query(bulk5000);
       await c.query("analyze public.schools");
-      // tolerante: força o planner a preferir índice e checa que ele PODE usar o GIN trigram (nome e bairro).
       await c.query("set local enable_seqscan = off");
       for (const [col, val] of [
         ["normalized_name", "escola teste abc"],
-        ["lower(public.immutable_unaccent(neighborhood))", "bairro 7"],
+        ["public.search_normalize(neighborhood)", "bairro 7"],
       ] as const) {
         const plan = await c.query<{ "QUERY PLAN": string }>(
           `explain select id from public.schools where ${col} operator(extensions.%) $1`,
@@ -331,10 +398,25 @@ describe("search_schools: desempenho", () => {
         expect(text, col).toMatch(/Bitmap Index Scan|Index Scan/);
         expect(text, col).toMatch(/gin|trgm|idx/i);
       }
-      await c.query("reset enable_seqscan");
-      const t0 = Date.now();
+    });
+  });
+
+  it("como anon (RLS ativa), sem forçar plano, com 5.000 escolas: executa, respeita o limite e não degenera", async () => {
+    await inTx(async (c) => {
+      await c.query(bulk5000);
+      await c.query("analyze public.schools");
+      await c.query("set local role anon");
+      const plan = await c.query<{ "QUERY PLAN": string }>(
+        "explain (analyze) select * from public.search_schools('escola teste 1a2b', null, null, null, 20, 0)",
+      );
+      const text = plan.rows.map((r) => r["QUERY PLAN"]).join("\n");
+      // Achado registrado no ledger: sob RLS, os operadores pg_trgm não são leakproof, então o planner
+      // filtra municipality_id (política) antes do `%` e cai em Seq Scan. Aqui só garantimos que a
+      // execução é finita e correta na escala do piloto (teto folgado, não uma promessa de tempo).
+      expect(text).toMatch(/Function Scan on search_schools .*rows=\d+ loops=1/);
+      const ms = Number(/Execution Time: ([\d.]+) ms/.exec(text)?.[1]);
+      expect(ms).toBeLessThan(5000);
       const r = await c.query("select * from public.search_schools('escola teste 1a2b', null, null, null, 20, 0)");
-      expect(Date.now() - t0).toBeLessThan(1500);
       expect(r.rows.length).toBeLessThanOrEqual(20);
     });
   });

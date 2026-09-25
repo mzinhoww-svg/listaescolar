@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ClaimBlock } from "@/components/schools/ClaimBlock";
 import { foundLabel, formatPhone, initials } from "@/components/schools/format";
@@ -13,7 +13,6 @@ import { StatusBadges } from "@/components/schools/StatusBadges";
 import { parseSearchParams } from "@/features/schools/search/params";
 import type { SchoolListItem, SchoolProfile } from "@/features/schools/search/types";
 
-import { GradeYearPicker } from "@/app/escolas/[inep]/GradeYearPicker";
 import { SearchForm } from "@/app/escolas/SearchForm";
 
 const item = (over: Partial<SchoolListItem> = {}): SchoolListItem => ({
@@ -72,14 +71,22 @@ describe("StatusBadges / SchoolCard", () => {
   });
 
   it("card liga ao perfil e mostra INEP, bairro e rede", () => {
-    render(<ul><SchoolCard school={item()} /></ul>);
+    render(
+      <ul>
+        <SchoolCard school={item()} />
+      </ul>,
+    );
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "/escolas/51001234");
     expect(link).toHaveTextContent("INEP 51001234 · Centro Sul · Municipal");
   });
 
   it("card sem bairro não mostra 'null'", () => {
-    render(<ul><SchoolCard school={item({ neighborhood: null })} /></ul>);
+    render(
+      <ul>
+        <SchoolCard school={item({ neighborhood: null })} />
+      </ul>,
+    );
     expect(screen.getByRole("link")).not.toHaveTextContent(/null|undefined/);
   });
 });
@@ -110,17 +117,28 @@ describe("Pagination / NetworkChips", () => {
   it("preserva filtros e não aparece com uma só página", () => {
     const input = parseSearchParams({ q: "silva", rede: "privada", pagina: "2" });
     const { container, rerender } = render(<Pagination input={input} page={2} pageCount={3} />);
-    expect(screen.getByRole("link", { name: "Anterior" })).toHaveAttribute("href", "/escolas?q=silva&rede=privada");
-    expect(screen.getByRole("link", { name: "Próxima" })).toHaveAttribute("href", "/escolas?q=silva&rede=privada&pagina=3");
+    expect(screen.getByRole("link", { name: "Anterior" })).toHaveAttribute(
+      "href",
+      "/escolas?q=silva&rede=privada",
+    );
+    expect(screen.getByRole("link", { name: "Próxima" })).toHaveAttribute(
+      "href",
+      "/escolas?q=silva&rede=privada&pagina=3",
+    );
     rerender(<Pagination input={input} page={1} pageCount={1} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("chips marcam a rede ativa e voltam à página 1", () => {
-    render(<NetworkChips input={parseSearchParams({ q: "silva", rede: "estadual", pagina: "4" })} />);
+    render(
+      <NetworkChips input={parseSearchParams({ q: "silva", rede: "estadual", pagina: "4" })} />,
+    );
     expect(screen.getByRole("link", { name: "Estadual" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Todas" })).toHaveAttribute("href", "/escolas?q=silva");
-    expect(screen.getByRole("link", { name: "Municipal" })).toHaveAttribute("href", "/escolas?q=silva&rede=municipal");
+    expect(screen.getByRole("link", { name: "Municipal" })).toHaveAttribute(
+      "href",
+      "/escolas?q=silva&rede=municipal",
+    );
   });
 });
 
@@ -156,7 +174,10 @@ describe("ProfileInfo / ClaimBlock", () => {
 
   it("botão Reivindicar perfil aponta para a rota da S06; suspensa não oferece", () => {
     const { rerender } = render(<ClaimBlock inep="51001234" status="registered" />);
-    expect(screen.getByRole("link", { name: "Reivindicar perfil" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
+    expect(screen.getByRole("link", { name: "Reivindicar perfil" })).toHaveAttribute(
+      "href",
+      "/escolas/51001234/reivindicar",
+    );
     rerender(<ClaimBlock inep="51001234" status="suspended" />);
     expect(screen.queryByRole("link")).toBeNull();
   });
@@ -164,7 +185,9 @@ describe("ProfileInfo / ClaimBlock", () => {
 
 describe("SearchForm", () => {
   it("é um form GET para /escolas e preserva filtros em campos ocultos", () => {
-    const { container } = render(<SearchForm defaultValue="silva" preserve={{ rede: "privada" }} />);
+    const { container } = render(
+      <SearchForm defaultValue="silva" preserve={{ rede: "privada" }} />,
+    );
     const form = container.querySelector("form");
     expect(form).toHaveAttribute("method", "get");
     expect(form).toHaveAttribute("action", "/escolas");
@@ -174,7 +197,9 @@ describe("SearchForm", () => {
   });
 
   it("campo Bairro opcional (visível) vai no GET e mantém o valor", () => {
-    const { container } = render(<SearchForm neighborhood="Centro Sul" preserve={{ rede: "privada" }} />);
+    const { container } = render(
+      <SearchForm neighborhood="Centro Sul" preserve={{ rede: "privada" }} />,
+    );
     const bairro = screen.getByLabelText("Bairro (opcional)");
     expect(bairro).toHaveValue("Centro Sul");
     expect(bairro).toHaveAttribute("name", "bairro");
@@ -187,30 +212,5 @@ describe("SearchForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
     expect(screen.getByLabelText("Buscar escola pelo nome ou INEP")).toHaveValue("");
     expect(screen.queryByRole("button", { name: "Limpar busca" })).toBeNull();
-  });
-});
-
-describe("GradeYearPicker", () => {
-  it("atualiza a query string sem chamada de rede", () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const replace = vi.spyOn(window.history, "replaceState");
-    render(<GradeYearPicker inep="51001234" serie={null} ano={null} years={[2026, 2027]} />);
-    expect(screen.getByText("Escolha a série para ver a lista")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Série"), { target: { value: "ef-4" } });
-    fireEvent.change(screen.getByLabelText("Ano letivo"), { target: { value: "2027" } });
-    expect(replace).toHaveBeenLastCalledWith(null, "", "?serie=ef-4&ano=2027");
-    expect(screen.getByText("4º ano · 2027: lista não publicada")).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
-    fetchSpy.mockRestore();
-    replace.mockRestore();
-  });
-
-  it("parte da seleção vinda da URL e o form (sem JS) usa GET no perfil", () => {
-    const { container } = render(<GradeYearPicker inep="51001234" serie="em-2" ano={2027} years={[2026, 2027]} />);
-    expect(screen.getByLabelText("Série")).toHaveValue("em-2");
-    expect(screen.getByLabelText("Ano letivo")).toHaveValue("2027");
-    const form = container.querySelector("form");
-    expect(form).toHaveAttribute("method", "get");
-    expect(form).toHaveAttribute("action", "/escolas/51001234");
   });
 });

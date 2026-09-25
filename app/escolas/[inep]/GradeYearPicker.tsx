@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import { GRADES, STAGE_LABEL, findGrade, type GradeStage } from "@/features/grades/catalog";
 
@@ -9,6 +11,10 @@ type Props = {
   serie: string | null;
   ano: number | null;
   years: readonly number[];
+  /** Lista publicada para a série/ano da URL (dado real do servidor); null = não publicada. */
+  published?: { versionNumber: number; itemCount: number } | null;
+  /** A consulta da lista falhou no servidor: mostrar "indisponível", nunca "não publicada". */
+  unavailable?: boolean;
 };
 
 const STAGES: GradeStage[] = ["ei", "ef", "em"];
@@ -16,10 +22,19 @@ const FIELD =
   "border-tinta focus-visible:outline-verde-fundo h-12 w-full rounded-campo border-[1.5px] bg-white px-3 text-[15px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2";
 
 /**
- * Seletor de série e ano letivo. A seleção vive na query string (`?serie=ef-4&ano=2027`) e é
- * atualizada com `history.replaceState`, sem chamada de rede. Sem JS, o `<form method="get">` recarrega a página.
+ * Seletor de série e ano letivo. A seleção vive na query string (`?serie=ef-4&ano=2027`) e, com JS,
+ * `router.replace` pede ao servidor o estado real da lista (S05). Sem JS, o `<form method="get">` recarrega a página.
  */
-export function GradeYearPicker({ inep, serie, ano, years }: Props) {
+export function GradeYearPicker({
+  inep,
+  serie,
+  ano,
+  years,
+  published = null,
+  unavailable = false,
+}: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [grade, setGrade] = useState(serie ?? "");
   const [year, setYear] = useState(String(ano ?? years[0]));
 
@@ -27,10 +42,12 @@ export function GradeYearPicker({ inep, serie, ano, years }: Props) {
     const p = new URLSearchParams();
     if (nextGrade) p.set("serie", nextGrade);
     p.set("ano", nextYear);
-    window.history.replaceState(null, "", `?${p.toString()}`);
+    startTransition(() => router.replace(`?${p.toString()}`, { scroll: false }));
   }
 
   const selected = findGrade(grade);
+  // `published`/`unavailable` descrevem a seleção que veio do servidor; com outra seleção local, nunca os mostre.
+  const inSync = grade === (serie ?? "") && year === String(ano ?? years[0]);
   return (
     <section aria-labelledby="lista" className="flex flex-col gap-3">
       <h2 id="lista" className="text-base font-extrabold">
@@ -87,20 +104,58 @@ export function GradeYearPicker({ inep, serie, ano, years }: Props) {
           </div>
         </div>
         <noscript>
-          <button type="submit" className="bg-tinta text-papel rounded-botao h-12 w-full text-base font-extrabold">
+          <button
+            type="submit"
+            className="bg-tinta text-papel rounded-botao h-12 w-full text-base font-extrabold"
+          >
             Ver lista
           </button>
         </noscript>
       </form>
       <div className="rounded-[22px] bg-white p-4" role="status">
-        <p className="text-[15px] font-extrabold">
-          {selected ? `${selected.label} · ${year}: lista não publicada` : "Escolha a série para ver a lista"}
-        </p>
-        <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
-          {selected
-            ? "Ainda não há lista publicada para esta escola, série e ano. Quando houver, ela aparece aqui."
-            : "Nenhuma lista publicada está disponível para esta escola no momento."}
-        </p>
+        {!inSync ? (
+          <>
+            <p className="text-[15px] font-extrabold">Consultando…</p>
+            <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
+              {isPending
+                ? "Buscando a lista desta série e ano."
+                : "Se a lista não aparecer, recarregue a página."}
+            </p>
+          </>
+        ) : selected && unavailable ? (
+          <>
+            <p className="text-[15px] font-extrabold">{`${selected.label} · ${year}: lista indisponível`}</p>
+            <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
+              Não foi possível consultar a lista agora. Tente novamente em instantes.
+            </p>
+          </>
+        ) : selected && published ? (
+          <>
+            <p className="text-[15px] font-extrabold">{`${selected.label} · ${year}: lista publicada`}</p>
+            <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
+              {`Versão ${published.versionNumber} · ${published.itemCount === 1 ? "1 item" : `${published.itemCount} itens`}`}
+            </p>
+            <Link
+              href={`/escolas/${inep}/${selected.slug}?ano=${year}`}
+              className="bg-tinta text-papel rounded-botao mt-3 flex h-12 w-full items-center justify-center text-base font-extrabold"
+            >
+              Ver lista
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="text-[15px] font-extrabold">
+              {selected
+                ? `${selected.label} · ${year}: lista não publicada`
+                : "Escolha a série para ver a lista"}
+            </p>
+            <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
+              {selected
+                ? "Ainda não há lista publicada para esta escola, série e ano. Quando houver, ela aparece aqui."
+                : "Nenhuma lista publicada está disponível para esta escola no momento."}
+            </p>
+          </>
+        )}
       </div>
     </section>
   );

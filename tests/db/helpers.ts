@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Client } from "pg";
@@ -155,4 +156,96 @@ async function insertAuthUser(client: Client, id: string, label: string): Promis
     `insert into auth.users (id, aud, role, email) values ($1, 'authenticated', 'authenticated', $2)`,
     [id, `${label}@teste.invalid`],
   );
+}
+
+export type StationeryStatus =
+  | "signup"
+  | "accreditation"
+  | "under_review"
+  | "approved"
+  | "active"
+  | "paused"
+  | "suspended"
+  | "rejected";
+
+export type SeedStationery = {
+  status?: StationeryStatus;
+  /** perfil que vira owner (member_role = 'owner'); omitido = sem membro. */
+  ownerId?: string;
+  pausedBy?: "owner" | "admin" | null;
+  complete?: boolean; // dados que as pré-condições do dono exigem (padrão true)
+  overrides?: Record<string, unknown>;
+};
+
+/**
+ * Remove papelarias (e o que depende delas) de testes que confirmaram dados (commit). O banco recusa DELETE de
+ * papelaria com eventos (FK restrict, eventos imutáveis), então a limpeza usa `session_replication_role = replica`
+ * (só superuser) e apaga os filhos na mão.
+ */
+export async function purgeStationeries(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      await c.query("set local session_replication_role = replica");
+      for (const t of ["stationery_status_events", "catalog_items", "stationery_areas", "stationery_members"]) {
+        await c.query(`delete from public.${t} where stationery_id = any($1::uuid[])`, [ids]);
+      }
+      await c.query("delete from public.stationeries where id = any($1::uuid[])", [ids]);
+      await c.query("commit");
+    } catch (e) {
+      await c.query("rollback");
+      throw e;
+    }
+  });
+}
+
+/**
+ * Cria uma papelaria (e o owner) como superuser, mesmo dentro de uma transação de withClaims:
+ * sai do papel de teste, insere e volta ao papel anterior. Devolve o id.
+ */
+export async function seedStationery(client: Client, opts: SeedStationery = {}): Promise<string> {
+  const prev = (await client.query("select current_user as u")).rows[0].u as string;
+  await client.query("reset role");
+  try {
+    // 14 dígitos aleatórios: não colidem entre execuções concorrentes nem com dados confirmados de outra rodada.
+    const n = Array.from({ length: 14 }, () => String(randomInt(0, 10))).join("");
+    const muni = await client.query("select id from public.municipalities order by ibge_code limit 1");
+    const complete = opts.complete ?? true;
+    const row: Record<string, unknown> = {
+      slug: `papelaria-${n}`,
+      trade_name: "Papelaria Teste",
+      legal_name: complete ? "Papelaria Teste LTDA" : null,
+      cnpj: n,
+      status: opts.status ?? "signup",
+      municipality_id: muni.rows[0].id,
+      neighborhood: complete ? "Centro" : null,
+      address: "Rua Teste, 1",
+      cep: "78005000",
+      whatsapp: complete ? "+5565999990000" : null,
+      phone: "+556533330000",
+      email: "contato@papelaria-teste.invalid",
+      offers_pickup: complete,
+      offers_delivery: false,
+      lgpd_accepted_at: complete ? new Date().toISOString() : null,
+      lgpd_text_version: complete ? "v1" : null,
+      paused_by: opts.pausedBy ?? null,
+      ...opts.overrides,
+    };
+    const cols = Object.keys(row);
+    const res = await client.query(
+      `insert into public.stationeries (${cols.join(",")}) values (${cols.map((_, i) => `$${i + 1}`).join(",")}) returning id`,
+      cols.map((k) => row[k]),
+    );
+    const id = res.rows[0].id as string;
+    if (opts.ownerId) {
+      await client.query(
+        `insert into public.stationery_members (stationery_id, profile_id, member_role) values ($1, $2, 'owner')`,
+        [id, opts.ownerId],
+      );
+    }
+    return id;
+  } finally {
+    await client.query(`set local role ${prev}`);
+  }
 }

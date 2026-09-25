@@ -6,6 +6,7 @@ import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
 import { ProfileNotices } from "@/components/schools/ProfileNotices";
 import { academicYears, defaultAcademicYear, parseGradeSelection } from "@/features/grades/catalog";
+import { getPublishedList } from "@/features/lists/queries";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { buildSchoolMetadata } from "@/features/schools/search/seo";
@@ -35,6 +36,8 @@ export default async function SchoolPage({ params, searchParams }: Props) {
   const sp = await searchParams;
   const now = new Date();
   const { grade, year } = parseGradeSelection(first(sp.serie), first(sp.ano), now);
+  const selectedYear = year ?? defaultAcademicYear(now);
+  const list = grade ? await getPublishedList(school.inep, grade.slug, selectedYear) : null;
   const jsonLd = buildSchoolJsonLd(school, siteBase() ?? undefined);
 
   return (
@@ -48,8 +51,9 @@ export default async function SchoolPage({ params, searchParams }: Props) {
         <GradeYearPicker
           inep={school.inep}
           serie={grade?.slug ?? null}
-          ano={year ?? defaultAcademicYear(now)}
+          ano={selectedYear}
           years={academicYears(now)}
+          published={list ? { versionNumber: list.version.versionNumber, itemCount: list.version.itemCount } : null}
         />
         <ClaimBlock inep={school.inep} status={school.verificationStatus} isDemo={school.isDemo} />
         <ProfileInfo school={school} />

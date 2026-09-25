@@ -16,7 +16,8 @@
     "db:reset": "node scripts/supa.mjs db reset",
     "db:status": "node scripts/supa.mjs status",
     "db:env": "node scripts/supa.mjs env",
-    "import:inep": "tsx --conditions=react-server scripts/import-inep.ts"
+    "import:inep": "tsx --conditions=react-server scripts/import-inep.ts",
+    "seed:demo-lists": "tsx --conditions=react-server scripts/seed-demo-lists.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "^11.0.0",

@@ -10,8 +10,10 @@ vi.mock("@/features/schools/search/repository", () => ({
   getSchoolByInep: (...a: unknown[]) => getSchoolByInep(...a),
 }));
 // `cache` do React não deduplica fora do servidor de RSC; nos testes vale a chamada direta.
+vi.mock("@/features/lists/queries", () => ({ getPublishedList: vi.fn().mockResolvedValue(null), listVersionHistory: vi.fn().mockResolvedValue([]) }));
 vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), cache: <T,>(f: T) => f }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
   redirect: (to: string) => {
     throw new Error(`REDIRECT:${to}`);
   },

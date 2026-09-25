@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { attempt, cleanupUsers, seedUsers, withClaims, withSuperuser } from "./helpers";
+import { asOwner, attempt, cleanupUsers, seedUsers, withClaims, withSuperuser } from "./helpers";
 
 const DISABLED_IBGE = "5208707";
 const CUIABA = "5103403";
@@ -53,10 +53,13 @@ async function seedSchool(
   status = "registered",
   ibge = CUIABA,
 ): Promise<void> {
-  await c.query(
-    `insert into public.schools (inep, name, normalized_name, network, municipality_id, verification_status)
-     select $1, $2, $3, 'municipal', m.id, $4::public.verification_status from public.municipalities m where m.ibge_code = $5`,
-    [inep, name, name.toLowerCase(), status, ibge],
+  // claimed/verified só o dono das funções semeia (gatilho schools_guard_verification, 0104).
+  await asOwner(c, () =>
+    c.query(
+      `insert into public.schools (inep, name, normalized_name, network, municipality_id, verification_status)
+       select $1, $2, $3, 'municipal', m.id, $4::public.verification_status from public.municipalities m where m.ibge_code = $5`,
+      [inep, name, name.toLowerCase(), status, ibge],
+    ),
   );
 }
 
@@ -244,7 +247,7 @@ describe("import_apply_rows e import_claim_batch", () => {
     await withClaims("system", async (c) => {
       const b1 = await newBatch(c);
       await apply(c, b1, [row(1, "51000001", "Escola Um")]);
-      await c.query("update public.schools set verification_status = 'verified' where inep = '51000001'");
+      await asOwner(c, () => c.query("update public.schools set verification_status = 'verified' where inep = '51000001'"));
       const b2 = await newBatch(c);
       const t = await apply(c, b2, [row(1, "51000001", "Escola Um", { email: "novo@x.invalid", phone: "999" })]);
       expect(t).toMatchObject({ unchanged: 1, updated: 0 });

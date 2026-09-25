@@ -107,3 +107,9 @@ Conteúdo e dados:
 - Staging: advisor aceito com `auth_role()` executável por anon, `rls_auto_enable()` (função da plataforma) e a view definer `stationery_public` (S13, esperado).
 - Encerrar só o servidor aberto pela própria sessão (`kill "$(lsof -ti tcp:<porta> -sTCP:LISTEN)"`); nunca `pkill`.
 - Subagentes: nunca despachar dois na mesma rodada no mesmo worktree.
+
+## Política de uso (definida pelo humano em 2026-09-25, limite semanal em 79%)
+- Sonnet nos implementadores e nas revisões comuns; Opus só nas revisões de segurança (RLS, cobrança, B2B e dados de menor).
+- Juntar correções pequenas numa única rodada.
+- Se o limite estiver perto do fim: registrar o estado neste arquivo e parar num ponto limpo, com push feito.
+- Bloqueio conhecido: o classificador negou gravar no Vault do staging o valor de `WORKER_SHARED_SECRET` lido do `.env.local` (credencial em banco remoto); a função `ocr-worker` e o teste de tick dependem de o humano decidir (D-060).

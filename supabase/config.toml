@@ -123,6 +123,12 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# S07: bucket privado das listas enviadas (a migration 0201 também o cria/atualiza, para staging e produção).
+[storage.buckets.list-uploads]
+public = false
+file_size_limit = "4000000B"
+allowed_mime_types = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true
@@ -390,6 +396,12 @@ enabled = false
 authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
+
+# Worker do OCR (S07). A autenticação é do próprio código (x-worker-secret ou chave de serviço), não do JWT:
+# o pg_cron/pg_net e o enfileiramento chamam com segredo. Ver supabase/functions/ocr-worker/README.md.
+[functions.ocr-worker]
+enabled = true
+verify_jwt = false
 
 [edge_runtime]
 enabled = true

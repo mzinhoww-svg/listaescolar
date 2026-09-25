@@ -21,6 +21,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "coverage/**",
     ".track-workdir/**",
+    "supabase/functions/ocr-worker/**", // Deno
   ]),
 ]);
 

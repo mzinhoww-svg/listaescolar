@@ -186,7 +186,8 @@ const queueRow = z.object({
   submitted_at: z.string().nullable(),
   created_at: z.string(),
   is_demo: z.boolean(),
-  schools: z.object({ inep: z.string(), name: z.string() }),
+  evidence_note: z.string().nullable(),
+  schools: z.object({ inep: z.string(), name: z.string(), verification_status: z.string() }),
   claim_evidence: z.array(z.object({ count: z.number() })),
 });
 
@@ -199,7 +200,7 @@ export async function listClaimQueue(actor: SessionActor, filter: ClaimQueueFilt
   const q = admin
     .from("claims")
     .select(
-      "id, status, method, claimant_name, claimant_role_title, contact_email, channel_confirmed_at, submitted_at, created_at, is_demo, schools!inner(inep, name), claim_evidence(count)",
+      "id, status, method, claimant_name, claimant_role_title, contact_email, channel_confirmed_at, submitted_at, created_at, is_demo, evidence_note, schools!inner(inep, name, verification_status), claim_evidence(count)",
     )
     .order("created_at", { ascending: true })
     .limit(f.limit);
@@ -217,7 +218,8 @@ export async function listClaimQueue(actor: SessionActor, filter: ClaimQueueFilt
     createdAt: r.created_at,
     isDemo: r.is_demo,
     evidenceCount: r.claim_evidence[0]?.count ?? 0,
-    school: r.schools,
+    evidenceNote: r.evidence_note,
+    school: { inep: r.schools.inep, name: r.schools.name, verificationStatus: r.schools.verification_status },
   }));
 }
 

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { ClaimBlock } from "@/components/schools/ClaimBlock";
+import { ClaimBlock, type OwnClaimSummary } from "@/components/schools/ClaimBlock";
 import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
 import { ProfileNotices } from "@/components/schools/ProfileNotices";
+import { getSessionActor } from "@/features/auth/actor";
+import { getMyClaimForSchool } from "@/features/claims/queries";
 import { academicYears, defaultAcademicYear, parseGradeSelection } from "@/features/grades/catalog";
 import { getPublishedList } from "@/features/lists/queries";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
@@ -30,6 +32,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
+/** Reivindicação do usuário logado (a própria; nunca de terceiros). Falha de consulta não derruba o perfil: sem bloco personalizado. */
+async function loadOwnClaim(inep: string): Promise<OwnClaimSummary | null> {
+  try {
+    const actor = await getSessionActor();
+    if (!actor) return null;
+    const claim = await getMyClaimForSchool(actor, inep);
+    return claim ? { status: claim.status, createdAt: claim.createdAt, decisionReason: claim.decisionReason } : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function SchoolPage({ params, searchParams }: Props) {
   const school = await loadSchool((await params).inep);
   if (!school) notFound();
@@ -48,6 +62,7 @@ export default async function SchoolPage({ params, searchParams }: Props) {
       listUnavailable = true;
     }
   }
+  const ownClaim = await loadOwnClaim(school.inep);
   const jsonLd = buildSchoolJsonLd(school, siteBase() ?? undefined);
 
   return (
@@ -73,7 +88,7 @@ export default async function SchoolPage({ params, searchParams }: Props) {
               : null
           }
         />
-        <ClaimBlock inep={school.inep} status={school.verificationStatus} isDemo={school.isDemo} />
+        <ClaimBlock inep={school.inep} status={school.verificationStatus} claim={ownClaim} />
         <ProfileInfo school={school} />
       </main>
     </div>

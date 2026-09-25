@@ -34,10 +34,10 @@ export type QueueRow = {
   createdAt: string;
   isDemo: boolean;
   evidenceCount: number;
-  school: { inep: string; name: string };
+  evidenceNote: string | null;
+  school: { inep: string; name: string; verificationStatus: string };
 };
 export type AdminClaimView = QueueRow & {
-  evidenceNote: string | null;
   decisionReason: string | null;
   decidedAt: string | null;
   events: ClaimEventView[];

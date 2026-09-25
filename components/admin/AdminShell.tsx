@@ -6,11 +6,12 @@ const NAV = [
   { href: "/admin", label: "Visão geral" },
   { href: "/admin/importacoes", label: "Importações" },
   { href: "/admin/reivindicacoes", label: "Reivindicações" },
+  { href: "/admin/revisao", label: "Revisão" },
   { href: "/admin/papelarias", label: "Papelarias" },
 ] as const;
 
 type Props = {
-  active: "/admin" | "/admin/importacoes" | "/admin/papelarias" | "/admin/reivindicacoes";
+  active: "/admin" | "/admin/importacoes" | "/admin/papelarias" | "/admin/reivindicacoes" | "/admin/revisao";
   /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
   email: string | null | undefined;
   breadcrumb: string;

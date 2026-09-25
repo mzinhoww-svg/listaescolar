@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Cabecalho } from "@/components/pesquisa/Cabecalho";
+
 export const metadata: Metadata = {
   title: "Como usamos seus dados | Pesquisa ListaCerta",
   description: "Como usamos os dados coletados na pesquisa sobre a compra da lista de material escolar.",
@@ -8,9 +10,13 @@ export const metadata: Metadata = {
 
 export default function PesquisaPrivacidadePage() {
   return (
-    <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-6 px-5 py-10">
+    <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-6 px-5 pt-3 pb-12">
+      <Cabecalho />
       <div>
-        <Link href="/pesquisa" className="text-texto-2 text-sm font-bold">
+        <Link
+          href="/pesquisa"
+          className="text-texto-2 focus-visible:outline-verde-fundo -ml-2 inline-flex h-11 items-center rounded-full px-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
           ← Voltar para a pesquisa
         </Link>
         <h1 className="mt-4 text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em]">

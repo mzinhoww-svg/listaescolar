@@ -34,16 +34,20 @@ export function PerguntaCompraIdeal({ step, compraIdealAtual, podeCitarAtual, on
         rows={5}
         aria-label="Como seria a compra perfeita da lista?"
         placeholder="Conte com suas palavras"
-        className="border-linha rounded-campo w-full border bg-white px-4 py-3 text-base"
+        className="border-linha text-tinta rounded-campo focus-visible:border-verde-fundo focus-visible:ring-verde-fundo/25 placeholder:text-texto-3 w-full resize-none border-[1.5px] bg-white px-4 py-3.5 text-base leading-relaxed font-medium shadow-[0_1px_2px_rgba(15,27,45,0.04)] outline-none focus-visible:ring-4"
       />
-      <label className="flex items-start gap-3 text-sm font-semibold">
+      <label
+        className={`rounded-campo has-focus-visible:outline-verde-fundo flex cursor-pointer items-center gap-3 border-[1.5px] bg-white px-4 py-3.5 text-sm font-semibold transition-colors duration-150 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
+          podeCitar ? "border-verde-fundo" : "border-linha"
+        }`}
+      >
         <input
           type="checkbox"
           checked={podeCitar}
           onChange={(e) => setPodeCitar(e.target.checked)}
-          className="mt-1 h-5 w-5"
+          className="accent-verde-fundo h-5 w-5 shrink-0 outline-none"
         />
-        Pode usar minha frase, sem meu nome
+        <span className="text-tinta">Pode usar minha frase, sem meu nome</span>
       </label>
     </Tela>
   );

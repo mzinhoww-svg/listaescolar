@@ -1,0 +1,35 @@
+@keyframes pesquisa-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pesquisa-pulso {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.entrar {
+  animation: pesquisa-entrar 220ms ease-out both;
+}
+
+.pulso {
+  animation: pesquisa-pulso 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entrar,
+  .pulso {
+    animation: none;
+  }
+}

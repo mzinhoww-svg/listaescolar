@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ULTIMO_STEP } from "@/lib/pesquisa/perguntas";
 import { obterOuCriarEstadoLocal, salvarEstadoLocal, type EstadoPesquisaLocal } from "@/lib/pesquisa/sessao";
 
+import { Esqueleto } from "./Esqueleto";
 import { PerguntaRouter } from "./PerguntaRouter";
 import { enviarComRetry } from "./retry";
 import { TelaFinal } from "./TelaFinal";
@@ -72,7 +73,7 @@ export function Pesquisa() {
     });
   }, []);
 
-  if (!estado) return null;
+  if (!estado) return <Esqueleto />;
 
   if (estado.concluida) {
     return <TelaFinal sessionId={estado.sessionId} g={estado.g} jaConcluida={!acabouDeConcluir} />;
@@ -81,11 +82,21 @@ export function Pesquisa() {
   return (
     <>
       {falhaEnvio ? (
-        <p role="status" className="bg-aviso-fundo text-aviso-texto mx-auto mt-4 w-full max-w-[480px] rounded-campo px-4 py-2 text-center text-xs font-bold">
+        <p
+          role="status"
+          className="bg-aviso-fundo text-aviso-texto rounded-campo mx-auto mt-3 w-[calc(100%-2.5rem)] max-w-[440px] px-4 py-2.5 text-center text-xs font-bold"
+        >
           Não conseguimos salvar sua última resposta agora. Continue: vamos tentar de novo.
         </p>
       ) : null}
-      <PerguntaRouter estado={estado} onResponder={onResponder} onVoltar={onVoltar} onComecar={onComecar} />
+      {/* key por step: remonta a tela (animação de entrada) e nunca reaproveita estado de opção entre telas */}
+      <PerguntaRouter
+        key={estado.step}
+        estado={estado}
+        onResponder={onResponder}
+        onVoltar={onVoltar}
+        onComecar={onComecar}
+      />
     </>
   );
 }

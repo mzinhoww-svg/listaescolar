@@ -39,7 +39,7 @@ export function PerguntaEscolaEtapas({ step, escolaAtual, etapasAtuais, onRespon
         onChange={(e) => setEscola(e.target.value)}
         placeholder="Nome da escola (opcional)"
         aria-label="Nome da escola"
-        className="border-linha rounded-campo h-12 w-full border bg-white px-4 text-base"
+        className="border-linha text-tinta rounded-campo focus-visible:border-verde-fundo focus-visible:ring-verde-fundo/25 placeholder:text-texto-3 h-14 w-full border-[1.5px] bg-white px-4 text-base font-medium shadow-[0_1px_2px_rgba(15,27,45,0.04)] outline-none focus-visible:ring-4"
       />
       <OpcaoMultipla nomeGrupo="Etapas" opcoes={ETAPAS} valoresSelecionados={etapas} onAlternar={alternar} />
     </Tela>

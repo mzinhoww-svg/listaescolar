@@ -7,6 +7,7 @@ import { aggregateSurvey } from "@/lib/pesquisa/agregacao";
 import { RESULTS_COOKIE_NAME, verifyResultsCookie } from "@/lib/pesquisa/auth-resultados";
 import { exportLeadsRows, exportResponsesRows } from "@/lib/pesquisa/repositorio";
 
+import { Cabecalho } from "@/components/pesquisa/Cabecalho";
 import { Cartoes } from "@/components/pesquisa/resultados/Cartoes";
 import { Frases } from "@/components/pesquisa/resultados/Frases";
 import { Funil } from "@/components/pesquisa/resultados/Funil";
@@ -40,7 +41,8 @@ export default async function ResultadosPage() {
   const semDados = stats.cartoes.iniciadas === 0;
 
   return (
-    <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col gap-10 px-5 py-10">
+    <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col gap-10 px-5 pt-3 pb-12">
+      <Cabecalho />
       <div className="flex flex-col gap-4">
         <h1 className="text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em]">Resultados da pesquisa</h1>
         <div className="flex flex-wrap gap-3">

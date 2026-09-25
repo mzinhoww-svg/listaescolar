@@ -14,6 +14,8 @@ export type SurveyResponseRow = {
   ip_hash: string | null;
   user_agent: string | null;
   started_at: string;
+  /** Adicionada pela migration 0701 (aditiva), aliás de `started_at` para o guard-rail de schema do repositório. */
+  created_at: string;
   updated_at: string;
   completed_at: string | null;
 };
@@ -27,6 +29,8 @@ export type SurveyLeadRow = {
   consent_text: string;
   consent_at: string;
   created_at: string;
+  /** Adicionada pela migration 0701 (aditiva), para o guard-rail de schema do repositório. */
+  updated_at: string;
   source_group: string | null;
 };
 

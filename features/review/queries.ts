@@ -10,7 +10,7 @@ import { ReviewError } from "./errors";
 /** Service role só DEPOIS de conferir `SessionActor` de admin (papel de `profiles`). */
 function repoFor(actor: unknown) {
   if (!isSessionActor(actor) || actor.role !== "admin") throw new ReviewError("forbidden");
-  return createReviewRepository(createAdminClient());
+  return createReviewRepository(createAdminClient({ fresh: true }));
 }
 
 export const getReviewQueue = (actor: SessionActor, tab: QueueTab) => listQueue(repoFor(actor), tab);

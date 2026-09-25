@@ -78,7 +78,7 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
               <button type="submit" disabled={publishing || !publicationAvailable} className="bg-tinta text-papel rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">{retry ? "Tentar publicar de novo" : "Publicar"}</button>
             </form>
           ) : null}
-          {[approveState, publishState].map((r, i) => (r.kind === "unavailable" && !publicationAvailable ? null : <Result key={i} s={r} demo={demoPublication} />))}
+          {[approveState, publishState, rejectState].map((r, i) => (r.kind === "unavailable" && !publicationAvailable ? null : <Result key={i} s={r} demo={demoPublication} />))}
         </>
       ) : (
         <>

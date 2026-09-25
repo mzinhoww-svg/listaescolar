@@ -12,7 +12,7 @@ import { createReviewService } from "./service";
 export function buildReviewService() {
   const pub = buildPublicationDeps();
   return createReviewService({
-    store: createReviewRepository(createAdminClient()).store,
+    store: createReviewRepository(createAdminClient({ fresh: true })).store,
     publication: { publisher: pub.publisher, context: pub.context, clock: pub.clock, settings: pub.settings },
     onAlert: (a) => console.error(JSON.stringify({ level: "error", fn: "review_publish", ...a })),
   });
@@ -23,4 +23,4 @@ export function buildSchoolLabelReader(): SchoolLabelReader | null {
   return createSchoolLabelReader({ NODE_ENV: e.NODE_ENV, APP_ENV: e.APP_ENV, VERCEL_ENV: e.VERCEL_ENV, FAKE_PUBLICATION_FIXTURE: e.FAKE_PUBLICATION_FIXTURE });
 }
 
-export const buildParentCopyService = () => createParentCopyService(createAdminClient());
+export const buildParentCopyService = () => createParentCopyService(createAdminClient({ fresh: true }));

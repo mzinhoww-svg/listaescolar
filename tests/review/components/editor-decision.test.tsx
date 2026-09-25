@@ -131,6 +131,15 @@ describe("DecisionPanel", () => {
     expect(screen.getAllByText(/Publicação indisponível neste ambiente até a integração/)).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Tentar publicar de novo" })).toBeDisabled();
   });
+  it("recusa: 'Lista recusada.' continua visível depois de o envio virar rejected (modo somente leitura)", async () => {
+    const reject = vi.fn<Act>(async () => state("rejected", "Lista recusada."));
+    const { rerender } = render(<Workbench actions={{ reject }} />);
+    fireEvent.change(document.querySelector("select[name=reason]")!, { target: { value: "other" } });
+    fireEvent.click(screen.getByRole("button", { name: "Recusar" }));
+    expect(await screen.findByText("Lista recusada.")).toBeInTheDocument();
+    rerender(<Workbench status="rejected" actions={{ reject }} />);
+    expect(screen.getByText("Lista recusada.")).toBeInTheDocument();
+  });
   it("com porta, 'Publicar' fica habilitado no envio aprovado", () => {
     render(<Workbench status="approved" canPublish />);
     expect(screen.getByRole("button", { name: "Publicar" })).toBeEnabled();

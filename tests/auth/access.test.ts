@@ -27,6 +27,8 @@ describe("canAccess", () => {
     "/conta/x": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/carrinho/novo": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/ir-para/x/kalunga": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/enviar-lista": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
+    "/enviar-lista/abc": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/escola": { parent: "forbidden", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/papelaria/pedidos": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/admin": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "forbidden", system: "forbidden" },

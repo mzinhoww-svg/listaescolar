@@ -4,8 +4,9 @@ import type { NextConfig } from "next";
 const dsn = process.env.SENTRY_DSN;
 
 const baseConfig: NextConfig = {
-  // Padrão do Next é 1 MB; o upload de CSV do INEP aceita até 4 MB (MAX_UPLOAD_BYTES). Maiores: `pnpm import:inep`.
-  experimental: { serverActions: { bodySizeLimit: "4mb" } },
+  // Limite de corpo das Server Actions (padrão do Next: 1 MB): envio de lista (S07) aceita PDF/foto de até 10 MB
+  // (11 MB cobre o multipart); o CSV do INEP (S03) fica em 4 MB na própria action. Maiores: `pnpm import:inep`.
+  experimental: { serverActions: { bodySizeLimit: "11mb" } },
   ...(dsn ? { env: { NEXT_PUBLIC_SENTRY_DSN: dsn } } : {}),
 };
 

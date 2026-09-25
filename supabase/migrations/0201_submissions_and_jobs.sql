@@ -386,7 +386,9 @@ begin
 end;
 $$;
 
-create function public.jobs_fail(p_job_id uuid, p_error text, p_retry_in_seconds int) returns public.job_status
+-- p_permanent = true (ex.: arquivo armazenado inválido): vai direto a dead (DLQ + envio rejected), sem esgotar tentativas.
+create function public.jobs_fail(p_job_id uuid, p_error text, p_retry_in_seconds int, p_permanent boolean default false)
+returns public.job_status
 language plpgsql
 security definer
 set search_path = ''
@@ -401,7 +403,7 @@ begin
   if j.status <> 'running' then
     return j.status; -- no-op: já finalizado ou não reivindicado
   end if;
-  if j.attempts < j.max_attempts then
+  if not coalesce(p_permanent, false) and j.attempts < j.max_attempts then
     update public.jobs
        set status = 'retrying', locked_at = null, last_error = left(p_error, 500),
            run_after = now() + make_interval(secs => greatest(coalesce(p_retry_in_seconds, 0), 0))
@@ -447,7 +449,7 @@ revoke execute on function public.jobs_mark_dead(uuid, text) from public, anon, 
 revoke execute on function public.jobs_enqueue(text, jsonb, text, uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_claim(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_complete(uuid, jsonb, int) from public, anon, authenticated, service_role;
-revoke execute on function public.jobs_fail(uuid, text, int) from public, anon, authenticated, service_role;
+revoke execute on function public.jobs_fail(uuid, text, int, boolean) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_read(int, int) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_ack(bigint) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_set_vt(bigint, int) from public, anon, authenticated, service_role;
@@ -456,7 +458,7 @@ revoke execute on function public.consents_revoke(uuid, uuid) from public, anon,
 grant execute on function public.jobs_enqueue(text, jsonb, text, uuid) to service_role;
 grant execute on function public.jobs_claim(uuid) to service_role;
 grant execute on function public.jobs_complete(uuid, jsonb, int) to service_role;
-grant execute on function public.jobs_fail(uuid, text, int) to service_role;
+grant execute on function public.jobs_fail(uuid, text, int, boolean) to service_role;
 grant execute on function public.jobs_read(int, int) to service_role;
 grant execute on function public.jobs_ack(bigint) to service_role;
 grant execute on function public.jobs_set_vt(bigint, int) to service_role;

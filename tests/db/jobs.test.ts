@@ -7,7 +7,7 @@ const FUNCS = [
   "jobs_enqueue(text, jsonb, text, uuid)",
   "jobs_claim(uuid)",
   "jobs_complete(uuid, jsonb, integer)",
-  "jobs_fail(uuid, text, integer)",
+  "jobs_fail(uuid, text, integer, boolean)",
   "jobs_read(integer, integer)",
   "jobs_ack(bigint)",
   "jobs_set_vt(bigint, integer)",
@@ -262,6 +262,26 @@ describe("jobs_* (fila pgmq)", () => {
       expect(dlq.rows[0]!.message.job_id).toBe(id);
       expect((await c.query("select status::text from public.list_submissions where id = $1", [SUB.parent])).rows[0]!.status).toBe("rejected");
     });
+  });
+
+  it("jobs_fail permanente: dead na primeira falha (DLQ, envio rejected); não permanente segue o retry", async () => {
+    const id = await enqueue();
+    const st = await sys(async (c) => {
+      await q(c, "select public.jobs_claim($1)", [id]);
+      return (await q(c, "select public.jobs_fail($1, 'arquivo inválido', 0, true)::text s", [id])).rows[0]!.s;
+    });
+    expect(st).toBe("dead");
+    await withSuperuser(async (c) => {
+      expect((await c.query("select status::text, attempts, last_error from public.jobs where id = $1", [id])).rows[0]).toEqual({ status: "dead", attempts: 1, last_error: "arquivo inválido" });
+      expect((await c.query("select status::text from public.list_submissions where id = $1", [SUB.parent])).rows[0]!.status).toBe("rejected");
+    });
+    expect(await queueDepth("ocr_jobs_dlq")).toBe(1);
+    const other = await withSuperuser((c) => insertJob(c, SUB.parent, "np", { status: "queued" }));
+    const st2 = await sys(async (c) => {
+      await q(c, "select public.jobs_claim($1)", [other]);
+      return (await q(c, "select public.jobs_fail($1, 'x', 0, false)::text s", [other])).rows[0]!.s;
+    });
+    expect(st2).toBe("retrying");
   });
 
   it("jobs_fail em job que não está running é no-op (não duplica DLQ)", async () => {

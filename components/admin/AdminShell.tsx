@@ -5,11 +5,12 @@ import { Logo } from "@/components/brand/Logo";
 const NAV = [
   { href: "/admin", label: "Visão geral" },
   { href: "/admin/importacoes", label: "Importações" },
+  { href: "/admin/reivindicacoes", label: "Reivindicações" },
   { href: "/admin/papelarias", label: "Papelarias" },
 ] as const;
 
 type Props = {
-  active: "/admin" | "/admin/importacoes" | "/admin/papelarias";
+  active: "/admin" | "/admin/importacoes" | "/admin/papelarias" | "/admin/reivindicacoes";
   /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
   email: string | null | undefined;
   breadcrumb: string;

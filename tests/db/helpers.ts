@@ -38,7 +38,8 @@ export type Identity =
   | "stationery_member"
   | "system"
   | "system_profile" // perfil com role system logado como authenticated (não service_role)
-  | "orphan";
+  | "orphan"
+  | "spare"; // parent extra (precisa de ensureProfile)
 
 /** Ids fixos dos usuários de teste. `orphan` e `spare` existem em auth.users, mas sem profile. */
 export const IDS = {
@@ -156,6 +157,21 @@ async function insertAuthUser(client: Client, id: string, label: string): Promis
     `insert into auth.users (id, aud, role, email) values ($1, 'authenticated', 'authenticated', $2)`,
     [id, `${label}@teste.invalid`],
   );
+}
+
+/**
+ * Roda `fn` como superuser (dono das funções) dentro de uma transação de withClaims e volta ao papel anterior.
+ * Necessário para semear `claimed`/`verified` em schools: o gatilho schools_guard_verification (0104) recusa
+ * qualquer outro papel, inclusive service_role.
+ */
+export async function asOwner<T>(client: Client, fn: () => Promise<T>): Promise<T> {
+  const prev = (await client.query("select current_user as u")).rows[0].u as string;
+  await client.query("reset role");
+  try {
+    return await fn();
+  } finally {
+    await client.query(`set local role ${prev}`);
+  }
 }
 
 export type StationeryStatus =

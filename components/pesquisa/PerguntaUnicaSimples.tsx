@@ -16,7 +16,15 @@ type Props = {
 };
 
 /** Tela genérica de escolha única com um único campo (telas 1, 2, 3, 5, 7, 8 e 9). */
-export function PerguntaUnicaSimples({ step, campo, titulo, opcoes, valorAtual, onResponder, onVoltar }: Props) {
+export function PerguntaUnicaSimples({
+  step,
+  campo,
+  titulo,
+  opcoes,
+  valorAtual,
+  onResponder,
+  onVoltar,
+}: Props) {
   return (
     <Tela titulo={titulo} progresso={{ atual: step, total: ULTIMO_STEP }} onVoltar={onVoltar}>
       <OpcaoUnica

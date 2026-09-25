@@ -33,7 +33,10 @@ export async function GET(request: NextRequest) {
   }
 
   const tipo = tipoParsed.data;
-  const csv = tipo === "respostas" ? respostasToCsv(await exportResponsesRows()) : leadsToCsv(await exportLeadsRows());
+  const csv =
+    tipo === "respostas"
+      ? respostasToCsv(await exportResponsesRows())
+      : leadsToCsv(await exportLeadsRows());
 
   return new NextResponse(csv, {
     headers: {

@@ -14,7 +14,7 @@ export function Progresso({ atual, total }: Props) {
       className="bg-campo h-1.5 w-full overflow-hidden rounded-full"
     >
       <div
-        className="bg-verde-fundo h-full rounded-full transition-[width] duration-300 ease-out"
+        className="bg-verde-fundo h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
         style={{ width: `${pct}%` }}
       />
     </div>

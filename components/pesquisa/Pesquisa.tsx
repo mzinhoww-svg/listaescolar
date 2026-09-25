@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { ULTIMO_STEP } from "@/lib/pesquisa/perguntas";
-import { obterOuCriarEstadoLocal, salvarEstadoLocal, type EstadoPesquisaLocal } from "@/lib/pesquisa/sessao";
+import {
+  obterOuCriarEstadoLocal,
+  salvarEstadoLocal,
+  type EstadoPesquisaLocal,
+} from "@/lib/pesquisa/sessao";
 
 import { Esqueleto } from "./Esqueleto";
 import { PerguntaRouter } from "./PerguntaRouter";
@@ -49,7 +53,9 @@ export function Pesquisa() {
   const onResponder = useCallback((step: number, answers: Record<string, unknown>) => {
     setEstado((atual) => {
       if (!atual) return atual;
-      const respostas = Object.fromEntries(Object.entries(answers).filter(([, v]) => v !== undefined));
+      const respostas = Object.fromEntries(
+        Object.entries(answers).filter(([, v]) => v !== undefined),
+      );
       const concluindoAgora = step === ULTIMO_STEP;
       const novo: EstadoPesquisaLocal = {
         ...atual,

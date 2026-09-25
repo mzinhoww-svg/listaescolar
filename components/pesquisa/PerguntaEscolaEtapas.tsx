@@ -16,12 +16,20 @@ type Props = {
 };
 
 /** Tela 4: nome da escola (texto opcional) + etapas (múltipla, obrigatória). */
-export function PerguntaEscolaEtapas({ step, escolaAtual, etapasAtuais, onResponder, onVoltar }: Props) {
+export function PerguntaEscolaEtapas({
+  step,
+  escolaAtual,
+  etapasAtuais,
+  onResponder,
+  onVoltar,
+}: Props) {
   const [escola, setEscola] = useState(escolaAtual ?? "");
   const [etapas, setEtapas] = useState<string[]>(etapasAtuais ?? []);
 
   function alternar(slug: string) {
-    setEtapas((atual) => (atual.includes(slug) ? atual.filter((s) => s !== slug) : [...atual, slug]));
+    setEtapas((atual) =>
+      atual.includes(slug) ? atual.filter((s) => s !== slug) : [...atual, slug],
+    );
   }
 
   return (
@@ -41,7 +49,12 @@ export function PerguntaEscolaEtapas({ step, escolaAtual, etapasAtuais, onRespon
         aria-label="Nome da escola"
         className="border-linha text-tinta rounded-campo focus-visible:border-verde-fundo focus-visible:ring-verde-fundo/25 placeholder:text-texto-3 h-14 w-full border-[1.5px] bg-white px-4 text-base font-medium shadow-[0_1px_2px_rgba(15,27,45,0.04)] outline-none focus-visible:ring-4"
       />
-      <OpcaoMultipla nomeGrupo="Etapas" opcoes={ETAPAS} valoresSelecionados={etapas} onAlternar={alternar} />
+      <OpcaoMultipla
+        nomeGrupo="Etapas"
+        opcoes={ETAPAS}
+        valoresSelecionados={etapas}
+        onAlternar={alternar}
+      />
     </Tela>
   );
 }

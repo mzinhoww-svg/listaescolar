@@ -10,7 +10,10 @@ export function Frases({ frases }: Props) {
       ) : (
         <ul className="flex flex-col gap-2">
           {frases.map((frase, i) => (
-            <li key={i} className="border-linha rounded-card text-texto-2 border bg-white p-4 text-sm italic">
+            <li
+              key={i}
+              className="border-linha rounded-card text-texto-2 border bg-white p-4 text-sm italic"
+            >
               “{frase}”
             </li>
           ))}

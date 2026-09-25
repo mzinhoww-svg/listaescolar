@@ -46,13 +46,15 @@ describe("respostasToCsv", () => {
         },
       }),
     ]);
-    expect(csv).not.toContain(',=HYPERLINK');
+    expect(csv).not.toContain(",=HYPERLINK");
     expect(csv).toContain("'=HYPERLINK");
     expect(csv).toContain("'+1+1");
   });
 
   it("prefixa também -formula e @formula", () => {
-    const csv = respostasToCsv([baseResposta({ answers: { compra_ideal: "-2+3", escola: "@cmd" } })]);
+    const csv = respostasToCsv([
+      baseResposta({ answers: { compra_ideal: "-2+3", escola: "@cmd" } }),
+    ]);
     expect(csv).toContain("'-2+3");
     expect(csv).toContain("'@cmd");
   });
@@ -65,7 +67,9 @@ describe("respostasToCsv", () => {
 
   it("junta arrays com ; e escapa vírgula/aspas/quebra de linha", () => {
     const csv = respostasToCsv([
-      baseResposta({ answers: { dores: ["preco_alto", "falta_tempo"], escola: 'Escola "Boa", Ltda' } }),
+      baseResposta({
+        answers: { dores: ["preco_alto", "falta_tempo"], escola: 'Escola "Boa", Ltda' },
+      }),
     ]);
     expect(csv).toContain("preco_alto;falta_tempo");
     expect(csv).toContain('"Escola ""Boa"", Ltda"');

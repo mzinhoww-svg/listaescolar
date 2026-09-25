@@ -29,7 +29,7 @@ Pode me dar 3 minutos? É uma pesquisa rápida sobre como foi comprar a lista es
 
 No final, se quiser, dá para deixar o WhatsApp para receber a lista da sua escola pronta em janeiro.
 
-Qualquer dúvida, me chama: https://wa.me/5565996227110
+Qualquer dúvida, me chama: https://wa.me/<SEU-NUMERO>
 ```
 
 Versão curta (para repostar ou lembrar):
@@ -41,11 +41,11 @@ https://listaescolare.vercel.app/pesquisa?g=grupo-maes-1
 
 ## Link de contato (seu WhatsApp)
 
-`https://wa.me/5565996227110` abre uma conversa com você. Com mensagem pré-preenchida (a pessoa só aperta enviar):
+`https://wa.me/<SEU-NUMERO>` abre uma conversa com você. Com mensagem pré-preenchida (a pessoa só aperta enviar):
 
-`https://wa.me/5565996227110?text=Oi%2C%20vi%20a%20pesquisa%20da%20ListaCerta%20e%20queria%20tirar%20uma%20d%C3%BAvida`
+`https://wa.me/<SEU-NUMERO>?text=Oi%2C%20vi%20a%20pesquisa%20da%20ListaCerta%20e%20queria%20tirar%20uma%20d%C3%BAvida`
 
-O número só aparece nesta mensagem, que você controla; ele **não** está publicado em nenhuma página do site (Ruling no ledger).
+Troque `<SEU-NUMERO>` pelo seu WhatsApp com DDI e DDD, só dígitos (ex.: `55659...`). O número **não** fica no repositório (que é público) nem em nenhuma página do site; a mensagem pronta, já com o número, foi entregue no relatório da sessão (Ruling no ledger).
 
 ## Depois de enviar
 

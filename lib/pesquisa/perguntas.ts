@@ -121,6 +121,8 @@ export const STEP_TOTALMENTE_OPCIONAL: Readonly<Record<number, boolean>> = {
   12: true,
 };
 
-export function isStepValido(step: number): step is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 {
+export function isStepValido(
+  step: number,
+): step is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 {
   return Number.isInteger(step) && step >= 1 && step <= ULTIMO_STEP;
 }

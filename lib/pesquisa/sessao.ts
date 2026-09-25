@@ -46,7 +46,10 @@ export function salvarEstadoLocal(estado: EstadoPesquisaLocal): void {
   }
 }
 
-export function obterOuCriarEstadoLocal(paramsIniciais: { g?: string; ref?: string }): EstadoPesquisaLocal {
+export function obterOuCriarEstadoLocal(paramsIniciais: {
+  g?: string;
+  ref?: string;
+}): EstadoPesquisaLocal {
   const existente = carregarEstadoLocal();
   if (existente) return existente;
   const novo: EstadoPesquisaLocal = {

@@ -70,7 +70,10 @@ export async function sessionExists(sessionId: string): Promise<boolean> {
   return (data?.length ?? 0) > 0;
 }
 
-export async function countNewSessionsForIpHash(ipHash: string | null, sinceIso: string): Promise<number> {
+export async function countNewSessionsForIpHash(
+  ipHash: string | null,
+  sinceIso: string,
+): Promise<number> {
   if (!ipHash) return 0;
   const supabase = createAdminClient();
   const { count, error } = await supabase
@@ -102,17 +105,15 @@ export async function createOrUpdateLead(params: {
   consentText: string;
 }): Promise<"ok" | "session_not_found"> {
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("survey_leads")
-    .upsert(
-      {
-        session_id: params.sessionId,
-        name: params.name ?? null,
-        whatsapp_e164: params.whatsappE164,
-        consent_text: params.consentText,
-      },
-      { onConflict: "session_id" },
-    );
+  const { error } = await supabase.from("survey_leads").upsert(
+    {
+      session_id: params.sessionId,
+      name: params.name ?? null,
+      whatsapp_e164: params.whatsappE164,
+      consent_text: params.consentText,
+    },
+    { onConflict: "session_id" },
+  );
   if (error) {
     if (error.code === FOREIGN_KEY_VIOLATION) return "session_not_found";
     throw new Error(`createOrUpdateLead falhou: ${error.message}`);

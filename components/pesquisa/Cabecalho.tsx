@@ -11,7 +11,11 @@ export function Cabecalho({ direita }: Props) {
       <div className="w-[112px]">
         <Logo variant="horizontal" height={24} />
       </div>
-      {direita ? <div className="text-texto-3 text-xs font-bold tabular-nums">{direita}</div> : null}
+      {direita ? (
+        <div aria-hidden className="text-texto-3 text-xs font-bold tabular-nums">
+          {direita}
+        </div>
+      ) : null}
     </header>
   );
 }

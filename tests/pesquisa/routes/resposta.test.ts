@@ -56,7 +56,12 @@ describe("POST /api/pesquisa/resposta", () => {
   });
 
   it("honeypot preenchido: 200 sem gravar nem checar sessão", async () => {
-    const res = await call({ session_id: SESSION_ID, step: 1, answers: { cidade: "cuiaba" }, hp: "bot" });
+    const res = await call({
+      session_id: SESSION_ID,
+      step: 1,
+      answers: { cidade: "cuiaba" },
+      hp: "bot",
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(sessionExists).not.toHaveBeenCalled();

@@ -20,7 +20,13 @@ type Props = {
  * condicional) quando `usaria !== "nao"`. As duas sub-perguntas são uma única tela
  * numerada; só uma chamada de resposta é enviada, com os campos que se aplicam.
  */
-export function PerguntaUsariaCanal({ step, usariaAtual, canalAtual, onResponder, onVoltar }: Props) {
+export function PerguntaUsariaCanal({
+  step,
+  usariaAtual,
+  canalAtual,
+  onResponder,
+  onVoltar,
+}: Props) {
   const [usaria, setUsaria] = useState<string | undefined>(usariaAtual);
   const [fase, setFase] = useState<"usaria" | "canal">(
     usariaAtual && usariaAtual !== "nao" ? "canal" : "usaria",
@@ -63,7 +69,12 @@ export function PerguntaUsariaCanal({ step, usariaAtual, canalAtual, onResponder
       progresso={{ atual: step, total: ULTIMO_STEP }}
       onVoltar={onVoltar}
     >
-      <OpcaoUnica nomeGrupo="Você usaria?" opcoes={USARIA} valorSelecionado={usaria} onEscolher={escolherUsaria} />
+      <OpcaoUnica
+        nomeGrupo="Você usaria?"
+        opcoes={USARIA}
+        valorSelecionado={usaria}
+        onEscolher={escolherUsaria}
+      />
     </Tela>
   );
 }

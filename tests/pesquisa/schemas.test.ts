@@ -7,17 +7,28 @@ describe("answerSchemaForStep", () => {
     expect(answerSchemaForStep(2)?.safeParse({ filhos: "3_ou_mais" }).success).toBe(true);
     expect(answerSchemaForStep(3)?.safeParse({ rede: "ambas" }).success).toBe(true);
     expect(
-      answerSchemaForStep(4)?.safeParse({ etapas: ["infantil", "fundamental_1"], escola: "Escola Demo" }).success,
+      answerSchemaForStep(4)?.safeParse({
+        etapas: ["infantil", "fundamental_1"],
+        escola: "Escola Demo",
+      }).success,
     ).toBe(true);
     expect(answerSchemaForStep(4)?.safeParse({ etapas: ["medio"] }).success).toBe(true);
     expect(answerSchemaForStep(5)?.safeParse({ recebimento: "outro" }).success).toBe(true);
-    expect(answerSchemaForStep(6)?.safeParse({ onde_comprou: ["papelaria_bairro", "internet"] }).success).toBe(true);
+    expect(
+      answerSchemaForStep(6)?.safeParse({ onde_comprou: ["papelaria_bairro", "internet"] }).success,
+    ).toBe(true);
     expect(answerSchemaForStep(7)?.safeParse({ gasto: "ate_200" }).success).toBe(true);
     expect(answerSchemaForStep(8)?.safeParse({ tempo: "meio_dia" }).success).toBe(true);
     expect(answerSchemaForStep(9)?.safeParse({ comparou: "um_pouco" }).success).toBe(true);
-    expect(answerSchemaForStep(10)?.safeParse({ dores: ["preco_alto", "falta_tempo"] }).success).toBe(true);
-    expect(answerSchemaForStep(11)?.safeParse({ usaria: "com_certeza", canal: "tanto_faz" }).success).toBe(true);
-    expect(answerSchemaForStep(12)?.safeParse({ compra_ideal: "Tudo pronto", pode_citar: true }).success).toBe(true);
+    expect(
+      answerSchemaForStep(10)?.safeParse({ dores: ["preco_alto", "falta_tempo"] }).success,
+    ).toBe(true);
+    expect(
+      answerSchemaForStep(11)?.safeParse({ usaria: "com_certeza", canal: "tanto_faz" }).success,
+    ).toBe(true);
+    expect(
+      answerSchemaForStep(12)?.safeParse({ compra_ideal: "Tudo pronto", pode_citar: true }).success,
+    ).toBe(true);
   });
 
   it("rejeita id de outra tela (strictObject)", () => {
@@ -50,9 +61,9 @@ describe("answerSchemaForStep", () => {
     expect(
       answerSchemaForStep(4)?.safeParse({ etapas: ["medio"], escola: "a".repeat(121) }).success,
     ).toBe(false);
-    expect(
-      answerSchemaForStep(12)?.safeParse({ compra_ideal: "a".repeat(501) }).success,
-    ).toBe(false);
+    expect(answerSchemaForStep(12)?.safeParse({ compra_ideal: "a".repeat(501) }).success).toBe(
+      false,
+    );
   });
 
   it("tela 12: aceita objeto vazio (única totalmente opcional)", () => {

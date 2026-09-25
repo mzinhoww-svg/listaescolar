@@ -14,11 +14,18 @@ export function Funil({ funil }: Props) {
           const largura = Math.round((entrada.sessoes / maximo) * 100);
           return (
             <div key={entrada.step} className="flex items-center gap-3">
-              <span className="text-texto-2 w-16 shrink-0 text-xs font-bold">Etapa {entrada.step}</span>
+              <span className="text-texto-2 w-16 shrink-0 text-xs font-bold">
+                Etapa {entrada.step}
+              </span>
               <div className="bg-campo h-6 flex-1 overflow-hidden rounded-full">
-                <div className="bg-verde-fundo h-full rounded-full" style={{ width: `${largura}%` }} />
+                <div
+                  className="bg-verde-fundo h-full rounded-full"
+                  style={{ width: `${largura}%` }}
+                />
               </div>
-              <span className="text-tinta w-8 shrink-0 text-right text-xs font-bold">{entrada.sessoes}</span>
+              <span className="text-tinta w-8 shrink-0 text-right text-xs font-bold">
+                {entrada.sessoes}
+              </span>
             </div>
           );
         })}

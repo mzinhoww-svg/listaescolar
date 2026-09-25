@@ -32,7 +32,9 @@ export function PerguntaMultiplaSimples({
   const [selecionados, setSelecionados] = useState<string[]>(valoresAtuais ?? []);
 
   function alternar(slug: string) {
-    setSelecionados((atual) => (atual.includes(slug) ? atual.filter((s) => s !== slug) : [...atual, slug]));
+    setSelecionados((atual) =>
+      atual.includes(slug) ? atual.filter((s) => s !== slug) : [...atual, slug],
+    );
   }
 
   return (
@@ -43,7 +45,13 @@ export function PerguntaMultiplaSimples({
       onContinuar={() => onResponder(step, { [campo]: selecionados })}
       continuarDesabilitado={selecionados.length === 0}
     >
-      <OpcaoMultipla nomeGrupo={titulo} opcoes={opcoes} valoresSelecionados={selecionados} max={max} onAlternar={alternar} />
+      <OpcaoMultipla
+        nomeGrupo={titulo}
+        opcoes={opcoes}
+        valoresSelecionados={selecionados}
+        max={max}
+        onAlternar={alternar}
+      />
     </Tela>
   );
 }

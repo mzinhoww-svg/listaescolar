@@ -21,10 +21,10 @@ export function OpcaoMultipla({ nomeGrupo, opcoes, valoresSelecionados, max, onA
         return (
           <label
             key={o.slug}
-            className={`rounded-campo has-focus-visible:outline-verde-fundo flex min-h-14 cursor-pointer items-center gap-3 border-[1.5px] px-4 py-3.5 text-base font-semibold transition-[background-color,border-color,color,transform,box-shadow,opacity] duration-150 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 active:scale-[0.985] ${
+            className={`rounded-campo has-focus-visible:outline-verde-fundo flex min-h-14 cursor-pointer items-center gap-3 border-[1.5px] px-4 py-3.5 text-base font-semibold transition-[background-color,border-color,color,transform,box-shadow,opacity] duration-150 active:scale-[0.985] has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
               marcado
                 ? "bg-verde-fundo border-verde-fundo text-white shadow-[0_6px_18px_rgba(11,107,74,0.28)]"
-                : "border-linha text-tinta bg-white shadow-[0_1px_2px_rgba(15,27,45,0.04)]"
+                : "border-linha text-tinta hover:border-linha-tracejada bg-white shadow-[0_1px_2px_rgba(15,27,45,0.04)]"
             } ${desabilitado ? "cursor-not-allowed opacity-45" : ""}`}
           >
             <input

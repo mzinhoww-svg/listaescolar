@@ -73,7 +73,12 @@ const s3 = {
   completed_at: "2026-09-25T10:03:00.000Z",
   last_step: 12,
   source_group: null,
-  answers: { cidade: "varzea_grande", filhos: "3_ou_mais", compra_ideal: "Quero praticidade", pode_citar: false },
+  answers: {
+    cidade: "varzea_grande",
+    filhos: "3_ou_mais",
+    compra_ideal: "Quero praticidade",
+    pode_citar: false,
+  },
 };
 const s4 = {
   ...baseResposta("s4"),
@@ -244,7 +249,10 @@ describe("aggregateSurvey — frases", () => {
 
   it("ignora pode_citar ausente ou false, e compra_ideal ausente", () => {
     const linhas: SurveyResponseRow[] = [
-      { ...baseResposta("y1"), answers: { compra_ideal: "Não deveria aparecer", pode_citar: false } },
+      {
+        ...baseResposta("y1"),
+        answers: { compra_ideal: "Não deveria aparecer", pode_citar: false },
+      },
       { ...baseResposta("y2"), answers: { pode_citar: true } }, // sem compra_ideal
       { ...baseResposta("y3"), answers: { compra_ideal: "   ", pode_citar: true } }, // só espaços
     ];

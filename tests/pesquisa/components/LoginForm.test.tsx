@@ -52,7 +52,9 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     preencherEEnviar("qualquer-coisa");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível entrar. Tente de novo.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível entrar. Tente de novo.",
+    );
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -61,7 +63,9 @@ describe("LoginForm", () => {
     render(<LoginForm />);
     preencherEEnviar("qualquer-coisa");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível entrar. Tente de novo.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível entrar. Tente de novo.",
+    );
   });
 
   it('desabilita o botão e mostra "Entrando…" enquanto a requisição está pendente', async () => {

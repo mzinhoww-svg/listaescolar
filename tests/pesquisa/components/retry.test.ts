@@ -58,8 +58,39 @@ describe("enviarComRetry", () => {
     expect(onFalhaFinal).toHaveBeenCalledTimes(1);
   });
 
+  it("resposta 4xx é falha definitiva: uma tentativa só, sem esperar, e chama onFalhaFinal", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 400 });
+    vi.stubGlobal("fetch", fetchMock);
+    const onFalhaFinal = vi.fn();
+
+    await enviarComRetry("/api/x", { a: 1 }, onFalhaFinal);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onFalhaFinal).toHaveBeenCalledTimes(1);
+  });
+
+  it("5xx continua sendo repetido com backoff", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+    const onFalhaFinal = vi.fn();
+
+    const promise = enviarComRetry("/api/x", { a: 1 }, onFalhaFinal);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    await promise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(onFalhaFinal).not.toHaveBeenCalled();
+  });
+
   it("sucesso na 2ª tentativa: não chama onFalhaFinal e para de tentar", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
     const onFalhaFinal = vi.fn();
 

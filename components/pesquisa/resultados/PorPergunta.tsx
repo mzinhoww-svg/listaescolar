@@ -28,7 +28,9 @@ export function PorPergunta({ porPergunta }: Props) {
       <h2 className="text-lg font-extrabold">Por pergunta</h2>
       {porPergunta.map((pergunta) => (
         <div key={pergunta.campo} className="border-linha rounded-card border bg-white p-4">
-          <h3 className="text-tinta text-base font-bold">{TITULOS[pergunta.campo] ?? pergunta.campo}</h3>
+          <h3 className="text-tinta text-base font-bold">
+            {TITULOS[pergunta.campo] ?? pergunta.campo}
+          </h3>
           <p className="text-texto-3 mb-3 text-xs font-bold">{pergunta.respondentes} respostas</p>
           <div className="flex flex-col gap-2">
             {pergunta.opcoes.map((opcao) => (

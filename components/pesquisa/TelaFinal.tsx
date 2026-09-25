@@ -7,7 +7,10 @@ import { Cabecalho } from "./Cabecalho";
 import styles from "./pesquisa.module.css";
 import { enviarComRetry } from "./retry";
 import { TelaFinalSucesso } from "./TelaFinalSucesso";
+import { TituloTela } from "./TituloTela";
 import { mascararWhatsApp, whatsAppMascaraCompleta } from "./whatsapp-mascara";
+
+import { normalizeWhatsappBR } from "@/lib/pesquisa/telefone";
 
 type Props = {
   sessionId: string;
@@ -26,13 +29,17 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
   const [aceite, setAceite] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [falhou, setFalhou] = useState(false);
   const [enviado, setEnviado] = useState(Boolean(jaConcluida));
 
-  const completo = whatsAppMascaraCompleta(whatsapp);
+  // Máscara completa e número aceito pelo servidor (DDD válido): evita um 400 previsível.
+  const completo = whatsAppMascaraCompleta(whatsapp) && normalizeWhatsappBR(whatsapp) !== null;
   const habilitado = completo && aceite && !enviando;
 
   async function enviar() {
     setEnviando(true);
+    setFalhou(false);
+    let falhaFinal = false;
     await enviarComRetry(
       "/api/pesquisa/lead",
       {
@@ -42,9 +49,17 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
         consent: true,
         hp: honeypot || undefined,
       },
-      () => console.error("[pesquisa-lead] falha ao enviar após as tentativas"),
+      () => {
+        falhaFinal = true;
+        console.error("[pesquisa-lead] falha ao enviar após as tentativas");
+      },
     );
     setEnviando(false);
+    // Sem lead gravado, não mostrar sucesso: a mãe acharia que vai receber a lista.
+    if (falhaFinal) {
+      setFalhou(true);
+      return;
+    }
     setEnviado(true);
   }
 
@@ -56,9 +71,9 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
       className={`${styles.entrar} mx-auto flex min-h-[100dvh] w-full max-w-[480px] flex-1 flex-col gap-5 px-5 pt-3`}
     >
       <Cabecalho />
-      <h1 className="text-tinta text-[26px] leading-[1.15] font-extrabold tracking-[-0.02em] text-balance">
+      <TituloTela focar className="text-tinta">
         Obrigada! Quer receber a lista da sua escola pronta em janeiro?
-      </h1>
+      </TituloTela>
       <div className="flex flex-col gap-4 pb-2">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="pesquisa-nome" className="text-texto-2 text-[13px] font-bold">
@@ -112,10 +127,19 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
             className="accent-verde-fundo mt-0.5 h-5 w-5 shrink-0 outline-none"
           />
           <span className="text-tinta">
-            Aceito receber mensagens da ListaCerta pelo WhatsApp sobre a lista escolar. Posso cancelar quando quiser.
+            Aceito receber mensagens da ListaCerta pelo WhatsApp sobre a lista escolar. Posso
+            cancelar quando quiser.
           </span>
         </label>
       </div>
+      {falhou ? (
+        <p
+          role="status"
+          className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-2.5 text-center text-xs font-bold"
+        >
+          Não conseguimos salvar seu WhatsApp agora. Confira o número e tente de novo.
+        </p>
+      ) : null}
       <BarraAcoes
         onPrimario={enviar}
         primarioLabel="Quero receber"
@@ -124,7 +148,7 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
           <button
             type="button"
             onClick={() => setEnviado(true)}
-            className="text-texto-2 focus-visible:outline-verde-fundo flex h-11 items-center rounded-full px-4 text-sm font-bold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
+            className="text-texto-2 focus-visible:outline-verde-fundo flex h-12 items-center rounded-full px-4 text-sm font-bold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
           >
             Agora não
           </button>

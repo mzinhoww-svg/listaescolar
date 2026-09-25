@@ -15,7 +15,13 @@ type Props = {
 };
 
 /** Tela 12: texto livre (opcional, máx. 500) + "pode citar" (opcional). Tem "Pular". */
-export function PerguntaCompraIdeal({ step, compraIdealAtual, podeCitarAtual, onResponder, onVoltar }: Props) {
+export function PerguntaCompraIdeal({
+  step,
+  compraIdealAtual,
+  podeCitarAtual,
+  onResponder,
+  onVoltar,
+}: Props) {
   const [texto, setTexto] = useState(compraIdealAtual ?? "");
   const [podeCitar, setPodeCitar] = useState(podeCitarAtual ?? false);
 
@@ -24,7 +30,9 @@ export function PerguntaCompraIdeal({ step, compraIdealAtual, podeCitarAtual, on
       titulo="Como seria a compra perfeita da lista?"
       progresso={{ atual: step, total: ULTIMO_STEP }}
       onVoltar={onVoltar}
-      onContinuar={() => onResponder(step, { compra_ideal: texto.trim() || undefined, pode_citar: podeCitar })}
+      onContinuar={() =>
+        onResponder(step, { compra_ideal: texto.trim() || undefined, pode_citar: podeCitar })
+      }
       onPular={() => onResponder(step, {})}
     >
       <textarea
@@ -38,7 +46,7 @@ export function PerguntaCompraIdeal({ step, compraIdealAtual, podeCitarAtual, on
       />
       <label
         className={`rounded-campo has-focus-visible:outline-verde-fundo flex cursor-pointer items-center gap-3 border-[1.5px] bg-white px-4 py-3.5 text-sm font-semibold transition-colors duration-150 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
-          podeCitar ? "border-verde-fundo" : "border-linha"
+          podeCitar ? "border-verde-fundo" : "border-linha hover:border-linha-tracejada"
         }`}
       >
         <input

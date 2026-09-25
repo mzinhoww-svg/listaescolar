@@ -18,7 +18,13 @@ export function TelaBoasVindas({ onComecar }: Props) {
           aria-hidden
           className="bg-campo text-verde-fundo flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
         >
-          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path
               d="M12 3.5 5 6.2v5.1c0 4.4 3 8.2 7 9.2 4-1 7-4.8 7-9.2V6.2L12 3.5Z"
               strokeLinejoin="round"
@@ -30,7 +36,7 @@ export function TelaBoasVindas({ onComecar }: Props) {
           Não pedimos nenhum dado do seu filho. Suas respostas são anônimas.{" "}
           <Link
             href="/pesquisa/privacidade"
-            className="text-verde-fundo focus-visible:outline-verde-fundo rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="text-verde-fundo focus-visible:outline-verde-fundo hover:text-tinta rounded-sm underline underline-offset-4 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Como usamos seus dados
           </Link>

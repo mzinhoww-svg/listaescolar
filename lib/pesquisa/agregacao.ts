@@ -55,7 +55,10 @@ function mediana(valores: readonly number[]): number | null {
   return a === undefined || b === undefined ? null : (a + b) / 2;
 }
 
-function computeCartoes(responses: readonly SurveyResponseRow[], leads: readonly SurveyLeadRow[]): CartaoStats {
+function computeCartoes(
+  responses: readonly SurveyResponseRow[],
+  leads: readonly SurveyLeadRow[],
+): CartaoStats {
   const iniciadas = responses.length;
   const completas = responses.filter(
     (r): r is SurveyResponseRow & { completed_at: string } => r.completed_at !== null,
@@ -112,7 +115,10 @@ function valoresComoSlugs(valor: unknown): string[] {
   return [];
 }
 
-function computeUmaPergunta(responses: readonly SurveyResponseRow[], def: CampoEscolha): PerguntaStats {
+function computeUmaPergunta(
+  responses: readonly SurveyResponseRow[],
+  def: CampoEscolha,
+): PerguntaStats {
   const slugsValidos = new Set(def.opcoes.map((o) => o.slug));
   const contagem = new Map<string, number>();
   let respondentes = 0;
@@ -126,7 +132,12 @@ function computeUmaPergunta(responses: readonly SurveyResponseRow[], def: CampoE
   }
   const opcoes = def.opcoes.map((o) => {
     const c = contagem.get(o.slug) ?? 0;
-    return { slug: o.slug, rotulo: o.rotulo, contagem: c, percentual: respondentes === 0 ? 0 : c / respondentes };
+    return {
+      slug: o.slug,
+      rotulo: o.rotulo,
+      contagem: c,
+      percentual: respondentes === 0 ? 0 : c / respondentes,
+    };
   });
   return { campo: def.campo, respondentes, opcoes };
 }
@@ -159,7 +170,10 @@ function computeFrases(responses: readonly SurveyResponseRow[]): string[] {
 }
 
 /** Agregação pura da pesquisa (sem Supabase, sem I/O) a partir das linhas já lidas do repositório. */
-export function aggregateSurvey(responses: SurveyResponseRow[], leads: SurveyLeadRow[]): SurveyStats {
+export function aggregateSurvey(
+  responses: SurveyResponseRow[],
+  leads: SurveyLeadRow[],
+): SurveyStats {
   return {
     cartoes: computeCartoes(responses, leads),
     funil: computeFunil(responses),

@@ -57,10 +57,18 @@ const STEP_11 = z
   .superRefine((val, ctx) => {
     const exigeCanal = val.usaria !== "nao";
     if (exigeCanal && !val.canal) {
-      ctx.addIssue({ code: "custom", path: ["canal"], message: "canal é obrigatório quando usaria != nao" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["canal"],
+        message: "canal é obrigatório quando usaria != nao",
+      });
     }
     if (!exigeCanal && val.canal) {
-      ctx.addIssue({ code: "custom", path: ["canal"], message: "canal não é aceito quando usaria == nao" });
+      ctx.addIssue({
+        code: "custom",
+        path: ["canal"],
+        message: "canal não é aceito quando usaria == nao",
+      });
     }
   });
 const STEP_12 = z.strictObject({

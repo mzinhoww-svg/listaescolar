@@ -20,7 +20,8 @@ describe("TelaFinalSucesso", () => {
 
   it("usa o g atual da sessão quando presente, em vez de 'indicacao'", () => {
     render(<TelaFinalSucesso sessionId={SESSION_ID} g="grupo-maes-1" />);
-    const href = screen.getByRole("link", { name: "Enviar para outra mãe" }).getAttribute("href") ?? "";
+    const href =
+      screen.getByRole("link", { name: "Enviar para outra mãe" }).getAttribute("href") ?? "";
     const mensagem = decodeURIComponent(href.replace("https://wa.me/?text=", ""));
     expect(mensagem).toContain(`g=grupo-maes-1`);
     expect(mensagem).not.toContain("indicacao");
@@ -28,7 +29,8 @@ describe("TelaFinalSucesso", () => {
 
   it("a mensagem nunca contém nome, telefone ou dado de escola — só o pitch genérico e a URL", () => {
     render(<TelaFinalSucesso sessionId={SESSION_ID} g="e2e-teste" />);
-    const href = screen.getByRole("link", { name: "Enviar para outra mãe" }).getAttribute("href") ?? "";
+    const href =
+      screen.getByRole("link", { name: "Enviar para outra mãe" }).getAttribute("href") ?? "";
     const mensagem = decodeURIComponent(href.replace("https://wa.me/?text=", ""));
     expect(mensagem).not.toMatch(/\d{2}\s?9\d{8}/); // formato de telefone BR
     expect(mensagem).toBe(

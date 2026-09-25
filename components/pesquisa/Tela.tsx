@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { BarraAcoes } from "./BarraAcoes";
 import { Cabecalho } from "./Cabecalho";
 import { Progresso } from "./Progresso";
+import { TituloTela } from "./TituloTela";
 import styles from "./pesquisa.module.css";
 
 type Props = {
@@ -40,19 +41,28 @@ export function Tela({
         <button
           type="button"
           onClick={onVoltar}
-          className="text-texto-2 focus-visible:outline-verde-fundo -ml-2 flex h-11 items-center gap-1 self-start rounded-full px-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
+          className="text-texto-2 focus-visible:outline-verde-fundo hover:text-tinta -ml-2 flex h-12 items-center gap-1 self-start rounded-full px-2 text-sm font-bold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
         >
-          <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <svg
+            aria-hidden
+            viewBox="0 0 20 20"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+          >
             <path d="M12.5 4.5 7 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Voltar
         </button>
       ) : null}
       <div className="flex flex-col gap-2.5">
-        <h1 className="text-tinta text-[26px] leading-[1.15] font-extrabold tracking-[-0.02em] text-balance">
+        <TituloTela focar={Boolean(progresso)} className="text-tinta">
           {titulo}
-        </h1>
-        {descricao ? <div className="text-texto-2 text-[17px] leading-relaxed">{descricao}</div> : null}
+        </TituloTela>
+        {descricao ? (
+          <div className="text-texto-2 text-[17px] leading-relaxed">{descricao}</div>
+        ) : null}
       </div>
       <div className="flex flex-col gap-4 pb-2">{children}</div>
       <BarraAcoes
@@ -64,7 +74,7 @@ export function Tela({
             <button
               type="button"
               onClick={onPular}
-              className="text-texto-2 focus-visible:outline-verde-fundo flex h-11 items-center rounded-full px-4 text-sm font-bold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
+              className="text-texto-2 focus-visible:outline-verde-fundo hover:text-tinta flex h-12 items-center rounded-full px-4 text-sm font-bold underline underline-offset-4 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
             >
               Pular
             </button>

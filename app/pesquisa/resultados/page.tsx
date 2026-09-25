@@ -44,19 +44,21 @@ export default async function ResultadosPage() {
     <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col gap-10 px-5 pt-3 pb-12">
       <Cabecalho />
       <div className="flex flex-col gap-4">
-        <h1 className="text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em]">Resultados da pesquisa</h1>
-        <div className="flex flex-wrap gap-3">
+        <h1 className="text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em] text-balance">
+          Resultados da pesquisa
+        </h1>
+        <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap">
           <a
             href="/api/pesquisa/export?tipo=respostas"
             download
-            className="border-tinta text-tinta rounded-botao border-[1.5px] px-5 py-2 text-sm font-extrabold"
+            className="border-tinta text-tinta rounded-botao focus-visible:outline-verde-fundo flex h-12 items-center justify-center border-[1.5px] px-5 text-sm font-extrabold transition-colors duration-150 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Baixar respostas (CSV)
           </a>
           <a
             href="/api/pesquisa/export?tipo=leads"
             download
-            className="border-tinta text-tinta rounded-botao border-[1.5px] px-5 py-2 text-sm font-extrabold"
+            className="border-tinta text-tinta rounded-botao focus-visible:outline-verde-fundo flex h-12 items-center justify-center border-[1.5px] px-5 text-sm font-extrabold transition-colors duration-150 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Baixar leads (CSV)
           </a>

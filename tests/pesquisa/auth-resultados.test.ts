@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { passwordMatches, signResultsCookie, verifyResultsCookie } from "@/lib/pesquisa/auth-resultados";
+import {
+  passwordMatches,
+  signResultsCookie,
+  verifyResultsCookie,
+} from "@/lib/pesquisa/auth-resultados";
 
 describe("signResultsCookie / verifyResultsCookie", () => {
   it("assinatura válida verifica com a mesma senha", () => {

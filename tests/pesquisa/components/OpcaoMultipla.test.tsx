@@ -8,7 +8,12 @@ describe("OpcaoMultipla", () => {
   it("chama onAlternar com o slug marcado/desmarcado", () => {
     const onAlternar = vi.fn();
     render(
-      <OpcaoMultipla nomeGrupo="Dores" opcoes={DORES} valoresSelecionados={[]} onAlternar={onAlternar} />,
+      <OpcaoMultipla
+        nomeGrupo="Dores"
+        opcoes={DORES}
+        valoresSelecionados={[]}
+        onAlternar={onAlternar}
+      />,
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Preço alto" }));
     expect(onAlternar).toHaveBeenCalledWith("preco_alto");

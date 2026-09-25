@@ -86,7 +86,7 @@ Ambiente e deploy:
 - Rodar `scripts/ai-smoke.ts` com chave e modelos reais (tem custo; os agentes não rodam).
 - Supabase Auth hospedado: FEITO pelo humano em 2026-09-25 (Site URL, Redirect URLs incl. `https://listaescolare-*.vercel.app/**`, templates `magic_link` e `confirmation`); falta validar o link mágico em outro navegador no preview e SMTP próprio antes de produção (D-063). Referência do que foi configurado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
 - Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
-- Pepper do IP de auditoria: o hospedado NÃO permite definir `app.audit_ip_pepper` no banco (permission denied); o pepper do staging já está no Vault (`audit_ip_pepper`) e a S11 (0601) faz `audit_row_change` lê-lo de lá; na produção, gerar outro (D-059).
+- Pepper do IP de auditoria: o hospedado NÃO permite definir `app.audit_ip_pepper` no banco (permission denied); o pepper do staging já está no Vault (`audit_ip_pepper`) e a S11 (0601) fará `audit_row_change` ler o pepper de lá; na produção, gerar outro (D-059).
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
 
 Credenciais e contas:

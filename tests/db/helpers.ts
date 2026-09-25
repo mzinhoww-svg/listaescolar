@@ -156,3 +156,74 @@ async function insertAuthUser(client: Client, id: string, label: string): Promis
     [id, `${label}@teste.invalid`],
   );
 }
+
+export type StationeryStatus =
+  | "signup"
+  | "accreditation"
+  | "under_review"
+  | "approved"
+  | "active"
+  | "paused"
+  | "suspended"
+  | "rejected";
+
+export type SeedStationery = {
+  status?: StationeryStatus;
+  /** perfil que vira owner (member_role = 'owner'); omitido = sem membro. */
+  ownerId?: string;
+  pausedBy?: "owner" | "admin" | null;
+  complete?: boolean; // dados que as pré-condições do dono exigem (padrão true)
+  overrides?: Record<string, unknown>;
+};
+
+let stationerySeq = 0;
+
+/**
+ * Cria uma papelaria (e o owner) como superuser, mesmo dentro de uma transação de withClaims:
+ * sai do papel de teste, insere e volta ao papel anterior. Devolve o id.
+ */
+export async function seedStationery(client: Client, opts: SeedStationery = {}): Promise<string> {
+  const prev = (await client.query("select current_user as u")).rows[0].u as string;
+  await client.query("reset role");
+  try {
+    stationerySeq += 1;
+    const n = `${Date.now() % 1_000_000_000}${stationerySeq}`.padStart(14, "0").slice(-14);
+    const muni = await client.query("select id from public.municipalities order by ibge_code limit 1");
+    const complete = opts.complete ?? true;
+    const row: Record<string, unknown> = {
+      slug: `papelaria-${n}`,
+      trade_name: "Papelaria Teste",
+      legal_name: complete ? "Papelaria Teste LTDA" : null,
+      cnpj: n,
+      status: opts.status ?? "signup",
+      municipality_id: muni.rows[0].id,
+      neighborhood: complete ? "Centro" : null,
+      address: "Rua Teste, 1",
+      cep: "78005000",
+      whatsapp: complete ? "+5565999990000" : null,
+      phone: "+556533330000",
+      email: "contato@papelaria-teste.invalid",
+      offers_pickup: complete,
+      offers_delivery: false,
+      lgpd_accepted_at: complete ? new Date().toISOString() : null,
+      lgpd_text_version: complete ? "v1" : null,
+      paused_by: opts.pausedBy ?? null,
+      ...opts.overrides,
+    };
+    const cols = Object.keys(row);
+    const res = await client.query(
+      `insert into public.stationeries (${cols.join(",")}) values (${cols.map((_, i) => `$${i + 1}`).join(",")}) returning id`,
+      cols.map((k) => row[k]),
+    );
+    const id = res.rows[0].id as string;
+    if (opts.ownerId) {
+      await client.query(
+        `insert into public.stationery_members (stationery_id, profile_id, member_role) values ($1, $2, 'owner')`,
+        [id, opts.ownerId],
+      );
+    }
+    return id;
+  } finally {
+    await client.query(`set local role ${prev}`);
+  }
+}

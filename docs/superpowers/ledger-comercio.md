@@ -52,3 +52,8 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orqu
 - Ruling: `/carrinho` e `/ir-para` viraram prefixos protegidos do proxy (qualquer papel autenticado exceto `system`), substituindo o Ruling anterior de "não protegidos"; páginas usam `requireAccess` (features/auth/guard.ts); `/carrinho/**` é noindex por layout — custo se errada: baixo.
 - Ruling: `LineRow` falha fechado: preço sem origem ou sem data é exibido como "preço indisponível" — custo se errada: baixo.
 
+
+- Ruling (S13 T1): visão pública `stationery_public` é view definer (`security_barrier`) só com colunas seguras de papelarias `active`, e anon não tem grant algum na base — motivo: RLS filtra linhas, não colunas, então grants por coluna não separam dono de público — custo se errada: trocar a view por `security_invoker` + política extra, sem mudar o contrato.
+- Ruling (S13 T1): cadastro (insert de `stationeries`/`stationery_members`) só por `service_role` no servidor; `status`, `status_reason` e `paused_by` só mudam por `stationery_transition` (nem admin nem service_role escrevem direto) — motivo: fecha escalada e permite auditar toda mudança — custo se errada: liberar insert com política própria.
+- Ruling (S13 T1): dono escreve catálogo só em `approved|active|paused` (monta o catálogo antes de publicar, não em análise/suspensa/rejeitada); áreas em `signup|accreditation|approved|active|paused` — custo se errada: ajustar lista de estados nas políticas.
+- Ruling (S13 T1): um dono por papelaria e uma papelaria por dono (índices únicos parciais); `staff` existe no enum mas não há convite no MVP.

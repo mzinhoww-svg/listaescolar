@@ -6,7 +6,7 @@ import { getSiteOrigin } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { composeLeadContextReader } from "@/features/integration/compose";
-import { NoopLeadNotifier } from "./notifier";
+import { KickLeadNotifier } from "./notifier";
 import type { LeadCartReader, LeadListContextReader } from "./ports";
 import { createLeadStore } from "./repository";
 import { LeadService } from "./service";
@@ -39,7 +39,7 @@ export function getLeadService(): LeadService {
     store: createLeadStore(createAdminClient()),
     carts: createCartReader(),
     contexts: createContextReader(),
-    notifier: new NoopLeadNotifier(),
+    notifier: new KickLeadNotifier(),
     now: () => new Date(),
     siteOrigin: () => getSiteOrigin(),
   });

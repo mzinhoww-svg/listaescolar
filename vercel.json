@@ -1,3 +1,12 @@
 {
-  "crons": [{ "path": "/api/cron/leads-expire", "schedule": "0 7 * * *" }]
+  "crons": [
+    {
+      "path": "/api/cron/leads-expire",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/notifications/dispatch",
+      "schedule": "0 8 * * *"
+    }
+  ]
 }

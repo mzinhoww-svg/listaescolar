@@ -31,9 +31,16 @@ const V1: ItemInput[] = [
   it("Caixa de lápis de cor 24 cores", 1, "cx", "Arte"),
 ];
 
-const V2: ItemInput[] = [...V1.slice(0, 7), it("Caixa de lápis de cor 12 cores", 1, "cx", "Arte"), it("Estojo escolar", 1, "un", "Papelaria")];
+const V2: ItemInput[] = [
+  ...V1.slice(0, 7),
+  it("Caixa de lápis de cor 12 cores", 1, "cx", "Arte"),
+  it("Estojo escolar", 1, "un", "Papelaria"),
+];
 
-const APPROVED_ONLY: ItemInput[] = [it("Caderno universitário 10 matérias", 2, "un", "Papelaria"), it("Calculadora simples", 1, "un", "Geometria")];
+const APPROVED_ONLY: ItemInput[] = [
+  it("Caderno universitário 10 matérias", 2, "un", "Papelaria"),
+  it("Calculadora simples", 1, "un", "Geometria"),
+];
 
 /** 99001001 ef-5 publicada (v1); 99001002 ef-1 publicada com v2 sobre v1 (histórico); 99001003 ef-5 só aprovada (não pública). */
 export const DEMO_LIST_PLANS: readonly DemoListPlan[] = [
@@ -42,13 +49,31 @@ export const DEMO_LIST_PLANS: readonly DemoListPlan[] = [
   { inep: "99001003", gradeSlug: "ef-5", versions: [APPROVED_ONLY], publish: false },
 ];
 
-export type SeedArgs = { allowProduction: boolean };
+/** O seed nunca roda fora de local/staging: não existe flag para produção. */
+export type SeedArgs = { allowProduction: false };
 
 export function parseSeedArgs(argv: string[]): SeedArgs {
-  let allowProduction = false;
-  for (const a of argv) {
-    if (a === "--i-know-this-is-production") allowProduction = true;
-    else throw new Error(`Opção desconhecida: ${a}. Uso: pnpm seed:demo-lists [--i-know-this-is-production]`);
+  for (const a of argv)
+    throw new Error(`Opção desconhecida: ${a}. Uso: pnpm seed:demo-lists (sem opções)`);
+  return { allowProduction: false };
+}
+
+export type ExistingListState = { status: string; versionCount: number };
+
+/** Lista já existente só conta como "já existia" se o estado bate com o plano; senão falha alto (seed não é atômico). */
+export function assertExistingListMatches(plan: DemoListPlan, actual: ExistingListState): void {
+  const expected = {
+    status: plan.publish ? "published" : "approved",
+    versionCount: plan.versions.length,
+  };
+  const problems: string[] = [];
+  if (actual.status !== expected.status)
+    problems.push(`status ${actual.status} (esperado ${expected.status})`);
+  if (actual.versionCount !== expected.versionCount)
+    problems.push(`${actual.versionCount} versões (esperado ${expected.versionCount})`);
+  if (problems.length > 0) {
+    throw new Error(
+      `Lista demo ${plan.inep}/${plan.gradeSlug} existe em estado divergente: ${problems.join("; ")}. Um seed anterior pode ter falhado no meio; corrija ou remova a lista demo e rode de novo.`,
+    );
   }
-  return { allowProduction };
 }

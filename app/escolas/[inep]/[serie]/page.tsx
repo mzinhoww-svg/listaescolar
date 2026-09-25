@@ -34,7 +34,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   }
   return {
     title: `Lista de material ${grade.label} ${year} · ${school.name}${school.isDemo ? " (Demonstração)" : ""} · ListaCerta`,
-    // Demo e filtros ficam fora do índice; a lista real é indexável só quando a escola for.
+    // Sempre noindex nesta fatia (listas ainda demo); liberar para escola claimed|verified é dívida registrada no ledger.
     robots: { index: false, follow: true },
   };
 }
@@ -49,7 +49,7 @@ export default async function ListPage({ params, searchParams }: Props) {
   if (!school) notFound();
 
   const list = await getPublishedList(inep, grade.slug, year);
-  const history = list ? await listVersionHistory(inep, grade.slug, year) : [];
+  const history = list ? await listVersionHistory(inep, grade.slug, year, { listId: list.id }) : [];
   const version = list?.version;
 
   return (
@@ -60,7 +60,15 @@ export default async function ListPage({ params, searchParams }: Props) {
         gradeLabel={grade.label}
         year={year}
         isDemo={school.isDemo || Boolean(list?.isDemo)}
-        version={version ? { number: version.versionNumber, publishedAt: version.publishedAt, itemCount: version.itemCount } : undefined}
+        version={
+          version
+            ? {
+                number: version.versionNumber,
+                publishedAt: version.publishedAt,
+                itemCount: version.itemCount,
+              }
+            : undefined
+        }
       />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
         {version ? (
@@ -75,4 +83,3 @@ export default async function ListPage({ params, searchParams }: Props) {
     </div>
   );
 }
-

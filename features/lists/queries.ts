@@ -4,11 +4,18 @@ import { z } from "zod";
 
 import { createPublicClient } from "@/lib/supabase/public";
 
-import type { PublicList, PublicListItem, PublicListVersion, PublicListVersionSummary } from "./types";
+import type {
+  PublicList,
+  PublicListItem,
+  PublicListVersion,
+  PublicListVersionSummary,
+} from "./types";
 
 /** Só o cliente publicável (RLS + grants por coluna). Nunca service role neste arquivo. */
 export type PublicClient = ReturnType<typeof createPublicClient>;
 export type ListQueryDeps = { client?: PublicClient };
+/** `listId` (já obtido de getPublishedList) evita reconsultar a lista e a corrida entre a versão atual e a exibida. */
+export type HistoryDeps = ListQueryDeps & { listId?: string };
 
 // Colunas explícitas e seguras: `select *` em list_items dá 42501 para anon.
 const LIST_COLUMNS = "id, school_year, published_at, is_demo, current_version_id";
@@ -42,10 +49,21 @@ const itemRow = z.object({
 /** Zod remove chaves desconhecidas: qualquer coluna interna que vier na linha é descartada aqui. */
 export function toPublicVersionSummary(row: unknown): PublicListVersionSummary {
   const v = versionRow.parse(row);
-  return { id: v.id, versionNumber: v.version_number, status: v.status, publishedAt: v.published_at, itemCount: v.item_count };
+  return {
+    id: v.id,
+    versionNumber: v.version_number,
+    status: v.status,
+    publishedAt: v.published_at,
+    itemCount: v.item_count,
+  };
 }
 
-export function toPublicList(list: unknown, version: unknown, items: unknown[], gradeSlug: string): PublicList {
+export function toPublicList(
+  list: unknown,
+  version: unknown,
+  items: unknown[],
+  gradeSlug: string,
+): PublicList {
   const l = listRow.parse(list);
   const rows = items.map((i) => itemRow.parse(i));
   const publicItems: PublicListItem[] = rows.map((i) => ({
@@ -58,14 +76,34 @@ export function toPublicList(list: unknown, version: unknown, items: unknown[], 
     unit: i.unit,
   }));
   const v: PublicListVersion = { ...toPublicVersionSummary(version), items: publicItems };
-  return { id: l.id, gradeSlug, schoolYear: l.school_year, publishedAt: l.published_at, isDemo: l.is_demo, version: v };
+  return {
+    id: l.id,
+    gradeSlug,
+    schoolYear: l.school_year,
+    publishedAt: l.published_at,
+    isDemo: l.is_demo,
+    version: v,
+  };
 }
 
-async function findPublishedListRow(client: PublicClient, inep: string, gradeSlug: string, year: number) {
-  const { data: school, error: e1 } = await client.from("schools").select("id").eq("inep", inep).maybeSingle();
+async function findPublishedListRow(
+  client: PublicClient,
+  inep: string,
+  gradeSlug: string,
+  year: number,
+) {
+  const { data: school, error: e1 } = await client
+    .from("schools")
+    .select("id")
+    .eq("inep", inep)
+    .maybeSingle();
   if (e1) throw new Error(`lists: consulta de escola falhou (${e1.code})`);
   if (!school) return null;
-  const { data: grade, error: e2 } = await client.from("grades").select("id").eq("slug", gradeSlug).maybeSingle();
+  const { data: grade, error: e2 } = await client
+    .from("grades")
+    .select("id")
+    .eq("slug", gradeSlug)
+    .maybeSingle();
   if (e2) throw new Error(`lists: consulta de série falhou (${e2.code})`);
   if (!grade) return null;
   const { data, error } = await client
@@ -112,15 +150,19 @@ export async function listVersionHistory(
   inep: string,
   gradeSlug: string,
   year: number,
-  deps: ListQueryDeps = {},
+  deps: HistoryDeps = {},
 ): Promise<PublicListVersionSummary[]> {
   const client = deps.client ?? createPublicClient();
-  const list = await findPublishedListRow(client, inep, gradeSlug, year);
-  if (!list) return [];
+  let listId = deps.listId;
+  if (!listId) {
+    const list = await findPublishedListRow(client, inep, gradeSlug, year);
+    if (!list) return [];
+    listId = list.id;
+  }
   const { data, error } = await client
     .from("list_versions")
     .select(VERSION_COLUMNS)
-    .eq("list_id", list.id)
+    .eq("list_id", listId)
     .in("status", ["published", "superseded"])
     .order("version_number", { ascending: false });
   if (error) throw new Error(`lists: consulta de histórico falhou (${error.code})`);

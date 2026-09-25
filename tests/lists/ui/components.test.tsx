@@ -33,6 +33,7 @@ describe("format", () => {
     expect(formatQuantity(12.5, "kg")).toBe("12,5 kg");
     expect(formatQuantity(3, null)).toBe("3");
     expect(formatQuantity(null, null)).toBeNull();
+    expect(formatQuantity(null, "cx")).toBeNull();
     expect(itemCountLabel(1)).toBe("1 item");
     expect(itemCountLabel(4)).toBe("4 itens");
   });
@@ -41,8 +42,14 @@ describe("format", () => {
 describe("ListHeader", () => {
   it("publicada: escola, série/ano, chips e selo de demonstração", () => {
     render(
-      <ListHeader schoolName="Escola X" inep="99001001" gradeLabel="5º ano" year={2027} isDemo
-        version={{ number: 2, publishedAt: "2027-01-10T15:00:00Z", itemCount: 4 }} />,
+      <ListHeader
+        schoolName="Escola X"
+        inep="99001001"
+        gradeLabel="5º ano"
+        year={2027}
+        isDemo
+        version={{ number: 2, publishedAt: "2027-01-10T15:00:00Z", itemCount: 4 }}
+      />,
     );
     expect(screen.getByRole("heading", { level: 1, name: "Escola X" })).toBeInTheDocument();
     expect(screen.getByText("Lista publicada")).toBeInTheDocument();
@@ -52,10 +59,15 @@ describe("ListHeader", () => {
     expect(chips.getByText("4 itens")).toBeInTheDocument();
     expect(chips.getByText("Versão 2")).toBeInTheDocument();
     expect(chips.getByText("Atualizada 10/01/2027")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Voltar para o perfil/ })).toHaveAttribute("href", "/escolas/99001001");
+    expect(screen.getByRole("link", { name: /Voltar para o perfil/ })).toHaveAttribute(
+      "href",
+      "/escolas/99001001",
+    );
   });
   it("não publicada: sem chips e sem selo demo quando não é demo", () => {
-    render(<ListHeader schoolName="Escola X" inep="1" gradeLabel="5º ano" year={2027} isDemo={false} />);
+    render(
+      <ListHeader schoolName="Escola X" inep="1" gradeLabel="5º ano" year={2027} isDemo={false} />,
+    );
     expect(screen.getByText("Lista não publicada")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Resumo da lista" })).toBeNull();
     expect(screen.queryByText("Demonstração")).toBeNull();
@@ -64,11 +76,24 @@ describe("ListHeader", () => {
 
 describe("ItemsTable", () => {
   it("mostra nome, quantidade, categoria; sem quantidade vira traço acessível; nunca preço inventado", () => {
-    render(<ItemsTable items={[item(), item({ id: "3f2b8c1e-5d4a-4b6f-9a7e-1c2d3e4f5a6c", name: "Régua", category: null, quantity: null, unit: null })]} />);
+    render(
+      <ItemsTable
+        items={[
+          item(),
+          item({
+            id: "3f2b8c1e-5d4a-4b6f-9a7e-1c2d3e4f5a6c",
+            name: "Régua",
+            category: null,
+            quantity: null,
+            unit: null,
+          }),
+        ]}
+      />,
+    );
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
     expect(screen.getByText("2 un")).toBeInTheDocument();
     expect(screen.getByText("Papelaria")).toBeInTheDocument();
-    expect(screen.getByLabelText("quantidade não informada")).toBeInTheDocument();
+    expect(screen.getByText("quantidade não informada")).toBeInTheDocument();
     expect(screen.getByText(/Preço e estoque: indisponível/)).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/R\$/);
   });
@@ -88,6 +113,10 @@ describe("UnpublishedState", () => {
   it("informa lista não publicada e volta ao perfil", () => {
     render(<UnpublishedState inep="99001001" gradeLabel="3º ano" year={2027} />);
     expect(screen.getByText("3º ano · 2027: lista não publicada")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Escolher outra série" })).toHaveAttribute("href", "/escolas/99001001");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("link", { name: "Escolher outra série" })).toHaveAttribute(
+      "href",
+      "/escolas/99001001",
+    );
   });
 });

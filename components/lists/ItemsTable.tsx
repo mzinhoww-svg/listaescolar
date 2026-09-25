@@ -13,19 +13,31 @@ export function ItemsTable({ items }: { items: PublicListItem[] }) {
         {items.map((item) => {
           const qty = formatQuantity(item.quantity, item.unit);
           return (
-            <li key={item.id} className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3.5">
+            <li
+              key={item.id}
+              className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3.5"
+            >
               <div className="min-w-0">
                 <p className="text-[15px] leading-[1.3] font-bold">{item.name}</p>
-                {item.category ? <p className="text-texto-3 mt-0.5 text-xs font-semibold">{item.category}</p> : null}
+                {item.category ? (
+                  <p className="text-texto-3 mt-0.5 text-xs font-semibold">{item.category}</p>
+                ) : null}
               </div>
               <p className="text-texto-2 shrink-0 text-[13px] font-extrabold">
-                {qty ?? <span aria-label="quantidade não informada">—</span>}
+                {qty ?? (
+                  <>
+                    <span aria-hidden="true">—</span>
+                    <span className="sr-only">quantidade não informada</span>
+                  </>
+                )}
               </p>
             </li>
           );
         })}
       </ul>
-      <p className="text-texto-3 text-xs font-medium">Preço e estoque: indisponível (sem fonte nesta lista).</p>
+      <p className="text-texto-3 text-xs font-medium">
+        Preço e estoque: indisponível (sem fonte nesta lista).
+      </p>
     </section>
   );
 }

@@ -10,8 +10,15 @@ vi.mock("@/features/schools/search/repository", () => ({
   getSchoolByInep: (...a: unknown[]) => getSchoolByInep(...a),
 }));
 // `cache` do React não deduplica fora do servidor de RSC; nos testes vale a chamada direta.
-vi.mock("@/features/lists/queries", () => ({ getPublishedList: vi.fn().mockResolvedValue(null), listVersionHistory: vi.fn().mockResolvedValue([]) }));
-vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), cache: <T,>(f: T) => f }));
+const getPublishedList = vi.fn();
+vi.mock("@/features/lists/queries", () => ({
+  getPublishedList: (...a: unknown[]) => getPublishedList(...a),
+  listVersionHistory: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("react", async (orig) => ({
+  ...(await orig<typeof import("react")>()),
+  cache: <T,>(f: T) => f,
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
   redirect: (to: string) => {
@@ -56,16 +63,19 @@ const results = (over: Partial<Extract<SearchResult, { kind: "results" }>> = {})
 beforeEach(() => {
   searchSchools.mockReset();
   getSchoolByInep.mockReset();
+  getPublishedList.mockReset().mockResolvedValue(null);
 });
 
 describe("/escolas", () => {
   it("INEP existente redireciona ao perfil; página fora do intervalo volta à página 1", async () => {
     searchSchools.mockResolvedValueOnce({ kind: "redirect", inep: "51001234" });
-    await expect(SearchPage({ searchParams: sp({ q: "51001234" }) })).rejects.toThrow("REDIRECT:/escolas/51001234");
-    searchSchools.mockResolvedValueOnce({ kind: "page_out_of_range", page: 9 });
-    await expect(SearchPage({ searchParams: sp({ q: "silva", rede: "privada", pagina: "9" }) })).rejects.toThrow(
-      "REDIRECT:/escolas?q=silva&rede=privada",
+    await expect(SearchPage({ searchParams: sp({ q: "51001234" }) })).rejects.toThrow(
+      "REDIRECT:/escolas/51001234",
     );
+    searchSchools.mockResolvedValueOnce({ kind: "page_out_of_range", page: 9 });
+    await expect(
+      SearchPage({ searchParams: sp({ q: "silva", rede: "privada", pagina: "9" }) }),
+    ).rejects.toThrow("REDIRECT:/escolas?q=silva&rede=privada");
   });
 
   it("vazio mostra 'Nenhuma escola encontrada', não erro", async () => {
@@ -77,17 +87,24 @@ describe("/escolas", () => {
 
   it("falha do banco propaga (error.tsx trata) e não vira 'vazio'", async () => {
     searchSchools.mockRejectedValueOnce(new Error("school_search_failed"));
-    await expect(SearchPage({ searchParams: sp({ q: "silva" }) })).rejects.toThrow("school_search_failed");
+    await expect(SearchPage({ searchParams: sp({ q: "silva" }) })).rejects.toThrow(
+      "school_search_failed",
+    );
   });
 
   it("metadados: noindex com parâmetro cru, index sem", async () => {
-    expect((await searchMeta({ searchParams: sp({ pagina: "abc" }) })).robots).toMatchObject({ index: false });
+    expect((await searchMeta({ searchParams: sp({ pagina: "abc" }) })).robots).toMatchObject({
+      index: false,
+    });
     expect((await searchMeta({ searchParams: sp() })).robots).toMatchObject({ index: true });
   });
 });
 
 describe("/escolas/[inep]", () => {
-  const props = (inep = "51001234", q: Record<string, string> = {}) => ({ params: Promise.resolve({ inep }), searchParams: sp(q) });
+  const props = (inep = "51001234", q: Record<string, string> = {}) => ({
+    params: Promise.resolve({ inep }),
+    searchParams: sp(q),
+  });
 
   it("404 para escola inexistente ou de município desabilitado (null)", async () => {
     getSchoolByInep.mockResolvedValue(null);
@@ -126,11 +143,28 @@ describe("/escolas/[inep]", () => {
     expect(screen.queryByRole("link", { name: "Reivindicar perfil" })).toBeNull();
   });
 
+  it("falha ao consultar a lista vira 'indisponível' no bloco e não derruba o perfil", async () => {
+    getSchoolByInep.mockResolvedValue(school());
+    getPublishedList.mockRejectedValueOnce(new Error("lists: consulta de lista falhou (XX000)"));
+    render(
+      await SchoolPage(
+        props("51001234", { serie: "ef-4", ano: String(defaultAcademicYear(new Date())) }),
+      ),
+    );
+    expect(screen.getByText(/lista indisponível/)).toBeInTheDocument();
+    expect(screen.queryByText(/lista não publicada/)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: /Escola Municipal Antônio Silva/ }),
+    ).toBeInTheDocument();
+  });
+
   it("série e ano válidos da URL chegam ao seletor; inválidos são ignorados", async () => {
     getSchoolByInep.mockResolvedValue(school());
     const now = new Date();
     const [y] = academicYears(now);
-    const { unmount } = render(await SchoolPage(props("51001234", { serie: "ef-4", ano: String(y + 1) })));
+    const { unmount } = render(
+      await SchoolPage(props("51001234", { serie: "ef-4", ano: String(y + 1) })),
+    );
     expect(screen.getByLabelText("Série")).toHaveValue("ef-4");
     expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(y + 1));
     unmount();
@@ -143,10 +177,16 @@ describe("/escolas/[inep]", () => {
 describe("/escolas/[inep]/reivindicar", () => {
   it("página honesta, sem formulário; 404 se a escola não existe", async () => {
     getSchoolByInep.mockResolvedValueOnce(school());
-    const { container } = render(await ClaimPage({ params: Promise.resolve({ inep: "51001234" }) }));
-    expect(screen.getByRole("heading", { name: "Reivindicação em implantação" })).toBeInTheDocument();
+    const { container } = render(
+      await ClaimPage({ params: Promise.resolve({ inep: "51001234" }) }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Reivindicação em implantação" }),
+    ).toBeInTheDocument();
     expect(container.querySelector("form, input")).toBeNull();
     getSchoolByInep.mockResolvedValueOnce(null);
-    await expect(ClaimPage({ params: Promise.resolve({ inep: "99999999" }) })).rejects.toThrow("NOT_FOUND");
+    await expect(ClaimPage({ params: Promise.resolve({ inep: "99999999" }) })).rejects.toThrow(
+      "NOT_FOUND",
+    );
   });
 });

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useState } from "react";
+import { useState, useTransition } from "react";
 
 import { GRADES, STAGE_LABEL, findGrade, type GradeStage } from "@/features/grades/catalog";
 
@@ -13,6 +13,8 @@ type Props = {
   years: readonly number[];
   /** Lista publicada para a série/ano da URL (dado real do servidor); null = não publicada. */
   published?: { versionNumber: number; itemCount: number } | null;
+  /** A consulta da lista falhou no servidor: mostrar "indisponível", nunca "não publicada". */
+  unavailable?: boolean;
 };
 
 const STAGES: GradeStage[] = ["ei", "ef", "em"];
@@ -23,8 +25,16 @@ const FIELD =
  * Seletor de série e ano letivo. A seleção vive na query string (`?serie=ef-4&ano=2027`) e, com JS,
  * `router.replace` pede ao servidor o estado real da lista (S05). Sem JS, o `<form method="get">` recarrega a página.
  */
-export function GradeYearPicker({ inep, serie, ano, years, published = null }: Props) {
+export function GradeYearPicker({
+  inep,
+  serie,
+  ano,
+  years,
+  published = null,
+  unavailable = false,
+}: Props) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [grade, setGrade] = useState(serie ?? "");
   const [year, setYear] = useState(String(ano ?? years[0]));
 
@@ -36,6 +46,8 @@ export function GradeYearPicker({ inep, serie, ano, years, published = null }: P
   }
 
   const selected = findGrade(grade);
+  // `published`/`unavailable` descrevem a seleção que veio do servidor; com outra seleção local, nunca os mostre.
+  const inSync = grade === (serie ?? "") && year === String(ano ?? years[0]);
   return (
     <section aria-labelledby="lista" className="flex flex-col gap-3">
       <h2 id="lista" className="text-base font-extrabold">
@@ -92,13 +104,32 @@ export function GradeYearPicker({ inep, serie, ano, years, published = null }: P
           </div>
         </div>
         <noscript>
-          <button type="submit" className="bg-tinta text-papel rounded-botao h-12 w-full text-base font-extrabold">
+          <button
+            type="submit"
+            className="bg-tinta text-papel rounded-botao h-12 w-full text-base font-extrabold"
+          >
             Ver lista
           </button>
         </noscript>
       </form>
       <div className="rounded-[22px] bg-white p-4" role="status">
-        {selected && published ? (
+        {!inSync ? (
+          <>
+            <p className="text-[15px] font-extrabold">Consultando…</p>
+            <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
+              {isPending
+                ? "Buscando a lista desta série e ano."
+                : "Se a lista não aparecer, recarregue a página."}
+            </p>
+          </>
+        ) : selected && unavailable ? (
+          <>
+            <p className="text-[15px] font-extrabold">{`${selected.label} · ${year}: lista indisponível`}</p>
+            <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
+              Não foi possível consultar a lista agora. Tente novamente em instantes.
+            </p>
+          </>
+        ) : selected && published ? (
           <>
             <p className="text-[15px] font-extrabold">{`${selected.label} · ${year}: lista publicada`}</p>
             <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
@@ -114,7 +145,9 @@ export function GradeYearPicker({ inep, serie, ano, years, published = null }: P
         ) : (
           <>
             <p className="text-[15px] font-extrabold">
-              {selected ? `${selected.label} · ${year}: lista não publicada` : "Escolha a série para ver a lista"}
+              {selected
+                ? `${selected.label} · ${year}: lista não publicada`
+                : "Escolha a série para ver a lista"}
             </p>
             <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
               {selected

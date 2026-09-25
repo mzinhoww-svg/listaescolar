@@ -23,7 +23,8 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const school = await loadSchool((await params).inep);
-  if (!school) return { title: "Escola não encontrada · ListaCerta", robots: { index: false, follow: false } };
+  if (!school)
+    return { title: "Escola não encontrada · ListaCerta", robots: { index: false, follow: false } };
   return buildSchoolMetadata(school);
 }
 
@@ -37,13 +38,25 @@ export default async function SchoolPage({ params, searchParams }: Props) {
   const now = new Date();
   const { grade, year } = parseGradeSelection(first(sp.serie), first(sp.ano), now);
   const selectedYear = year ?? defaultAcademicYear(now);
-  const list = grade ? await getPublishedList(school.inep, grade.slug, selectedYear) : null;
+  let list: Awaited<ReturnType<typeof getPublishedList>> = null;
+  let listUnavailable = false;
+  if (grade) {
+    try {
+      list = await getPublishedList(school.inep, grade.slug, selectedYear);
+    } catch {
+      // Falha de consulta não derruba o perfil: o bloco mostra "indisponível".
+      listUnavailable = true;
+    }
+  }
   const jsonLd = buildSchoolJsonLd(school, siteBase() ?? undefined);
 
   return (
     <div className="flex min-h-dvh flex-col">
       {jsonLd ? (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
+        />
       ) : null}
       <ProfileHeader school={school} />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
@@ -53,7 +66,12 @@ export default async function SchoolPage({ params, searchParams }: Props) {
           serie={grade?.slug ?? null}
           ano={selectedYear}
           years={academicYears(now)}
-          published={list ? { versionNumber: list.version.versionNumber, itemCount: list.version.itemCount } : null}
+          unavailable={listUnavailable}
+          published={
+            list
+              ? { versionNumber: list.version.versionNumber, itemCount: list.version.itemCount }
+              : null
+          }
         />
         <ClaimBlock inep={school.inep} status={school.verificationStatus} isDemo={school.isDemo} />
         <ProfileInfo school={school} />

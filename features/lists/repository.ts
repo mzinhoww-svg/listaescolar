@@ -6,7 +6,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { itemsInputSchema, type ItemInput } from "./schemas";
-import { PUBLISH_ONLY_TARGET, assertTransition, type ListState } from "./state";
+import { LIST_STATES, PUBLISH_ONLY_TARGET, assertTransition, type ListState } from "./state";
 
 /**
  * Repositório de ESCRITA (service role). Os chamadores são as portas S09/S10/S11 (Pipeline/admin): toda
@@ -16,11 +16,7 @@ import { PUBLISH_ONLY_TARGET, assertTransition, type ListState } from "./state";
 export type WriteClient = SupabaseClient;
 
 export type ListRepositoryErrorCode =
-  | "not_found"
-  | "invalid_transition"
-  | "invalid_argument"
-  | "already_exists"
-  | "database";
+  "not_found" | "invalid_transition" | "invalid_argument" | "already_exists" | "database";
 
 export class ListRepositoryError extends Error {
   constructor(
@@ -38,18 +34,28 @@ function mapError(e: { code?: string; message: string }, what: string): ListRepo
     case "P0002":
       return new ListRepositoryError("not_found", `${what}: lista não encontrada`, e.code);
     case "23514":
-      return new ListRepositoryError("invalid_transition", `${what}: estado não permite a operação`, e.code);
+      return new ListRepositoryError(
+        "invalid_transition",
+        `${what}: estado não permite a operação`,
+        e.code,
+      );
     case "22023":
       return new ListRepositoryError("invalid_argument", `${what}: argumento inválido`, e.code);
     case "23505":
       return new ListRepositoryError("already_exists", `${what}: já existe`, e.code);
     default:
-      return new ListRepositoryError("database", `${what}: falha no banco (${e.code ?? "sem código"})`, e.code);
+      return new ListRepositoryError(
+        "database",
+        `${what}: falha no banco (${e.code ?? "sem código"})`,
+        e.code,
+      );
   }
 }
 
 const uuid = z.uuid();
-const candidateRows = z.array(z.object({ version_id: z.uuid(), version_number: z.number().int().positive() }));
+const candidateRows = z.array(
+  z.object({ version_id: z.uuid(), version_number: z.number().int().positive() }),
+);
 const draftRow = z.object({ id: z.uuid() });
 const positionRow = z.object({ position: z.number().int().positive() });
 
@@ -67,7 +73,12 @@ export function createListsRepository(client: WriteClient) {
     async createDraftList(input: DraftInput): Promise<string> {
       const { data, error } = await client
         .from("school_lists")
-        .insert({ school_id: input.schoolId, grade_id: input.gradeId, school_year: input.schoolYear, is_demo: input.isDemo })
+        .insert({
+          school_id: input.schoolId,
+          grade_id: input.gradeId,
+          school_year: input.schoolYear,
+          is_demo: input.isDemo,
+        })
         .select("id")
         .single();
       if (error) throw mapError(error, "createDraftList");
@@ -75,7 +86,9 @@ export function createListsRepository(client: WriteClient) {
     },
 
     /** Próxima versão candidata (não muda o estado da lista: uma publicada segue pública). */
-    async createCandidateVersion(input: CandidateInput): Promise<{ versionId: string; versionNumber: number }> {
+    async createCandidateVersion(
+      input: CandidateInput,
+    ): Promise<{ versionId: string; versionNumber: number }> {
       const { data, error } = await client.rpc("list_create_candidate_version", {
         p_list_id: input.listId,
         p_source: input.source,
@@ -119,15 +132,27 @@ export function createListsRepository(client: WriteClient) {
      * Muda o estado (matriz TS antes do banco). `published` só por `publishVersion`; `archived` delega
      * a list_archive no banco. `approved`/`rejected` exigem ator (o banco também confere).
      */
-    async transition(input: { listId: string; to: ListState; actorId: string; reason?: string | null }): Promise<void> {
+    async transition(input: {
+      listId: string;
+      to: ListState;
+      actorId: string;
+      reason?: string | null;
+    }): Promise<void> {
       uuid.parse(input.actorId);
       if (input.to === PUBLISH_ONLY_TARGET) {
-        throw new ListRepositoryError("invalid_argument", "transition: publicar exige publishVersion (versão explícita)");
+        throw new ListRepositoryError(
+          "invalid_argument",
+          "transition: publicar exige publishVersion (versão explícita)",
+        );
       }
-      const { data, error: ge } = await client.from("school_lists").select("status").eq("id", input.listId).maybeSingle();
+      const { data, error: ge } = await client
+        .from("school_lists")
+        .select("status")
+        .eq("id", input.listId)
+        .maybeSingle();
       if (ge) throw mapError(ge, "transition");
       if (!data) throw new ListRepositoryError("not_found", "transition: lista não encontrada");
-      assertTransition(z.object({ status: z.string() }).parse(data).status as ListState, input.to);
+      assertTransition(z.object({ status: z.enum(LIST_STATES) }).parse(data).status, input.to);
       const { error } = await client.rpc("list_transition", {
         p_list_id: input.listId,
         p_to: input.to,
@@ -141,7 +166,11 @@ export function createListsRepository(client: WriteClient) {
      * Aprova uma versão `candidate` da própria lista (grava quem e quando na versão). Só versão aprovada
      * publica: a aprovação da lista (`transition -> approved`) não basta.
      */
-    async approveVersion(input: { listId: string; versionId: string; actorId: string }): Promise<void> {
+    async approveVersion(input: {
+      listId: string;
+      versionId: string;
+      actorId: string;
+    }): Promise<void> {
       uuid.parse(input.actorId);
       const { error } = await client.rpc("list_approve_version", {
         p_list_id: input.listId,
@@ -156,7 +185,11 @@ export function createListsRepository(client: WriteClient) {
      * estar `approved` ou `published`. A versão publicada anterior vira `superseded`. Sem aprovação ou sem
      * itens o banco responde 23514 (`invalid_transition`).
      */
-    async publishVersion(input: { listId: string; versionId: string; actorId: string }): Promise<number> {
+    async publishVersion(input: {
+      listId: string;
+      versionId: string;
+      actorId: string;
+    }): Promise<number> {
       uuid.parse(input.actorId);
       const { data, error } = await client.rpc("list_publish_version", {
         p_list_id: input.listId,
@@ -168,7 +201,11 @@ export function createListsRepository(client: WriteClient) {
     },
 
     /** published -> archived; todas as versões ficam arquivadas e a lista some da consulta pública. */
-    async archive(input: { listId: string; actorId: string; reason?: string | null }): Promise<void> {
+    async archive(input: {
+      listId: string;
+      actorId: string;
+      reason?: string | null;
+    }): Promise<void> {
       uuid.parse(input.actorId);
       const { error } = await client.rpc("list_archive", {
         p_list_id: input.listId,

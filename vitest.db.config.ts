@@ -11,7 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/db/**/*.test.ts", "tests/**/repository.test.ts"],
+    include: ["tests/db/**/*.test.ts", "tests/**/repository.test.ts", "tests/submissions/store.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     fileParallelism: false,

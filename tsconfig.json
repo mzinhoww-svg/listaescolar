@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", ".track-workdir"]
+  "exclude": ["node_modules", ".track-workdir", "supabase/functions/ocr-worker"]
 }

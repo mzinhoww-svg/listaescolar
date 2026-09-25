@@ -4,6 +4,40 @@ import { z } from "zod";
 
 import { blankToUndefined, describeIssues, getPublicEnv, type PublicEnv } from "./env.public";
 
+const flag = z.enum(["0", "1"]).optional();
+const pipelineShape = {
+  /** Pipeline de demonstração (S07). Nunca em produção sem ALLOW_DEMO_IN_PRODUCTION. */
+  DEMO_PIPELINE: flag,
+  ALLOW_DEMO_IN_PRODUCTION: flag,
+  /** Autentica as chamadas à Edge Function ocr-worker. */
+  WORKER_SHARED_SECRET: z.string().min(16).optional(),
+};
+const pipelineFlagsSchema = z.object(pipelineShape);
+export type PipelineFlags = z.infer<typeof pipelineFlagsSchema>;
+
+/** `DEMO_PIPELINE=1` em produção sem a flag explícita é erro de validação (nunca demonstração em produção). */
+export function assertDemoAllowed(flags: PipelineFlags, nodeEnv = process.env.NODE_ENV): void {
+  if (flags.DEMO_PIPELINE === "1" && nodeEnv === "production" && flags.ALLOW_DEMO_IN_PRODUCTION !== "1") {
+    throw new Error("Variáveis de ambiente ausentes ou inválidas (servidor): DEMO_PIPELINE");
+  }
+}
+
+function readPipelineFlags() {
+  return {
+    DEMO_PIPELINE: process.env.DEMO_PIPELINE,
+    ALLOW_DEMO_IN_PRODUCTION: process.env.ALLOW_DEMO_IN_PRODUCTION,
+    WORKER_SHARED_SECRET: process.env.WORKER_SHARED_SECRET,
+  };
+}
+
+/** Só as flags do pipeline (não exige as demais variáveis do servidor). */
+export function getPipelineFlags(): PipelineFlags {
+  const parsed = pipelineFlagsSchema.safeParse(blankToUndefined(readPipelineFlags()));
+  if (!parsed.success) throw describeIssues(parsed.error, "servidor");
+  assertDemoAllowed(parsed.data);
+  return parsed.data;
+}
+
 const serverSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().min(1),
   OPENROUTER_KEY: z.string().min(1),
@@ -14,6 +48,7 @@ const serverSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   MELI_AFFILIATE_ID: z.string().min(1).optional(),
   AMAZON_ASSOCIATE_TAG: z.string().min(1).optional(),
+  ...pipelineShape,
 });
 
 export type ServerEnv = z.infer<typeof serverSchema> & PublicEnv;
@@ -31,8 +66,10 @@ export function getServerEnv(): ServerEnv {
       VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
       MELI_AFFILIATE_ID: process.env.MELI_AFFILIATE_ID,
       AMAZON_ASSOCIATE_TAG: process.env.AMAZON_ASSOCIATE_TAG,
+      ...readPipelineFlags(),
     }),
   );
   if (!parsed.success) throw describeIssues(parsed.error, "servidor");
+  assertDemoAllowed(parsed.data);
   return { ...getPublicEnv(), ...parsed.data };
 }

@@ -397,6 +397,12 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+# Worker do OCR (S07). A autenticação é do próprio código (x-worker-secret ou chave de serviço), não do JWT:
+# o pg_cron/pg_net e o enfileiramento chamam com segredo. Ver supabase/functions/ocr-worker/README.md.
+[functions.ocr-worker]
+enabled = true
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

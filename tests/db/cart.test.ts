@@ -1,23 +1,11 @@
-import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { attempt, cleanupUsers, IDS, seedUsers, withClaims, withSuperuser, type Identity } from "./helpers";
+import { attempt, cleanupUsers, IDS, inTx, seedUsers, withClaims, withSuperuser, type Identity } from "./helpers";
 
 // Fixtures criadas fora dos papéis de teste (superuser) e removidas no fim.
 const CART_PARENT = "00000000-0000-4000-8000-0000000c0001";
 const CART_SCHOOL = "00000000-0000-4000-8000-0000000c0002";
 const INACTIVE_SLUG = "loja-inativa-teste";
 const NON_OWNERS: Identity[] = ["school_member", "stationery_member", "orphan"];
-
-async function inTx(fn: (c: Client) => Promise<void>): Promise<void> {
-  await withSuperuser(async (c) => {
-    await c.query("begin");
-    try {
-      await fn(c);
-    } finally {
-      await c.query("rollback");
-    }
-  });
-}
 
 describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
   beforeAll(async () => {
@@ -118,7 +106,10 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
           expect(x.search_url_template).toMatch(/^https:\/\//);
           expect(x.search_url_template).toContain("{query}");
           const registrable = new URL(x.base_url).hostname.replace(/^www\./, "");
-          expect(new URL(x.search_url_template.replace("{query}", "abc")).hostname.endsWith(registrable)).toBe(true);
+          expect(((h: string) => h === registrable || h.endsWith("." + registrable))(
+              new URL(x.search_url_template.replace("{query}", "abc")).hostname,
+            ),
+          ).toBe(true);
           expect(x.search_url_template).not.toMatch(/tag=|matt_|affiliate|utm_|partner|aff/i);
         }
       });
@@ -131,6 +122,30 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
         expect(b.error).not.toBeNull();
       });
     });
+  });
+
+  describe("search_url_template", () => {
+    const TPL = (t: string) =>
+      `insert into public.retailers (slug, name, base_url, search_url_template) values ('tpl','T','https://www.kalunga.com.br','${t}')`;
+    for (const bad of [
+      "https://www.kalunga.com.br{query}",
+      "https://www.kalunga.com.br.evil.com{query}.x/",
+      "https://{query}.evil.com/",
+      "https://www.kalunga.com.brx{query}",
+    ]) {
+      it(`recusa ${bad}`, async () => {
+        await inTx(async (c) => {
+          expect((await attempt(c, TPL(bad))).error).not.toBeNull();
+        });
+      });
+    }
+    for (const ok of ["https://a.example.com/busca/{query}", "https://a.example.com/s?k={query}", "https://a.example.com/#{query}"]) {
+      it(`aceita ${ok}`, async () => {
+        await inTx(async (c) => {
+          expect((await attempt(c, TPL(ok))).error).toBeNull();
+        });
+      });
+    }
   });
 
   describe("RLS retailers", () => {
@@ -165,6 +180,12 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
         });
       });
     }
+    it("system (perfil authenticated) escreve em retailers", async () => {
+      await withClaims("system_profile", async (c) => {
+        const r = await attempt(c, `insert into public.retailers (slug, name, base_url, search_url_template) values ('z','Z','https://z.example.com','https://z.example.com/?q={query}')`);
+        expect(r.error).toBeNull();
+      });
+    });
     it("admin escreve em retailers", async () => {
       await withClaims("admin", async (c) => {
         const r = await attempt(c, `insert into public.retailers (slug, name, base_url, search_url_template) values ('z','Z','https://z.example.com','https://z.example.com/?q={query}')`);
@@ -207,6 +228,33 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
         });
       });
     }
+    it("admin NÃO insere/altera/apaga carrinhos e itens de terceiros", async () => {
+      await withClaims("admin", async (c) => {
+        expect((await attempt(c, "insert into public.carts (owner_id) values ($1)", [IDS.parent])).error).not.toBeNull();
+        expect((await attempt(c, "insert into public.cart_items (cart_id, name, quantity) values ($1, 'x', 1)", [CART_PARENT])).error).not.toBeNull();
+        for (const sql of [
+          "update public.carts set strategy = 'cheapest' where id = $1",
+          "delete from public.carts where id = $1",
+        ]) {
+          const r = await attempt(c, sql, [CART_PARENT]);
+          expect(r.error !== null || r.rowCount === 0, sql).toBe(true);
+        }
+        for (const sql of [
+          "update public.cart_items set quantity = 9 where cart_id = $1",
+          "delete from public.cart_items where cart_id = $1",
+        ]) {
+          const r = await attempt(c, sql, [CART_PARENT]);
+          expect(r.error !== null || r.rowCount === 0, sql).toBe(true);
+        }
+      });
+    });
+    it("options_snapshot acima de 64KB é recusado", async () => {
+      await inTx(async (c) => {
+        const big = JSON.stringify({ x: "a".repeat(70000) });
+        expect((await attempt(c, "insert into public.carts (owner_id, options_snapshot) values ($1, $2::jsonb)", [IDS.parent, big])).error).not.toBeNull();
+        expect((await attempt(c, "insert into public.carts (owner_id, options_snapshot) values ($1, '{\"ok\":1}'::jsonb)", [IDS.parent])).error).toBeNull();
+      });
+    });
     it("dono cria carrinho e itens para si; não em nome de outro", async () => {
       await withClaims("parent", async (c) => {
         const own = await attempt(c, "insert into public.carts (owner_id, strategy) values ($1, 'fewest_stores') returning id", [IDS.parent]);
@@ -274,6 +322,26 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
     });
   });
 
+  describe("auditoria e índices", () => {
+    it("alterar/inserir/apagar retailers gera linhas em audit_log", async () => {
+      await inTx(async (c) => {
+        await c.query(`insert into public.retailers (slug, name, base_url, search_url_template) values ('aud','A','https://a.example.com','https://a.example.com/?q={query}')`);
+        await c.query("update public.retailers set name = 'A2' where slug = 'aud'");
+        await c.query("delete from public.retailers where slug = 'aud'");
+        const r = await c.query(
+          "select action from public.audit_log where entity_table = 'retailers' and (after ->> 'slug' = 'aud' or before ->> 'slug' = 'aud') order by id",
+        );
+        expect(r.rows.map((x) => x.action).sort()).toEqual(["DELETE", "INSERT", "UPDATE"]);
+      });
+    });
+    it("índice em affiliate_clicks(retailer_id) existe", async () => {
+      await withSuperuser(async (c) => {
+        const r = await c.query("select 1 from pg_indexes where tablename = 'affiliate_clicks' and indexdef like '%(retailer_id)%'");
+        expect(r.rowCount).toBe(1);
+      });
+    });
+  });
+
   describe("RLS affiliate_clicks", () => {
     const INSERT = `insert into public.affiliate_clicks (cart_id, retailer_id, profile_id, affiliate_applied, target_url)
       select $1, id, $2, false, 'https://www.kalunga.com.br/busca/x' from public.retailers where slug = 'kalunga'`;
@@ -313,6 +381,35 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
       await withClaims("parent", async (c) => {
         expect((await attempt(c, INSERT, [CART_SCHOOL, IDS.parent])).error).not.toBeNull();
         expect((await attempt(c, INSERT, [CART_PARENT, IDS.school_member])).error).not.toBeNull();
+      });
+    });
+    it("clique com varejista inativo é recusado", async () => {
+      const inactiveId = await withSuperuser(
+        async (c) => (await c.query("select id from public.retailers where slug = $1", [INACTIVE_SLUG])).rows[0]?.id as string,
+      );
+      await withClaims("parent", async (c) => {
+        const r = await attempt(
+          c,
+          `insert into public.affiliate_clicks (cart_id, retailer_id, profile_id, affiliate_applied, target_url)
+           values ($1, $3, $2, false, 'https://inativa.example.com/s?q=x')`,
+          [CART_PARENT, IDS.parent, inactiveId],
+        );
+        expect(r.error).not.toBeNull();
+      });
+    });
+    it("anon não insere clique", async () => {
+      await withClaims("anon", async (c) => {
+        expect((await attempt(c, INSERT, [CART_PARENT, IDS.parent])).error).not.toBeNull();
+      });
+    });
+    it("admin NÃO insere/altera/apaga cliques de terceiros", async () => {
+      await withClaims("admin", async (c) => {
+        expect((await attempt(c, INSERT, [CART_PARENT, IDS.parent])).error).not.toBeNull();
+        expect((await attempt(c, INSERT, [CART_PARENT, IDS.admin])).error).not.toBeNull();
+        const upd = await attempt(c, "update public.affiliate_clicks set affiliate_applied = true");
+        expect(upd.error !== null || upd.rowCount === 0).toBe(true);
+        const del = await attempt(c, "delete from public.affiliate_clicks");
+        expect(del.error !== null || del.rowCount === 0).toBe(true);
       });
     });
     it("dono não altera nem apaga cliques (registro imutável para o usuário)", async () => {

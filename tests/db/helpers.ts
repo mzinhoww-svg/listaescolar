@@ -36,6 +36,7 @@ export type Identity =
   | "admin"
   | "stationery_member"
   | "system"
+  | "system_profile" // perfil com role system logado como authenticated (não service_role)
   | "orphan";
 
 /** Ids fixos dos usuários de teste. `orphan` e `spare` existem em auth.users, mas sem profile. */
@@ -76,7 +77,9 @@ export async function withClaims<T>(
       const dbRole =
         identity === "anon" ? "anon" : identity === "system" ? "service_role" : "authenticated";
       const claims: Record<string, string> = { role: dbRole };
-      if (identity !== "anon" && identity !== "system") claims.sub = IDS[identity];
+      if (identity !== "anon" && identity !== "system") {
+        claims.sub = identity === "system_profile" ? IDS.system : IDS[identity];
+      }
       await client.query(`set local role ${dbRole}`);
       await client.query("select set_config('request.jwt.claims', $1, true)", [
         JSON.stringify(claims),
@@ -84,6 +87,18 @@ export async function withClaims<T>(
       return await fn(client);
     } finally {
       await client.query("rollback");
+    }
+  });
+}
+
+/** Transação superuser (sem papel de teste) que sempre faz rollback. */
+export async function inTx(fn: (client: Client) => Promise<void>): Promise<void> {
+  await withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      await fn(c);
+    } finally {
+      await c.query("rollback");
     }
   });
 }

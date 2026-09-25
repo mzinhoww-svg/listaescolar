@@ -118,7 +118,8 @@ describe("features/cart/repository (Postgres local, RLS)", () => {
     });
     const cart = await getCart(alice.client, id);
     expect(cart).toMatchObject({ id, ownerId: alice.id, strategy: "cheapest", isDemo: false });
-    expect(cart?.items.map((i) => [i.name, i.itemKey, i.quantity])).toEqual([
+    // itens do mesmo insert têm o mesmo created_at: a ordem entre eles não é garantida.
+    expect(cart?.items.map((i) => [i.name, i.itemKey, i.quantity]).sort()).toEqual([
       ["Caderno 96 folhas", "caderno 96 folhas", 2],
       ["Cola branca", "cola branca", 1],
     ]);

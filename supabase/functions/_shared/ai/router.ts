@@ -100,7 +100,7 @@ async function closed<V>(fn: () => Promise<V>, detail: string): Promise<V> {
     return await fn();
   } catch (e) {
     if (e instanceof AiError) throw e;
-    throw new AiError("ai_not_configured", { detail });
+    throw new AiError("provider_error", { transient: true, detail }); // exceção inesperada de infraestrutura: repete
   }
 }
 

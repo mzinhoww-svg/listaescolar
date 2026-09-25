@@ -38,6 +38,8 @@ export class AiError extends Error {
   readonly code: AiErrorCode;
   readonly transient: boolean;
   readonly status?: number;
+  /** Código estável e seguro (`settings_unavailable`, `decision_record_failed`...), nunca eco do provedor. */
+  readonly detail?: string;
 
   constructor(code: AiErrorCode, opts: { transient?: boolean; status?: number; detail?: string } = {}) {
     const detail = opts.detail !== undefined && SAFE_DETAIL.test(opts.detail) ? opts.detail : undefined;
@@ -45,11 +47,12 @@ export class AiError extends Error {
     this.name = "AiError";
     this.code = code;
     this.transient = opts.transient ?? DEFAULT_TRANSIENT[code];
+    if (detail) this.detail = detail;
     if (opts.status !== undefined && Number.isInteger(opts.status)) this.status = opts.status;
   }
 
-  toJSON(): { name: string; code: AiErrorCode; transient: boolean; status?: number; message: string } {
-    return { name: this.name, code: this.code, transient: this.transient, status: this.status, message: this.message };
+  toJSON(): { name: string; code: AiErrorCode; transient: boolean; status?: number; detail?: string; message: string } {
+    return { name: this.name, code: this.code, transient: this.transient, status: this.status, detail: this.detail, message: this.message };
   }
 }
 

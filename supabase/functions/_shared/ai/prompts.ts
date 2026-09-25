@@ -1,5 +1,5 @@
 import { AiError } from "./errors.ts";
-import { type RpcClient, unwrapRow } from "./settings.ts";
+import { type RpcClient, isConfigError, rpcUnavailable, unwrapRow } from "./settings.ts";
 import { type Clock, type Prompt, type PromptRegistry, promptRowSchema } from "./types.ts";
 
 const KEY = /^[a-z][a-z0-9_]{0,63}$/;
@@ -17,8 +17,9 @@ export function createPromptRegistry(deps: { rpc: RpcClient; clock: Clock; cache
       try {
         res = await deps.rpc.rpc("ai_get_active_prompt", { p_key: key });
       } catch {
-        throw new AiError("ai_not_configured", { detail: "prompt_unavailable" });
+        throw rpcUnavailable("prompt_unavailable");
       }
+      if (res.error && !isConfigError(res.error)) throw rpcUnavailable("prompt_unavailable");
       const parsed = res.error ? null : promptRowSchema.safeParse(unwrapRow(res.data));
       if (!parsed?.success) throw new AiError("ai_not_configured", { detail: "prompt_unavailable" });
       cache.set(key, { value: parsed.data, at: deps.clock.now() });

@@ -230,6 +230,34 @@ describe("processJob", () => {
     expect(extract).toHaveBeenCalledTimes(MAX_PAID_ATTEMPTS);
   });
 
+  it("RPC de settings/prompt falhou (transitório, sem chamada paga): retry sempre, além do teto pago", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "provider_error", transient: true, detail: "settings_unavailable" });
+    const { deps, db, clock } = setup({ extract: async () => { throw err; } });
+    db.jobs.get("j1")!.maxAttempts = 10;
+    for (let i = 0; i < MAX_PAID_ATTEMPTS + 2; i++) {
+      expect((await processMessage("j1", deps)).outcome).toBe("retry");
+      clock.advance(900_000);
+    }
+  });
+
+  it("falha da RPC ao gravar a decisão (chamada paga): retry e conta no teto", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "provider_error", transient: true, detail: "decision_record_failed" });
+    const { deps, db, clock } = setup({ extract: async () => { throw err; } });
+    db.jobs.get("j1")!.maxAttempts = 10;
+    const outcomes: string[] = [];
+    for (let i = 0; i < MAX_PAID_ATTEMPTS; i++) {
+      outcomes.push((await processMessage("j1", deps)).outcome);
+      clock.advance(900_000);
+    }
+    expect(outcomes).toEqual(Array(MAX_PAID_ATTEMPTS - 1).fill("retry").concat("dead"));
+  });
+
+  it("linha de configuração ausente (P0002 -> ai_not_configured): dead sem retry", async () => {
+    const err = Object.assign(new Error("x"), { name: "AiError", code: "ai_not_configured", transient: false, detail: "settings_invalid" });
+    const { deps } = setup({ extract: async () => { throw err; } });
+    expect((await processMessage("j1", deps)).outcome).toBe("dead");
+  });
+
   it("arquivo ausente no storage: falha transitória (retry)", async () => {
     const { deps } = setup({ input: null });
     expect((await processMessage("j1", deps)).outcome).toBe("retry");

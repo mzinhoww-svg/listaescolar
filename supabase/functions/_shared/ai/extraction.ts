@@ -22,6 +22,7 @@ import {
 } from "./extraction-normalize.ts";
 import type { Evaluation, Task } from "./router.ts";
 import type { AiSettings, LlmMessage, LlmPart, LlmRequest, Prompt } from "./types.ts";
+import { WARNING_LOW_CONFIDENCE } from "./warnings.ts";
 
 export const PROMPT_KEY = "extract_list";
 export const MAX_ITEMS = 500;
@@ -150,8 +151,7 @@ export function evaluateNormalized(n: Normalized): Evaluation {
 
 export const WARNING_EMPTY =
   "Nenhum item foi lido no documento (vazio ou ilegível). Revise manualmente.";
-export const WARNING_LOW_CONFIDENCE =
-  "Leitura automática com baixa confiança: revisão obrigatória antes de qualquer publicação.";
+export { WARNING_LOW_CONFIDENCE };
 export const WARNING_HANDWRITTEN = "Texto manuscrito detectado: confira cada item.";
 export const WARNING_CRITICAL = "Há alertas críticos nesta leitura: revisão obrigatória.";
 export const WARNING_ALERTS = "Alertas são sinalizações para revisão, não parecer jurídico.";

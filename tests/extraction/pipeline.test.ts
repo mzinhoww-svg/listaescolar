@@ -264,6 +264,9 @@ describe("adaptador RpcClient validado", () => {
     };
     const r1 = await createValidatedRpc(p0002).rpc("ai_get_settings");
     expect(JSON.stringify(r1)).not.toContain("segredo");
+    expect(r1.error).toMatchObject({ code: "P0002", message: "rpc_not_found" });
+    const r3 = await createValidatedRpc({ rpc: async () => ({ data: null, error: { code: "57P01", message: "x" } }) }).rpc("ai_get_settings");
+    expect(r3.error).toEqual({ message: "rpc_failed" });
     const r2 = await createValidatedRpc({
       rpc: async () => {
         throw new Error("boom com chave");

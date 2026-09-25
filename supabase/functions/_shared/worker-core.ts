@@ -154,7 +154,7 @@ async function runWithTimeout(deps: WorkerDeps, input: WorkerInput & { submissio
     .delay(budgetMs, timer.signal)
     .then((): never => {
       abort.abort();
-      throw new Error("timeout do pipeline");
+      throw Object.assign(new Error("timeout do pipeline"), { name: "PipelineTimeout" });
     });
   try {
     const routerBudget = Math.max(1, budgetMs - PIPELINE_ABORT_MARGIN_MS);
@@ -164,10 +164,17 @@ async function runWithTimeout(deps: WorkerDeps, input: WorkerInput & { submissio
   }
 }
 
+/** Falhas de leitura de settings/prompt ocorrem antes de qualquer chamada paga: não contam no teto. */
+const UNPAID_DETAILS = new Set(["settings_unavailable", "prompt_unavailable"]);
+
 function isPermanentAiError(e: unknown, attempts: number): boolean {
-  const x = e as { name?: unknown; code?: unknown; transient?: unknown } | null;
+  const x = e as { name?: unknown; code?: unknown; transient?: unknown; detail?: unknown } | null;
+  // Timeout externo: havia chamada em andamento (possivelmente paga); conta no teto.
+  if (x?.name === "PipelineTimeout") return attempts >= MAX_PAID_ATTEMPTS;
   if (!x || x.name !== "AiError") return false;
-  return x.transient === false || x.code === "invalid_output" || attempts >= MAX_PAID_ATTEMPTS;
+  if (x.transient === false || x.code === "invalid_output") return true;
+  if (typeof x.detail === "string" && UNPAID_DETAILS.has(x.detail)) return false;
+  return attempts >= MAX_PAID_ATTEMPTS;
 }
 
 export async function processMessage(jobId: string, deps: WorkerDeps): Promise<MessageResult> {

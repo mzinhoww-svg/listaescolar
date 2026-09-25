@@ -180,7 +180,7 @@ describe("roteador barato-primeiro", () => {
     });
     const err = await router.run(makeTask(), { budgetMs: 1000 }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AiError);
-    expect((err as AiError).code).toBe("ai_not_configured");
+    expect(err).toMatchObject({ code: "provider_error", transient: true, detail: "settings_unavailable" });
     expect(String((err as AiError).message)).not.toContain("postgres");
     expect(fake.calls).toHaveLength(0);
     expect(recorder.rows).toHaveLength(0);
@@ -199,7 +199,7 @@ describe("roteador barato-primeiro", () => {
       recorder: makeRecorder(),
       clock,
     });
-    await expect(router.run(makeTask(), { budgetMs: 1000 })).rejects.toMatchObject({ code: "ai_not_configured" });
+    await expect(router.run(makeTask(), { budgetMs: 1000 })).rejects.toMatchObject({ code: "provider_error", transient: true, detail: "prompt_unavailable" });
     expect(fake.calls).toHaveLength(0);
   });
 

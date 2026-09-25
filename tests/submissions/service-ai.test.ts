@@ -66,6 +66,9 @@ describe("submitList com o pipeline de IA", () => {
     ["provider_timeout", new AiError("provider_timeout"), true],
     ["429 após escalada", new AiError("provider_error", { transient: true, status: 429 }), true],
     ["decision_record_failed", new AiError("provider_error", { detail: "decision_record_failed" }), false],
+    ["decision_record_failed (RPC)", new AiError("provider_error", { transient: true, detail: "decision_record_failed" }), true],
+    ["settings_unavailable (RPC)", new AiError("provider_error", { transient: true, detail: "settings_unavailable" }), true],
+    ["ai_not_configured (P0002)", new AiError("ai_not_configured", { detail: "settings_invalid" }), false],
   ])("falha de infraestrutura (%s): segue para o caminho assíncrono, não rejeita o envio", async (_n, err, available) => {
     const s = store();
     const q = queue();

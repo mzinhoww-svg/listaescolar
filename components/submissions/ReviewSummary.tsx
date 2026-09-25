@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { REVIEW_NOTICE } from "@/features/submissions/copy";
-import { WARNING_LOW_CONFIDENCE } from "@/supabase/functions/_shared/ai/extraction";
+import { WARNING_LOW_CONFIDENCE } from "@/supabase/functions/_shared/ai/warnings";
 import type { ExtractionResult } from "@/features/submissions/schemas";
 
 // Rótulos neutros: sinalizações para revisão, nunca parecer jurídico.

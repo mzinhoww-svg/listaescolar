@@ -30,7 +30,11 @@ export function createValidatedRpc(client: RawRpc | (() => RawRpc)): RpcClient {
       } catch {
         return { data: null, error: { message: "rpc_failed" } };
       }
-      if (res.error) return { data: null, error: { message: "rpc_failed" } };
+      // Sem eco: só se preserva que a linha não existe (P0002 = configuração) versus falha da chamada.
+      if (res.error) {
+        const notFound = (res.error as { code?: unknown }).code === "P0002";
+        return { data: null, error: { message: notFound ? "rpc_not_found" : "rpc_failed", ...(notFound ? { code: "P0002" } : {}) } };
+      }
       const parsed = schema.safeParse(res.data);
       return parsed.success
         ? { data: parsed.data, error: null }

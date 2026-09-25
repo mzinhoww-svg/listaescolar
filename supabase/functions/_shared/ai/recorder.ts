@@ -1,5 +1,5 @@
 import { AiError } from "./errors.ts";
-import type { RpcClient } from "./settings.ts";
+import { type RpcClient, isConfigError, rpcUnavailable } from "./settings.ts";
 import type { DecisionRecord, DecisionRecorder } from "./types.ts";
 
 /** Grava por `ai_record_decision(jsonb)` (whitelist no banco). Só ids, scores, códigos e nomes de modelo. */
@@ -31,7 +31,11 @@ export function createRpcRecorder(rpc: RpcClient): DecisionRecorder {
       } catch {
         error = true;
       }
-      if (error) throw new AiError("provider_error", { transient: false, detail: "decision_record_failed" });
+      // Só o banco recusar a decisão (P0002/formato) é permanente; falha de RPC repete sem perder o resultado.
+      if (error) {
+        if (isConfigError(error)) throw new AiError("provider_error", { transient: false, detail: "decision_record_failed" });
+        throw rpcUnavailable("decision_record_failed");
+      }
     },
   };
 }

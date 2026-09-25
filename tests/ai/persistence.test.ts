@@ -55,7 +55,7 @@ describe("SettingsProvider", () => {
     expect(calls[0]?.name).toBe("ai_get_settings");
   });
   const bad: [string, unknown, unknown][] = [
-    ["erro do banco", null, { message: "boom postgres://u:p@h" }],
+    ["P0002 (sem linha)", null, { code: "P0002", message: "boom postgres://u:p@h" }],
     ["sem dados", null, null],
     ["limiar fora de [0,1]", { ...row, confidence_threshold: 1.5 }, null],
     ["limiar NaN", { ...row, confidence_threshold: "abc" }, null],
@@ -73,8 +73,29 @@ describe("SettingsProvider", () => {
     let n = 0;
     const { rpc } = rpcOf(() => (n++ === 0 ? { data: null, error: { message: "x" } } : { data: row, error: null }));
     const p = createSettingsProvider({ rpc, clock: new FakeClock() });
-    await expect(p.load()).rejects.toMatchObject({ code: "ai_not_configured" });
+    await expect(p.load()).rejects.toMatchObject({ code: "provider_error", transient: true });
     await expect(p.load()).resolves.toMatchObject({ pipelineVersion: "s08.1" });
+  });
+});
+
+describe("RPC falhou (transitório) x linha ausente (configuração)", () => {
+  const boom = { rpc: async () => { throw new Error("rede"); } };
+  const pgErr = rpcOf(() => ({ data: null, error: { message: "boom" } })).rpc;
+  it.each([
+    ["settings: rpc rejeita", () => createSettingsProvider({ rpc: boom, clock: new FakeClock() }).load(), "settings_unavailable"],
+    ["settings: erro PostgREST", () => createSettingsProvider({ rpc: pgErr, clock: new FakeClock() }).load(), "settings_unavailable"],
+    ["prompt: rpc rejeita", () => createPromptRegistry({ rpc: boom, clock: new FakeClock() }).get("extract_list"), "prompt_unavailable"],
+    ["prompt: erro PostgREST", () => createPromptRegistry({ rpc: pgErr, clock: new FakeClock() }).get("extract_list"), "prompt_unavailable"],
+  ])("%s: transitório com código estável", async (_n, run, detail) => {
+    const err = await run().catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "provider_error", transient: true, detail });
+  });
+  it("gravação da decisão: falha da RPC é transitória; P0002 é permanente", async () => {
+    const d = { entityType: "x", entityId: "i", kind: "extraction", provider: "fake", model: "m", promptKey: "k", promptVersion: 1, pipelineVersion: "v", overallScore: 1, itemScores: [], alerts: [], decision: "accepted", justification: "accepted", attempt: 1, startedAt: "a", finishedAt: "b", latencyMs: 1 } as never;
+    await expect(createRpcRecorder(boom).record(d)).rejects.toMatchObject({ transient: true, detail: "decision_record_failed" });
+    await expect(createRpcRecorder(pgErr).record(d)).rejects.toMatchObject({ transient: true, detail: "decision_record_failed" });
+    const p0002 = rpcOf(() => ({ data: null, error: { code: "P0002", message: "x" } })).rpc;
+    await expect(createRpcRecorder(p0002).record(d)).rejects.toMatchObject({ transient: false, detail: "decision_record_failed" });
   });
 });
 

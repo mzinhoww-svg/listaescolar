@@ -34,21 +34,21 @@ Observação: o check "Vercel" falha em todos os PRs desde o #4 (não só do #8 
 
 ## Migrations
 
-Aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); as versões remotas não estão registradas no repositório (`n/d`) e devem ser reconciliadas antes da S20.
+Aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
 | 0001_base_schema.sql | S01 | base_schema | n/d |
 | 0002_profile_on_signup.sql | S02 | profile_on_signup | n/d |
-| 0101_schools_and_imports.sql | S03 | n/d | n/d |
-| 0102_school_search.sql | S04 | n/d | n/d |
-| 0103_lists_and_versions.sql | S05 | n/d | n/d |
-| 0104_claims.sql | S06 | n/d | n/d |
-| 0201_submissions_and_jobs.sql | S07 | n/d | n/d |
-| 0202_ai_registry_settings_decisions.sql | S08 | n/d | n/d |
-| 0301_cart_retailers_affiliates.sql | S12 | n/d | n/d |
-| 0302_stationeries.sql | S13 | n/d | n/d |
-| 0303_leads.sql | S14 | n/d | n/d |
+| 0101_schools_and_imports.sql | S03 | 20260925043904 | schools_and_imports |
+| 0102_school_search.sql | S04 | 20260925052004 | school_search |
+| 0103_lists_and_versions.sql | S05 | 20260925061744 | lists_and_versions |
+| 0104_claims.sql | S06 | 20260925132606 | claims |
+| 0201_submissions_and_jobs.sql | S07 | 20260925053528 | submissions_and_jobs |
+| 0202_ai_registry_settings_decisions.sql | S08 | 20260925120948 | ai_registry_settings_decisions |
+| 0301_cart_retailers_affiliates.sql | S12 | 20260925041851 | cart_retailers_affiliates |
+| 0302_stationeries.sql | S13 | 20260925060339 | stationeries |
+| 0303_leads.sql | S14 | 20260925131816 | leads |
 
 Pendente de staging: `0203_publication_decisions.sql` (S09, branch `slice/S09-aprovacao`; aplicar depois da revisão final, antes do merge).
 

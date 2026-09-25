@@ -177,3 +177,8 @@ Ruling: teste E2E da Edge Function (tests/submissions/edge-function.e2e.test.ts)
 - Dívida (M-2): o ramo sem pipeline responde 500 `misconfigured`/`pipeline_unavailable` mesmo varrendo publicação; sem regressão em deploys hospedados (pipeline configurado).
 - Dívida (M-4): `worker-core.ts` (~420 linhas) e `decide.ts` (~290) passaram do teto de leitura confortável; refatorar na S18.
 - Dívida (M-7): quando a porta publica e o envio já não está `approved` (`not_approved`), a versão fica órfã sem linha persistente própria; aceito com alerta `published_not_recorded`.
+
+## S09 · Task 3 (E2E e textos de estado)
+- Ruling: a tela de status ganha só o estado da decisão, com textos fixos e sem prazo, contagem ou motivo: `human_review` = "Em revisão pela equipe", `approved` = "Aprovada, aguardando publicação", `published` = "Publicada automaticamente" + selo "Demonstração" quando `publicationIsDemo(env)` (mesma trava das portas em memória, lida no servidor pela rota de status como `publicationDemo`). Os códigos de motivo não aparecem para pai/escola (ficam em `ai_decisions`; a S10 os mostra ao admin) — custo se errada: baixo (só copy).
+- Ruling: o E2E injeta `schoolId` como campo oculto porque `/enviar-lista` ainda não tem seletor de escola; a fixture em memória dá o vínculo. O seletor e o vínculo real são S11/S13 — custo se errada: nenhum.
+- Ruling: o E2E cobre app (inline), worker (g) e varredor (h2, off) separadamente e declara que suas memórias são distintas; envios pendentes para o varredor são clonados por SQL (`review_needed` com o resultado de `ocr_jobs` de um envio real) — custo se errada: nenhum.

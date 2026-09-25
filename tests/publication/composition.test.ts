@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPublicationDeps, resetMemoryPublishers, type PublicationEnv } from "../../supabase/functions/_shared/publication/composition";
+import { createPublicationDeps, publicationIsDemo, resetMemoryPublishers, type PublicationEnv } from "../../supabase/functions/_shared/publication/composition";
 import { MemoryListPublisher, MemoryPublicationContextReader } from "../../supabase/functions/_shared/publication/memory";
 import { FakeClock } from "../helpers/fake-clock";
 
@@ -73,5 +73,18 @@ describe("createPublicationDeps: portas em memória só com fixture e ambiente e
     expect(d.store).toBeDefined();
     expect(d.settings).toBeDefined();
     expect(d.clock).toBeDefined();
+  });
+});
+
+describe("publicationIsDemo: o selo 'Demonstração' segue a mesma trava das portas em memória", () => {
+  it("true só com fixture válida + APP_ENV local/development", () => {
+    expect(publicationIsDemo({ APP_ENV: "local", FAKE_PUBLICATION_FIXTURE: FIXTURE })).toBe(true);
+    expect(publicationIsDemo({ APP_ENV: "development", FAKE_PUBLICATION_FIXTURE: FIXTURE })).toBe(true);
+  });
+  it("false sem fixture, com fixture inválida, em preview/staging ou em produção", () => {
+    expect(publicationIsDemo({ APP_ENV: "local" })).toBe(false);
+    expect(publicationIsDemo({ APP_ENV: "local", FAKE_PUBLICATION_FIXTURE: "{" })).toBe(false);
+    expect(publicationIsDemo({ APP_ENV: "staging", FAKE_PUBLICATION_FIXTURE: FIXTURE })).toBe(false);
+    expect(publicationIsDemo({ APP_ENV: "production", FAKE_PUBLICATION_FIXTURE: FIXTURE })).toBe(false);
   });
 });

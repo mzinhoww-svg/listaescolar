@@ -12,4 +12,4 @@ export {
 } from "../../supabase/functions/_shared/publication/decide";
 export { runPublicationSweep, type SweepSummary } from "../../supabase/functions/_shared/publication/sweep";
 export { createPublicationSettings, type PublicationSettingsProvider } from "../../supabase/functions/_shared/publication/settings";
-export { createPublicationDeps, type PublicationEnv } from "../../supabase/functions/_shared/publication/composition";
+export { createPublicationDeps, publicationIsDemo, type PublicationEnv } from "../../supabase/functions/_shared/publication/composition";

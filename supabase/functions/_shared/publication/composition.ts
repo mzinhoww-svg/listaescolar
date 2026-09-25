@@ -21,6 +21,11 @@ export function publicationPortsAllowed(env: PublicationEnv): boolean {
   return (MEMORY_PORT_ENVS as readonly string[]).includes(app) && !isProductionEnv(env) && parsePublicationFixture(env.FAKE_PUBLICATION_FIXTURE) !== null;
 }
 
+/** Verdadeiro quando a publicação vem da porta em memória (demonstração): a tela mostra o selo "Demonstração". */
+export function publicationIsDemo(env: PublicationEnv): boolean {
+  return publicationPortsAllowed(env);
+}
+
 const publishers = new Map<string, MemoryListPublisher>();
 /** Um publicador por fixture (string) por processo; sobrevive entre requisições. */
 function sharedPublisher(fixtureRaw: string): MemoryListPublisher {

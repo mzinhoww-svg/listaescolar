@@ -90,7 +90,8 @@ export async function seedUsers(): Promise<void> {
     await cleanupUsers();
     for (const role of PROFILE_ROLES) {
       await insertAuthUser(client, IDS[role], role);
-      await client.query("insert into public.profiles (id, role, display_name) values ($1, $2, $3)", [
+      // o trigger handle_new_user (0002) já criou o profile como parent; ajusta papel e nome.
+      await client.query("update public.profiles set role = $2, display_name = $3 where id = $1", [
         IDS[role],
         role,
         `Teste ${role}`,
@@ -98,6 +99,8 @@ export async function seedUsers(): Promise<void> {
     }
     await insertAuthUser(client, IDS.orphan, "orphan");
     await insertAuthUser(client, IDS.spare, "spare");
+    // orphan e spare devem ficar sem profile (o trigger criou um).
+    await client.query("delete from public.profiles where id = any($1::uuid[])", [[IDS.orphan, IDS.spare]]);
   });
 }
 

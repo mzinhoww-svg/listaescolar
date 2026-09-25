@@ -40,7 +40,10 @@ describe("/auth/callback", () => {
 });
 
 describe("/auth/confirm", () => {
-  beforeEach(() => verifyOtp.mockReset());
+  beforeEach(() => {
+    verifyOtp.mockReset();
+    exchangeCodeForSession.mockReset();
+  });
   it("verifyOtp com token_hash e type; Location relativo", async () => {
     verifyOtp.mockResolvedValue({ error: null });
     const res = await confirm(req("/auth/confirm?token_hash=h&type=email&next=/conta/x"));
@@ -54,11 +57,36 @@ describe("/auth/confirm", () => {
     expect(verifyOtp).toHaveBeenCalledWith({ token_hash: "h", type: "magiclink" });
   });
   it("type inválido ou token ausente: /entrar?erro=codigo sem chamar verifyOtp", async () => {
-    for (const q of ["token_hash=h&type=recovery", "type=email", "token_hash=h"]) {
+    for (const q of ["token_hash=h&type=recovery", "type=email", "token_hash=h", ""]) {
       const res = await confirm(req(`/auth/confirm?${q}`));
       expect(res.headers.get("location")).toBe("/entrar?erro=codigo");
     }
     expect(verifyOtp).not.toHaveBeenCalled();
+    expect(exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+  it("aceita signup", async () => {
+    verifyOtp.mockResolvedValue({ error: null });
+    const res = await confirm(req("/auth/confirm?token_hash=h&type=signup"));
+    expect(verifyOtp).toHaveBeenCalledWith({ token_hash: "h", type: "signup" });
+    expect(res.headers.get("location")).toBe("/conta");
+  });
+  it("fallback: code sem token_hash usa exchangeCodeForSession", async () => {
+    exchangeCodeForSession.mockResolvedValue({ error: null });
+    const res = await confirm(req("/auth/confirm?code=abc&next=/conta/y"));
+    expect(exchangeCodeForSession).toHaveBeenCalledWith("abc");
+    expect(verifyOtp).not.toHaveBeenCalled();
+    expect(res.headers.get("location")).toBe("/conta/y");
+  });
+  it("fallback: erro no exchange", async () => {
+    exchangeCodeForSession.mockResolvedValue({ error: { message: "x" } });
+    const res = await confirm(req("/auth/confirm?code=abc"));
+    expect(res.headers.get("location")).toBe("/entrar?erro=codigo");
+  });
+  it("token_hash tem prioridade sobre code", async () => {
+    verifyOtp.mockResolvedValue({ error: null });
+    await confirm(req("/auth/confirm?token_hash=h&type=email&code=abc"));
+    expect(verifyOtp).toHaveBeenCalled();
+    expect(exchangeCodeForSession).not.toHaveBeenCalled();
   });
   it("erro do verifyOtp", async () => {
     verifyOtp.mockResolvedValue({ error: { message: "expired" } });

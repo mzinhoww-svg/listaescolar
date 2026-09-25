@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { PrivacyNote } from "@/components/auth/PrivacyNote";
 import { Screen } from "@/components/auth/Screen";
+import { getCurrentUser } from "@/features/auth/queries";
 import { safeNextPath } from "@/features/auth/redirect";
 
 import { LoginForm } from "./LoginForm";
@@ -16,6 +18,7 @@ const ERRORS: Record<string, string> = {
 export default async function EntrarPage({ searchParams }: PageProps<"/entrar">) {
   const sp = await searchParams;
   const next = safeNextPath(Array.isArray(sp.next) ? sp.next[0] : sp.next);
+  if (await getCurrentUser()) redirect(next);
   const erro = Array.isArray(sp.erro) ? sp.erro[0] : sp.erro;
   const erroMsg = erro ? (ERRORS[erro] ?? "Não foi possível entrar. Tente de novo.") : null;
 

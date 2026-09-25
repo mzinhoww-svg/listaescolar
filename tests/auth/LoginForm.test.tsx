@@ -32,6 +32,47 @@ describe("LoginForm", () => {
     expect(screen.getByRole("button", { name: "Reenviar link" })).toBeEnabled();
   });
 
+  it("após enviado mantém o e-mail e o reenvio dispara a action", async () => {
+    signInWithMagicLink.mockResolvedValue({
+      status: "sent",
+      message: "Verifique seu e-mail.",
+      email: "a@b.co",
+    });
+    render(<LoginForm next="/conta" />);
+    submit("A@b.co");
+    await screen.findByText("Verifique seu e-mail.");
+    expect(screen.getByLabelText("E-mail")).toHaveValue("a@b.co");
+    fireEvent.click(screen.getByRole("button", { name: "Reenviar link" }));
+    await waitFor(() => expect(signInWithMagicLink).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const second = signInWithMagicLink.mock.calls[1]?.[0] as FormData;
+    expect(second.get("email")).toBe("a@b.co");
+  });
+
+  it("após erro de rate limit mantém o e-mail, sem aria-invalid", async () => {
+    signInWithMagicLink.mockResolvedValue({
+      status: "error",
+      message: "Aguarde um minuto para pedir outro link.",
+      email: "a@b.co",
+    });
+    render(<LoginForm next="/conta" />);
+    submit("a@b.co");
+    await screen.findByRole("alert");
+    const input = screen.getByLabelText("E-mail");
+    expect(input).toHaveValue("a@b.co");
+    expect(input).toHaveAttribute("aria-invalid", "false");
+    expect(input).toHaveAttribute("aria-describedby", "email-msg");
+  });
+
+  it("e-mail inválido: mantém o texto digitado e marca aria-invalid", async () => {
+    render(<LoginForm next="/conta" />);
+    submit("nao-e-email");
+    await screen.findByRole("alert");
+    const input = screen.getByLabelText("E-mail");
+    expect(input).toHaveValue("nao-e-email");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+  });
+
   it("mostra a mensagem de rate limit", async () => {
     signInWithMagicLink.mockResolvedValue({
       status: "error",

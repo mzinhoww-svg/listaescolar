@@ -30,7 +30,16 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
     email: formData.get("email"),
     next: formData.get("next") ?? undefined,
   });
-  if (!parsed.success) return { status: "error", message: "Informe um e-mail válido." };
+  const rawEmail = formData.get("email");
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: "Informe um e-mail válido.",
+      invalid: true,
+      email: typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : undefined,
+    };
+  }
+  const email = parsed.data.email;
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({
@@ -44,11 +53,12 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
       return {
         status: "error",
         message: isRateLimit(error) ? RATE_LIMIT_ERROR : GENERIC_ERROR,
+        email,
       };
     }
-    return { status: "sent", message: "Verifique seu e-mail." };
+    return { status: "sent", message: "Verifique seu e-mail.", email };
   } catch {
-    return { status: "error", message: GENERIC_ERROR };
+    return { status: "error", message: GENERIC_ERROR, email };
   }
 }
 

@@ -27,11 +27,33 @@ describe("parseInepCsv", () => {
     expect(r.rows[0]?.NO_ENTIDADE).toBe("Ação");
   });
 
-  it("detecta latin1", () => {
-    const latin = iconv.encode(`${HEADER}\n51000001;Escola São José;5103403;3\n`, "latin1");
+  it("detecta Windows-1252 (inclui aspas e travessão tipográficos)", () => {
+    const latin = iconv.encode(`${HEADER}\n51000001;Escola “São José” – Anexo;5103403;3\n`, "win1252");
     const r = parseInepCsv(latin);
-    expect(r.encoding).toBe("latin1");
-    expect(r.rows[0]?.NO_ENTIDADE).toBe("Escola São José");
+    expect(r.encoding).toBe("win1252");
+    expect(r.rows[0]?.NO_ENTIDADE).toBe("Escola “São José” – Anexo");
+  });
+
+  it("mojibake (UTF-8 relido como Windows-1252) e byte indefinido viram encoding_ambiguous", () => {
+    const moji = buf(`${HEADER}\n51000001;Escola SÃ£o JosÃ©;5103403;3\n`);
+    expect(parseInepCsv(moji).errors[0]?.code).toBe("encoding_ambiguous");
+    const undef = Buffer.concat([buf(`${HEADER}\n51000001;Escola `), Buffer.from([0x81]), buf(`;5103403;3\n`)]);
+    expect(parseInepCsv(undef).errors[0]?.code).toBe("encoding_ambiguous");
+  });
+
+  it("informa a linha do arquivo em que cada registro termina", () => {
+    const r = parseInepCsv(buf(`${HEADER}\n51000001;A;5103403;3\n\n51000002;"B\nB";5103403;3\n51000003;C;5103403;3\n`));
+    expect(r.lines).toEqual([2, 5, 6]);
+  });
+
+  it("registro acima de 64 KB vira invalid_csv", () => {
+    const r = parseInepCsv(buf(`${HEADER}\n51000001;${"x".repeat(70_000)};5103403;3\n`));
+    expect(r.errors[0]?.code).toBe("invalid_csv");
+  });
+
+  it("coluna desconhecida repetida não é erro de coluna duplicada", () => {
+    const r = parseInepCsv(buf(`${HEADER};EXTRA;EXTRA\n51000001;A;5103403;3;x;y\n`));
+    expect(r.errors).toEqual([]);
   });
 
   it("trata aspas e quebra de linha dentro do campo", () => {

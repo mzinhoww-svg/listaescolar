@@ -1,9 +1,9 @@
 CO_ENTIDADE;NO_ENTIDADE;CO_MUNICIPIO;NO_MUNICIPIO;SG_UF;TP_DEPENDENCIA;DS_ENDERECO;NU_ENDERECO;NO_BAIRRO;CO_CEP;NU_DDD;NU_TELEFONE;DS_EMAIL
-51990001;Escola Demonstração 1;5103403;Cuiabá;MT;3;Rua Fictícia;100;Centro;78000000;65;33330001;demo1@exemplo.invalid
-51990002;Escola Demonstração 2;5103403;Cuiabá;MT;2;Avenida Fictícia;200;Jardim Demo;78000001;65;33330002;
-51990003;Escola Demonstração 3;5103403;Cuiabá;MT;4;Rua Teste;300;Centro;78000002;65;999990003;demo3@exemplo.invalid
-51990001;Escola Demonstração 1;5103403;Cuiabá;MT;3;Rua Fictícia;100;Centro;78000000;65;33330001;demo1@exemplo.invalid
-51990004;ESCOLA DEMONSTRAÇÃO 2;5103403;Cuiabá;MT;2;Rua Repetida;1;Centro;78000003;65;33330004;
+99001001;Escola Demonstração 1;5103403;Cuiabá;MT;3;Rua Fictícia;100;Centro;78000000;65;33330001;demo1@exemplo.invalid
+99001002;Escola Demonstração 2;5103403;Cuiabá;MT;2;Avenida Fictícia;200;Jardim Demo;78000001;65;33330002;
+99001003;Escola Demonstração 3;5103403;Cuiabá;MT;4;Rua Teste;300;Centro;78000002;65;999990003;demo3@exemplo.invalid
+99001001;Escola Demonstração 1;5103403;Cuiabá;MT;3;Rua Fictícia;100;Centro;78000000;65;33330001;demo1@exemplo.invalid
+99001004;ESCOLA DEMONSTRAÇÃO 2;5103403;Cuiabá;MT;2;Rua Repetida;1;Centro;78000003;65;33330004;
 123;Escola Demonstração 5;5103403;Cuiabá;MT;3;Rua X;1;Centro;78000004;65;33330005;
-52000001;Escola Demonstração 6;5208707;Goiânia;GO;3;Rua Y;1;Setor Demo;74000000;62;33330006;
-51990007;Escola Demonstração 7;5103403;Cuiabá;MT;9;Rua Z;1;Centro;78000005;65;33330007;
+99001008;Escola Demonstração 6;5208707;Goiânia;GO;3;Rua Y;1;Setor Demo;74000000;62;33330006;
+99001007;Escola Demonstração 7;5103403;Cuiabá;MT;9;Rua Z;1;Centro;78000005;65;33330007;

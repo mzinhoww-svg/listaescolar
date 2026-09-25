@@ -26,8 +26,9 @@ export default async function Page() {
     <AdminShell active="/admin/importacoes" email={user.email} breadcrumb="Admin / Importações" title="Importações">
       {data.ok ? (
         <>
-          <div className="max-w-xs">
-            <CountCard label="Escolas cadastradas" value={data.schools} hint="Contagem direta do banco" />
+          <div className="grid max-w-xl grid-cols-2 gap-3">
+            <CountCard label="Escolas reais" value={data.schools.real} hint="Contagem direta do banco" />
+            <CountCard label="Escolas de demonstração" value={data.schools.demo} hint="Marcadas como Demonstração" />
           </div>
           <UploadForm />
           <BatchTable batches={data.batches} />

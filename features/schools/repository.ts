@@ -3,10 +3,10 @@ import "server-only";
 import type {
   ApplyRow,
   BatchInfo,
-  BatchTotals,
   ClaimInput,
   ClaimResult,
   ErrorRow,
+  SchoolCounts,
   SchoolsImportRepository,
   Totals,
 } from "./ports";
@@ -16,11 +16,13 @@ import { z } from "zod";
 /** Acesso mínimo ao banco como service_role (implementado sobre supabase-js em produção e sobre `pg` nos testes). */
 export interface AdminGateway {
   rpc(fn: "import_claim_batch" | "import_apply_rows", args: Record<string, unknown>): Promise<unknown>;
-  updateBatch(batchId: string, patch: Record<string, unknown>): Promise<void>;
+  /** status + finished_at do lote, `where status <> 'completed'`; nunca toca contadores. */
+  finishBatch(batchId: string, status: "completed" | "failed"): Promise<void>;
   selectBatch(batchId: string): Promise<unknown | null>;
-  /** Linhas de import_rows com problema (rejected, ou duplicate que não seja `already_up_to_date`). */
+  /** Linhas de import_rows com problema (rejected, ou duplicate com `unchanged = false`). */
   selectErrorRows(batchId: string, offset: number, limit: number): Promise<unknown[]>;
-  countSchools(): Promise<number>;
+  countWarningRows(batchId: string): Promise<number>;
+  countSchools(): Promise<SchoolCounts>;
 }
 
 const PAGE = 1000;
@@ -36,7 +38,13 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
       });
       const [row] = claimResponseSchema.parse(data);
       if (!row) throw new Error("import_claim_batch sem retorno");
-      return { batchId: row.batch_id, alreadyExisted: row.already_exists, status: row.status };
+      return {
+        batchId: row.batch_id,
+        alreadyExisted: row.already_exists,
+        status: row.status,
+        owner: row.owner,
+        isDemo: row.is_demo,
+      };
     },
 
     async getBatch(batchId: string): Promise<BatchInfo | null> {
@@ -63,18 +71,7 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
       return totalsSchema.parse(data);
     },
 
-    async finishBatch(batchId: string, totals: BatchTotals, status: "completed" | "failed"): Promise<void> {
-      await gw.updateBatch(batchId, {
-        status,
-        finished_at: new Date().toISOString(),
-        total_rows: totals.total,
-        inserted_count: totals.inserted,
-        updated_count: totals.updated,
-        duplicate_count: totals.duplicate,
-        rejected_count: totals.rejected,
-        unchanged_count: totals.unchanged,
-      });
-    },
+    finishBatch: (batchId, status) => gw.finishBatch(batchId, status),
 
     async getErrorRows(batchId: string): Promise<ErrorRow[]> {
       const out: ErrorRow[] = [];
@@ -85,6 +82,7 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
       }
     },
 
+    countWarningRows: (batchId) => gw.countWarningRows(batchId),
     countSchools: () => gw.countSchools(),
   };
 }

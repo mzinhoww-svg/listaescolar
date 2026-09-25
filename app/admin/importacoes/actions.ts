@@ -35,6 +35,9 @@ export async function uploadInepCsv(_prev: UploadState, formData: FormData): Pro
       }
       return { status: "file_error", batchId: result.batchId, errors: result.fileErrors };
     }
+    if (result.fileErrors.some((e) => e.code === "demo_flag_mismatch")) {
+      return { status: "error", message: result.fileErrors[0]?.message ?? "Marcação de demonstração divergente.", retryable: false };
+    }
     return {
       status: "success",
       batchId: result.batchId,

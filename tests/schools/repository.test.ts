@@ -8,7 +8,7 @@ import { createSchoolsRepository, type AdminGateway } from "@/features/schools/r
 import { DATABASE_URL, withSuperuser } from "../db/helpers";
 
 const FIXTURE = readFileSync("tests/fixtures/inep-demo.csv");
-const INEPS = ["51990001", "51990002", "51990003", "51990004", "51990007", "52000001", "51000101"];
+const INEPS = ["99001001", "99001002", "99001003", "99001004", "99001007", "99001008", "51000101"];
 
 let client: Client;
 const gateway: AdminGateway = {
@@ -28,10 +28,11 @@ const gateway: AdminGateway = {
     ]);
     return r.rows[0]?.r;
   },
-  async updateBatch(id, patch) {
-    const keys = Object.keys(patch);
-    const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(", ");
-    await client.query(`update public.import_batches set ${sets} where id = $1`, [id, ...keys.map((k) => patch[k])]);
+  async finishBatch(id, status) {
+    await client.query(
+      "update public.import_batches set status = $2::public.import_status, finished_at = now() where id = $1 and status <> 'completed'",
+      [id, status],
+    );
   },
   async selectBatch(id) {
     const r = await client.query(
@@ -43,15 +44,25 @@ const gateway: AdminGateway = {
   async selectErrorRows(id, offset, limit) {
     const r = await client.query(
       `select row_number, action, errors, raw from public.import_rows
-        where batch_id = $1 and (action = 'rejected' or (action = 'duplicate' and not errors @> '[{"code":"already_up_to_date"}]'::jsonb))
+        where batch_id = $1 and (action = 'rejected' or (action = 'duplicate' and not unchanged))
         order by row_number offset $2 limit $3`,
       [id, offset, limit],
     );
     return r.rows;
   },
-  async countSchools() {
-    const r = await client.query("select count(*)::int as n from public.schools");
+  async countWarningRows(id) {
+    const r = await client.query(
+      `select count(*)::int as n from public.import_rows where batch_id = $1
+         and (errors @> '[{"code":"municipality_changed"}]'::jsonb or errors @> '[{"code":"municipality_change_ignored"}]'::jsonb)`,
+      [id],
+    );
     return r.rows[0]?.n ?? 0;
+  },
+  async countSchools() {
+    const r = await client.query(
+      "select count(*) filter (where not is_demo)::int as real, count(*) filter (where is_demo)::int as demo from public.schools",
+    );
+    return { real: r.rows[0]?.real ?? 0, demo: r.rows[0]?.demo ?? 0 };
   },
 };
 
@@ -90,18 +101,18 @@ describe("repositório real (service_role) + fixture demo", () => {
     expect(r.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
     const errs = await repo.getErrorRows(r.batchId);
     expect(errs.map((e) => [e.rowNumber, e.action, e.errors[0]?.code])).toEqual([
-      [4, "duplicate", "duplicate_inep_in_file"],
-      [5, "duplicate", "duplicate_name_municipality"],
-      [6, "rejected", "invalid_inep"],
-      [7, "rejected", "municipality_not_enabled"],
-      [8, "rejected", "invalid_network"],
+      [5, "duplicate", "duplicate_inep_in_file"],
+      [6, "duplicate", "duplicate_name_municipality"],
+      [7, "rejected", "invalid_inep"],
+      [8, "rejected", "municipality_not_enabled"],
+      [9, "rejected", "invalid_network"],
     ]);
-    expect(errs[0]?.raw).toMatchObject({ CO_ENTIDADE: "51990001" });
+    expect(errs[0]?.raw).toMatchObject({ CO_ENTIDADE: "99001001" });
     const b = await repo.getBatch(r.batchId);
     expect(b).toMatchObject({ status: "completed", isDemo: true, totals: r.totals });
-    const s = await client.query("select is_demo, verification_status, phone from public.schools where inep = '51990003'");
+    const s = await client.query("select is_demo, verification_status, phone from public.schools where inep = '99001003'");
     expect(s.rows[0]).toMatchObject({ is_demo: true, verification_status: "registered", phone: "65999990003" });
-    expect(await repo.countSchools()).toBeGreaterThanOrEqual(3);
+    expect((await repo.countSchools()).demo).toBeGreaterThanOrEqual(3);
   });
 
   it("segunda execução do mesmo arquivo é idempotente", async () => {
@@ -116,11 +127,11 @@ describe("repositório real (service_role) + fixture demo", () => {
 
   it("arquivo novo atualiza sem duplicar e preserva verification_status", async () => {
     await run(FIXTURE);
-    await withSuperuser((c) => c.query("update public.schools set verification_status = 'verified' where inep = '51990001'"));
+    await withSuperuser((c) => c.query("update public.schools set verification_status = 'verified' where inep = '99001001'"));
     const changed = Buffer.from(FIXTURE.toString("utf8").replace("Escola Demonstração 1;5103403", "Escola Demonstração Um;5103403"));
     const r = await run(changed, "repo-test-2.csv");
     expect(r.totals.updated).toBe(1);
-    const s = await client.query("select name, verification_status from public.schools where inep = '51990001'");
+    const s = await client.query("select name, verification_status from public.schools where inep = '99001001'");
     expect(s.rows[0]).toMatchObject({ name: "Escola Demonstração Um", verification_status: "verified" });
   });
 
@@ -149,5 +160,40 @@ describe("repositório real (service_role) + fixture demo", () => {
     const resumed = await importInepFile(input, { repo: createSchoolsRepository(gateway), chunkSize: 3 });
     expect(resumed).toMatchObject({ batchId: failed.batchId, alreadyExisted: true, status: "completed" });
     expect(resumed.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
+  });
+  it("uploads concorrentes do mesmo arquivo: só um processa, o outro recebe o lote existente", async () => {
+    const [a, b] = await Promise.all([run(FIXTURE, "repo-test-conc.csv"), run(FIXTURE, "repo-test-conc.csv")]);
+    expect(a.batchId).toBe(b.batchId);
+    expect([a.alreadyExisted, b.alreadyExisted].filter(Boolean)).toHaveLength(1);
+    const r = [a, b].find((x) => !x.alreadyExisted);
+    expect(r).toMatchObject({ status: "completed", resumed: false });
+    expect(r?.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
+    const n = await client.query("select count(*)::int as n from public.import_rows where batch_id = $1", [a.batchId]);
+    expect(n.rows[0]?.n).toBe(8);
+    const bt = await client.query("select status, total_rows, inserted_count from public.import_batches where id = $1", [a.batchId]);
+    expect(bt.rows[0]).toEqual({ status: "completed", total_rows: 8, inserted_count: 3 });
+  });
+
+  it("lote processing parado há mais de 10 min é retomado; recente não", async () => {
+    const claim = createSchoolsRepository(gateway).claimBatch;
+    const hash = "repo-test-stale-hash";
+    const first = await claim({ fileHash: hash, fileName: "repo-test-stale.csv", importedBy: null, isDemo: true });
+    expect(first).toMatchObject({ owner: true, alreadyExisted: false, status: "processing" });
+    const fresh = await claim({ fileHash: hash, fileName: "repo-test-stale.csv", importedBy: null, isDemo: true });
+    expect(fresh).toMatchObject({ owner: false, alreadyExisted: true, status: "processing" });
+    await withSuperuser(async (c) => {
+      // o trigger de updated_at sobrescreve o valor: desligado só nesta sessão.
+      await c.query("set session_replication_role = replica");
+      await c.query("update public.import_batches set updated_at = now() - interval '11 minutes' where id = $1", [first.batchId]);
+    });
+    const stale = await claim({ fileHash: hash, fileName: "repo-test-stale.csv", importedBy: null, isDemo: true });
+    expect(stale).toMatchObject({ owner: true, alreadyExisted: true, batchId: first.batchId });
+  });
+
+  it("mesmo arquivo com marcação demo diferente: não reprocessa e sinaliza demo_flag_mismatch", async () => {
+    const first = await run(FIXTURE, "repo-test-flag.csv", true);
+    const again = await run(FIXTURE, "repo-test-flag.csv", false);
+    expect(again).toMatchObject({ batchId: first.batchId, alreadyExisted: true });
+    expect(again.fileErrors.map((e) => e.code)).toEqual(["demo_flag_mismatch"]);
   });
 });

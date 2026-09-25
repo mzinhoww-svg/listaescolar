@@ -7,7 +7,7 @@ import { DemoBadge } from "@/components/admin/DemoBadge";
 import { StatusChip } from "@/components/admin/StatusChip";
 import { requireAccess } from "@/features/auth/guard";
 import { describeError } from "@/features/schools/error-report";
-import { getBatch, getErrorRows } from "@/features/schools/queries";
+import { countWarningRows, getBatch, getErrorRows } from "@/features/schools/queries";
 
 export const dynamic = "force-dynamic";
 const PREVIEW = 50;
@@ -19,7 +19,7 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
   if (!id.success) notFound();
   const batch = await getBatch(id.data);
   if (!batch) notFound();
-  const errors = await getErrorRows(id.data);
+  const [errors, warnings] = await Promise.all([getErrorRows(id.data), countWarningRows(id.data)]);
   const t = batch.totals;
   return (
     <AdminShell
@@ -32,13 +32,14 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
         <StatusChip status={batch.status} />
         {batch.isDemo ? <DemoBadge /> : null}
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
         <CountCard label="Total" value={t.total} />
         <CountCard label="Inseridas" value={t.inserted} />
         <CountCard label="Atualizadas" value={t.updated} />
         <CountCard label="Sem alteração" value={t.unchanged} />
         <CountCard label="Duplicadas" value={t.duplicate} />
         <CountCard label="Rejeitadas" value={t.rejected} />
+        <CountCard label="Linhas com aviso" value={warnings} hint="Município alterado ou mantido" />
       </div>
       <section className="rounded-card bg-branco-tonal flex flex-col gap-3 px-6 py-6">
         <div className="flex items-center justify-between">

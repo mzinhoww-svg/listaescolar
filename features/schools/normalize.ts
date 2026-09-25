@@ -47,7 +47,7 @@ export function normalizeName(input: string): string {
 
 /** Texto de exibição: remove controles e colapsa espaços. */
 export function cleanText(input: string | undefined): string {
-  return (input ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  return (input ?? "").replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 const digits = (s: string | undefined) => (s ?? "").replace(/\D+/g, "");

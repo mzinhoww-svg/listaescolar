@@ -11,7 +11,8 @@ export type Totals = { inserted: number; updated: number; duplicate: number; rej
 export type BatchTotals = Totals & { total: number };
 
 export type ClaimInput = { fileHash: string; fileName: string; importedBy: string | null; isDemo: boolean };
-export type ClaimResult = { batchId: string; alreadyExisted: boolean; status: BatchStatus };
+/** `owner`: só quem recebe true pode processar o lote (claim atômico); `isDemo` é a natureza já gravada no lote. */
+export type ClaimResult = { batchId: string; alreadyExisted: boolean; status: BatchStatus; owner: boolean; isDemo: boolean };
 export type BatchInfo = { batchId: string; status: BatchStatus; totals: BatchTotals; isDemo: boolean };
 
 /** Linha enviada a `import_apply_rows` (chaves em snake_case, como a função SQL espera). */
@@ -40,19 +41,26 @@ export type ErrorRow = {
 };
 
 export interface SchoolsImportRepository {
-  /** Insere o lote ou devolve o existente para o mesmo hash (seguro sob concorrência). */
+  /** Claim atômico por hash: lote novo, `pending`/`failed` ou `processing` parado há mais de 10 min viram do chamador (`owner`). */
   claimBatch(input: ClaimInput): Promise<ClaimResult>;
   getBatch(batchId: string): Promise<BatchInfo | null>;
   /** Aplica linhas já validadas; idempotente por (lote, row_number). Devolve o que está gravado para essas linhas. */
   applyRows(batchId: string, rows: ApplyRow[]): Promise<Totals>;
-  finishBatch(batchId: string, totals: BatchTotals, status: "completed" | "failed"): Promise<void>;
+  /** Só status/finished_at, e nunca sobre lote `completed`; os contadores já são mantidos por `applyRows`. */
+  finishBatch(batchId: string, status: "completed" | "failed"): Promise<void>;
   getErrorRows(batchId: string): Promise<ErrorRow[]>;
-  countSchools(): Promise<number>;
+  /** Linhas gravadas com aviso (município alterado ou mantido). */
+  countWarningRows(batchId: string): Promise<number>;
+  countSchools(): Promise<SchoolCounts>;
 }
+
+export type SchoolCounts = { real: number; demo: number };
 
 export type ImportResult = {
   batchId: string;
   alreadyExisted: boolean;
+  /** true quando um lote `failed`/`pending`/`processing` parado foi retomado por esta chamada. */
+  resumed: boolean;
   status: BatchStatus;
   totals: BatchTotals;
   fileErrors: FileError[];

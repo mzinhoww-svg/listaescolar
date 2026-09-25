@@ -134,14 +134,14 @@ describe("import_apply_rows e import_claim_batch", () => {
     await withClaims("system", async (c) => {
       const b1 = await newBatch(c);
       await apply(c, b1, [row(1, "51000001", "Escola Um")]);
-      const xminBefore = (await c.query("select xmin::text as x from public.schools where inep = '51000001'")).rows[0]?.x;
       const b2 = await newBatch(c);
       const t = await apply(c, b2, [row(1, "51000001", "Escola Um")]);
       expect(t).toEqual({ inserted: 0, updated: 0, duplicate: 0, rejected: 0, unchanged: 1 });
       const a = (await actions(c, b2))[1];
       expect(a?.action).toBe("duplicate");
       expect(a?.errors[0]?.code).toBe("already_up_to_date");
-      expect((await c.query("select xmin::text as x from public.schools where inep = '51000001'")).rows[0]?.x).toBe(xminBefore);
+      const flag = await c.query("select unchanged from public.import_rows where batch_id = $1", [b2]);
+      expect(flag.rows).toEqual([{ unchanged: true }]);
       const upd = await c.query(
         "select 1 from public.audit_log where entity_table = 'schools' and action = 'UPDATE' and after ->> 'inep' = '51000001'",
       );
@@ -541,17 +541,114 @@ describe("import_apply_rows e import_claim_batch", () => {
     });
   });
 
-  it("import_claim_batch: cria lote pendente e devolve o existente na segunda chamada", async () => {
+  it("import_claim_batch: lote novo nasce processing (owner); segunda chamada recebe o existente sem ser dona", async () => {
     await withClaims("system", async (c) => {
       const hash = randomUUID();
       const a = await c.query("select * from public.import_claim_batch($1, 'a.csv', $2, true)", [hash, null]);
-      expect(a.rows[0]).toMatchObject({ already_exists: false, status: "pending" });
+      expect(a.rows[0]).toMatchObject({ already_exists: false, status: "processing", owner: true, is_demo: true });
       const b = await c.query("select * from public.import_claim_batch($1, 'outro.csv', $2, false)", [hash, null]);
-      expect(b.rows[0]).toMatchObject({ already_exists: true, batch_id: a.rows[0]?.batch_id, status: "pending" });
+      expect(b.rows[0]).toMatchObject({
+        already_exists: true,
+        batch_id: a.rows[0]?.batch_id,
+        status: "processing",
+        owner: false,
+        is_demo: true,
+      });
       const row1 = await c.query("select file_name, is_demo, status from public.import_batches where id = $1", [
         a.rows[0]?.batch_id,
       ]);
-      expect(row1.rows[0]).toEqual({ file_name: "a.csv", is_demo: true, status: "pending" });
+      expect(row1.rows[0]).toEqual({ file_name: "a.csv", is_demo: true, status: "processing" });
+    });
+  });
+
+  it("import_claim_batch: failed e processing parado (>10 min) são retomáveis; processing recente e completed não", async () => {
+    await withSuperuser(async (c) => {
+      await c.query("set role service_role");
+      const hash = randomUUID();
+      const claim = async () =>
+        (await c.query("select * from public.import_claim_batch($1, 'a.csv', null, false)", [hash])).rows[0];
+      const first = await claim();
+      const id = first?.batch_id;
+      const set = async (sql: string) => {
+        await c.query("reset role");
+        await c.query("set session_replication_role = replica"); // trigger de updated_at desligado nesta sessão
+        await c.query(sql, [id]);
+        await c.query("set session_replication_role = origin");
+        await c.query("set role service_role");
+      };
+      expect((await claim())?.owner).toBe(false);
+      await set("update public.import_batches set updated_at = now() - interval '11 minutes' where id = $1");
+      expect(await claim()).toMatchObject({ owner: true, already_exists: true, status: "processing" });
+      expect((await claim())?.owner).toBe(false); // o heartbeat foi renovado pelo claim
+      await set("update public.import_batches set status = 'failed' where id = $1");
+      expect((await claim())?.owner).toBe(true);
+      await set("update public.import_batches set status = 'completed' where id = $1");
+      expect(await claim()).toMatchObject({ owner: false, status: "completed" });
+      await c.query("reset role");
+      await c.query("delete from public.import_batches where id = $1", [id]);
+    });
+  });
+
+  it("import_apply_rows renova o heartbeat (updated_at) de lote já em processing", async () => {
+    await withSuperuser(async (c) => {
+      const b = await newBatch(c);
+      try {
+        await c.query("set session_replication_role = replica"); // trigger de updated_at desligado nesta sessão
+        await c.query("update public.import_batches set status = 'processing', updated_at = now() - interval '9 minutes' where id = $1", [b]);
+        await c.query("set session_replication_role = origin");
+        await c.query("set role service_role");
+        await apply(c, b, [row(1, "99001900", "Escola Um")]);
+        await c.query("reset role");
+        const r = await c.query("select updated_at > now() - interval '1 minute' as fresh from public.import_batches where id = $1", [b]);
+        expect(r.rows[0]?.fresh).toBe(true);
+      } finally {
+        await c.query("reset role");
+        await c.query("delete from public.schools where inep = '99001900'");
+        await c.query("delete from public.import_batches where id = $1", [b]);
+      }
+    });
+  });
+
+  it("dedupe nome+município é isolado por is_demo: demo e real com o mesmo nome coexistem", async () => {
+    await withClaims("system", async (c) => {
+      const real = await newBatch(c);
+      expect((await apply(c, real, [row(1, "51000001", "Escola Igual")])).inserted).toBe(1);
+      const demo = (
+        await c.query<{ id: string }>(
+          "insert into public.import_batches (file_name, file_hash, is_demo) values ('d.csv', $1, true) returning id",
+          [randomUUID()],
+        )
+      ).rows[0]?.id ?? "";
+      const t = await apply(c, demo, [row(1, "51000002", "Escola Igual", { is_demo: true })]);
+      expect(t).toEqual({ inserted: 1, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
+    });
+  });
+
+  it("check: unchanged só vale para action duplicate", async () => {
+    await withSuperuser(async (c) => {
+      const id = (
+        await c.query<{ id: string }>("insert into public.import_batches (file_name, file_hash) values ('u.csv', $1) returning id", [randomUUID()])
+      ).rows[0]?.id;
+      await expect(
+        c.query("insert into public.import_rows (batch_id, row_number, action, unchanged) values ($1, 1, 'inserted', true)", [id]),
+      ).rejects.toThrow(/import_rows_unchanged_is_duplicate/);
+      await c.query("delete from public.import_batches where id = $1", [id]);
+    });
+  });
+
+  it("teto de tamanho: raw enorme e errors excessivos não inflam import_rows", async () => {
+    await withClaims("system", async (c) => {
+      const b = await newBatch(c);
+      const hugeErrors = Array.from({ length: 200 }, (_, i) => ({ code: "invalid_row", message: `e${i}` }));
+      await apply(c, b, [
+        row(1, "51000001", "Escola Um", { raw: { NO_ENTIDADE: "x".repeat(50_000) } }),
+        row(2, "12", "Escola Dois", { errors: hugeErrors, raw: { A: "b" } }),
+      ]);
+      const r = await c.query("select row_number, raw, errors from public.import_rows where batch_id = $1 order by row_number", [b]);
+      expect(r.rows[0]?.raw).toEqual({ truncated: true });
+      expect(r.rows[1]?.errors).toHaveLength(1);
+      expect(r.rows[1]?.errors[0]?.code).toBe("invalid_row");
+      expect(r.rows[1]?.raw).toEqual({ A: "b" });
     });
   });
 

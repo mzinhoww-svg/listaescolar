@@ -23,7 +23,7 @@ create table public.import_batches (
   updated_count integer not null default 0 check (updated_count >= 0),
   duplicate_count integer not null default 0 check (duplicate_count >= 0),
   rejected_count integer not null default 0 check (rejected_count >= 0),
-  unchanged_count integer not null default 0 check (unchanged_count >= 0), -- escolas já iguais (duplicate/already_up_to_date)
+  unchanged_count integer not null default 0 check (unchanged_count >= 0), -- escolas já iguais (import_rows.unchanged)
   status public.import_status not null default 'pending',
   imported_by uuid references public.profiles (id) on delete set null,
   started_at timestamptz,
@@ -42,9 +42,11 @@ create table public.import_rows (
   normalized jsonb,
   errors jsonb not null default '[]'::jsonb, -- lista de {code, message}
   action public.import_row_action not null,
+  unchanged boolean not null default false, -- escola já igual ao arquivo (gravada como duplicate)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint import_rows_batch_row_key unique (batch_id, row_number)
+  constraint import_rows_batch_row_key unique (batch_id, row_number),
+  constraint import_rows_unchanged_is_duplicate check (not unchanged or action = 'duplicate')
 );
 
 create table public.schools (
@@ -129,35 +131,53 @@ create policy import_rows_select_admin on public.import_rows
   for select to authenticated using ((select public.auth_role()) in ('admin', 'system'));
 
 -- ---------------------------------------------------------------------------
--- import_claim_batch: insere o lote ou devolve o existente para o mesmo hash.
--- Seguro sob concorrência: on conflict do nothing espera a transação concorrente e o select
--- seguinte (novo snapshot, READ COMMITTED) enxerga o lote já confirmado.
+-- import_claim_batch: claim atômico do lote por hash. Devolve `owner = true` só para quem pode
+-- processar: lote novo (nasce `processing`) ou existente `pending`/`failed` da mesma natureza
+-- (demo x real) ou `processing` parado há mais de 10 min (heartbeat = updated_at, renovado por
+-- import_apply_rows). Os demais recebem o lote existente com owner = false.
+-- Seguro sob concorrência: on conflict do nothing espera a transação concorrente e o update
+-- seguinte (novo snapshot, READ COMMITTED) reavalia a linha já confirmada.
 -- ---------------------------------------------------------------------------
 create function public.import_claim_batch(
   p_file_hash text, p_file_name text, p_imported_by uuid, p_is_demo boolean
-) returns table (batch_id uuid, already_exists boolean, status public.import_status)
+) returns table (batch_id uuid, already_exists boolean, status public.import_status, owner boolean, is_demo boolean)
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
   v_id uuid;
+  v_demo boolean := coalesce(p_is_demo, false);
 begin
   if p_file_hash is null or length(btrim(p_file_hash)) = 0 then
     raise exception 'file_hash obrigatório' using errcode = '22023';
   end if;
 
-  insert into public.import_batches (file_name, file_hash, imported_by, is_demo)
-  values (coalesce(nullif(btrim(p_file_name), ''), 'arquivo.csv'), p_file_hash, p_imported_by, coalesce(p_is_demo, false))
+  insert into public.import_batches (file_name, file_hash, imported_by, is_demo, status, started_at)
+  values (coalesce(nullif(btrim(p_file_name), ''), 'arquivo.csv'), p_file_hash, p_imported_by, v_demo,
+          'processing', now())
   on conflict (file_hash) do nothing
   returning id into v_id;
 
   if v_id is not null then
-    return query select v_id, false, 'pending'::public.import_status;
+    return query select v_id, false, 'processing'::public.import_status, true, v_demo;
     return;
   end if;
 
-  return query select b.id, true, b.status from public.import_batches b where b.file_hash = p_file_hash;
+  update public.import_batches b
+     set status = 'processing', started_at = coalesce(b.started_at, now()), finished_at = null
+   where b.file_hash = p_file_hash
+     and b.is_demo = v_demo
+     and (b.status in ('pending', 'failed')
+          or (b.status = 'processing' and b.updated_at < now() - interval '10 minutes'))
+  returning b.id into v_id;
+
+  if v_id is not null then
+    return query select v_id, true, 'processing'::public.import_status, true, v_demo;
+    return;
+  end if;
+
+  return query select b.id, true, b.status, false, b.is_demo from public.import_batches b where b.file_hash = p_file_hash;
 end;
 $$;
 
@@ -173,6 +193,8 @@ set search_path = ''
 as $$
 declare
   c_max_rows constant integer := 1000;
+  c_max_json constant integer := 20000; -- caracteres de raw/normalized/errors por linha
+  c_max_errors constant integer := 20;
   c_keys constant text[] := array['row_number', 'inep', 'name', 'normalized_name', 'network', 'neighborhood',
                                   'address', 'cep', 'phone', 'email', 'ibge_code', 'is_demo'];
   r jsonb;
@@ -200,6 +222,8 @@ declare
   v_action public.import_row_action;
   v_errors jsonb;
   v_normalized jsonb;
+  v_raw jsonb;
+  v_unchanged boolean;
   v_numbers integer[] := '{}';
   v_result jsonb;
 begin
@@ -222,9 +246,10 @@ begin
     raise exception 'lote % já concluído', p_batch_id using errcode = '22023';
   end if;
 
+  -- renova o heartbeat (updated_at, pelo trigger) mesmo quando o lote já está `processing`.
   update public.import_batches
      set status = 'processing', started_at = coalesce(started_at, now())
-   where id = p_batch_id and status in ('pending', 'failed');
+   where id = p_batch_id;
 
   for r in
     select e.value from jsonb_array_elements(p_rows) as e(value)
@@ -255,11 +280,24 @@ begin
     -- lote demo nunca cria/atualiza escola real; linha demo em lote real também é demo.
     v_demo := v_batch_demo or coalesce((r ->> 'is_demo')::boolean, false);
     v_action := null;
+    v_unchanged := false;
     v_muni_id := null;
     v_warn := '[]'::jsonb;
     v_errors := case when jsonb_typeof(r -> 'errors') = 'array' then r -> 'errors' else '[]'::jsonb end;
     v_normalized := (select coalesce(jsonb_object_agg(k.key, k.value), '{}'::jsonb)
                        from jsonb_each(r) as k(key, value) where k.key = any (c_keys));
+    -- tetos de tamanho: raw, normalized e errors nunca inflam import_rows.
+    v_raw := r -> 'raw';
+    if v_raw is not null and length(v_raw::text) > c_max_json then
+      v_raw := jsonb_build_object('truncated', true);
+    end if;
+    if length(v_normalized::text) > c_max_json then
+      v_normalized := '{}'::jsonb;
+    end if;
+    if jsonb_array_length(v_errors) > c_max_errors or length(v_errors::text) > c_max_json then
+      v_errors := jsonb_build_array(jsonb_build_object(
+        'code', 'invalid_row', 'message', 'Erros de validação acima do tamanho máximo'));
+    end if;
 
     if jsonb_array_length(v_errors) = 0 then
       if v_inep is null or v_inep !~ '^[0-9]{8}$' then
@@ -315,11 +353,13 @@ begin
              is not distinct from
              (v_name, v_norm, v_network, v_neighborhood, v_address, v_cep, v_eff_phone, v_eff_email, v_eff_muni) then
             v_action := 'duplicate';
+            v_unchanged := true;
             v_errors := jsonb_build_array(jsonb_build_object(
               'code', 'already_up_to_date', 'message', 'Escola já cadastrada com os mesmos dados')) || v_warn;
           elsif exists (
             select 1 from public.schools s
              where s.id <> v_school.id and s.municipality_id = v_eff_muni and s.normalized_name = v_norm
+               and s.is_demo = v_demo
           ) then
             v_action := 'duplicate';
             v_errors := jsonb_build_array(jsonb_build_object(
@@ -336,7 +376,8 @@ begin
           end if;
         end if;
       elsif exists (
-        select 1 from public.schools s where s.municipality_id = v_muni_id and s.normalized_name = v_norm
+        select 1 from public.schools s
+         where s.municipality_id = v_muni_id and s.normalized_name = v_norm and s.is_demo = v_demo
       ) then
         v_action := 'duplicate';
         v_errors := jsonb_build_array(jsonb_build_object(
@@ -350,12 +391,12 @@ begin
       end if;
     end if;
 
-    insert into public.import_rows (batch_id, row_number, raw, normalized, errors, action)
-    values (p_batch_id, rn, r -> 'raw', v_normalized, v_errors, v_action);
+    insert into public.import_rows (batch_id, row_number, raw, normalized, errors, action, unchanged)
+    values (p_batch_id, rn, v_raw, v_normalized, v_errors, v_action, v_unchanged);
   end loop;
 
   -- contadores do lote sempre recalculados do que está gravado (consistente e idempotente).
-  -- "sem alteração" é gravado como duplicate + already_up_to_date (enum fixo) e contado à parte.
+  -- "sem alteração" é gravado como duplicate + import_rows.unchanged (enum fixo) e contado à parte.
   update public.import_batches b
      set total_rows = c.total, inserted_count = c.ins, updated_count = c.upd,
          duplicate_count = c.dup, rejected_count = c.rej, unchanged_count = c.unc
@@ -363,23 +404,21 @@ begin
       select count(*)::integer as total,
              (count(*) filter (where action = 'inserted'))::integer as ins,
              (count(*) filter (where action = 'updated'))::integer as upd,
-             (count(*) filter (where action = 'duplicate' and not unch))::integer as dup,
+             (count(*) filter (where action = 'duplicate' and not unchanged))::integer as dup,
              (count(*) filter (where action = 'rejected'))::integer as rej,
-             (count(*) filter (where action = 'duplicate' and unch))::integer as unc
-        from (select action, errors @> '[{"code":"already_up_to_date"}]'::jsonb as unch
-                from public.import_rows where batch_id = p_batch_id) q
+             (count(*) filter (where action = 'duplicate' and unchanged))::integer as unc
+        from public.import_rows where batch_id = p_batch_id
     ) c
    where b.id = p_batch_id;
 
   select jsonb_build_object(
            'inserted', (count(*) filter (where action = 'inserted'))::integer,
            'updated', (count(*) filter (where action = 'updated'))::integer,
-           'duplicate', (count(*) filter (where action = 'duplicate' and not unch))::integer,
+           'duplicate', (count(*) filter (where action = 'duplicate' and not unchanged))::integer,
            'rejected', (count(*) filter (where action = 'rejected'))::integer,
-           'unchanged', (count(*) filter (where action = 'duplicate' and unch))::integer)
+           'unchanged', (count(*) filter (where action = 'duplicate' and unchanged))::integer)
     into v_result
-    from (select action, errors @> '[{"code":"already_up_to_date"}]'::jsonb as unch
-            from public.import_rows where batch_id = p_batch_id and row_number = any (v_numbers)) q;
+    from public.import_rows where batch_id = p_batch_id and row_number = any (v_numbers);
   return v_result;
 end;
 $$;

@@ -98,7 +98,7 @@ export function parseInepRow(raw: RawInepRow): ParsedRow {
   return {
     success: false,
     errors: r.error.issues.map((i) => {
-      const code = (i as { params?: { code?: unknown } }).params?.code;
+      const code: unknown = i.code === "custom" ? i.params?.code : undefined;
       return { code: typeof code === "string" ? code : "invalid_row", message: i.message };
     }),
   };
@@ -110,7 +110,15 @@ export const rowErrorSchema = z.object({ code: z.string(), message: z.string() }
 export const totalsSchema = z.object({ inserted: int, updated: int, duplicate: int, rejected: int, unchanged: int });
 const statusSchema = z.enum(["pending", "processing", "completed", "failed"]);
 export const claimResponseSchema = z
-  .array(z.object({ batch_id: z.string().uuid(), already_exists: z.boolean(), status: statusSchema }))
+  .array(
+    z.object({
+      batch_id: z.string().uuid(),
+      already_exists: z.boolean(),
+      status: statusSchema,
+      owner: z.boolean(),
+      is_demo: z.boolean(),
+    }),
+  )
   .length(1);
 export const batchRowSchema = z.object({
   id: z.string().uuid(),

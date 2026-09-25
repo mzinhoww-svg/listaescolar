@@ -35,4 +35,5 @@ export async function listBatches(limit = 50): Promise<BatchListItem[]> {
 
 export const countSchools = () => createSupabaseSchoolsRepository().countSchools();
 export const getBatch = (id: string) => createSupabaseSchoolsRepository().getBatch(id);
+export const countWarningRows = (id: string) => createSupabaseSchoolsRepository().countWarningRows(id);
 export const getErrorRows = (id: string) => createSupabaseSchoolsRepository().getErrorRows(id);

@@ -69,7 +69,7 @@ describe("schools e importações: schema", () => {
       "duplicate_count", "rejected_count", "unchanged_count", "status", "imported_by", "started_at", "finished_at", "is_demo",
       "created_at", "updated_at",
     ],
-    import_rows: ["id", "batch_id", "row_number", "raw", "normalized", "errors", "action", "created_at", "updated_at"],
+    import_rows: ["id", "batch_id", "row_number", "raw", "normalized", "errors", "action", "unchanged", "created_at", "updated_at"],
   };
   for (const [table, cols] of Object.entries(COLUMNS)) {
     it(`${table} tem RLS habilitada e as colunas esperadas`, async () => {

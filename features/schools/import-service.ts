@@ -5,6 +5,7 @@ import type { ApplyRow, BatchTotals, FileError, ImportResult, SchoolsImportRepos
 import { parseInepRow, type RawInepRow } from "./schemas";
 
 export const MAX_CHUNK_SIZE = 500;
+export const MAX_RAW_CELL = 1000;
 
 export type ImportInput = { fileName: string; buffer: Buffer; importedBy: string | null; isDemo: boolean };
 export type ImportDeps = { repo: SchoolsImportRepository; hash?: (b: Buffer) => string; chunkSize?: number };
@@ -17,9 +18,11 @@ const withTotal = (t: Totals): BatchTotals => ({
 });
 
 function toApplyRow(raw: RawInepRow, rowNumber: number, isDemo: boolean): ApplyRow {
-  // raw guardado só com as colunas conhecidas, já aparadas pelo parser.
+  // raw guardado só com as colunas conhecidas, já aparadas pelo parser e limitadas a MAX_RAW_CELL caracteres.
   const rawRecord: Record<string, string> = Object.fromEntries(
-    Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string"),
+    Object.entries(raw)
+      .filter((e): e is [string, string] => typeof e[1] === "string")
+      .map(([k, v]) => [k, v.slice(0, MAX_RAW_CELL)]),
   );
   const parsed = parseInepRow(raw);
   if (!parsed.success) {
@@ -52,9 +55,9 @@ function toApplyRow(raw: RawInepRow, rowNumber: number, isDemo: boolean): ApplyR
 }
 
 /**
- * Importa um CSV do INEP: hash -> claim do lote -> fatias de até 500 linhas -> apply -> finish.
- * Mesmo hash com lote concluído devolve o lote existente; lote `failed`/`pending` é retomado
- * (o banco pula as linhas já gravadas e devolve os totais reais).
+ * Importa um CSV do INEP: hash -> claim atômico -> fatias de até 500 linhas -> apply -> finish.
+ * Só o dono do claim processa (lote novo, `pending`/`failed` ou `processing` parado há mais de 10 min);
+ * os demais recebem o lote existente. `row_number` é a linha do arquivo em que o registro termina.
  */
 export async function importInepFile(input: ImportInput, deps: ImportDeps): Promise<ImportResult> {
   const { repo } = deps;
@@ -68,24 +71,37 @@ export async function importInepFile(input: ImportInput, deps: ImportDeps): Prom
     isDemo: input.isDemo,
   });
 
-  if (claim.alreadyExisted && claim.status !== "failed" && claim.status !== "pending") {
+  if (!claim.owner) {
     const info = await repo.getBatch(claim.batchId);
     if (!info) throw new Error("lote existente não encontrado");
+    const mismatch = claim.isDemo !== input.isDemo;
     return {
       batchId: claim.batchId,
       alreadyExisted: true,
+      resumed: false,
       status: info.status,
       totals: info.totals,
-      fileErrors: [],
+      fileErrors: mismatch
+        ? [
+            {
+              code: "demo_flag_mismatch",
+              message: claim.isDemo
+                ? "Este arquivo já foi importado como demonstração; a marcação enviada é de dados reais."
+                : "Este arquivo já foi importado como dados reais; a marcação enviada é de demonstração.",
+            },
+          ]
+        : [],
     };
   }
+  const resumed = claim.alreadyExisted;
 
   const parsed = parseInepCsv(input.buffer);
   if (parsed.errors.length > 0) {
-    await repo.finishBatch(claim.batchId, withTotal(ZERO), "failed");
+    await repo.finishBatch(claim.batchId, "failed");
     return {
       batchId: claim.batchId,
       alreadyExisted: claim.alreadyExisted,
+      resumed,
       status: "failed",
       totals: withTotal(ZERO),
       fileErrors: parsed.errors,
@@ -98,7 +114,7 @@ export async function importInepFile(input: ImportInput, deps: ImportDeps): Prom
   try {
     for (let start = 0; start < parsed.rows.length; start += chunkSize) {
       const slice = parsed.rows.slice(start, start + chunkSize);
-      const payload = slice.map((raw, i) => toApplyRow(raw, start + i + 1, input.isDemo));
+      const payload = slice.map((raw, i) => toApplyRow(raw, parsed.lines[start + i] ?? start + i + 2, input.isDemo));
       const t = await repo.applyRows(claim.batchId, payload);
       totals.inserted += t.inserted;
       totals.updated += t.updated;
@@ -114,17 +130,17 @@ export async function importInepFile(input: ImportInput, deps: ImportDeps): Prom
     });
   }
 
-  const finalTotals = withTotal(totals);
   try {
-    await repo.finishBatch(claim.batchId, finalTotals, status);
+    await repo.finishBatch(claim.batchId, status);
   } catch (e) {
     if (status === "completed") throw e; // sem fechar o lote não há como afirmar sucesso.
   }
   return {
     batchId: claim.batchId,
     alreadyExisted: claim.alreadyExisted,
+    resumed,
     status,
-    totals: finalTotals,
+    totals: withTotal(totals),
     fileErrors,
   };
 }

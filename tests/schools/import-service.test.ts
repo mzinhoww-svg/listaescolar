@@ -20,7 +20,7 @@ describe("importInepFile", () => {
     const r = await importInepFile(input(csv("51000001;Escola A;5103403;3", "51000002;Escola B;5103403;2")), { repo });
     expect(r).toMatchObject({ alreadyExisted: false, status: "completed", fileErrors: [] });
     expect(r.totals).toEqual({ total: 2, inserted: 2, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
-    expect(await repo.countSchools()).toBe(2);
+    expect(await repo.countSchools()).toEqual({ real: 2, demo: 0 });
   });
 
   it("calcula o hash SHA-256 do buffer bruto e o repassa ao claim", async () => {
@@ -62,7 +62,7 @@ describe("importInepFile", () => {
     expect(r.totals).toMatchObject({ total: 4, inserted: 0, rejected: 4 });
     const codes = (await repo.getErrorRows(r.batchId)).map((e) => e.errors[0]?.code);
     expect(codes).toEqual(["municipality_not_enabled", "invalid_inep", "invalid_network", "invalid_name"]);
-    expect(await repo.countSchools()).toBe(0);
+    expect(await repo.countSchools()).toEqual({ real: 0, demo: 0 });
   });
 
   it("arquivo sem coluna obrigatória: failed, sem tocar em escolas nem aplicar linhas", async () => {
@@ -90,7 +90,7 @@ describe("importInepFile", () => {
     const r = await importInepFile(input(csv("51000001;Escola A Renomeada;5103403;3")), { repo });
     expect(r.alreadyExisted).toBe(false);
     expect(r.totals.updated).toBe(1);
-    expect(await repo.countSchools()).toBe(1);
+    expect(await repo.countSchools()).toEqual({ real: 1, demo: 0 });
   });
 
   it("chunkSize pequeno percorre todos os lotes", async () => {
@@ -114,7 +114,7 @@ describe("importInepFile", () => {
     const again = await importInepFile(input(buffer), { repo, chunkSize: 3 });
     expect(again).toMatchObject({ batchId: failed.batchId, alreadyExisted: true, status: "completed" });
     expect(again.totals).toEqual({ total: 7, inserted: 7, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
-    expect(await repo.countSchools()).toBe(7);
+    expect(await repo.countSchools()).toEqual({ real: 7, demo: 0 });
     expect(repo.batches.size).toBe(1);
   });
 
@@ -159,11 +159,54 @@ describe("importInepFile", () => {
     expect(r.status).toBe("completed");
   });
 
-  it("latin1 e fixture demo: totais esperados", async () => {
+  it("Windows-1252 e fixture demo: totais esperados", async () => {
     const utf8 = readFileSync("tests/fixtures/inep-demo.csv");
-    const latin = iconv.encode(utf8.toString("utf8"), "latin1");
+    const latin = iconv.encode(utf8.toString("utf8"), "win1252");
     const r = await importInepFile(input(latin, true), { repo });
     expect(r.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
-    expect(repo.schools.get("51990001")?.name).toBe("Escola Demonstração 1");
+    expect(repo.schools.get("99001001")?.name).toBe("Escola Demonstração 1");
+  });
+
+  it("lote processing parado (stale) é retomado e marcado resumed; um fresco não", async () => {
+    const buffer = csv("51000001;Escola A;5103403;3");
+    const hash = createHash("sha256").update(buffer).digest("hex");
+    const claim = await repo.claimBatch({ fileHash: hash, fileName: "t.csv", importedBy: null, isDemo: false });
+    const b = repo.batches.get(claim.batchId);
+    if (!b) throw new Error("lote");
+    expect((await importInepFile(input(buffer), { repo })).resumed).toBe(false);
+    b.stale = true;
+    const r = await importInepFile(input(buffer), { repo });
+    expect(r).toMatchObject({ alreadyExisted: true, resumed: true, status: "completed" });
+    expect(r.totals.inserted).toBe(1);
+  });
+
+  it("dois uploads simultâneos do mesmo arquivo: só um processa", async () => {
+    const buffer = csv("51000001;Escola A;5103403;3");
+    const [a, b] = await Promise.all([importInepFile(input(buffer), { repo }), importInepFile(input(buffer), { repo })]);
+    expect(a.batchId).toBe(b.batchId);
+    expect(repo.applyCalls).toBe(1);
+    expect([a.resumed, b.resumed]).toEqual([false, false]);
+  });
+
+  it("mesmo hash com marcação demo diferente: devolve o lote e demo_flag_mismatch", async () => {
+    const buffer = csv("51000001;Escola A;5103403;3");
+    await importInepFile(input(buffer, true), { repo });
+    const r = await importInepFile(input(buffer, false), { repo });
+    expect(r.alreadyExisted).toBe(true);
+    expect(r.fileErrors.map((e) => e.code)).toEqual(["demo_flag_mismatch"]);
+    expect(repo.applyCalls).toBe(1);
+  });
+
+  it("row_number é a linha do arquivo (cabeçalho = 1, registros multilinha e linhas em branco contam)", async () => {
+    const buffer = Buffer.from(`${HEADER}\n51000001;A;5103403;3\n\n12;"B\nB";5103403;3\n51000003;C;5103403;8\n`);
+    const r = await importInepFile(input(buffer), { repo });
+    expect((await repo.getErrorRows(r.batchId)).map((e) => e.rowNumber)).toEqual([5, 6]);
+  });
+
+  it("raw guardado é truncado por célula", async () => {
+    const long = "x".repeat(5000);
+    const r = await importInepFile(input(csv(`12;${long};5103403;3`)), { repo });
+    const [row] = await repo.getErrorRows(r.batchId);
+    expect(String(row?.raw?.NO_ENTIDADE).length).toBe(1000);
   });
 });

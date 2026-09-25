@@ -5,8 +5,6 @@ import {
   attempt,
   cleanupUsers,
   IDS,
-  purgeLeads,
-  purgeStationeries,
   seedLead,
   seedStationery,
   seedUsers,
@@ -29,7 +27,7 @@ async function ids(c: Client, table: string): Promise<string[]> {
   return (await c.query(`select id from public.${table}`)).rows.map((r) => r.id as string);
 }
 const SAFE_LEAD_COLS =
-  "id, code, cart_id, list_id, stationery_id, status, school_name, grade_label, school_year, municipality_id, neighborhood, item_count, expires_at, quoted_total_cents, quoted_at, declared_sale_cents, declared_at, close_reason, is_demo, created_at, updated_at";
+  "id, code, list_id, stationery_id, status, school_name, grade_label, school_year, municipality_id, neighborhood, item_count, expires_at, quoted_total_cents, quoted_at, declared_sale_cents, declared_at, close_reason, is_demo, created_at, updated_at";
 
 describe("S14 leads · colunas e checks", () => {
   beforeAll(seedUsers);
@@ -218,29 +216,43 @@ describe("S14 leads · RLS e grants por coluna", () => {
   it("grants por coluna: nada que identifique o responsável (requester_id, consent_*, idempotency_key, actor_id)", async () => {
     await withClaims("stationery_member", async (c) => {
       const fx = await fixture(c);
-      for (const col of ["requester_id", "consent_id", "consent_text_version", "consented_at", "idempotency_key"]) {
+      for (const col of ["requester_id", "cart_id", "consent_id", "consent_text_version", "consented_at", "idempotency_key"]) {
         const r = await attempt(c, `select ${col} from public.leads where id = $1`, [fx.leadA.id]);
         expect(r.code, col).toBe("42501");
       }
       expect((await attempt(c, "select * from public.leads")).code).toBe("42501");
       expect((await attempt(c, "select actor_id from public.lead_events")).code).toBe("42501");
+      expect((await attempt(c, "select reason from public.lead_events")).code).toBe("42501"); // motivo do admin não chega à papelaria
       expect((await attempt(c, "select * from public.lead_events")).code).toBe("42501");
       const ok = await attempt(c, `select ${SAFE_LEAD_COLS} from public.leads where id = $1`, [fx.leadA.id]);
       expect(ok.error).toBeNull();
       expect(ok.rows[0]).not.toHaveProperty("requester_id");
-      expect((await attempt(c, "select id, lead_id, event_type, from_status, to_status, actor_role, amount_cents, reason, item_count, created_at from public.lead_events")).error).toBeNull();
-      expect((await attempt(c, "select * from public.lead_items")).error).toBeNull();
+      expect((await attempt(c, "select id, lead_id, event_type, from_status, to_status, actor_role, amount_cents, item_count, created_at from public.lead_events")).error).toBeNull();
+      expect((await attempt(c, "select id, lead_id, position, name, item_key, quantity from public.lead_items")).error).toBeNull();
     });
     await withClaims("parent", async (c) => {
       const fx = await fixture(c);
-      for (const col of ["requester_id", "consent_id", "idempotency_key"]) {
+      for (const col of ["requester_id", "cart_id", "consent_id", "idempotency_key"]) {
         expect((await attempt(c, `select ${col} from public.leads where id = $1`, [fx.leadA.id])).code, col).toBe("42501");
       }
       expect((await attempt(c, "select actor_id from public.lead_events")).code).toBe("42501");
     });
   });
 
-  it("ninguém escreve direto: authenticated e service_role sem INSERT/UPDATE/DELETE/TRUNCATE", async () => {
+  it("sem privilégio de escrita nas tabelas para authenticated e service_role (grant, não só trigger)", async () => {
+    await withSuperuser(async (c) => {
+      for (const role of ["anon", "authenticated", "service_role"]) {
+        for (const t of ["leads", "lead_items", "lead_events"]) {
+          for (const priv of ["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]) {
+            const r = await c.query("select has_table_privilege($1, $2::regclass, $3) as ok", [role, `public.${t}`, priv]);
+            expect(r.rows[0].ok, `${role} ${priv} ${t}`).toBe(false);
+          }
+        }
+      }
+    });
+  });
+
+  it("ninguém escreve direto: comandos com erro 42501 (em lead_items/lead_events service_role também cai no trigger de imutabilidade)", async () => {
     for (const who of ["parent", "stationery_member", "admin", "system"] as Identity[]) {
       await withClaims(who, async (c) => {
         const fx = await fixture(c);
@@ -312,24 +324,6 @@ describe("S14 leads · imutabilidade, vínculo e auditoria", () => {
   });
 
   it("excluir o perfil do solicitante anula requester_id e preserva lead, itens e eventos", async () => {
-    const stationeryIds: string[] = [];
-    const leadIds: string[] = [];
-    try {
-      const lead = await withSuperuser(async (c) => {
-        await c.query("begin");
-        const st = await seedStationery(c, { status: "active" });
-        stationeryIds.push(st);
-        const l = await seedLead(c, { stationeryId: st, requesterId: IDS.spare });
-        leadIds.push(l.id);
-        await c.query("commit");
-        return l.id;
-      }).catch(async (e: unknown) => {
-        throw e;
-      });
-      void lead;
-    } catch {
-      // IDS.spare não tem profile: cria e usa dentro da própria transação abaixo
-    }
     await withSuperuser(async (c) => {
       await c.query("begin");
       let leadId = "";
@@ -347,8 +341,6 @@ describe("S14 leads · imutabilidade, vínculo e auditoria", () => {
         await c.query("rollback");
       }
     });
-    await purgeLeads({ leadIds });
-    await purgeStationeries(stationeryIds);
   });
 
   it("carrinho apagado zera cart_id sem apagar o lead", async () => {
@@ -396,8 +388,7 @@ describe("S14 leads · imutabilidade, vínculo e auditoria", () => {
       await c.query("begin");
       try {
         const st = await seedStationery(c, { status: "active" });
-        const { id } = await seedLead(c, { stationeryId: st });
-        await c.query("update public.leads set updated_at = now() - interval '1 day' where id = $1", [id]);
+        const { id } = await seedLead(c, { stationeryId: st, overrides: { updated_at: new Date(Date.now() - 86_400_000).toISOString() } });
         await c.query("update public.leads set item_count = 2 where id = $1", [id]);
         const r = await c.query("select updated_at > now() - interval '1 minute' as fresh from public.leads where id = $1", [id]);
         expect(r.rows[0].fresh).toBe(true);

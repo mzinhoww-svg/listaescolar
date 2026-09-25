@@ -113,6 +113,7 @@ describe("S14 lead_create", () => {
         const cart = await seedCart(c, IDS.parent);
         const r = await create(c, { stationery: st, cart });
         expect(r.code).toBe("42501");
+        expect(r.error).toMatch(/permission denied for function lead_create/);
       });
     },
   );
@@ -213,7 +214,7 @@ describe("S14 lead_create", () => {
     await withClaims("system", async (c) => {
       const { stationery, cart } = await fixture(c);
       expect((await create(c, { stationery, cart, neighborhood: "centro" })).error).toBeNull(); // bairro da papelaria
-      expect((await create(c, { stationery, cart, neighborhood: null })).error).toBeNull(); // sem bairro: qualquer do município
+      expect((await create(c, { stationery, cart, neighborhood: null })).error).toBeNull(); // sem bairro pedido: basta atender o município
       const out = await create(c, { stationery, cart, neighborhood: "bairro distante" });
       expect(out.hint).toBe("out_of_area");
       await c.query("reset role");
@@ -223,6 +224,108 @@ describe("S14 lead_create", () => {
       );
       await c.query("set local role service_role");
       expect((await create(c, { stationery, cart, neighborhood: "bairro distante" })).error).toBeNull(); // área cadastrada
+    });
+  });
+
+  it("bairro com acento e espaços: mesma normalização da S13 (São José, Boa Esperança)", async () => {
+    await withClaims("system", async (c) => {
+      const stationery = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { neighborhood: "  São   José " } });
+      const cart = await seedCart(c, IDS.parent);
+      for (const nb of ["são josé", "SAO JOSE", "Sao  Jose", " são josé "]) {
+        const r = await create(c, { stationery, cart, neighborhood: nb, list: randomUUID() });
+        expect(r.error, nb).toBeNull();
+        expect((await c.query("select neighborhood from public.leads where id = $1", [(r.rows[0] as { lead_id: string }).lead_id])).rows[0].neighborhood).toBe("sao jose");
+      }
+      expect((await create(c, { stationery, cart, neighborhood: "Sao Joao" })).hint).toBe("out_of_area");
+      await c.query("reset role");
+      await c.query(
+        "insert into public.stationery_areas (stationery_id, municipality_id, neighborhood, display_name) select $1, municipality_id, 'boa esperanca', 'Boa Esperança' from public.stationeries where id = $1",
+        [stationery],
+      );
+      await c.query("set local role service_role");
+      expect((await create(c, { stationery, cart, neighborhood: "Boa Esperança", list: randomUUID() })).error).toBeNull();
+      expect((await create(c, { stationery, cart, neighborhood: "BOA  esperanca", list: randomUUID() })).error).toBeNull();
+    });
+  });
+
+  it("papelaria sem bairro e sem área não atende bairro pedido (mesma regra do TS), só o município", async () => {
+    await withClaims("system", async (c) => {
+      const stationery = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, complete: false });
+      const cart = await seedCart(c, IDS.parent);
+      expect((await create(c, { stationery, cart, neighborhood: "centro" })).hint).toBe("out_of_area");
+      expect((await create(c, { stationery, cart, neighborhood: null })).error).toBeNull();
+    });
+  });
+
+  it("município desabilitado é out_of_area", async () => {
+    await withClaims("system", async (c) => {
+      const { stationery, cart } = await fixture(c);
+      await c.query("reset role");
+      await c.query("update public.municipalities set is_enabled = false where id = (select municipality_id from public.stationeries where id = $1)", [stationery]);
+      await c.query("set local role service_role");
+      expect((await create(c, { stationery, cart })).hint).toBe("out_of_area");
+    });
+  });
+
+  it("is_demo do lead acompanha papelaria e carrinho (divergência é invalid_input)", async () => {
+    await withClaims("system", async (c) => {
+      const realSt = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const demoSt = await seedStationery(c, { status: "active", overrides: { is_demo: true } });
+      const demoCart = await seedCart(c, IDS.parent, true);
+      const realCart = await seedCart(c, IDS.parent, false);
+      const m = await muni(c);
+      const call = (st: string, cart: string, demo: boolean) => {
+        const a = args(m, { stationery: st, cart });
+        a[12] = demo;
+        return attemptH(c, CREATE, a);
+      };
+      expect((await call(realSt, realCart, true)).hint).toBe("invalid_input"); // nada é demo
+      expect((await call(realSt, demoCart, false)).hint).toBe("invalid_input"); // carrinho demo
+      expect((await call(demoSt, realCart, false)).hint).toBe("invalid_input"); // papelaria demo
+      const ok = await call(demoSt, realCart, true);
+      expect(ok.error).toBeNull();
+      const okReal = await call(realSt, realCart, false);
+      expect(okReal.error).toBeNull();
+      const rows = (await c.query("select id, is_demo from public.leads where id = any($1::uuid[])", [[ok.rows[0]?.lead_id, okReal.rows[0]?.lead_id]])).rows;
+      expect(rows.find((r) => r.id === ok.rows[0]?.lead_id)?.is_demo).toBe(true);
+      expect(rows.find((r) => r.id === okReal.rows[0]?.lead_id)?.is_demo).toBe(false);
+    });
+  });
+
+  it("snapshot inválido (ano, escola, série) sai como invalid_input estável", async () => {
+    await withClaims("system", async (c) => {
+      const { stationery, cart } = await fixture(c);
+      const m = await muni(c);
+      const cases: [number, unknown][] = [[6, null], [6, 1999], [6, 2101], [4, "   "], [4, ""], [4, null], [5, "  "], [5, "x".repeat(61)]];
+      for (const [idx, v] of cases) {
+        const a = args(m, { stationery, cart });
+        a[idx] = idx === 4 && typeof v === "string" && v.length === 0 ? "" : v;
+        const r = await attemptH(c, CREATE, a);
+        expect(r.hint, `${idx}:${String(v)}`).toBe("invalid_input");
+        expect(r.code, `${idx}:${String(v)}`).toBe("22023");
+      }
+      const longName = args(m, { stationery, cart });
+      longName[4] = "e".repeat(201);
+      expect((await attemptH(c, CREATE, longName)).hint).toBe("invalid_input");
+    });
+  });
+
+  it("limites padrão (p_max_per_day = 10, p_max_open_per_list = 5) valem quando omitidos", async () => {
+    await withClaims("system", async (c) => {
+      const cart = await seedCart(c, IDS.parent);
+      const SHORT = `select * from public.lead_create($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::text, $7::int, $8::uuid,
+        $9::text, $10::jsonb, $11::text, $12::uuid, $13::boolean)`;
+      const m = await muni(c);
+      const short = (st: string, list: string) => attemptH(c, SHORT, args(m, { stationery: st, cart, list }).slice(0, 13));
+      const list = randomUUID();
+      for (let i = 0; i < 5; i++) {
+        const st = await seedStationery(c, { status: "active" });
+        expect((await short(st, list)).error, `aberto ${i}`).toBeNull();
+      }
+      const st6 = await seedStationery(c, { status: "active" });
+      expect((await short(st6, list)).hint).toBe("rate_limited"); // 6º aberto na mesma lista
+      for (let i = 0; i < 5; i++) expect((await short(st6, randomUUID())).error, `dia ${i}`).toBeNull(); // 5 + 5 = 10 em 24 h
+      expect((await short(st6, randomUUID())).hint).toBe("rate_limited"); // 11º em 24 h
     });
   });
 
@@ -421,6 +524,36 @@ describe("S14 lead_create · concorrência (dados confirmados)", () => {
     await withSuperuser(async (c) => {
       expect(Number((await c.query("select count(*) from public.leads where requester_id = $1", [IDS.parent])).rows[0].count)).toBe(1);
       expect(Number((await c.query("select count(*) from public.consents where profile_id = $1 and purpose = 'lead_whatsapp_quote'", [IDS.parent])).rows[0].count)).toBe(1);
+      expect(Number((await c.query("select count(*) from public.lead_events where lead_id = $1", [a.lead_id])).rows[0].count)).toBe(1);
+    });
+  });
+  it("duas criações em paralelo com chaves diferentes para a mesma papelaria e lista: só uma vence", async () => {
+    const setup = await withSuperuser(async (c) => {
+      await c.query("begin");
+      const stationery = await seedStationery(c, { status: "active" });
+      const cart = await seedCart(c, IDS.parent);
+      await c.query("commit");
+      return { stationery, cart };
+    });
+    stationeryIds.push(setup.stationery);
+    cartIds.push(setup.cart);
+    const list = randomUUID();
+    const run = () =>
+      asServiceCommitted(async (c) => {
+        const m = await muni(c);
+        const r = await c.query(CREATE, args(m, { stationery: setup.stationery, cart: setup.cart, list, key: randomUUID() }));
+        return r.rows[0] as { lead_id: string; code: string; created: boolean };
+      });
+    const results = await Promise.allSettled([run(), run()]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    const [a, b] = results.map((r) => (r as PromiseFulfilledResult<{ lead_id: string; created: boolean }>).value) as [
+      { lead_id: string; created: boolean },
+      { lead_id: string; created: boolean },
+    ];
+    expect(a.lead_id).toBe(b.lead_id);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    await withSuperuser(async (c) => {
+      expect(Number((await c.query("select count(*) from public.leads where stationery_id = $1 and list_id = $2", [setup.stationery, list])).rows[0].count)).toBe(1);
       expect(Number((await c.query("select count(*) from public.lead_events where lead_id = $1", [a.lead_id])).rows[0].count)).toBe(1);
     });
   });

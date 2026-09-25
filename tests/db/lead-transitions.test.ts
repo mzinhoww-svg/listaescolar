@@ -107,7 +107,13 @@ describe("S14 lead_transition · matriz por ator", () => {
           const label = `${actor}: ${from} -> ${to}`;
           const res = await attemptH(c, CALL, [id, to, ACTOR_ID[actor], actor, null, reasonFor(actor, to)]);
           const allowed = ALLOWED[actor].has(`${from}>${to}`);
-          if (allowed) {
+          if (from === "expired") {
+            // contrato único: lead já expirado devolve `expired` sem erro, sem mudar nada e sem novo evento
+            expect(res.error, label).toBeNull();
+            expect(res.rows[0]?.s, label).toBe("expired");
+            expect((await leadRow(c, id)).status, label).toBe("expired");
+            expect((await eventTypes(c, id)).length, label).toBe(before.length);
+          } else if (allowed) {
             expect(res.error, label).toBeNull();
             expect(res.rows[0]?.s, label).toBe(to);
             expect((await leadRow(c, id)).status, label).toBe(to);
@@ -123,6 +129,21 @@ describe("S14 lead_transition · matriz por ator", () => {
       }
     });
     expect(allowedSeen).toBe(ALLOWED[actor].size);
+  });
+
+  it("lead já expirado devolve expired sem erro e sem novo evento, para qualquer ator válido", async () => {
+    await withClaims("system", async (c) => {
+      const st = await setup(c);
+      const { id } = await seedLead(c, { stationeryId: st, status: "expired" });
+      for (const [actor, to] of [["stationery", "in_progress"], ["parent", "cancelled"], ["admin", "cancelled"], ["system", "expired"]] as [Actor, LeadStatus][]) {
+        const r = await attemptH(c, CALL, [id, to, ACTOR_ID[actor], actor, null, reasonFor(actor, to)]);
+        expect(r.error, actor).toBeNull();
+        expect(r.rows[0]?.s, actor).toBe("expired");
+      }
+      // ator que não é quem diz ser continua recusado
+      expect((await attemptH(c, CALL, [id, "in_progress", IDS.school_member, "stationery", null, null])).hint).toBe("forbidden");
+      expect(await eventTypes(c, id)).toEqual(["created"]);
+    });
   });
 
   it("system não expira lead dentro do prazo", async () => {
@@ -336,6 +357,34 @@ describe("S14 lead_mark_viewed, whatsapp_opened e lead_expire_due", () => {
     });
   });
 
+  it("sub do JWT diferente do ator é recusado em mark_viewed e whatsapp_opened (e igual passa)", async () => {
+    await withClaims("system", async (c) => {
+      const st = await setup(c);
+      const { id } = await seedLead(c, { stationeryId: st });
+      const claims = (sub: string) => c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role", sub })]);
+      await claims(IDS.admin);
+      expect((await attemptH(c, VIEW, [id, IDS.stationery_member])).code).toBe("42501");
+      expect((await attemptH(c, WA, [id, IDS.parent])).code).toBe("42501");
+      expect(await eventTypes(c, id)).toEqual(["created"]);
+      await claims(IDS.stationery_member);
+      expect((await attemptH(c, VIEW, [id, IDS.stationery_member])).rows[0]?.s).toBe("viewed");
+      await claims(IDS.parent);
+      expect((await attemptH(c, WA, [id, IDS.parent])).rows[0]?.ok).toBe(true);
+    });
+  });
+
+  it("papelaria suspensa ainda lê o histórico (leads, itens e eventos) mas não opera", async () => {
+    await withClaims("stationery_member", async (c) => {
+      const st = await seedStationery(c, { status: "suspended", ownerId: IDS.stationery_member });
+      const { id } = await seedLead(c, { stationeryId: st, status: "quote_sent" });
+      expect((await c.query("select 1 from public.leads where id = $1", [id])).rowCount).toBe(1);
+      expect((await c.query("select 1 from public.lead_items where lead_id = $1", [id])).rowCount).toBe(1);
+      expect((await c.query("select 1 from public.lead_events where lead_id = $1", [id])).rowCount).toBe(1);
+      await c.query("set local role service_role");
+      expect((await attemptH(c, CALL, [id, "converted", IDS.stationery_member, "stationery", null, null])).hint).toBe("stationery_unavailable");
+    });
+  });
+
   it("mark_viewed em lead vencido expira (preguiçoso) e devolve expired", async () => {
     await withClaims("system", async (c) => {
       const st = await setup(c);
@@ -459,10 +508,13 @@ describe("S14 lead_transition · concorrência (dados confirmados)", () => {
 
   it("transição da papelaria x lead_expire_due em lead vencido: um único evento expired", async () => {
     const id = await committedLead({ expiresIn: "-1 hour" });
-    await Promise.all([
+    const results = await Promise.allSettled([
       svc(CALL, [id, "in_progress", IDS.stationery_member, "stationery", null, null]),
       svc("select public.lead_expire_due(1000) as n", []),
     ]);
+    // em qualquer ordem: nenhuma das duas falha, a transição devolve `expired`
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect((results[0] as PromiseFulfilledResult<{ s: string }>).value.s).toBe("expired");
     await withSuperuser(async (c) => {
       expect((await leadRow(c, id)).status).toBe("expired");
       expect(await eventTypes(c, id)).toEqual(["created", "expired"]);

@@ -26,6 +26,11 @@ describe("phaseOf", () => {
   ] as const)("%s/%s (pipeline %s) -> %s", (status, job, avail, expected) => {
     expect(phaseOf(p(status, job, avail))).toBe(expected);
   });
+  it("rejected com resultado é 'ready' (cópia utilizável); sem resultado, 'failed'", () => {
+    expect(phaseOf({ ...p("rejected"), result: { items: [] } })).toBe("ready");
+    expect(phaseOf(p("rejected"))).toBe("failed");
+    expect(phaseOf({ ...p("archived"), result: { items: [] } })).toBe("failed");
+  });
   it("só `reading` continua consultando", () => {
     expect(isFinalPhase("reading")).toBe(false);
     for (const f of ["ready", "failed", "unavailable"] as const) expect(isFinalPhase(f)).toBe(true);

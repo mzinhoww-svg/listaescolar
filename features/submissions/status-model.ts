@@ -13,6 +13,10 @@ export const statusPayloadSchema = z.object({
   /** Publicação feita pela porta em memória (só local): a tela mostra o selo "Demonstração". */
   publicationDemo: z.boolean().optional(),
   result: extractionResultSchema.optional(),
+  /** Origem do envio; a revisão da própria lista (S10) só existe para `parent`. */
+  source: z.enum(["parent", "school"]).optional(),
+  /** D-071: quem publicou, vindo da linha da decisão (não do status). Ausente = não se sabe: texto neutro. */
+  publishedBy: z.enum(["auto", "human"]).optional(),
 });
 export type StatusPayload = z.infer<typeof statusPayloadSchema>;
 
@@ -22,8 +26,9 @@ const READY = new Set(["review_needed", "human_review", "approved", "published"]
 const FAILED = new Set(["rejected", "archived"]);
 
 /** Fase de tela. Só `reading` continua consultando: as demais são estados finais. */
-export function phaseOf(p: Pick<StatusPayload, "status" | "jobStatus" | "pipelineAvailable">): Phase {
+export function phaseOf(p: Pick<StatusPayload, "status" | "jobStatus" | "pipelineAvailable"> & { result?: unknown }): Phase {
   if (READY.has(p.status)) return "ready";
+  if (p.status === "rejected" && p.result !== undefined) return "ready"; // recusada pela equipe, mas a leitura existe: a cópia continua utilizável
   if (FAILED.has(p.status) || p.jobStatus === "dead") return "failed";
   if (!p.pipelineAvailable) return "unavailable"; // ninguém vai processar: não adianta esperar
   return "reading";

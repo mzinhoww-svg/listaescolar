@@ -94,12 +94,41 @@ describe("StatusPanel", () => {
 
   it.each([
     ["human_review", "Em revisão pela equipe"],
-    ["approved", "Aprovada, aguardando publicação"],
-    ["published", "Publicada automaticamente"],
+    ["approved", "Aprovada pela equipe; publicação em andamento"],
+    ["published", "Lista publicada"],
   ])("estado %s mostra o texto fixo, sem prazo", (status, title) => {
     render(<StatusPanel submissionId={ID} initial={{ ...base, status, jobStatus: "succeeded", result }} />);
     expect(screen.getByText(title)).toBeInTheDocument();
     expect(screen.getByTestId("publication-state").textContent).not.toMatch(/\d/);
+  });
+
+  it("D-071: 'Publicada automaticamente' só com publishedBy=auto; humana e desconhecida usam o texto neutro", () => {
+    const { unmount } = render(<StatusPanel submissionId={ID} initial={{ ...base, status: "published", result, publishedBy: "auto" }} />);
+    expect(screen.getByText("Publicada automaticamente")).toBeInTheDocument();
+    unmount();
+    const h = render(<StatusPanel submissionId={ID} initial={{ ...base, status: "published", result, publishedBy: "human" }} />);
+    expect(screen.getByText("Lista publicada")).toBeInTheDocument();
+    expect(screen.queryByText("Publicada automaticamente")).toBeNull();
+    h.unmount();
+    render(<StatusPanel submissionId={ID} initial={{ ...base, status: "published", result }} />);
+    expect(screen.queryByText("Publicada automaticamente")).toBeNull();
+  });
+
+  it("recusada COM resultado: aviso, cópia utilizável (pai) e link para revisar; sem resultado continua falha", () => {
+    const { unmount } = render(<StatusPanel submissionId={ID} initial={{ ...base, status: "rejected", jobStatus: "succeeded", result, source: "parent" }} />);
+    expect(screen.getByText(/A equipe não publicou esta lista como oficial\. Você ainda pode usar sua cópia para montar o carrinho\./)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Revisar meus itens" })).toHaveAttribute("href", `/enviar-lista/${ID}/revisar`);
+    expect(screen.getByTestId("publication-state").textContent).not.toMatch(/illegible|duplicate|not_a_school|\d/);
+    unmount();
+    render(<StatusPanel submissionId={ID} initial={{ ...base, status: "rejected", jobStatus: "succeeded" }} />);
+    expect(screen.queryByRole("link", { name: "Revisar meus itens" })).toBeNull();
+    expect(screen.queryByTestId("publication-state")).toBeNull();
+  });
+
+  it("envio de escola não oferece 'Revisar meus itens' nem fala em cópia", () => {
+    render(<StatusPanel submissionId={ID} initial={{ ...base, status: "rejected", result, source: "school" }} />);
+    expect(screen.queryByRole("link", { name: "Revisar meus itens" })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/sua cópia/);
   });
 
   it("publicada pela porta em memória: selo Demonstração; sem isso, sem selo", () => {

@@ -2,6 +2,8 @@
  * "Kick" best effort depois de um fato que gera notificação: pede o despacho sem esperar. O Bearer só vai para a origem configurada
  * e válida (https, ou http de loopback), sem credencial nem caminho, e nunca segue redirect. Nunca lança.
  */
+import "server-only";
+
 export function validKickOrigin(raw: string | undefined): string | null {
   let u: URL;
   try {

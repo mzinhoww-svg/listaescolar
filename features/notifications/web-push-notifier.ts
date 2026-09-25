@@ -1,9 +1,10 @@
 // ÚNICO lugar que importa `web-push`. Push leva só título genérico e caminho do link (pushPayload), cifrado pelo protocolo.
+import "server-only";
 import webpush from "web-push";
 
 import { pushPayload } from "./copy";
 import { isAllowedPushEndpoint } from "./push-endpoint";
-import type { DeliveryOutcome, DeliveryPayload, Notifier, PushSubscriptionRow } from "./ports";
+import type { DeliveryOutcome, DeliveryPayload, Notifier } from "./ports";
 
 export type VapidConfig = { publicKey: string; privateKey: string; subject: string };
 export type PushSendOptions = { TTL: number; timeout: number; urgency: "very-low" | "low" | "normal" | "high"; vapidDetails: VapidConfig };
@@ -42,7 +43,7 @@ export class WebPushNotifier implements Notifier {
     let sent = false;
     let transient = false;
     let failCode: string | null = null;
-    for (const s of d.subscriptions as PushSubscriptionRow[]) {
+    for (const s of d.subscriptions) {
       if (!isAllowedPushEndpoint(s.endpoint, this.appEnv)) {
         revoke.push(s.id); // nunca chama host fora dos serviços de push (SSRF)
         continue;

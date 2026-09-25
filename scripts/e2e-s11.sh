@@ -215,7 +215,7 @@ eq "$(sql_as "$PARENT" "select count(*)||'|'||count(*) filter (where recipient_i
 eq "$(sql_as "$STAT_OWNER" "select count(*)||'|'||count(*) filter (where recipient_id<>'$STAT_OWNER') from public.notifications")" "1|0" "8c: RLS: a papelaria lê só a sua (o lead_received)"
 eq "$(sql_as "$ESCOLA" "select count(*) from public.list_watches")" "0" "8d: RLS: a escola não enxerga os acompanhamentos do responsável"
 eq "$(sql "select count(*) from public.notification_deliveries where channel in ('email','web_push')")" "0" "8e: nenhuma entrega externa criada (e-mail desligado no banco, sem assinatura push)"
-eq "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/notifications/dispatch")" "401" "8f: despachante sem segredo: 401"
+eq "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/notifications/dispatch")" "401" "8f: despachante sem Authorization (segredo configurado): 401"
 eq "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $(openssl rand -hex 16)" "$BASE/api/notifications/dispatch")" "401" "8g: despachante com segredo errado: 401"
 DISP=$(curl -s -X POST -H "Authorization: Bearer $(cat "$DISPATCH_SECRET_FILE")" "$BASE/api/notifications/dispatch")
 grep -q '"expiredTokens"' <<<"$DISP" && grep -q '"dispatch"' <<<"$DISP" && grep -q '"purged"' <<<"$DISP" && ok "8h: despachante com o segredo: ciclo roda (expira tokens, despacha, expurga) sem nada a enviar ($DISP)" || bad "8h" "$DISP"

@@ -1,4 +1,6 @@
 // Transporte de e-mail atrás de flag: `NullEmailTransport` (padrão) nunca toca a rede; `ResendEmailTransport` usa `fetch` (sem SDK).
+import "server-only";
+
 export type EmailMessage = { to: string; subject: string; text: string };
 
 export class EmailSendError extends Error {

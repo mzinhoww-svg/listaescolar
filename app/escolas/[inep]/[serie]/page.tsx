@@ -5,9 +5,12 @@ import { ItemsTable } from "@/components/lists/ItemsTable";
 import { ListHeader } from "@/components/lists/ListHeader";
 import { UnpublishedState } from "@/components/lists/UnpublishedState";
 import { VersionHistory } from "@/components/lists/VersionHistory";
+import { ShareListCard } from "@/components/share/ShareListCard";
 import { defaultAcademicYear, findGrade, parseGradeSelection } from "@/features/grades/catalog";
 import { getPublishedList, listVersionHistory } from "@/features/lists/queries";
 import { loadSchool } from "@/features/schools/search/load-school";
+import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
+import { siteBase } from "@/lib/site-base";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +35,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (!school || !grade || year === null) {
     return { title: "Lista não encontrada · ListaCerta", robots: { index: false, follow: false } };
   }
+  const title = `Lista de material ${grade.label} ${year} · ${school.name}${school.isDemo ? " (Demonstração)" : ""} · ListaCerta`;
   return {
-    title: `Lista de material ${grade.label} ${year} · ${school.name}${school.isDemo ? " (Demonstração)" : ""} · ListaCerta`,
+    title,
+    openGraph: { type: "website", siteName: SITE_NAME, locale: SITE_LOCALE, title },
     // Sempre noindex nesta fatia (listas ainda demo); liberar para escola claimed|verified é dívida registrada no ledger.
     robots: { index: false, follow: true },
   };
@@ -51,6 +56,7 @@ export default async function ListPage({ params, searchParams }: Props) {
   const list = await getPublishedList(inep, grade.slug, year);
   const history = list ? await listVersionHistory(inep, grade.slug, year, { listId: list.id }) : [];
   const version = list?.version;
+  const shareOrigin = version ? siteBase() : null;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -75,6 +81,7 @@ export default async function ListPage({ params, searchParams }: Props) {
           <>
             <ItemsTable items={version.items} />
             <VersionHistory versions={history} />
+            {shareOrigin ? <ShareListCard inep={school.inep} gradeSlug={grade.slug} origin={shareOrigin} /> : null}
           </>
         ) : (
           <UnpublishedState inep={school.inep} gradeLabel={grade.label} year={year} />

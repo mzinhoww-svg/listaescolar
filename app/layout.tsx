@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
 import { siteBase } from "@/lib/site-base";
 import "./globals.css";
 
@@ -17,6 +18,8 @@ export const metadata: Metadata = {
   title: "ListaCerta",
   description:
     "Plataforma neutra de listas oficiais de material escolar: organiza, compara e redireciona.",
+  openGraph: { type: "website", siteName: SITE_NAME, locale: SITE_LOCALE },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

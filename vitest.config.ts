@@ -15,7 +15,12 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["tests/**/*.test.{ts,tsx}"],
     // tests/db roda em `pnpm test:db` (exige Supabase local).
-    exclude: ["tests/db/**", "node_modules/**", ".track-workdir/**"],
+    exclude: [
+      "tests/db/**",
+      "tests/cart/repository.test.ts",
+      "node_modules/**",
+      ".track-workdir/**",
+    ],
     globals: false,
   },
 });

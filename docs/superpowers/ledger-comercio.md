@@ -216,6 +216,10 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orqu
 - Ruling (S27 fechamento): `/como-funciona` usa container de 1200 px (igual ao cabeçalho/rodapé), não 1400; o 3º celular segue claro (não "Material entregue"), divergência deliberada do design (ver S27 T1 rodada 2) — custo se errada: baixo.
 - Ruling (S27 fechamento): o cleanup do `e2e-s27.sh` restaura o build normal (`PRODSIM_DIRTY`) se a fase k for interrompida — custo se errada: baixo.
 
+## S11 · Obrigação vinda do staging (2026-09-25)
+- Ruling: a 0601 (S11, Task 2) inclui `create or replace function public.audit_row_change` lendo o pepper de `coalesce(nullif(current_setting('app.audit_ip_pepper', true), ''), (select decrypted_secret from vault.decrypted_secrets where name = 'audit_ip_pepper'))` — o hospedado não permite o GUC de banco; local sem o segredo no Vault segue sem hash (falha fechada); teste de banco cobre GUC, Vault e ausência — custo se estiver errada: `ip_hash` continua nulo no staging (ver D-059)
+- Ruling: a chave do Asaas (`ASAAS_*`) já está no projeto Vercel e em `.env.local`; a S21/S23 não a usam para dinheiro real (só sandbox/fake) e revisam o adapter Pix contra a API do Asaas antes do go-live (D-076)
+
 ## S11 · Planejamento (plano 2026-09-25-s11-integracao-notificacoes)
 Nota: escrito sobre `main` @ `e198162`, antes do merge da S10 (lida só pelo plano e pelos Rulings em `origin/slice/S10-revisao` @ `8f43b0d`, sem código). O Step 0 da Task 1 revalida tudo o que depende do estado final da S10.
 - Ruling: a implementação da S11 só começa depois do merge da S10 em `main`; roda no worktree `T3-comercio` (trilha 3, porta 3003, sessões `t3s11-*`), com `slice/S11-integracao` rebaseada sobre esse `main` — a S11 liga portas estendidas pela S10 e recria CHECKs da 0204 — custo se errada: retrabalho de assinaturas se a S10 mudar depois.

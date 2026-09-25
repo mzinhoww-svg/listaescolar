@@ -82,11 +82,11 @@ Ambiente e deploy:
 - Vercel: a proteção dos previews foi DESATIVADA pelo humano em 2026-09-25 (previews públicos; `X-Robots-Tag: noindex` em tudo fora da produção). REATIVAR antes de entrar dado real: checklist da S20 (D-074).
 - Vercel: `CRON_SECRET` (16 caracteres ou mais) nos ambientes e aceite do cron diário `/api/cron/leads-expire` no plano da conta (S14).
 - Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio; canonical, JSON-LD, links de login e do lead, OG, sitemap e QR dependem dele).
-- Supabase (staging): deploy da Edge Function `ocr-worker`, agendamento pg_cron/pg_net com Vault (`supabase/functions/ocr-worker/README.md`) e secrets `WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_CHEAP`, `AI_MODEL_STRONG`, `AI_MODEL_VISION`.
+- Supabase (staging): FEITO em 2026-09-25: `pg_cron`/`pg_net`, segredos no Vault, Edge Function `ocr-worker` (v1, `verify_jwt=false`) e job `ocr-worker-tick` ATIVO (a cada minuto). Tick de teste: 200 `status: ok` (D-060 resolvida). Falta o teste ponta a ponta no preview.
 - Rodar `scripts/ai-smoke.ts` com chave e modelos reais (tem custo; os agentes não rodam).
-- Supabase Auth hospedado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
+- Supabase Auth hospedado: FEITO pelo humano em 2026-09-25 (Site URL, Redirect URLs incl. `https://listaescolare-*.vercel.app/**`, templates `magic_link` e `confirmation`); falta validar o link mágico em outro navegador no preview e SMTP próprio antes de produção (D-063). Referência do que foi configurado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
 - Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
-- Pepper do IP de auditoria (`app.audit_ip_pepper`, de preferência no Vault) no staging e na produção antes da S20; sem ele `ip_hash` fica nulo.
+- Pepper do IP de auditoria: o hospedado NÃO permite definir `app.audit_ip_pepper` no banco (permission denied); o pepper do staging já está no Vault (`audit_ip_pepper`) e a S11 (0601) fará `audit_row_change` ler o pepper de lá; na produção, gerar outro (D-059).
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
 
 Credenciais e contas:
@@ -107,3 +107,15 @@ Conteúdo e dados:
 - Staging: advisor aceito com `auth_role()` executável por anon, `rls_auto_enable()` (função da plataforma) e a view definer `stationery_public` (S13, esperado).
 - Encerrar só o servidor aberto pela própria sessão (`kill "$(lsof -ti tcp:<porta> -sTCP:LISTEN)"`); nunca `pkill`.
 - Subagentes: nunca despachar dois na mesma rodada no mesmo worktree.
+
+## Política de uso (definida pelo humano em 2026-09-25, limite semanal em 79%)
+- Sonnet nos implementadores e nas revisões comuns; Opus só nas revisões de segurança (RLS, cobrança, B2B e dados de menor).
+- Juntar correções pequenas numa única rodada.
+- Se o limite estiver perto do fim: registrar o estado neste arquivo e parar num ponto limpo, com push feito.
+- Bloqueio conhecido: o classificador impede o orquestrador de copiar credencial de arquivo local para sistema remoto e de mesclar PR revisado só por subagente ("Self-Approval"): esses itens vão para "Aguardando humano" (regra permanente no CLAUDE.md, seção Autonomia).
+
+
+## Aguardando humano
+Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
+
+- **OPENROUTER_KEY da Edge Function `ocr-worker` (staging) recusada pelo OpenRouter (401).** E2E de 2026-09-25 no alias `listaescolare.vercel.app`: login e envio passaram; o worker (cron, 200) chamou o provedor e recebeu `http_401` (envio `rejected`, job `dead`, 2 linhas `failed` em `ai_decisions`). Ação do humano: no painel do Supabase (Edge Functions > Secrets) conferir/regravar `OPENROUTER_KEY` com uma chave válida e conferir `AI_MODEL_CHEAP/STRONG/VISION` (o modelo usado foi um de texto, `deepseek/deepseek-chat`, sobre um PDF). Depois disso o orquestrador reenvia o teste (nenhuma ação do humano além do secret). Também conferir a `OPENROUTER_KEY` no projeto Vercel `listaescolare` (a primeira decisão foi um `provider_timeout` de 9 s, provavelmente da leitura inline do app).

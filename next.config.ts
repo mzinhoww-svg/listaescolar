@@ -12,7 +12,7 @@ const baseConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   // Previews e qualquer ambiente fora da produção da Vercel nunca são indexados (X-Robots-Tag: noindex).
   async headers() {
-    return robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV });
+    return robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV, SITE_INDEXING: process.env.SITE_INDEXING });
   },
   ...(dsn ? { env: { NEXT_PUBLIC_SENTRY_DSN: dsn } } : {}),
 };

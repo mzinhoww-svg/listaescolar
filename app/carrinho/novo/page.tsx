@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Screen } from "@/components/auth/Screen";
 import { EmptyState } from "@/components/cart/CartStates";
 import { SubmitButton } from "@/components/cart/SubmitButton";
+import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { getListReader, readServiceEnv } from "@/features/cart/service";
 
@@ -31,17 +32,8 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       />
     );
   }
-  const reader = getListReader(readServiceEnv());
-  if (!reader) {
-    return (
-      <EmptyState
-        title="Listas indisponíveis por aqui"
-        text="Ainda não há fonte de listas ligada a este ambiente. Não inventamos dados."
-      />
-    );
-  }
-  const items = await reader.getItems(listId.data);
-  if (!items || items.length === 0) {
+  const list = await getListReader(readServiceEnv()).getList(listId.data, { actor: await getSessionActor() });
+  if (!list || list.items.length === 0) {
     return (
       <EmptyState
         title="Lista não encontrada"
@@ -49,6 +41,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       />
     );
   }
+  const items = list.items;
   return (
     <Screen>
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
@@ -60,7 +53,11 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
         </p>
       ) : null}
       <p className="text-texto-2 text-xs font-semibold">
-        Lista de demonstração: itens de exemplo, sem dado de escola nem de aluno.
+        {list.isDemo
+          ? "Lista de demonstração: itens de exemplo, sem dado de escola nem de aluno."
+          : list.kind === "parent_copy"
+            ? "Sua cópia privada da lista: só você a vê."
+            : "Lista oficial publicada."}
       </p>
       <ul className="bg-branco-tonal divide-linha divide-y rounded-[24px] px-4 py-2">
         {items.map((i) => (

@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import robots from "@/app/robots";
 import { PREFIXES } from "@/features/auth/access";
 
-const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, env: process.env.VERCEL_ENV, url: process.env.VERCEL_URL };
+const saved = { site: process.env.NEXT_PUBLIC_SITE_URL, env: process.env.VERCEL_ENV, url: process.env.VERCEL_URL, idx: process.env.SITE_INDEXING };
 afterEach(() => {
-  for (const [k, v] of [["NEXT_PUBLIC_SITE_URL", saved.site], ["VERCEL_ENV", saved.env], ["VERCEL_URL", saved.url]] as const) {
+  for (const [k, v] of [["NEXT_PUBLIC_SITE_URL", saved.site], ["VERCEL_ENV", saved.env], ["VERCEL_URL", saved.url], ["SITE_INDEXING", saved.idx]] as const) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
@@ -19,8 +19,9 @@ function rule() {
 }
 
 describe("robots", () => {
-  it("produção: libera / e bloqueia cada prefixo privado sem tocar em /escolas", () => {
+  it("produção COM SITE_INDEXING=1: libera / e bloqueia cada prefixo privado sem tocar em /escolas", () => {
     process.env.VERCEL_ENV = "production";
+    process.env.SITE_INDEXING = "1";
     process.env.NEXT_PUBLIC_SITE_URL = "https://listacerta.example";
     const disallow = [rule().disallow].flat();
     expect(rule().allow).toBe("/");
@@ -50,8 +51,21 @@ describe("robots", () => {
     expect(robots().sitemap).toBeUndefined();
   });
 
+  it("produção SEM SITE_INDEXING (o deploy de produção hoje aponta para o staging): disallow /, sem sitemap", () => {
+    process.env.VERCEL_ENV = "production";
+    process.env.NEXT_PUBLIC_SITE_URL = "https://listacerta.example";
+    delete process.env.SITE_INDEXING;
+    expect(rule().disallow).toBe("/");
+    expect(robots().sitemap).toBeUndefined();
+    process.env.SITE_INDEXING = "0";
+    expect(rule().disallow).toBe("/");
+    process.env.SITE_INDEXING = "true";
+    expect(rule().disallow).toBe("/");
+  });
+
   it("produção sem base válida: disallow /", () => {
     process.env.VERCEL_ENV = "production";
+    process.env.SITE_INDEXING = "1";
     delete process.env.NEXT_PUBLIC_SITE_URL;
     delete process.env.VERCEL_URL;
     expect(rule().disallow).toBe("/");

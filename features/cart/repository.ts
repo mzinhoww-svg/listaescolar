@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { normalizeItemKey } from "./item-key";
+import type { ListKind } from "./ports";
 import {
   retailerRowSchema,
   snapshotRowSchema,
@@ -88,6 +89,8 @@ export type NewCartInput = {
   listId: string | null;
   strategy?: CartStrategy;
   isDemo?: boolean;
+  /** Origem de `listId` (S11): official | parent_copy | demo. Omitido = default do banco (`demo`). */
+  listKind?: ListKind;
   items: { listItemId?: string | null; name: string; quantity: number }[];
 };
 
@@ -99,6 +102,7 @@ export async function createCart(client: SupabaseClient, input: NewCartInput): P
       list_id: input.listId,
       strategy: input.strategy ?? "cheapest",
       is_demo: input.isDemo ?? false,
+      ...(input.listKind ? { list_kind: input.listKind } : {}),
     })
     .select("id")
     .single();

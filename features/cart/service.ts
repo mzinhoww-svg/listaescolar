@@ -4,8 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { buildRetailerRedirect, type AffiliateEnv } from "./affiliate";
 import { createDemoRetailerProvider, isDemoEnabled, type DemoEnv } from "./demo-provider";
+import { composeLeadContextReader, composeListReader } from "@/features/integration/compose";
+import { createLocalCatalogSource } from "@/features/stationeries/repository";
+import { CatalogLocalQuoteProvider } from "@/features/stationeries/local-quote-provider";
+import { createAdminClient } from "@/lib/supabase/admin";
+
 import { buildCartOptions } from "./options-engine";
-import { createDemoListReader } from "./memory-list-reader";
 import {
   getCart,
   getPriceSnapshots,
@@ -18,7 +22,7 @@ import {
 import type { RetailerRow } from "./schemas";
 import { SnapshotRetailerProvider } from "./snapshot-provider";
 import { RedirectTargetError } from "./redirect-target";
-import type { CartOption, CartStrategy, Quote } from "./types";
+import type { CartOption, CartStrategy, LocalQuote, Quote } from "./types";
 import type { ListReader } from "./ports";
 
 export type StoreInfo = {
@@ -51,9 +55,28 @@ export function readServiceEnv(): ServiceEnv {
   };
 }
 
-/** Leitor de listas desta fatia: só o de demonstração (o real é ligado na S11). */
-export function getListReader(env: ServiceEnv): ListReader | null {
-  return createDemoListReader(env);
+/** Leitor de listas (S11): banco real (oficial e cópia do próprio pai) e, atrás da regra fail-closed da S12, a demonstração. */
+export function getListReader(env: ServiceEnv): ListReader {
+  return composeListReader(createAdminClient(), env);
+}
+
+/**
+ * Cotação da papelaria local (S13, ligada na S11 · D-045): só com o município da escola da lista (lista oficial ou cópia do pai com
+ * escola). Sem município conhecido (demonstração, cópia sem escola) devolve `null` = "cotação local indisponível"; nada de chute.
+ */
+export async function collectLocalQuotes(cart: CartRow, env: ServiceEnv, now: Date): Promise<LocalQuote[] | null> {
+  if (cart.listId === null) return null;
+  try {
+    const admin = createAdminClient();
+    const context = await composeLeadContextReader(admin, env).getContext(cart.listId, { actorId: cart.ownerId });
+    if (!context?.municipalityId) return null;
+    const items = cart.items.map((i) => ({ itemKey: i.itemKey, name: i.name, quantity: i.quantity }));
+    return await new CatalogLocalQuoteProvider(createLocalCatalogSource(admin), { municipalityId: context.municipalityId }).getQuotes(items, { now });
+  } catch {
+    // Falha da fonte local (rede, limite) degrada para "cotação local indisponível": nunca inventa preço, nunca derruba o carrinho.
+    console.error(JSON.stringify({ level: "error", fn: "cart.local_quotes", code: "local_quotes_unavailable" }));
+    return null;
+  }
 }
 
 export function initialsOf(name: string): string {
@@ -123,14 +146,15 @@ export async function loadCartView(
   const cart = await getCart(client, cartId);
   if (!cart || cart.ownerId !== userId) return null;
   const items = cart.items.map((i) => ({ itemKey: i.itemKey, name: i.name, quantity: i.quantity }));
-  const [quotes, retailers, clicks] = await Promise.all([
+  const [quotes, local, retailers, clicks] = await Promise.all([
     collectQuotes(client, cart, env, now),
+    collectLocalQuotes(cart, env, now),
     listActiveRetailers(client),
     client.from("affiliate_clicks").select("retailer_id").eq("cart_id", cartId),
   ]);
   if (clicks.error) throw new Error(`ler cliques: ${clicks.error.message}`);
-  // Papelaria local: sem provedor nesta fatia (ligado na S11) → indisponível.
-  const options = buildCartOptions(items, quotes, null, now);
+  // Papelaria local (S13, ligada na S11): sem município da escola → `null` = indisponível.
+  const options = buildCartOptions(items, quotes, local, now);
   const sample = cart.items[0] ?? null;
   const stores: Record<string, StoreInfo> = {};
   for (const r of retailers) stores[r.slug] = storeInfo(r, sample, env);

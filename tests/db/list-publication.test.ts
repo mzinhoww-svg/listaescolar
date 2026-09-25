@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { insertSubmission } from "./cross-track-fixtures";
 import { Client } from "pg";
 import { attempt, cleanupUsers, DATABASE_URL, IDS, inTx, seedUsers, withSuperuser } from "./helpers";
 import {
@@ -281,17 +282,18 @@ describe("S05 list_create_candidate_version", () => {
   it("números sequenciais por lista, começando em 1; independentes entre listas", async () => {
     await inTx(async (c) => {
       const school = await seedSchool(c);
+      const sub = (await insertSubmission(c, school, true)).id; // 0600: submission_id agora tem FK
       const a = await seedList(c, school, "ef-1");
       const b = await seedList(c, school, "ef-2");
       const nums: number[] = [];
       for (const l of [a, a, b, a, b]) {
-        const r = await c.query<{ version_number: number }>(CREATE, [l, "school_upload", "00000000-0000-4000-8000-0000000000aa", IDS.parent]);
+        const r = await c.query<{ version_number: number }>(CREATE, [l, "school_upload", sub, IDS.parent]);
         nums.push(r.rows[0]!.version_number);
       }
       expect(nums).toEqual([1, 2, 1, 3, 2]);
       const v = await c.query("select status::text, source::text, submission_id, created_by, item_count from public.list_versions where list_id = $1 order by version_number limit 1", [a]);
       expect(v.rows[0]).toEqual({
-        status: "candidate", source: "school_upload", submission_id: "00000000-0000-4000-8000-0000000000aa", created_by: IDS.parent, item_count: 0,
+        status: "candidate", source: "school_upload", submission_id: sub, created_by: IDS.parent, item_count: 0,
       });
     });
   });

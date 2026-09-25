@@ -63,14 +63,14 @@ describe("S12 schema: carrinho, varejistas, preços e cliques", () => {
         }
       });
     });
-    it("carts não tem FK para tabelas de outras trilhas (list_id sem FK)", async () => {
+    it("carts só referencia list_items (0600) fora da própria trilha; carts.list_id segue sem FK (polimórfica)", async () => {
       await withSuperuser(async (c) => {
         const r = await c.query(
           `select conrelid::regclass::text as t, confrelid::regclass::text as f from pg_constraint
            where contype = 'f' and conrelid = any(array['public.carts','public.cart_items','public.affiliate_clicks']::regclass[])`,
         );
         const targets = r.rows.map((x) => String(x.f).replace(/^public\./, ""));
-        expect(targets.every((t) => ["auth.users", "profiles", "carts", "retailers"].includes(t))).toBe(true);
+        expect(targets.every((t) => ["auth.users", "profiles", "carts", "retailers", "list_items"].includes(t))).toBe(true);
         expect(targets.length).toBeGreaterThan(0);
       });
     });

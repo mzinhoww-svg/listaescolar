@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Client } from "pg";
-import { attempt, cleanupUsers, IDS, seedUsers, withClaims, withSuperuser, type Identity } from "./helpers";
+import { attempt, cleanupUsers, ensureSchool, IDS, seedUsers, withClaims, withSuperuser, type Identity } from "./helpers";
 
 type Status = "submitted" | "processing" | "review_needed" | "human_review" | "approved" | "published" | "rejected";
 const GOOD_RESULT = { items: [{ name: "Caderno", quantity: 1, unit: null, confidence: 0.9 }], overallConfidence: 0.9, warnings: [] };
@@ -15,7 +15,7 @@ async function seedSubmission(c: Client, opts: { status?: Status; result?: unkno
   await c.query(
     `insert into public.list_submissions (id, submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type, size_bytes, consent_id)
      values ($1, $2, $3::public.submission_source, $4, '4o ano', 2027, $5, 'lista-secreta.pdf', 'application/pdf', 1000, $6)`,
-    [id, owner, opts.source ?? "school", randomUUID(), `${owner}/${id}/lista.pdf`, consent],
+    [id, owner, opts.source ?? "school", await ensureSchool(c), `${owner}/${id}/lista.pdf`, consent],
   );
   if (opts.status && opts.status !== "submitted") await c.query("update public.list_submissions set status = $2::public.list_status where id = $1", [id, opts.status]);
   if (opts.demo) await c.query("update public.list_submissions set is_demo = true where id = $1", [id]);

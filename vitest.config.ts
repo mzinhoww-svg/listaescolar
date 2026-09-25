@@ -8,6 +8,8 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./", import.meta.url)),
       "server-only": fileURLToPath(new URL("./tests/stubs/server-only.ts", import.meta.url)),
+      // A Edge Function (Deno) importa o cliente por especificador `npm:`; o teste do worker o troca por um stub.
+      "npm:@supabase/supabase-js@2": fileURLToPath(new URL("./tests/stubs/deno-supabase-js.ts", import.meta.url)),
     },
   },
   test: {

@@ -50,7 +50,7 @@ export function StatusPanel({ submissionId, initial }: { submissionId: string; i
     };
   }, [phase, submissionId]);
 
-  if (phase === "ready") return <ReviewSummary result={data.result} isDemo={data.isDemo} status={data.status} publicationDemo={data.publicationDemo === true} />;
+  if (phase === "ready") return <ReviewSummary result={data.result} isDemo={data.isDemo} status={data.status} publicationDemo={data.publicationDemo === true} submissionId={submissionId} source={data.source} publishedBy={data.publishedBy} />;
   if (phase === "failed") return <StatusNotice kind="failed" />;
   if (phase === "unavailable") return <StatusNotice kind="unavailable" />;
   if (lost) return <StatusNotice kind="lost" />;

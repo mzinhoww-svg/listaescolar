@@ -13,7 +13,8 @@ export type LeadListContext = {
   municipalityId?: string;
 };
 export interface LeadListContextReader {
-  getContext(listId: string): Promise<LeadListContext | null>;
+  /** `actorId` (S11): só ele enxerga a própria cópia do pai; oficial é público. */
+  getContext(listId: string, options?: { actorId?: string | null }): Promise<LeadListContext | null>;
 }
 
 export type CartSnapshot = {

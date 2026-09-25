@@ -13,6 +13,14 @@ vi.mock("@/features/submissions/service", async (orig) => ({
   submitList: (...a: unknown[]) => submitList(...a),
 }));
 vi.mock("@/features/submissions/deps", () => ({ buildSubmitDeps: () => ({}) }));
+const actorRole = { current: "parent" };
+vi.mock("@/features/auth/actor", () => ({ getSessionActor: async () => ({ userId: "u-sessao", role: actorRole.current }) }));
+const linked = vi.fn();
+vi.mock("@/features/claims/queries-mine", () => ({ listMySchools: (...a: unknown[]) => linked(...a) }));
+const publicSchool = { visible: true };
+vi.mock("@/lib/supabase/public", () => ({
+  createPublicClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: publicSchool.visible ? { id: "x" } : null, error: null }) }) }) }) }),
+}));
 
 import { submitListAction } from "@/app/enviar-lista/actions";
 import { SubmissionError } from "@/features/submissions/service";
@@ -37,6 +45,10 @@ describe("submitListAction", () => {
   beforeEach(() => {
     requireAccess.mockReset();
     requireAccess.mockResolvedValue({ user: { id: "u-sessao" }, role: "parent" });
+    actorRole.current = "parent";
+    publicSchool.visible = true;
+    linked.mockReset();
+    linked.mockResolvedValue([]);
     submitList.mockReset();
   });
 
@@ -102,11 +114,33 @@ describe("submitListAction", () => {
     expect(JSON.stringify(r)).not.toContain("segredo");
   });
 
-  it("schoolId: só school_member/admin; vira origem `school`", async () => {
-    expect(await submitListAction(idle, form({ schoolId: SCHOOL }))).toMatchObject({ code: "forbidden" });
+  it("família escolhe qualquer escola pública: segue como envio de família, com a escola", async () => {
+    submitList.mockResolvedValue({ status: "review_needed", submissionId: "s2", result: {} });
+    await expect(submitListAction(idle, form({ schoolId: SCHOOL }))).rejects.toThrow("REDIRECT:/enviar-lista/s2");
+    expect(submitList.mock.calls[0]![0]).toMatchObject({ source: "parent", schoolId: SCHOOL });
+    expect(linked).not.toHaveBeenCalled();
+  });
+
+  it("família com escola que o público não vê (inexistente ou município desabilitado): invalid_input", async () => {
+    publicSchool.visible = false;
+    expect(await submitListAction(idle, form({ schoolId: SCHOOL }))).toMatchObject({ code: "invalid_input" });
+    expect(submitList).not.toHaveBeenCalled();
+  });
+
+  it("D-002: school_member só envia por escola VINCULADA; sem vínculo: school_not_linked e nada é gravado", async () => {
     requireAccess.mockResolvedValue({ user: { id: "u2" }, role: "school_member" });
+    actorRole.current = "school_member";
+    linked.mockResolvedValue([{ schoolId: "5b1d4c2e-7d1a-4f0e-9a52-0c3f5e9a1b99" }]);
+    expect(await submitListAction(idle, form({ schoolId: SCHOOL }))).toMatchObject({ code: "school_not_linked" });
+    expect(submitList).not.toHaveBeenCalled();
+    linked.mockResolvedValue([{ schoolId: SCHOOL }]);
     submitList.mockResolvedValue({ status: "review_needed", submissionId: "s3", result: {} });
     await expect(submitListAction(idle, form({ schoolId: SCHOOL }))).rejects.toThrow("REDIRECT:/enviar-lista/s3");
     expect(submitList.mock.calls[0]![0]).toMatchObject({ source: "school", schoolId: SCHOOL });
+  });
+
+  it("recusa do banco (school_not_linked) chega como a mensagem do vínculo", async () => {
+    submitList.mockRejectedValue(new SubmissionError("school_not_linked"));
+    expect(await submitListAction(idle, form())).toMatchObject({ code: "school_not_linked" });
   });
 });

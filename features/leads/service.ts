@@ -40,7 +40,7 @@ export class LeadService {
     const cart = await this.deps.carts.getOwnedCart(actor, input.cartId);
     if (!cart || cart.ownerId !== actor.userId) throw new LeadError("carrinho não encontrado", "not_found");
     if (cart.listId === null || this.deps.contexts === null) throw new LeadError("lista indisponível", "list_unavailable");
-    const context = await this.deps.contexts.getContext(cart.listId);
+    const context = await this.deps.contexts.getContext(cart.listId, { actorId: actor.userId });
     if (!context) throw new LeadError("lista indisponível", "list_unavailable");
     const stationery = await this.deps.store.getStationeryPublic(input.stationeryId);
     if (!stationery) throw new LeadError("papelaria indisponível", "stationery_unavailable");

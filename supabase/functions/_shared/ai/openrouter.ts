@@ -16,14 +16,48 @@ import type {
 } from "./types.ts";
 
 export const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-const MAX_RESPONSE_CHARS = 5_000_000;
+const MAX_RESPONSE_BYTES = 5_000_000;
 const OCR_INSTRUCTION =
   "Transcreva fielmente todo o texto do documento, na ordem de leitura, sem comentar, resumir ou acrescentar nada.";
 
+/** Leitor mínimo de stream (compatível com ReadableStream.getReader()). */
+export type BodyReader = {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  cancel(): Promise<void>;
+};
 export type FetchLike = (
   url: string,
   init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
-) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
+) => Promise<{ ok: boolean; status: number; text(): Promise<string>; body?: { getReader(): BodyReader } | null }>;
+
+/** Lê o corpo com teto de bytes: para e cancela o stream ao passar do limite (não baixa tudo). */
+async function readBodyLimited(res: Awaited<ReturnType<FetchLike>>, maxBytes: number): Promise<string | null> {
+  if (!res.body) {
+    const t = await res.text();
+    return t.length > maxBytes ? null : t;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    all.set(c, off);
+    off += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
 
 const defaultFetch: FetchLike = (url, init) => fetch(url, init);
 
@@ -70,7 +104,7 @@ const isTransientStatus = (s: number) => s === 408 || s === 425 || s === 429 || 
 
 export class OpenRouterAdapter implements LlmProvider, OcrProvider {
   readonly model: string;
-  private readonly apiKey: string;
+  readonly #apiKey: string; // campo privado real: fora de JSON.stringify, Object.keys, inspect e console
   private readonly fetchImpl: FetchLike;
   private readonly baseUrl: string;
   private readonly now: () => number;
@@ -78,7 +112,7 @@ export class OpenRouterAdapter implements LlmProvider, OcrProvider {
   constructor(cfg: { apiKey: string; model: string; fetchImpl?: FetchLike; baseUrl?: string; now?: () => number }) {
     if (!cfg.apiKey || !cfg.apiKey.trim()) throw new AiError("ai_not_configured", { detail: "missing_key" });
     if (!cfg.model || !cfg.model.trim()) throw new AiError("ai_not_configured", { detail: "missing_model" });
-    this.apiKey = cfg.apiKey.trim();
+    this.#apiKey = cfg.apiKey.trim();
     this.model = cfg.model.trim();
     this.fetchImpl = cfg.fetchImpl ?? defaultFetch;
     this.baseUrl = (cfg.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -92,24 +126,27 @@ export class OpenRouterAdapter implements LlmProvider, OcrProvider {
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
 
-    let raw: string;
+    let raw: string | null;
     let status: number;
     try {
       const res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+        headers: { Authorization: `Bearer ${this.#apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(body),
         signal: opts.signal,
       });
       status = res.status;
-      raw = await res.text();
-      if (!res.ok) throw new AiError("provider_error", { transient: isTransientStatus(status), status, detail: `http_${status}` });
+      if (!res.ok) {
+        await (res.body?.getReader().cancel() ?? Promise.resolve()).catch(() => undefined); // corpo de erro nunca é lido
+        throw new AiError("provider_error", { transient: isTransientStatus(status), status, detail: `http_${status}` });
+      }
+      raw = await readBodyLimited(res, MAX_RESPONSE_BYTES);
     } catch (e) {
       if (e instanceof AiError) throw e;
       if (opts.signal?.aborted || (e as { name?: string } | null)?.name === "AbortError") throw new AiError("aborted");
       throw new AiError("provider_error", { transient: true, detail: "network_error" }); // nunca repassa e.message
     }
-    if (raw.length > MAX_RESPONSE_CHARS) throw new AiError("provider_error", { transient: true, status, detail: "response_too_large" });
+    if (raw === null) throw new AiError("provider_error", { transient: true, status, detail: "response_too_large" });
 
     let json: unknown;
     try {

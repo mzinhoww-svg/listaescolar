@@ -23,6 +23,7 @@ function setup(script: Partial<Record<Route, FakeStep[]>>, settings = makeSettin
   };
   const recorder = makeRecorder();
   const router = createRouter({
+    allowFake: true,
     providers: { fake: (route) => fakes[route] },
     settings: settingsOf(settings),
     prompts: promptsOf(),
@@ -168,6 +169,7 @@ describe("roteador barato-primeiro", () => {
     const fake = new FakeProvider([good()], { clock });
     const recorder = makeRecorder();
     const router = createRouter({
+      allowFake: true,
       providers: { fake: () => fake },
       settings: settingsOf(async () => {
         throw new Error("connection refused postgres://user:pw@host");
@@ -188,6 +190,7 @@ describe("roteador barato-primeiro", () => {
     const clock = new FakeClock();
     const fake = new FakeProvider([good()], { clock });
     const router = createRouter({
+      allowFake: true,
       providers: { fake: () => fake },
       settings: settingsOf(makeSettings()),
       prompts: promptsOf(async () => {
@@ -205,6 +208,7 @@ describe("roteador barato-primeiro", () => {
     const recorder = makeRecorder();
     const strongCalls: string[] = [];
     const router = createRouter({
+      allowFake: true,
       providers: {
         fake: (route) => {
           strongCalls.push(route);
@@ -224,6 +228,7 @@ describe("roteador barato-primeiro", () => {
   it("provedor sem fábrica registrada: ai_not_configured", async () => {
     const clock = new FakeClock();
     const router = createRouter({
+      allowFake: true,
       providers: {},
       settings: settingsOf(makeSettings()),
       prompts: promptsOf(),
@@ -240,6 +245,7 @@ describe("roteador barato-primeiro", () => {
     const recorder = makeRecorder();
     let settings = makeSettings();
     const router = createRouter({
+      allowFake: true,
       providers: { fake: () => fakeA, openrouter: () => fakeB },
       settings: { load: async () => settings },
       prompts: promptsOf(),
@@ -267,6 +273,7 @@ describe("roteador barato-primeiro", () => {
   it("vision_model_missing é permanente", async () => {
     const clock = new FakeClock();
     const router = createRouter({
+      allowFake: true,
       providers: {
         fake: () => {
           throw new AiError("vision_model_missing");
@@ -288,14 +295,14 @@ describe("roteador barato-primeiro", () => {
       evaluate: () => ({
         overall: 0.87654,
         items: [0.87654, 7, -1, Number.NaN],
-        alerts: ["low_confidence_item", "Texto Livre do Documento!", "ok_code"],
+        alerts: ["low_confidence_item", "Texto Livre do Documento!", "ambiguous_item"],
       }),
     });
     await router.run(task, { budgetMs: 1000 });
     const d = recorder.rows[0];
     expect(d?.overallScore).toBe(0.877);
     expect(d?.itemScores).toEqual([0.877, 1, 0, 0]);
-    expect(d?.alerts).toEqual(["low_confidence_item", "ok_code"]);
+    expect(d?.alerts).toEqual(["low_confidence_item", "ambiguous_item"]);
     expect(JSON.stringify(d)).not.toContain("Caderno");
   });
 
@@ -303,5 +310,144 @@ describe("roteador barato-primeiro", () => {
     const { recorder, router } = setup({ cheap: [good(0.1)], strong: [good()] });
     await router.run(makeTask(), { budgetMs: 1000 });
     expect(recorder.rows.map((d) => d.attempt)).toEqual([1, 2]);
+  });
+  it("cadeia inteira resolvida antes da 1ª tentativa: strong sem modelo + cheap barato falha fechado, sem rede nem decisão", async () => {
+    const clock = new FakeClock();
+    const cheap = new FakeProvider([good(0.3)], { clock });
+    const recorder = makeRecorder();
+    const router = createRouter({
+      allowFake: true,
+      providers: {
+        fake: (route) => {
+          if (route === "strong") throw new AiError("ai_not_configured", { detail: "model_strong" });
+          return cheap;
+        },
+      },
+      settings: settingsOf(makeSettings()),
+      prompts: promptsOf(),
+      recorder,
+      clock,
+    });
+    await expect(router.run(makeTask(), { budgetMs: 1000 })).rejects.toMatchObject({ code: "ai_not_configured" });
+    expect(cheap.calls).toHaveLength(0);
+    expect(recorder.rows).toHaveLength(0);
+  });
+
+  it("strong só é exigido quando max_escalations >= 1", async () => {
+    const clock = new FakeClock();
+    const cheap = new FakeProvider([good()], { clock });
+    const router = createRouter({
+      allowFake: true,
+      providers: {
+        fake: (route) => {
+          if (route === "strong") throw new AiError("ai_not_configured", { detail: "model_strong" });
+          return cheap;
+        },
+      },
+      settings: settingsOf(makeSettings({ maxEscalations: 0 })),
+      prompts: promptsOf(),
+      recorder: makeRecorder(),
+      clock,
+    });
+    await expect(router.run(makeTask(), { budgetMs: 1000 })).resolves.toMatchObject({ route: "cheap" });
+  });
+
+  it("fábrica que lança erro qualquer (não AiError) também falha fechado", async () => {
+    const clock = new FakeClock();
+    const router = createRouter({
+      allowFake: true,
+      providers: { fake: () => { throw new Error("boom postgres://u:p@h"); } },
+      settings: settingsOf(makeSettings()),
+      prompts: promptsOf(),
+      recorder: makeRecorder(),
+      clock,
+    });
+    const err = await router.run(makeTask(), { budgetMs: 1000 }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "ai_not_configured" });
+    expect(String((err as Error).message)).not.toContain("postgres");
+  });
+
+  describe("provedor fake só com allowFake explícito", () => {
+    const mkRouter = (extra: { allowFake?: boolean; env?: { NODE_ENV?: string } }) => {
+      const clock = new FakeClock();
+      const fake = new FakeProvider([good()], { clock });
+      const recorder = makeRecorder();
+      const router = createRouter({
+        ...extra,
+        providers: { fake: () => fake },
+        settings: settingsOf(makeSettings()),
+        prompts: promptsOf(),
+        recorder,
+        clock,
+      });
+      return { fake, recorder, router };
+    };
+    it("default (sem allowFake): ai_not_configured, sem rede nem decisão", async () => {
+      const { fake, recorder, router } = mkRouter({});
+      await expect(router.run(makeTask(), { budgetMs: 1000 })).rejects.toMatchObject({ code: "ai_not_configured" });
+      expect(fake.calls).toHaveLength(0);
+      expect(recorder.rows).toHaveLength(0);
+    });
+    it("allowFake false explícito também recusa", async () => {
+      const { fake, router } = mkRouter({ allowFake: false });
+      await expect(router.run(makeTask(), { budgetMs: 1000 })).rejects.toMatchObject({ code: "ai_not_configured" });
+      expect(fake.calls).toHaveLength(0);
+    });
+    it("allowFake true funciona fora de produção", async () => {
+      const { router } = mkRouter({ allowFake: true, env: { NODE_ENV: "test" } });
+      await expect(router.run(makeTask(), { budgetMs: 1000 })).resolves.toMatchObject({ provider: "fake" });
+    });
+    it("NODE_ENV=production sempre recusa, mesmo com allowFake true", async () => {
+      const { fake, router } = mkRouter({ allowFake: true, env: { NODE_ENV: "production" } });
+      await expect(router.run(makeTask(), { budgetMs: 1000 })).rejects.toMatchObject({ code: "ai_not_configured" });
+      expect(fake.calls).toHaveLength(0);
+    });
+  });
+
+  it("alertas: só os códigos do spec passam (regex sozinha não basta)", async () => {
+    const { recorder, router } = setup({ cheap: [good()] });
+    const task = makeTask({
+      evaluate: () => ({
+        overall: 0.9,
+        items: [0.9],
+        alerts: ["low_confidence_item", "leite_ninho_400g", "critical", "handwritten", "invalid_school_grade_year", "possible_collective_item"],
+      }),
+    });
+    await router.run(task, { budgetMs: 1000 });
+    expect(recorder.rows[0]?.alerts).toEqual(["low_confidence_item", "handwritten", "invalid_school_grade_year", "possible_collective_item"]);
+  });
+
+  it("exceção comum em buildRequest ou evaluate é erro permanente: não escala, sem eco", async () => {
+    for (const bad of [
+      makeTask({ buildRequest: () => { throw new Error("segredo Caderno do João"); } }),
+      makeTask({ evaluate: () => { throw new TypeError("segredo Caderno do João"); } }),
+    ]) {
+      const { fakes, recorder, router } = setup({ cheap: [good()], strong: [good()] });
+      const err = await router.run(bad, { budgetMs: 1000 }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AiError);
+      expect((err as AiError).transient).toBe(false);
+      expect(String((err as AiError).message)).not.toContain("João");
+      expect(fakes.strong.calls).toHaveLength(0);
+      expect(recorder.rows.map((d) => d.decision)).toEqual(["failed"]);
+    }
+  });
+
+  it("isAiError só por instanceof: objeto com name=AiError não vale", () => {
+    expect(isAiError({ name: "AiError", code: "aborted" })).toBe(false);
+    expect(isAiError(new AiError("aborted"))).toBe(true);
+  });
+
+  it("usage soma os tokens de todas as tentativas", async () => {
+    const { router } = setup({
+      cheap: [{ ...good(0.1), usage: { promptTokens: 10, completionTokens: 2, totalTokens: 12 } }],
+      strong: [{ ...good(), usage: { promptTokens: 20, completionTokens: 5 } }],
+    });
+    const out = await router.run(makeTask(), { budgetMs: 1000 });
+    expect(out.usage).toEqual({ promptTokens: 30, completionTokens: 7, totalTokens: 12 });
+  });
+
+  it("usage vazio quando o provedor não informa", async () => {
+    const { router } = setup({ cheap: [good()] });
+    expect((await router.run(makeTask(), { budgetMs: 1000 })).usage).toEqual({});
   });
 });

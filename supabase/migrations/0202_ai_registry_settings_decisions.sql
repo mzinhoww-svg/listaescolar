@@ -5,7 +5,8 @@
 
 -- ---------------------------------------------------------------------------
 -- Validadores puros (IMMUTABLE, search_path vazio). Usados em CHECK e na função de gravação.
--- EXECUTE fica com o padrão (public): CHECK roda com os privilégios de quem escreve; não tocam dados.
+-- EXECUTE só para authenticated/service_role (CHECK de ai_settings roda com os privilégios de quem escreve);
+-- anon e public não chamam (revoke logo após a criação). Não tocam dados.
 -- ---------------------------------------------------------------------------
 create function public.ai_route_valid(r jsonb) returns boolean
 language sql
@@ -78,6 +79,11 @@ as $$
   end;
 $$;
 
+revoke execute on function public.ai_route_valid(jsonb), public.ai_routes_valid(jsonb),
+  public.ai_alerts_valid(jsonb), public.ai_item_scores_valid(jsonb) from public, anon;
+grant execute on function public.ai_route_valid(jsonb), public.ai_routes_valid(jsonb),
+  public.ai_alerts_valid(jsonb), public.ai_item_scores_valid(jsonb) to authenticated, service_role;
+
 -- ---------------------------------------------------------------------------
 -- Tabelas
 -- ---------------------------------------------------------------------------
@@ -119,7 +125,7 @@ create table public.ai_decisions (
   entity_id uuid not null,
   kind text not null check (kind in ('extraction')),
   provider text not null check (provider ~ '^[a-z][a-z0-9_-]{0,39}$'),
-  model text not null check (length(btrim(model)) between 1 and 200 and model !~ '[[:cntrl:]]'),
+  model text not null check (model ~ '^[A-Za-z0-9._:/@-]{1,200}$'),
   prompt_key text not null check (prompt_key ~ '^[a-z][a-z0-9_]{0,63}$'),
   prompt_version int not null check (prompt_version >= 1),
   pipeline_version text not null check (length(btrim(pipeline_version)) between 1 and 40),
@@ -127,7 +133,7 @@ create table public.ai_decisions (
   item_scores jsonb not null default '[]'::jsonb check (public.ai_item_scores_valid(item_scores)),
   alerts jsonb not null default '[]'::jsonb check (public.ai_alerts_valid(alerts)),
   decision text not null check (decision in ('accepted', 'escalated', 'failed')),
-  justification text check (justification is null or length(justification) <= 500),
+  justification text check (justification is null or justification ~ '^[a-z][a-z0-9_:.-]{0,59}$'), -- só código, nunca texto livre
   actor_id uuid, -- sem FK (ADR-004); nulo = decisão automática
   previous_version_id uuid,
   new_version_id uuid,
@@ -149,7 +155,7 @@ create trigger prompt_registry_set_updated_at before update on public.prompt_reg
 create trigger ai_settings_set_updated_at before update on public.ai_settings
   for each row execute function public.set_updated_at();
 
--- Versão de prompt é histórica: key, version, text e schema nunca mudam (só is_active alterna); não se apaga.
+-- Versão de prompt é histórica: id, key, version, text, schema e created_at nunca mudam (só is_active alterna); não se apaga.
 create function public.prompt_registry_guard() returns trigger
 language plpgsql
 set search_path = ''
@@ -162,7 +168,8 @@ begin
      or new.key is distinct from old.key
      or new.version is distinct from old.version
      or new.text is distinct from old.text
-     or new.schema is distinct from old.schema then
+     or new.schema is distinct from old.schema
+     or new.created_at is distinct from old.created_at then
     raise exception 'versão de prompt é imutável; crie uma nova versão' using errcode = '42501';
   end if;
   return new;
@@ -187,22 +194,39 @@ create trigger ai_decisions_no_update_delete before update or delete on public.a
 create trigger ai_decisions_no_truncate before truncate on public.ai_decisions
   for each statement execute function public.ai_decisions_block_mutation();
 
--- Mudanças de configuração e de prompt ficam no audit_log.
+-- ai_settings: identidade (id, scope) imutável; o singleton por scope não pode ser renomeado.
+create function public.ai_settings_guard() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.id is distinct from old.id or new.scope is distinct from old.scope then
+    raise exception 'ai_settings: id e scope são imutáveis' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+create trigger ai_settings_no_identity_change before update on public.ai_settings
+  for each row execute function public.ai_settings_guard();
+
+-- Mudanças de configuração e de prompt ficam no audit_log (prompt sem text/schema: o conteúdo é versionado na tabela).
 create trigger ai_settings_audit after insert or update or delete on public.ai_settings
   for each row execute function public.audit_row_change();
 create trigger prompt_registry_audit after insert or update or delete on public.prompt_registry
-  for each row execute function public.audit_row_change();
+  for each row execute function public.audit_row_change('text', 'schema');
 
 -- Imutabilidade e auditoria valem mesmo com session_replication_role = replica.
 alter table public.prompt_registry enable always trigger prompt_registry_no_edit;
 alter table public.prompt_registry enable always trigger prompt_registry_no_truncate;
 alter table public.prompt_registry enable always trigger prompt_registry_audit;
 alter table public.ai_settings enable always trigger ai_settings_audit;
+alter table public.ai_settings enable always trigger ai_settings_no_identity_change;
 alter table public.ai_decisions enable always trigger ai_decisions_no_update_delete;
 alter table public.ai_decisions enable always trigger ai_decisions_no_truncate;
 
 revoke execute on function public.prompt_registry_guard() from public, anon, authenticated, service_role;
 revoke execute on function public.ai_decisions_block_mutation() from public, anon, authenticated, service_role;
+revoke execute on function public.ai_settings_guard() from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- Grants (mínimos; RLS decide o resto)

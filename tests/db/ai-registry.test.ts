@@ -53,6 +53,8 @@ describe("prompt_registry", () => {
         "update public.prompt_registry set schema = '{\"x\":1}' where key = 'extract_list' and version = 1",
         "update public.prompt_registry set version = 9 where key = 'extract_list' and version = 1",
         "update public.prompt_registry set key = 'outra' where key = 'extract_list' and version = 1",
+        "update public.prompt_registry set created_at = now() - interval '1 year' where key = 'extract_list' and version = 1",
+        "update public.prompt_registry set id = gen_random_uuid() where key = 'extract_list' and version = 1",
         "delete from public.prompt_registry where key = 'extract_list'",
         "truncate public.prompt_registry",
       ]) {
@@ -62,6 +64,34 @@ describe("prompt_registry", () => {
       await c.query("set local session_replication_role = replica");
       const r = await attempt(c, "update public.prompt_registry set text = 'alterado' where key = 'extract_list'");
       expect(r.error).not.toBeNull();
+      // DELETE e TRUNCATE também são bloqueados em modo replica (triggers enable always).
+      expect((await attempt(c, "delete from public.prompt_registry")).error).not.toBeNull();
+      expect((await attempt(c, "truncate public.prompt_registry")).error).not.toBeNull();
+    });
+  });
+
+  it("auditoria do prompt_registry: insert e troca de ativo entram no audit_log sem text/schema", async () => {
+    await inTx(async (c) => {
+      await c.query("insert into public.prompt_registry (key, version, text, schema) values ('extract_list', 7, 'segredo-de-prompt', '{\"x\":1}')");
+      await c.query("update public.prompt_registry set is_active = false where key = 'extract_list' and version = 1");
+      const r = await c.query(
+        "select action, before, after from public.audit_log where entity_table = 'prompt_registry' order by created_at, id",
+      );
+      expect(r.rows.map((x) => x.action).slice(-2)).toEqual(["INSERT", "UPDATE"]); // o seed da migration também é auditado
+      const dump = JSON.stringify(r.rows);
+      expect(dump).not.toContain("segredo-de-prompt");
+      for (const row of r.rows) {
+        for (const side of [row.before, row.after]) {
+          if (side) {
+            expect(side).not.toHaveProperty("text");
+            expect(side).not.toHaveProperty("schema");
+            expect(side).toHaveProperty("key", "extract_list");
+          }
+        }
+      }
+      const upd = r.rows[r.rows.length - 1];
+      expect(upd.before.is_active).toBe(true);
+      expect(upd.after.is_active).toBe(false);
     });
   });
 

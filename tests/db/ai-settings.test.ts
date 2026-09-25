@@ -132,7 +132,6 @@ describe("ai_settings", () => {
       expect(r.rows[0].v).toBe("s08.1");
     });
     await inTx(async (c) => {
-      await c.query("alter table public.ai_settings disable trigger ai_settings_audit");
       await c.query("delete from public.ai_settings");
       const r = await attempt(c, "select public.ai_get_settings()");
       expect(r.error).not.toBeNull();
@@ -142,5 +141,19 @@ describe("ai_settings", () => {
         expect((await attempt(c, "select public.ai_get_settings()")).code, who).toBe("42501");
       });
     }
+  });
+  it("id e scope são imutáveis (inclusive para admin e dono)", async () => {
+    for (const who of ["admin", "system"] as const) {
+      await withClaims(who, async (c) => {
+        const scope = await attempt(c, "update public.ai_settings set scope = 'outro' where scope = 'default'");
+        expect(scope.error, who).not.toBeNull();
+        const id = await attempt(c, "update public.ai_settings set id = gen_random_uuid() where scope = 'default'");
+        expect(id.error, who).not.toBeNull();
+      });
+    }
+    await inTx(async (c) => {
+      await c.query("set local session_replication_role = replica");
+      expect((await attempt(c, "update public.ai_settings set scope = 'outro'")).error).not.toBeNull();
+    });
   });
 });

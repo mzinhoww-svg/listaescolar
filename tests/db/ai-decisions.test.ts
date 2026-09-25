@@ -18,7 +18,7 @@ function decision(over: Record<string, unknown> = {}): Record<string, unknown> {
     item_scores: [0.9, 0.5],
     alerts: ["low_confidence_item", { code: "ambiguous_item", item_index: 1 }],
     decision: "escalated",
-    justification: "confiança abaixo do limiar",
+    justification: "low_confidence",
     attempt: 1,
     latency_ms: 812,
     ...over,
@@ -89,6 +89,14 @@ describe("ai_decisions", () => {
         ["latency negativa", decision({ latency_ms: -1 })],
         ["finished antes de started", decision({ started_at: "2026-01-02T00:00:00Z", finished_at: "2026-01-01T00:00:00Z" })],
         ["justificativa gigante", decision({ justification: "x".repeat(501) })],
+        ["justificativa texto livre", decision({ justification: "Leite Ninho 400g do aluno João" })],
+        ["justificativa com espaço", decision({ justification: "low confidence" })],
+        ["justificativa maiúscula", decision({ justification: "Low_confidence" })],
+        ["justificativa 61 chars", decision({ justification: "a".repeat(61) })],
+        ["model com espaço", decision({ model: "modelo com espaço" })],
+        ["model com quebra de linha", decision({ model: "modelo\nx" })],
+        ["model com acento", decision({ model: "modêlo" })],
+        ["model 201 chars", decision({ model: "m".repeat(201) })],
         ["JSON gigante", decision({ justification: "x".repeat(200000) })],
         ["não é objeto (array)", [decision()]],
         ["não é objeto (string)", "texto"],
@@ -208,5 +216,30 @@ describe("ai_decisions", () => {
     const { readFileSync } = await import("node:fs");
     const sql = readFileSync("supabase/migrations/0202_ai_registry_settings_decisions.sql", "utf8").toLowerCase();
     expect(sql).not.toMatch(/deepseek|\bglm\b|gpt-|claude|gemini|llama|mistral|qwen|openai\//);
+  });
+  it("aceita justification-código e model com caracteres de nome de modelo", async () => {
+    await withClaims("system", async (c) => {
+      for (const d of [
+        decision({ justification: "provider_timeout" }),
+        decision({ justification: "a:b.c-d_1", model: "vendor/model-3.5:free@v2" }),
+        decision({ justification: null }),
+      ]) {
+        expect((await record(c, d)).error).toBeNull();
+      }
+    });
+  });
+
+  it("validadores puros: sem EXECUTE para anon/public; authenticated e service_role mantêm (CHECKs)", async () => {
+    await inTx(async (c) => {
+      for (const f of ["ai_route_valid", "ai_routes_valid", "ai_alerts_valid", "ai_item_scores_valid"]) {
+        const r = await c.query<{ a: boolean; u: boolean; s: boolean }>(
+          `select has_function_privilege('anon', p.oid, 'execute') a, has_function_privilege('authenticated', p.oid, 'execute') u,
+                  has_function_privilege('service_role', p.oid, 'execute') s
+           from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = $1`,
+          [f],
+        );
+        expect(r.rows[0], f).toEqual({ a: false, u: true, s: true });
+      }
+    });
   });
 });

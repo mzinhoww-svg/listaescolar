@@ -1,6 +1,6 @@
 // Provedor falso, determinístico e scriptável (testes e demo). Não faz rede.
 import { AiError, type AiErrorCode } from "./errors.ts";
-import type { CallOptions, Clock, LlmProvider, LlmRequest, LlmResponse, OcrProvider, OcrResponse } from "./types.ts";
+import type { CallOptions, Clock, LlmProvider, LlmRequest, LlmResponse, OcrProvider, OcrResponse, Usage } from "./types.ts";
 import { systemClock } from "./types.ts";
 
 /** Passo do script (dados puros: pode vir de JSON). */
@@ -8,6 +8,7 @@ export type FakeStep = {
   json?: unknown;
   text?: string;
   delayMs?: number;
+  usage?: Usage;
   /** Fica pendente até o AbortSignal. */
   hang?: boolean;
   fail?: { code: AiErrorCode; transient?: boolean; status?: number };
@@ -40,7 +41,7 @@ export class FakeProvider implements LlmProvider, OcrProvider {
     else if (step.delayMs) await this.wait(step.delayMs, signal);
     if (step.fail) throw new AiError(step.fail.code, { transient: step.fail.transient, status: step.fail.status });
     const text = step.text ?? (step.json !== undefined ? JSON.stringify(step.json) : "");
-    return { text, model: this.model, latencyMs: Math.max(0, this.clock.now() - t0) };
+    return { text, model: this.model, usage: step.usage, latencyMs: Math.max(0, this.clock.now() - t0) };
   }
 
   async extractText(input: { bytes: Uint8Array; mime: string }, opts: CallOptions): Promise<OcrResponse> {

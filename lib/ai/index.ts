@@ -1,3 +1,4 @@
+import "server-only";
 // IA só por aqui: regra de negócio nunca importa um provedor direto. Fonte única em supabase/functions/_shared/ai.
 export * from "../../supabase/functions/_shared/ai/types";
 export * from "../../supabase/functions/_shared/ai/errors";

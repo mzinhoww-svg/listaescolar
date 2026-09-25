@@ -188,4 +188,71 @@ describe("modelos e fábrica por ambiente", () => {
     const g = openRouterProviderFactory({ apiKey: undefined, models: { cheap: "a" }, fetchImpl });
     expect(() => g("cheap")).toThrowError(expect.objectContaining({ code: "ai_not_configured" }));
   });
+  it("a chave fica em campo privado real (#apiKey): fora de JSON.stringify, keys, inspect e console", async () => {
+    const a = mk(reply(200, ok));
+    const { inspect } = await import("node:util");
+    expect(JSON.stringify(a)).not.toContain(KEY);
+    expect(Object.getOwnPropertyNames(a).join(",")).not.toMatch(/apiKey/i);
+    expect(inspect(a, { showHidden: true, depth: 5 })).not.toContain(KEY);
+    expect(String(a)).not.toContain(KEY);
+    const seen: string[] = [];
+    const orig = console.log;
+    console.log = (...args: unknown[]) => void seen.push(args.map((x) => inspect(x, { depth: 5 })).join(" "));
+    try {
+      console.log(a);
+    } finally {
+      console.log = orig;
+    }
+    expect(seen.join("")).not.toContain(KEY);
+    expect((a as unknown as Record<string, unknown>).apiKey).toBeUndefined();
+  });
+
+  it("corpo lido por stream com limite: aborta e recusa sem baixar tudo", async () => {
+    let pulled = 0;
+    let cancelled = false;
+    const chunk = new Uint8Array(1_000_000).fill(97);
+    const f: FetchLike = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => {
+        throw new Error("text() não deve ser usado quando há body");
+      },
+      body: {
+        getReader: () => ({
+          read: async () => {
+            pulled++;
+            return pulled > 50 ? { done: true } : { done: false, value: chunk };
+          },
+          cancel: async () => {
+            cancelled = true;
+          },
+        }),
+      },
+    });
+    const err = await mk(f).complete(req, {}).catch((e: unknown) => e);
+    expect(isAiError(err) && err.code).toBe("provider_error");
+    expect(pulled).toBeLessThanOrEqual(7);
+    expect(cancelled).toBe(true);
+  });
+
+  it("corpo por stream dentro do limite funciona", async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify(ok));
+    let done = false;
+    const f: FetchLike = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => "",
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (done) return { done: true };
+            done = true;
+            return { done: false, value: bytes };
+          },
+          cancel: async () => {},
+        }),
+      },
+    });
+    expect((await mk(f).complete(req, {})).text).toBe('{"items":[]}');
+  });
 });

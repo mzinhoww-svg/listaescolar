@@ -54,7 +54,7 @@ export class AiError extends Error {
 }
 
 export function isAiError(e: unknown): e is AiError {
-  return e instanceof AiError || (typeof e === "object" && e !== null && (e as { name?: unknown }).name === "AiError");
+  return e instanceof AiError;
 }
 
 /** Remove segredos conhecidos de um texto (defesa em profundidade; as mensagens já são fixas). */

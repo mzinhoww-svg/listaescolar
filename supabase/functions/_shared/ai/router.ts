@@ -1,13 +1,14 @@
 // Roteador barato-primeiro. Escala no máximo `max_escalations` (a cadeia tem só 2 rotas) e só por erro
 // transitório (Zod inválido, confiança baixa, timeout, erro 5xx/429). Uma decisão por tentativa.
 import type { ZodType } from "zod";
-import { AiError, isAiError } from "./errors.ts";
+import { AiError } from "./errors.ts";
 import { parseJsonLoose } from "./json.ts";
 import type {
   AiSettings,
   Clock,
   DecisionRecord,
   DecisionRecorder,
+  LlmProvider,
   LlmRequest,
   Prompt,
   PromptRegistry,
@@ -15,6 +16,7 @@ import type {
   ProviderName,
   Route,
   SettingsProvider,
+  Usage,
 } from "./types.ts";
 
 export type Evaluation = { overall: number; items: number[]; alerts: string[] };
@@ -41,6 +43,8 @@ export type RunResult<T> = {
   attempts: number;
   lowConfidence: boolean;
   pipelineVersion: string;
+  /** Tokens somados de todas as tentativas que responderam (inclusive as escaladas: também foram pagas). */
+  usage: Usage;
 };
 export type RouterDeps = {
   providers: ProviderFactories;
@@ -48,9 +52,33 @@ export type RouterDeps = {
   prompts: PromptRegistry;
   recorder: DecisionRecorder;
   clock: Clock;
+  /**
+   * O provedor `fake` só é usado se este flag for `true` E `env.NODE_ENV` não for "production".
+   * Default false. Composição de produção NUNCA passa `allowFake` (e NODE_ENV=production recusa mesmo assim).
+   */
+  allowFake?: boolean;
+  /** Só para teste: sobrescreve a leitura de NODE_ENV do processo. */
+  env?: { NODE_ENV?: string };
 };
 
-const CODE = /^[a-z][a-z0-9_]{0,63}$/;
+// Códigos de alerta do SPEC (seção de alertas). Qualquer outro código é descartado antes de gravar.
+export const ALERT_CODES: ReadonlySet<string> = new Set([
+  "low_confidence_item",
+  "ambiguous_item",
+  "handwritten",
+  "possible_collective_item",
+  "restrictive_brand_or_spec",
+  "text_document_mismatch",
+  "invalid_school_grade_year",
+]);
+
+function nodeEnv(): string | undefined {
+  try {
+    return (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV;
+  } catch {
+    return undefined;
+  }
+}
 const unit = (n: number) => (Number.isFinite(n) ? Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000 : 0);
 
 function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -71,17 +99,34 @@ function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
+type RouteCfg = AiSettings["routes"][Route];
+
 async function closed<V>(fn: () => Promise<V>, detail: string): Promise<V> {
   try {
     return await fn();
   } catch (e) {
-    if (isAiError(e)) throw e;
+    if (e instanceof AiError) throw e;
     throw new AiError("ai_not_configured", { detail });
   }
 }
 
 export function createRouter(deps: RouterDeps) {
   const { clock } = deps;
+  const fakeAllowed = () => deps.allowFake === true && (deps.env ? deps.env.NODE_ENV : nodeEnv()) !== "production";
+
+  /** Resolve o provedor da rota (falha fechada, sem rede). */
+  function resolve(settings: AiSettings, route: Route): { provider: LlmProvider; cfg: RouteCfg } {
+    const cfg = settings.routes[route];
+    if (cfg.provider === "fake" && !fakeAllowed()) throw new AiError("ai_not_configured", { detail: "fake_not_allowed" });
+    const factory = deps.providers[cfg.provider];
+    if (!factory) throw new AiError("ai_not_configured", { detail: "provider_unregistered" });
+    try {
+      return { provider: factory(route), cfg };
+    } catch (e) {
+      if (e instanceof AiError) throw e;
+      throw new AiError("ai_not_configured", { detail: "provider_unavailable" }); // nunca repassa e.message
+    }
+  }
 
   async function run<T>(task: Task<T>, opts: RunOptions): Promise<RunResult<T>> {
     const external = opts.signal;
@@ -94,12 +139,21 @@ export function createRouter(deps: RouterDeps) {
     const chain: Route[] = task.needsVision ? ["vision", "strong"] : ["cheap", "strong"];
     const maxAttempts = 1 + Math.min(settings.maxEscalations, chain.length - 1);
 
+    // Resolve TODA a cadeia antes da 1ª tentativa: se a rota de escalada não está configurada, falha fechado
+    // sem rede e sem decisão (evita `escalated` órfão e resultado pago perdido).
+    const resolved = chain.slice(0, maxAttempts).map((route) => resolve(settings, route));
+    const usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
+    const addUsage = (u: Usage | undefined) => {
+      if (!u) return;
+      for (const k of ["promptTokens", "completionTokens", "totalTokens"] as const) {
+        const v = u[k];
+        if (typeof v === "number" && Number.isFinite(v)) usage[k] = (usage[k] ?? 0) + v;
+      }
+    };
+
     for (let i = 0; i < maxAttempts; i++) {
       const route = chain[i] as Route;
-      const cfg = settings.routes[route];
-      const factory = deps.providers[cfg.provider];
-      if (!factory) throw new AiError("ai_not_configured", { detail: "provider_unregistered" });
-      const provider = factory(route); // AiError permanente se faltar chave/modelo: nada de rede, nada de decisão
+      const { provider, cfg } = resolved[i] as { provider: LlmProvider; cfg: RouteCfg };
 
       const startedAt = clock.now();
       const remaining = opts.budgetMs - (startedAt - t0);
@@ -121,6 +175,7 @@ export function createRouter(deps: RouterDeps) {
           controller.signal,
         );
         if (external?.aborted) throw new AiError("aborted");
+        addUsage(resp.usage);
         const parsed = task.schema.safeParse(parseJsonLoose(resp.text));
         if (!parsed.success) throw new AiError("invalid_output", { detail: "schema" });
         value = parsed.data;
@@ -128,8 +183,8 @@ export function createRouter(deps: RouterDeps) {
       } catch (e) {
         if (external?.aborted) throw new AiError("aborted");
         if (timedOut) failure = new AiError("provider_timeout");
-        else if (isAiError(e)) failure = e;
-        else failure = new AiError("provider_error", { transient: true, detail: "unexpected" });
+        else if (e instanceof AiError) failure = e;
+        else failure = new AiError("provider_error", { transient: false, detail: "unexpected" }); // bug local: não escala
       } finally {
         cancelTimer();
         external?.removeEventListener("abort", onExternal);
@@ -153,6 +208,7 @@ export function createRouter(deps: RouterDeps) {
             attempts: i + 1,
             lowConfidence: low,
             pipelineVersion: settings.pipelineVersion,
+            usage,
           };
         }
         await record(base, "escalated", "low_confidence", evaluation);
@@ -198,7 +254,7 @@ async function record<T>(b: RecordBase<T>, decision: DecisionRecord["decision"],
     pipelineVersion: b.settings.pipelineVersion,
     overallScore: ev ? unit(ev.overall) : null,
     itemScores: ev ? ev.items.slice(0, 2000).map(unit) : [],
-    alerts: ev ? ev.alerts.filter((a) => CODE.test(a)).slice(0, 200) : [],
+    alerts: ev ? ev.alerts.filter((a) => ALERT_CODES.has(a)).slice(0, 200) : [],
     decision,
     justification,
     attempt: b.attempt,

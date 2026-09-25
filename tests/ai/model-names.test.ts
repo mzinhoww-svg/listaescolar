@@ -1,10 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { loadModelsFromEnv, openRouterProviderFactory } from "@/supabase/functions/_shared/ai/openrouter.ts";
 
 const ROOT = process.cwd();
 const DIRS = ["lib", "features", "supabase/functions", "app", "components"];
-const MODEL_WORDS = /\b(deepseek|glm|gpt|gpt-\d\w*|claude|gemini|llama|mistral|qwen|anthropic|openai|sonnet|opus|haiku)\b/i;
+const MODEL_WORDS =
+  /(deepseek|\bglm|\bgpt|\bclaude|gemini|llama|mistral|qwen|anthropic|openai|sonnet|\bopus\b|haiku|grok|kimi|moonshot|x-ai|\bo[134]-?(mini|preview)?\b)/i;
 
 function walk(dir: string, out: string[] = []): string[] {
   let names: string[] = [];
@@ -23,6 +25,11 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 describe("nomes de modelo nunca ficam no código", () => {
+  it("o detector pega as famílias de modelo conhecidas (não é tautológico)", () => {
+    for (const w of ["gpt4o", "gpt-4o-mini", "grok-4", "kimi-k2", "o3", "o3-mini", "moonshot/kimi", "x-ai/grok", "deepseek-chat", "gemini-2.5", "claude-sonnet", "llama-3", "mistral-large", "qwen3", "z-ai/glm-4.6"])
+      expect(MODEL_WORDS.test(w), w).toBe(true);
+    for (const w of ["Caderno", "provider", "modelo", "route", "items", "escalation"]) expect(MODEL_WORDS.test(w), w).toBe(false);
+  });
   it("varredura de lib, features, supabase/functions, app e components", () => {
     const hits: string[] = [];
     for (const d of DIRS)
@@ -34,9 +41,19 @@ describe("nomes de modelo nunca ficam no código", () => {
           });
     expect(hits).toEqual([]);
   });
-  it("os modelos vêm só de AI_MODEL_* (o adapter não referencia outra variável de modelo)", () => {
-    const src = readFileSync(join(ROOT, "supabase/functions/_shared/ai/openrouter.ts"), "utf8");
-    expect(src).toContain("AI_MODEL_CHEAP");
-    expect(src).not.toMatch(/process\.env|Deno\.env/);
+  it("os modelos vêm só de AI_MODEL_*: loadModelsFromEnv ignora qualquer outra variável e a fábrica exige modelo", () => {
+    const models = loadModelsFromEnv({
+      AI_MODEL_CHEAP: " a ",
+      AI_MODEL_STRONG: "b",
+      AI_MODEL_VISION: "c",
+      MODEL: "x",
+      OPENROUTER_MODEL: "y",
+      AI_MODEL: "z",
+    });
+    expect(models).toEqual({ cheap: "a", strong: "b", vision: "c" });
+    expect(loadModelsFromEnv({ OPENROUTER_MODEL: "y", AI_MODEL: "z" })).toEqual({ cheap: undefined, strong: undefined, vision: undefined });
+    const factory = openRouterProviderFactory({ apiKey: "k-x", models: loadModelsFromEnv({}) });
+    for (const route of ["cheap", "strong", "vision"] as const) expect(() => factory(route)).toThrow();
+    expect(readFileSync(join(ROOT, "supabase/functions/_shared/ai/openrouter.ts"), "utf8")).not.toMatch(/process\.env|Deno\.env/);
   });
 });

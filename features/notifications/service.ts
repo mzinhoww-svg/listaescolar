@@ -25,14 +25,14 @@ export function vapidFromEnv(env: NodeJS.ProcessEnv = process.env): VapidConfig 
 export function buildNotifiers(env: NodeJS.ProcessEnv = process.env): Notifier[] {
   const enabled = t(env.EMAIL_NOTIFICATIONS_ENABLED) === "1" && t(env.EMAIL_API_KEY) !== "" && t(env.EMAIL_FROM) !== "";
   const transport = enabled ? new ResendEmailTransport({ apiKey: t(env.EMAIL_API_KEY), from: t(env.EMAIL_FROM) }) : new NullEmailTransport();
-  return [new WebPushNotifier({ vapid: vapidFromEnv(env) }), new EmailNotifier({ enabled, transport, siteOrigin: getSiteOrigin() })];
+  return [new WebPushNotifier({ vapid: vapidFromEnv(env), ...(env.APP_ENV ? { appEnv: env.APP_ENV } : {}) }), new EmailNotifier({ enabled, transport, siteOrigin: getSiteOrigin() })];
 }
 
 /** Um ciclo: expira tokens de reivindicação (D-047, gera claim_updated), despacha entregas e apaga notificações lidas antigas. */
 export async function runNotificationCycle(): Promise<{ expiredTokens: number; dispatch: DispatchSummary; purged: number }> {
   const repo = createNotificationRepo(createAdminClient());
   const expiredTokens = await repo.expireClaimTokens();
-  const dispatch = await runDispatch({ repo, notifiers: buildNotifiers(), limit: 25 });
+  const dispatch = await runDispatch({ repo, notifiers: buildNotifiers(), limit: 10 });
   const purged = await repo.purgeOld(READ_NOTIFICATION_RETENTION_DAYS);
   return { expiredTokens, dispatch, purged };
 }

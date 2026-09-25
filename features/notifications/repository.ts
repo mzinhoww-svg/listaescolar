@@ -8,6 +8,7 @@ import type { DeliveryPayload, MarkOutcome, NotificationRepo } from "./ports";
 
 const delivery = z.object({
   id: z.string().uuid(),
+  leaseId: z.string().uuid(),
   channel: z.enum(["web_push", "email"]),
   eventType: z.enum(NOTIFICATION_EVENTS),
   linkPath: z.string().max(300),
@@ -33,8 +34,8 @@ export function createNotificationRepo(client: Pick<SupabaseClient, "rpc">): Not
       if (!parsed.success) throw new Error("notification_invalid_response");
       return parsed.data;
     },
-    async mark(id: string, outcome: MarkOutcome, code: string | null, revoke: string[]) {
-      await call("notification_mark_delivery", { p_id: id, p_outcome: outcome, p_code: code, p_revoke: revoke.length > 0 ? revoke : null });
+    async mark(id: string, leaseId: string, outcome: MarkOutcome, code: string | null, revoke: string[]) {
+      await call("notification_mark_delivery", { p_id: id, p_lease: leaseId, p_outcome: outcome, p_code: code, p_revoke: revoke.length > 0 ? revoke : null });
     },
     async expireClaimTokens() {
       return z.number().int().parse(await call("claim_expire_tokens", {}));

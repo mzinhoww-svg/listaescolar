@@ -2,18 +2,22 @@
 import webpush from "web-push";
 
 import { pushPayload } from "./copy";
+import { isAllowedPushEndpoint } from "./push-endpoint";
 import type { DeliveryOutcome, DeliveryPayload, Notifier, PushSubscriptionRow } from "./ports";
 
 export type VapidConfig = { publicKey: string; privateKey: string; subject: string };
-export type PushSendOptions = { TTL: number; urgency: "very-low" | "low" | "normal" | "high"; vapidDetails: VapidConfig };
+export type PushSendOptions = { TTL: number; timeout: number; urgency: "very-low" | "low" | "normal" | "high"; vapidDetails: VapidConfig };
 export interface WebPushSender {
   send(sub: { endpoint: string; keys: { p256dh: string; auth: string } }, body: string, options: PushSendOptions): Promise<unknown>;
 }
 
 const defaultSender: WebPushSender = {
   send: (sub, body, options) =>
-    webpush.sendNotification(sub, body, { TTL: options.TTL, urgency: options.urgency, vapidDetails: { subject: options.vapidDetails.subject, publicKey: options.vapidDetails.publicKey, privateKey: options.vapidDetails.privateKey } }),
+    webpush.sendNotification(sub, body, { TTL: options.TTL, timeout: options.timeout, urgency: options.urgency, vapidDetails: { subject: options.vapidDetails.subject, publicKey: options.vapidDetails.publicKey, privateKey: options.vapidDetails.privateKey } }),
 };
+
+/** Teto por envio (o cliente `web-push` aplica `timeout` à requisição). */
+export const SEND_TIMEOUT_MS = 5000;
 
 const statusOf = (e: unknown): number | null => {
   const s = (e as { statusCode?: unknown } | null)?.statusCode;
@@ -24,8 +28,10 @@ export class WebPushNotifier implements Notifier {
   readonly channel = "web_push" as const;
   private readonly vapid: VapidConfig | null;
   private readonly sender: WebPushSender;
-  constructor(o: { vapid: VapidConfig | null; sender?: WebPushSender }) {
+  private readonly appEnv: string | undefined;
+  constructor(o: { vapid: VapidConfig | null; sender?: WebPushSender; appEnv?: string }) {
     this.vapid = o.vapid;
+    this.appEnv = o.appEnv;
     this.sender = o.sender ?? defaultSender;
   }
 
@@ -37,8 +43,12 @@ export class WebPushNotifier implements Notifier {
     let transient = false;
     let failCode: string | null = null;
     for (const s of d.subscriptions as PushSubscriptionRow[]) {
+      if (!isAllowedPushEndpoint(s.endpoint, this.appEnv)) {
+        revoke.push(s.id); // nunca chama host fora dos serviços de push (SSRF)
+        continue;
+      }
       try {
-        await this.sender.send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { TTL: 86_400, urgency: "normal", vapidDetails: this.vapid });
+        await this.sender.send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body, { TTL: 86_400, timeout: SEND_TIMEOUT_MS, urgency: "normal", vapidDetails: this.vapid });
         sent = true;
       } catch (e) {
         const status = statusOf(e);

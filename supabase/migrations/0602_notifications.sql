@@ -86,6 +86,7 @@ create table public.notification_deliveries (
   attempts integer not null default 0 check (attempts >= 0),
   next_attempt_at timestamptz not null default now(),
   locked_until timestamptz,
+  lease_id uuid, -- dono da lease atual: só ele marca o resultado (marcação atrasada não sobrescreve)
   last_error_code text check (last_error_code is null or last_error_code ~ '^[a-z][a-z0-9_]{0,59}$'), -- só código, sem texto do provedor
   sent_at timestamptz,
   created_at timestamptz not null default now(),
@@ -97,7 +98,11 @@ create index notification_deliveries_due_idx on public.notification_deliveries (
 create table public.push_subscriptions (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles (id) on delete cascade,
-  endpoint text not null check (length(endpoint) <= 2000 and (endpoint ~ '^https://[^\s]+$' or endpoint ~ '^http://(127\.0\.0\.1|localhost)(:[0-9]+)?/[^\s]*$')),
+  -- serviços de push conhecidos (anti-SSRF): nada de IP, host interno, porta, credencial ou http; loopback http só para E2E local
+  -- (o banco não conhece APP_ENV: a action e o notificador recusam loopback fora de local/development)
+  endpoint text not null check (length(endpoint) <= 2000 and (
+    endpoint ~ '^https://(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|([a-z0-9-]+\.)+push\.apple\.com|([a-z0-9-]+\.)+notify\.windows\.com)(/[^\s@]*)?$'
+    or endpoint ~ '^http://(127\.0\.0\.1|localhost)(:[0-9]+)?/[^\s]*$')),
   p256dh text not null check (p256dh ~ '^[A-Za-z0-9_-]{20,200}$'),
   auth text not null check (auth ~ '^[A-Za-z0-9_-]{10,100}$'),
   last_success_at timestamptz,
@@ -127,8 +132,8 @@ create table public.notification_preferences (
 create table public.list_watches (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles (id) on delete cascade,
-  school_id uuid not null references public.schools (id) on delete restrict,
-  grade_id uuid not null references public.grades (id) on delete restrict,
+  school_id uuid not null references public.schools (id) on delete cascade,
+  grade_id uuid not null references public.grades (id) on delete cascade,
   school_year integer not null check (school_year between 2000 and 2100),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -144,7 +149,7 @@ create trigger notification_preferences_set_updated_at before update on public.n
 create trigger list_watches_set_updated_at before update on public.list_watches for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- RLS e grants (o dono lê/marca as suas; entregas, flag e erros só pelo servidor)
+-- RLS e grants (o dono lê as suas; marcar como lida só por notifications_mark_read; entregas, flag e erros só pelo servidor)
 -- ---------------------------------------------------------------------------
 alter table public.notifications enable row level security;
 alter table public.notification_deliveries enable row level security;
@@ -157,7 +162,6 @@ alter table public.notification_emit_errors enable row level security;
 revoke all on public.notifications, public.notification_deliveries, public.push_subscriptions, public.notification_preferences,
   public.list_watches, public.notification_settings, public.notification_emit_errors from public, anon, authenticated, service_role;
 grant select on public.notifications to authenticated;
-grant update (read_at) on public.notifications to authenticated;
 grant select, delete on public.push_subscriptions to authenticated;
 grant select, insert, update, delete on public.notification_preferences to authenticated;
 grant select, delete on public.list_watches to authenticated;
@@ -166,8 +170,6 @@ grant select on public.notifications, public.notification_deliveries, public.pus
 grant select on public.notification_settings to service_role;
 
 create policy notifications_select_own on public.notifications for select to authenticated using (recipient_id = (select auth.uid()));
-create policy notifications_update_own on public.notifications for update to authenticated
-  using (recipient_id = (select auth.uid())) with check (recipient_id = (select auth.uid()));
 create policy push_subscriptions_select_own on public.push_subscriptions for select to authenticated using (profile_id = (select auth.uid()));
 create policy push_subscriptions_delete_own on public.push_subscriptions for delete to authenticated using (profile_id = (select auth.uid()));
 create policy notification_preferences_select_own on public.notification_preferences for select to authenticated using (profile_id = (select auth.uid()));
@@ -413,19 +415,23 @@ begin
   if p_limit is null or p_limit not between 1 and 50 then
     raise exception 'limite inválido' using errcode = '22023';
   end if;
+  -- lease vencida na 5ª tentativa: encerra (nunca retoma `sending` para sempre)
+  update public.notification_deliveries
+     set status = 'dead', locked_until = null, lease_id = null, last_error_code = 'lease_expired'
+   where status = 'sending' and locked_until < now() and attempts >= 5;
   return query
   with c as (
     select d.id from public.notification_deliveries d
      where (d.status in ('queued', 'failed') and d.next_attempt_at <= now() and (d.locked_until is null or d.locked_until < now()))
-        or (d.status = 'sending' and d.locked_until < now())
+        or (d.status = 'sending' and d.locked_until < now() and d.attempts < 5)
      order by d.next_attempt_at, d.id limit p_limit for update skip locked
   ), u as (
     update public.notification_deliveries d
-       set status = 'sending', locked_until = now() + interval '60 seconds', attempts = d.attempts + 1
+       set status = 'sending', locked_until = now() + interval '60 seconds', attempts = d.attempts + 1, lease_id = gen_random_uuid()
       from c where d.id = c.id returning d.*
   )
   select jsonb_build_object(
-      'id', u.id, 'channel', u.channel, 'eventType', n.event_type, 'linkPath', n.link_path, 'attempts', u.attempts, 'isDemo', n.is_demo,
+      'id', u.id, 'leaseId', u.lease_id, 'channel', u.channel, 'eventType', n.event_type, 'linkPath', n.link_path, 'attempts', u.attempts, 'isDemo', n.is_demo,
       'subscriptions', case when u.channel = 'web_push' then coalesce((
           select jsonb_agg(jsonb_build_object('id', s.id, 'endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth))
             from public.push_subscriptions s where s.profile_id = n.recipient_id and s.revoked_at is null), '[]'::jsonb) else '[]'::jsonb end,
@@ -435,7 +441,7 @@ end;
 $$;
 
 -- Resultado do envio: sent | transient (retry exponencial de 1, 2, 4, 8 min; dead na 5ª tentativa) | permanent (dead) | skipped.
-create function public.notification_mark_delivery(p_id uuid, p_outcome text, p_code text, p_revoke uuid[]) returns boolean
+create function public.notification_mark_delivery(p_id uuid, p_lease uuid, p_outcome text, p_code text, p_revoke uuid[]) returns boolean
 language plpgsql security definer set search_path = ''
 as $$
 declare
@@ -447,7 +453,9 @@ begin
   if p_code is not null and p_code !~ '^[a-z][a-z0-9_]{0,59}$' then
     raise exception 'código inválido' using errcode = '22023';
   end if;
-  select d.attempts into v_attempts from public.notification_deliveries d where d.id = p_id for update;
+  -- só o dono da lease vigente marca (marcação atrasada de outro despachante é ignorada)
+  select d.attempts into v_attempts from public.notification_deliveries d
+   where d.id = p_id and d.status = 'sending' and d.lease_id is not null and d.lease_id = p_lease for update;
   if not found then
     return false;
   end if;
@@ -457,6 +465,7 @@ begin
     sent_at = case when p_outcome = 'sent' then now() else sent_at end,
     next_attempt_at = case when p_outcome = 'transient' and v_attempts < 5 then now() + make_interval(mins => (2 ^ greatest(v_attempts - 1, 0))::int) else next_attempt_at end,
     locked_until = null,
+    lease_id = null,
     last_error_code = case when p_outcome = 'sent' then null else p_code end
    where id = p_id;
   if p_revoke is not null then
@@ -482,6 +491,9 @@ begin
   end if;
   delete from public.notifications where read_at is not null and read_at < now() - make_interval(days => p_days);
   get diagnostics n = row_count;
+  -- higiene do que não é lido pela central: erros de emissão e entregas encerradas com mais de 90 dias
+  delete from public.notification_emit_errors where created_at < now() - interval '90 days';
+  delete from public.notification_deliveries where status in ('dead', 'sent', 'skipped') and updated_at < now() - interval '90 days';
   return n;
 end;
 $$;
@@ -544,11 +556,21 @@ language plpgsql security definer set search_path = ''
 as $$
 declare
   v_id uuid;
+  v_owner uuid;
 begin
-  insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth) values (p_profile_id, p_endpoint, p_p256dh, p_auth)
-  on conflict (endpoint) do update
-    set profile_id = excluded.profile_id, p256dh = excluded.p256dh, auth = excluded.auth, revoked_at = null, failure_count = 0
-  returning id into v_id;
+  select s.id, s.profile_id into v_id, v_owner from public.push_subscriptions s where s.endpoint = p_endpoint for update;
+  if found then
+    -- o endpoint de outro perfil não é transferido (nem reativado): recusa
+    if v_owner is distinct from p_profile_id then
+      raise exception 'endpoint pertence a outro perfil' using errcode = '22023', hint = 'endpoint_owned';
+    end if;
+    update public.push_subscriptions set p256dh = p_p256dh, auth = p_auth, revoked_at = null, failure_count = 0 where id = v_id;
+    return v_id;
+  end if;
+  if (select count(*) from public.push_subscriptions s where s.profile_id = p_profile_id and s.revoked_at is null) >= 5 then
+    raise exception 'limite de assinaturas ativas' using errcode = '22023', hint = 'subscription_limit';
+  end if;
+  insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth) values (p_profile_id, p_endpoint, p_p256dh, p_auth) returning id into v_id;
   return v_id;
 end;
 $$;
@@ -560,12 +582,12 @@ revoke execute on function
   public.notification_email_enabled(), public.notification_emit(uuid, text, text, jsonb, text, boolean, boolean),
   public.notify_submission_status(), public.notify_review_rejected(), public.notify_publication_orphaned(), public.notify_list_published(),
   public.notify_lead_created(), public.notify_lead_status(), public.notify_claim_status(),
-  public.notification_claim_deliveries(int), public.notification_mark_delivery(uuid, text, text, uuid[]), public.notification_purge_old(int),
+  public.notification_claim_deliveries(int), public.notification_mark_delivery(uuid, uuid, text, text, uuid[]), public.notification_purge_old(int),
   public.notifications_mark_read(uuid, uuid[]), public.list_watch_add(uuid, uuid, text, int), public.list_watch_remove(uuid, uuid, text, int),
   public.push_subscription_upsert(uuid, text, text, text)
   from public, anon, authenticated, service_role;
 grant execute on function
   public.notification_emit(uuid, text, text, jsonb, text, boolean, boolean), public.notification_claim_deliveries(int),
-  public.notification_mark_delivery(uuid, text, text, uuid[]), public.notification_purge_old(int), public.notifications_mark_read(uuid, uuid[]),
+  public.notification_mark_delivery(uuid, uuid, text, text, uuid[]), public.notification_purge_old(int), public.notifications_mark_read(uuid, uuid[]),
   public.list_watch_add(uuid, uuid, text, int), public.list_watch_remove(uuid, uuid, text, int), public.push_subscription_upsert(uuid, text, text, text)
   to service_role;

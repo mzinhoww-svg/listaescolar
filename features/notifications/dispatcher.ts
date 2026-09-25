@@ -2,6 +2,8 @@ import type { DeliveryOutcome, MarkOutcome, NotificationRepo, Notifier } from ".
 
 export type DispatchSummary = { claimed: number; sent: number; failed: number; skipped: number };
 
+/** Orçamento total do ciclo (a rota tem teto de execução): lote limitado + parada ao estourar. */
+export const DEFAULT_BUDGET_MS = 25_000;
 const clamp = (n: number): number => Math.min(50, Math.max(1, Math.trunc(n) || 1));
 
 function toMark(o: DeliveryOutcome): { mark: MarkOutcome; code: string | null } {
@@ -14,10 +16,14 @@ function toMark(o: DeliveryOutcome): { mark: MarkOutcome; code: string | null } 
  * Um ciclo de despacho: reivindica entregas vencidas (lease no banco), entrega pelo notificador do canal e marca o resultado.
  * Retry exponencial e `dead` na 5ª tentativa são do banco (`notification_mark_delivery`). Falha de um item nunca derruba o lote.
  */
-export async function runDispatch(o: { repo: NotificationRepo; notifiers: readonly Notifier[]; limit: number }): Promise<DispatchSummary> {
+export async function runDispatch(o: { repo: NotificationRepo; notifiers: readonly Notifier[]; limit: number; budgetMs?: number; now?: () => number }): Promise<DispatchSummary> {
+  const now = o.now ?? Date.now;
+  const started = now();
+  const budget = o.budgetMs ?? DEFAULT_BUDGET_MS;
   const items = await o.repo.claim(clamp(o.limit));
   const summary: DispatchSummary = { claimed: items.length, sent: 0, failed: 0, skipped: 0 };
   for (const d of items) {
+    if (now() - started >= budget) break; // o que sobrou volta pela lease vencida (60 s)
     let outcome: DeliveryOutcome;
     const notifier = o.notifiers.find((n) => n.channel === d.channel);
     if (!notifier) outcome = { kind: "failed", transient: false, code: "channel_unavailable" };
@@ -30,7 +36,7 @@ export async function runDispatch(o: { repo: NotificationRepo; notifiers: readon
     }
     const { mark, code } = toMark(outcome);
     try {
-      await o.repo.mark(d.id, mark, code, outcome.revokeSubscriptionIds ?? []);
+      await o.repo.mark(d.id, d.leaseId, mark, code, outcome.revokeSubscriptionIds ?? []);
       if (outcome.kind === "sent") summary.sent += 1;
       else if (outcome.kind === "skipped") summary.skipped += 1;
       else summary.failed += 1;

@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { attempt, cleanupUsers, ensureSchool, IDS, inTx, seedUsers, withClaims, withSuperuser } from "./helpers";
+import { attempt, attemptH, cleanupUsers, ensureSchool, IDS, inTx, seedUsers, withClaims, withSuperuser } from "./helpers";
 import { asService, asSuper, tx } from "./review-fixtures";
 
 beforeAll(seedUsers);
@@ -10,7 +10,7 @@ afterAll(cleanupUsers);
 
 const emit = async (c: Client, o: { to?: string; event?: string; key?: string; params?: unknown; link?: string; demo?: boolean; inApp?: boolean } = {}) =>
   (await c.query("select public.notification_emit($1, $2, $3, $4::jsonb, $5, $6, $7) as id", [o.to ?? IDS.parent, o.event ?? "submission_ready", o.key ?? `k-${randomUUID()}`, JSON.stringify(o.params ?? {}), o.link ?? "/enviar-lista/abc", o.demo ?? false, o.inApp ?? false])).rows[0].id as string | null;
-const sub = async (c: Client, profile: string, endpoint = `https://push.example/${randomUUID()}`) =>
+const sub = async (c: Client, profile: string, endpoint = `https://fcm.googleapis.com/fcm/send/${randomUUID()}`) =>
   (await c.query("insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth) values ($1, $2, $3, $4) returning id", [profile, endpoint, "B".repeat(87), "a".repeat(22)])).rows[0].id as string;
 const pref = (c: Client, profile: string, event: string, channel: string, enabled = true) =>
   c.query("insert into public.notification_preferences (profile_id, event_type, channel, enabled) values ($1, $2, $3, $4)", [profile, event, channel, enabled]);
@@ -38,9 +38,10 @@ describe("tabelas, CHECKs e RLS", () => {
       await c.query("set local role authenticated");
       await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: IDS.parent })]);
       expect((await c.query("select id from public.notifications")).rows.map((r) => r.id)).toEqual([mine]);
-      expect((await attempt(c, "update public.notifications set read_at = now() where id = $1", [mine])).rowCount).toBe(1);
-      expect((await attempt(c, "update public.notifications set read_at = now() where id = $1", [theirs])).rowCount).toBe(0);
+      // nenhuma coluna é editável pela API: marcar como lida é só por notifications_mark_read (grava now())
+      expect((await attempt(c, "update public.notifications set read_at = '2000-01-01' where id = $1", [mine])).code).toBe("42501");
       expect((await attempt(c, "update public.notifications set params = '{}'::jsonb where id = $1", [mine])).code).toBe("42501");
+      expect(theirs).not.toBe(mine);
       expect((await attempt(c, "update public.notifications set recipient_id = $2 where id = $1", [mine, IDS.admin])).code).toBe("42501");
       expect((await attempt(c, "insert into public.notifications (recipient_id, event_type, event_key, link_path) values ($1, 'submission_ready', 'x', '/a')", [IDS.parent])).code).toBe("42501");
       expect((await attempt(c, "delete from public.notifications where id = $1", [mine])).code).toBe("42501");
@@ -76,16 +77,19 @@ describe("tabelas, CHECKs e RLS", () => {
   it("push_subscriptions: endpoint https ou loopback http; chaves base64url; dono lê/apaga; não cria pela API", async () => {
     await tx(async (c) => {
       const ins = (endpoint: string, p256dh = "B".repeat(87), auth = "a".repeat(22)) => attempt(c, "insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth) values ($1, $2, $3, $4)", [IDS.parent, endpoint, p256dh, auth]);
-      expect((await ins("http://evil.example/x")).code).toBe("23514");
-      expect((await ins("https://push.example/1", "não é base64!")).code).toBe("23514");
-      expect((await ins("https://push.example/1")).error).toBeNull();
+      for (const bad of ["http://evil.example/x", "https://evil.example/x", "https://127.0.0.1/x", "https://10.0.0.5/x", "https://[::1]/x", "https://localhost/x", "https://fcm.googleapis.com.evil.example/x", "https://user@fcm.googleapis.com/x", "https://fcm.googleapis.com:8443/x", "https://169.254.169.254/latest", "https://push.apple.com.evil.example/x"]) {
+        expect((await ins(bad)).code, bad).toBe("23514");
+      }
+      for (const good of ["https://updates.push.services.mozilla.com/wpush/v2/abc", "https://web.push.apple.com/abc", "https://wns2-par02p.notify.windows.com/w/?token=abc"]) expect((await ins(good)).error, good).toBeNull();
+      expect((await ins("https://fcm.googleapis.com/fcm/send/1", "não é base64!")).code).toBe("23514");
+      expect((await ins("https://fcm.googleapis.com/fcm/send/1")).error).toBeNull();
       expect((await ins("http://127.0.0.1:9999/p")).error).toBeNull();
-      expect((await ins("https://push.example/1")).code).toBe("23505");
+      expect((await ins("https://fcm.googleapis.com/fcm/send/1")).code).toBe("23505");
       await c.query("set local role authenticated");
       await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: IDS.parent })]);
-      expect((await c.query("select 1 from public.push_subscriptions")).rowCount).toBe(2);
-      expect((await attempt(c, "insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth) values ($1, 'https://p.example/2', $2, $3)", [IDS.parent, "B".repeat(87), "a".repeat(22)])).code).toBe("42501");
-      expect((await attempt(c, "delete from public.push_subscriptions")).rowCount).toBe(2);
+      expect((await c.query("select 1 from public.push_subscriptions")).rowCount).toBe(5);
+      expect((await attempt(c, "insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth) values ($1, 'https://fcm.googleapis.com/fcm/send/px2', $2, $3)", [IDS.parent, "B".repeat(87), "a".repeat(22)])).code).toBe("42501");
+      expect((await attempt(c, "delete from public.push_subscriptions")).rowCount).toBe(5);
     });
   });
 
@@ -167,7 +171,8 @@ describe("notification_emit e entregas", () => {
       expect(first[0].subscriptions).toHaveLength(1);
       expect((await c.query("select count(*)::int as n from public.notification_claim_deliveries(5)")).rows[0].n).toBe(0); // lease
       const id = first[0].id as string;
-      const mark = (o: string, code = "push_5xx") => c.query("select public.notification_mark_delivery($1, $2, $3, null) as r", [id, o, code]);
+      let lease = first[0].leaseId as string;
+      const mark = (o: string, code = "push_5xx") => c.query("select public.notification_mark_delivery($1, $2, $3, $4, null) as r", [id, lease, o, code]);
       await mark("transient");
       await asSuper(c);
       let d = (await c.query("select status, attempts, next_attempt_at > now() as later from public.notification_deliveries where notification_id = $1", [nid])).rows[0];
@@ -175,7 +180,8 @@ describe("notification_emit e entregas", () => {
       for (let i = 2; i <= 5; i++) {
         await c.query("update public.notification_deliveries set next_attempt_at = now() - interval '1 second', locked_until = null where notification_id = $1", [nid]);
         await asService(c);
-        expect((await c.query("select count(*)::int as n from public.notification_claim_deliveries(5)")).rows[0].n).toBe(1);
+        lease = (await c.query("select d->>'leaseId' as l from public.notification_claim_deliveries(5) as d")).rows[0].l as string;
+        expect(lease).toBeTruthy();
         await mark("transient");
         await asSuper(c);
       }
@@ -193,7 +199,7 @@ describe("notification_emit e entregas", () => {
         const nid = (await emit(c))!;
         await asService(c);
         const d = (await c.query("select * from public.notification_claim_deliveries(1) as d")).rows[0].d;
-        const r = await attempt(c, "select public.notification_mark_delivery($1, $2, $3, $4)", [d.id, outcome, outcome === "sent" ? null : "code_x", revoke]);
+        const r = await attempt(c, "select public.notification_mark_delivery($1, $2, $3, $4, $5)", [d.id, d.leaseId, outcome, outcome === "sent" ? null : "code_x", revoke]);
         await asSuper(c);
         return { r, status: (await c.query("select status from public.notification_deliveries where notification_id = $1", [nid])).rows[0].status as string };
       };
@@ -203,7 +209,7 @@ describe("notification_emit e entregas", () => {
       await run("permanent", [s]);
       expect((await c.query("select revoked_at is not null as r from public.push_subscriptions where id = $1", [s])).rows[0].r).toBe(true);
       await asService(c);
-      expect((await attempt(c, "select public.notification_mark_delivery(gen_random_uuid(), 'sent', 'Erro Livre com espaço', null)")).code).toBe("22023");
+      expect((await attempt(c, "select public.notification_mark_delivery(gen_random_uuid(), gen_random_uuid(), 'sent', 'Erro Livre com espaço', null)")).code).toBe("22023");
     });
   });
 
@@ -225,6 +231,7 @@ describe("notification_emit e entregas", () => {
     await withSuperuser(async (c) => {
       await c.query("delete from public.notifications where id = any($1::uuid[])", [ids]);
       await c.query("delete from public.push_subscriptions where profile_id = $1", [IDS.parent]);
+      await c.query("delete from public.notification_preferences where profile_id = $1", [IDS.parent]);
     });
   });
 
@@ -252,12 +259,12 @@ describe("privilégios das funções", () => {
     const fns: [string, string, unknown[]][] = [
       ["notification_emit", "$1, 'submission_ready', 'k', '{}'::jsonb, '/a', false, false", [IDS.parent]],
       ["notification_claim_deliveries", "1", []],
-      ["notification_mark_delivery", "gen_random_uuid(), 'sent', null, null", []],
+      ["notification_mark_delivery", "gen_random_uuid(), gen_random_uuid(), 'sent', null, null", []],
       ["notification_purge_old", "180", []],
       ["notifications_mark_read", "$1, null", [IDS.parent]],
       ["list_watch_add", "$1, gen_random_uuid(), 'ef-4', 2027", [IDS.parent]],
       ["list_watch_remove", "$1, gen_random_uuid(), 'ef-4', 2027", [IDS.parent]],
-      ["push_subscription_upsert", "$1, 'https://p.example/1', 'a', 'b'", [IDS.parent]],
+      ["push_subscription_upsert", "$1, 'https://fcm.googleapis.com/fcm/send/px1', 'a', 'b'", [IDS.parent]],
     ];
     for (const who of ["anon", "parent", "admin"] as const) {
       await withClaims(who, async (c) => {
@@ -270,3 +277,94 @@ describe("privilégios das funções", () => {
     });
   });
 });
+
+describe("correções da revisão de segurança (0602)", () => {
+  it("lease com dono: marcação de lease antiga ou sem lease é ignorada e não sobrescreve o resultado do dono atual", async () => {
+    await tx(async (c) => {
+      await pref(c, IDS.parent, "submission_ready", "web_push");
+      await sub(c, IDS.parent);
+      const nid = (await emit(c))!;
+      const did = (await c.query("select id from public.notification_deliveries where notification_id = $1", [nid])).rows[0].id as string;
+      const claimMine = async () => {
+        await asService(c);
+        const rows = (await c.query("select d from public.notification_claim_deliveries(50) as d")).rows.map((r) => r.d);
+        await asSuper(c);
+        return rows.find((d) => d.id === did);
+      };
+      const first = await claimMine();
+      await c.query("update public.notification_deliveries set locked_until = now() - interval '1 second' where id = $1", [did]);
+      const second = await claimMine();
+      expect(second.leaseId).not.toBe(first.leaseId);
+      await asService(c);
+      expect((await c.query("select public.notification_mark_delivery($1, $2, 'sent', null, null) as r", [did, first.leaseId])).rows[0].r).toBe(false);
+      expect((await c.query("select public.notification_mark_delivery($1, $2, 'permanent', 'push_4xx', null) as r", [did, null])).rows[0].r).toBe(false);
+      await asSuper(c);
+      expect((await deliveries(c, nid))[0].status).toBe("sending");
+      await asService(c);
+      expect((await c.query("select public.notification_mark_delivery($1, $2, 'sent', null, null) as r", [did, second.leaseId])).rows[0].r).toBe(true);
+    });
+  });
+
+  it("sending vencido com 5 tentativas vira dead no claim (nunca retoma para sempre)", async () => {
+    await tx(async (c) => {
+      await pref(c, IDS.parent, "submission_ready", "web_push");
+      await sub(c, IDS.parent);
+      const nid = (await emit(c))!;
+      await c.query("update public.notification_deliveries set status = 'sending', attempts = 5, locked_until = now() - interval '1 second', lease_id = gen_random_uuid() where notification_id = $1", [nid]);
+      await asService(c);
+      expect((await c.query("select count(*)::int as n from public.notification_claim_deliveries(5)")).rows[0].n).toBe(0);
+      await asSuper(c);
+      expect((await deliveries(c, nid))[0]).toMatchObject({ status: "dead", last_error_code: "lease_expired" });
+    });
+  });
+
+  it("push_subscription_upsert: teto de 5 ativas por perfil e endpoint de outro perfil recusado (sem transferir nem reativar)", async () => {
+    await tx(async (c) => {
+      await asService(c);
+      const up = (profile: string, n: number | string) => attemptUp(c, profile, `https://fcm.googleapis.com/fcm/send/${n}`);
+      for (let i = 0; i < 5; i++) expect((await up(IDS.parent, i)).error).toBeNull();
+      expect(await up(IDS.parent, 5)).toMatchObject({ code: "22023", hint: "subscription_limit" });
+      expect((await up(IDS.parent, 0)).error).toBeNull(); // o próprio endpoint só atualiza
+      expect(await up(IDS.school_member, 0)).toMatchObject({ code: "22023", hint: "endpoint_owned" });
+      await asSuper(c);
+      expect((await c.query("select profile_id from public.push_subscriptions where endpoint = 'https://fcm.googleapis.com/fcm/send/0'")).rows[0].profile_id).toBe(IDS.parent);
+      await c.query("update public.push_subscriptions set revoked_at = now() where endpoint = 'https://fcm.googleapis.com/fcm/send/1'");
+      await asService(c);
+      expect(await up(IDS.school_member, 1)).toMatchObject({ hint: "endpoint_owned" }); // revogado de outro dono também não é reaproveitado
+    });
+  });
+
+  it("purge_old também limpa erros de emissão e entregas encerradas com mais de 90 dias", async () => {
+    await tx(async (c) => {
+      await c.query("insert into public.notification_emit_errors (event_type, sqlstate, created_at) values ('x', '23514', now() - interval '100 days'), ('y', '23514', now())");
+      await pref(c, IDS.parent, "submission_ready", "web_push");
+      await sub(c, IDS.parent);
+      const old = (await emit(c))!;
+      const recent = (await emit(c))!;
+      await c.query("set local session_replication_role = replica"); // sem o gatilho de updated_at, para envelhecer a linha
+      await c.query("update public.notification_deliveries set status = 'dead', updated_at = now() - interval '100 days' where notification_id = $1", [old]);
+      await c.query("set local session_replication_role = origin");
+      await c.query("update public.notification_deliveries set status = 'dead' where notification_id = $1", [recent]);
+      await asService(c);
+      await c.query("select public.notification_purge_old(180)");
+      await asSuper(c);
+      expect((await c.query("select count(*)::int as n from public.notification_emit_errors where event_type in ('x', 'y')")).rows[0].n).toBe(1);
+      expect(await deliveries(c, old)).toEqual([]);
+      expect(await deliveries(c, recent)).toHaveLength(1);
+    });
+  });
+
+  it("list_watches: apagar escola ou série leva as inscrições junto (não trava reimportação)", async () => {
+    await tx(async (c) => {
+      const school = await ensureSchool(c);
+      await asService(c);
+      await c.query("select public.list_watch_add($1, $2, 'ef-4', 2027)", [IDS.parent, school]);
+      await asSuper(c);
+      await c.query("delete from public.schools where id = $1", [school]);
+      expect((await c.query("select count(*)::int as n from public.list_watches where school_id = $1", [school])).rows[0].n).toBe(0);
+    });
+  });
+});
+
+const attemptUp = (c: Client, profile: string, endpoint: string) =>
+  attemptH(c, "select public.push_subscription_upsert($1, $2, $3, $4)", [profile, endpoint, "B".repeat(87), "a".repeat(22)]);

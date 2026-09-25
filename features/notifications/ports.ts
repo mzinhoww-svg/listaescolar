@@ -6,6 +6,8 @@ export type PushSubscriptionRow = { id: string; endpoint: string; p256dh: string
 /** Uma entrega reivindicada (`notification_claim_deliveries`). Não carrega `params`: push e e-mail só levam o que o catálogo permite. */
 export type DeliveryPayload = {
   id: string;
+  /** Dono da lease: só ele marca o resultado (marcação atrasada é ignorada pelo banco). */
+  leaseId: string;
   channel: DeliveryChannel;
   eventType: NotificationEvent;
   linkPath: string;
@@ -29,7 +31,7 @@ export interface Notifier {
 export type MarkOutcome = "sent" | "transient" | "permanent" | "skipped";
 export interface NotificationRepo {
   claim(limit: number): Promise<DeliveryPayload[]>;
-  mark(id: string, outcome: MarkOutcome, code: string | null, revokeSubscriptionIds: string[]): Promise<void>;
+  mark(id: string, leaseId: string, outcome: MarkOutcome, code: string | null, revokeSubscriptionIds: string[]): Promise<void>;
 }
 
 /** Notificador para testes. */

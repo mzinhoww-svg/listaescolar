@@ -3,7 +3,7 @@ import { EmailNotifier } from "@/features/notifications/email-notifier";
 import { NullEmailTransport, ResendEmailTransport } from "@/features/notifications/email-transport";
 import type { DeliveryPayload } from "@/features/notifications/ports";
 
-const delivery: DeliveryPayload = { id: "d1", channel: "email", eventType: "lead_quote_sent", linkPath: "/cotacao/LC-5TJ1", attempts: 1, isDemo: false, subscriptions: [], email: "pai@exemplo.invalid" };
+const delivery: DeliveryPayload = { id: "d1", leaseId: "l1", channel: "email", eventType: "lead_quote_sent", linkPath: "/cotacao/LC-5TJ1", attempts: 1, isDemo: false, subscriptions: [], email: "pai@exemplo.invalid" };
 const resp = (status: number) => vi.fn(async () => new Response("{}", { status }));
 
 describe("EmailNotifier", () => {

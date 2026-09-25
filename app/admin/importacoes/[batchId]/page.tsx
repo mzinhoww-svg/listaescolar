@@ -6,8 +6,8 @@ import { CountCard } from "@/components/admin/CountCard";
 import { DemoBadge } from "@/components/admin/DemoBadge";
 import { StatusChip } from "@/components/admin/StatusChip";
 import { requireAccess } from "@/features/auth/guard";
-import { describeError } from "@/features/schools/error-report";
-import { countWarningRows, getBatch, getErrorRows } from "@/features/schools/queries";
+import { describeError, describeFileError } from "@/features/schools/error-report";
+import { countWarningRows, getBatch, getErrorRowsPreview } from "@/features/schools/queries";
 
 export const dynamic = "force-dynamic";
 const PREVIEW = 50;
@@ -19,8 +19,9 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
   if (!id.success) notFound();
   const batch = await getBatch(id.data);
   if (!batch) notFound();
-  const [errors, warnings] = await Promise.all([getErrorRows(id.data), countWarningRows(id.data)]);
+  const [errors, warnings] = await Promise.all([getErrorRowsPreview(id.data, PREVIEW), countWarningRows(id.data)]);
   const t = batch.totals;
+  const errorTotal = t.rejected + t.duplicate;
   return (
     <AdminShell
       active="/admin/importacoes"
@@ -32,7 +33,7 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
         <StatusChip status={batch.status} />
         {batch.isDemo ? <DemoBadge /> : null}
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         <CountCard label="Total" value={t.total} />
         <CountCard label="Inseridas" value={t.inserted} />
         <CountCard label="Atualizadas" value={t.updated} />
@@ -41,20 +42,30 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
         <CountCard label="Rejeitadas" value={t.rejected} />
         <CountCard label="Linhas com aviso" value={warnings} hint="Município alterado ou mantido" />
       </div>
+      {batch.fileErrors.length > 0 ? (
+        <section role="alert" className="rounded-card flex flex-col gap-2 bg-red-50 px-6 py-6 text-red-900">
+          <h2 className="text-lg font-extrabold">Erros do arquivo</h2>
+          <ul className="list-disc pl-5 text-[15px]">
+            {batch.fileErrors.map((e, i) => (
+              <li key={`${e.code}-${i}`}>{describeFileError(e)}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <section className="rounded-card bg-branco-tonal flex flex-col gap-3 px-6 py-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold">Linhas com problema ({errors.length})</h2>
-          {errors.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-extrabold">Linhas com problema ({errorTotal})</h2>
+          {errorTotal + batch.fileErrors.length > 0 ? (
             <a href={`/admin/importacoes/${id.data}/erros.csv`} className="text-verde-fundo font-extrabold underline">
               Baixar erros
             </a>
           ) : null}
         </div>
-        {errors.length === 0 ? (
+        {errorTotal === 0 ? (
           <p className="text-texto-2 text-[15px]">Nenhuma linha com erro neste lote.</p>
         ) : (
           <ul className="flex flex-col gap-2 text-[15px]">
-            {errors.slice(0, PREVIEW).map((r) => (
+            {errors.map((r) => (
               <li key={r.rowNumber}>
                 <strong>Linha {r.rowNumber}</strong> · {r.action === "rejected" ? "Rejeitada" : "Duplicada"} ·{" "}
                 {r.errors.map(describeError).join(" ") || "sem detalhe"}
@@ -62,8 +73,8 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
             ))}
           </ul>
         )}
-        {errors.length > PREVIEW ? (
-          <p className="text-texto-3 text-[13px]">Mostrando {PREVIEW} de {errors.length}. O CSV traz todas.</p>
+        {errorTotal > PREVIEW ? (
+          <p className="text-texto-3 text-[13px]">Mostrando {PREVIEW} de {errorTotal}. O CSV traz todas.</p>
         ) : null}
       </section>
     </AdminShell>

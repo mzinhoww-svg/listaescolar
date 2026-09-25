@@ -6,6 +6,7 @@ import type {
   ClaimInput,
   ClaimResult,
   ErrorRow,
+  FileError,
   SchoolCounts,
   SchoolsImportRepository,
   Totals,
@@ -17,7 +18,7 @@ import { z } from "zod";
 export interface AdminGateway {
   rpc(fn: "import_claim_batch" | "import_apply_rows", args: Record<string, unknown>): Promise<unknown>;
   /** status + finished_at do lote, `where status <> 'completed'`; nunca toca contadores. */
-  finishBatch(batchId: string, status: "completed" | "failed"): Promise<void>;
+  finishBatch(batchId: string, status: "completed" | "failed", fileErrors: FileError[]): Promise<void>;
   selectBatch(batchId: string): Promise<unknown | null>;
   /** Linhas de import_rows com problema (rejected, ou duplicate com `unchanged = false`). */
   selectErrorRows(batchId: string, offset: number, limit: number): Promise<unknown[]>;
@@ -63,6 +64,7 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
           rejected: b.rejected_count,
           unchanged: b.unchanged_count,
         },
+        fileErrors: b.file_errors,
       };
     },
 
@@ -71,7 +73,7 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
       return totalsSchema.parse(data);
     },
 
-    finishBatch: (batchId, status) => gw.finishBatch(batchId, status),
+    finishBatch: (batchId, status, fileErrors = []) => gw.finishBatch(batchId, status, fileErrors),
 
     async getErrorRows(batchId: string): Promise<ErrorRow[]> {
       const out: ErrorRow[] = [];
@@ -80,6 +82,11 @@ export function createSchoolsRepository(gw: AdminGateway): SchoolsImportReposito
         for (const r of page) out.push({ rowNumber: r.row_number, action: r.action, errors: r.errors, raw: r.raw });
         if (page.length < PAGE) return out;
       }
+    },
+
+    async getErrorRowsPreview(batchId: string, limit: number): Promise<ErrorRow[]> {
+      const page = z.array(errorRowSchema).parse(await gw.selectErrorRows(batchId, 0, limit));
+      return page.map((r) => ({ rowNumber: r.row_number, action: r.action, errors: r.errors, raw: r.raw }));
     },
 
     countWarningRows: (batchId) => gw.countWarningRows(batchId),

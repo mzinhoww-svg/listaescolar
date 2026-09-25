@@ -1,4 +1,4 @@
-import type { ErrorRow, RowError } from "./ports";
+import type { ErrorRow, FileError, RowError } from "./ports";
 import { INEP_COLUMNS } from "./schemas";
 
 const MESSAGES: Record<string, string> = {
@@ -24,6 +24,11 @@ export function describeErrorCode(code: string): string {
   return MESSAGES[code] ?? code;
 }
 
+/** Erros do arquivo já vêm com mensagem em português (parser); o código conhecido tem prioridade. */
+export function describeFileError(e: FileError): string {
+  return MESSAGES[e.code] ?? (e.message || e.code);
+}
+
 export function describeError(e: RowError): string {
   return MESSAGES[e.code] ?? (e.message ? `${e.code}: ${e.message}` : e.code);
 }
@@ -42,9 +47,12 @@ function csvCell(value: unknown): string {
 const ACTION_LABEL: Record<ErrorRow["action"], string> = { rejected: "Rejeitada", duplicate: "Duplicada" };
 
 /** CSV (separador `;`, BOM para Excel) com uma linha por erro de linha do lote. */
-export function buildErrorReportCsv(rows: ErrorRow[]): string {
+export function buildErrorReportCsv(rows: ErrorRow[], fileErrors: FileError[] = []): string {
   const header = ["linha", "situacao", "codigo", "mensagem", ...INEP_COLUMNS];
   const lines = [header.join(";")];
+  for (const e of fileErrors) {
+    lines.push(["", "Arquivo", e.code, describeFileError(e), ...INEP_COLUMNS.map(() => "")].map(csvCell).join(";"));
+  }
   for (const row of rows) {
     const errors = row.errors.length > 0 ? row.errors : [{ code: "sem_detalhe", message: "" }];
     const raw = row.raw ?? {};

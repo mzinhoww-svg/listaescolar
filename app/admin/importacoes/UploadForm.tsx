@@ -1,40 +1,53 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { startTransition, useActionState, useRef, useState } from "react";
 
 import { ImportResult } from "@/components/admin/ImportResult";
 import { IDLE, uploadFileSchema, type UploadState } from "@/features/schools/upload-schema";
 
 import { uploadInepCsv } from "./actions";
 
+type Sent = { file: File; isDemo: boolean };
+
 export function UploadForm() {
   const [state, formAction, pending] = useActionState<UploadState, FormData>(uploadInepCsv, IDLE);
   const [localError, setLocalError] = useState<string | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  // Último envio guardado em memória: o formulário é zerado pelo React 19 após cada action, então o
+  // retry não pode reler o input de arquivo.
+  const lastSent = useRef<Sent | null>(null);
+
+  function send({ file, isDemo }: Sent) {
+    lastSent.current = { file, isDemo };
+    const fd = new FormData();
+    fd.set("file", file);
+    if (isDemo) fd.set("isDemo", "on");
+    startTransition(() => formAction(fd));
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     const input = e.currentTarget.elements.namedItem("file");
+    const demo = e.currentTarget.elements.namedItem("isDemo");
     const file = input instanceof HTMLInputElement ? input.files?.[0] : undefined;
     const check =
       file && file.size > 0
         ? uploadFileSchema.safeParse({ name: file.name, size: file.size, type: file.type })
         : null;
-    if (!check) {
-      e.preventDefault();
-      setLocalError("Selecione um arquivo CSV.");
-    } else if (!check.success) {
-      e.preventDefault();
-      setLocalError(check.error.issues[0]?.message ?? "Arquivo inválido.");
-    } else setLocalError(null);
+    if (!file || !check) return setLocalError("Selecione um arquivo CSV.");
+    if (!check.success) return setLocalError(check.error.issues[0]?.message ?? "Arquivo inválido.");
+    setLocalError(null);
+    send({ file, isDemo: demo instanceof HTMLInputElement && demo.checked });
   }
 
+  const retry = () => {
+    if (lastSent.current) send(lastSent.current);
+  };
   const message = localError ?? (state.status === "error" ? state.message : null);
 
   return (
     <div className="flex flex-col gap-5">
       <form
-        ref={formRef}
-        action={formAction}
         onSubmit={onSubmit}
         noValidate
         className="rounded-card bg-branco-tonal flex flex-col gap-4 px-6 py-6"
@@ -45,14 +58,22 @@ export function UploadForm() {
             type="file"
             name="file"
             accept=".csv,text/csv"
-            onChange={() => setLocalError(null)}
-            className="bg-campo rounded-campo px-4 py-3 text-[15px] font-normal"
+            onChange={(e) => {
+              setLocalError(null);
+              setFileName(e.currentTarget.files?.[0]?.name ?? null);
+            }}
+            className="peer sr-only"
           />
+          <span className="flex items-center gap-3 font-normal peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">
+            <span className="bg-campo rounded-botao px-4 py-2 text-[15px] font-extrabold">Escolher arquivo</span>
+            <span className="text-texto-2 truncate">{fileName ?? "Nenhum arquivo selecionado"}</span>
+          </span>
         </label>
         <label className="flex items-center gap-2 text-[15px]">
           <input type="checkbox" name="isDemo" className="size-4" />
           Importação de demonstração (dados fictícios)
         </label>
+        <p className="text-texto-3 text-[13px]">Até 4 MB. Arquivos maiores entram pelo script de importação.</p>
         <button
           type="submit"
           disabled={pending}
@@ -68,7 +89,7 @@ export function UploadForm() {
           {state.status === "error" && state.retryable && !localError ? (
             <button
               type="button"
-              onClick={() => formRef.current?.requestSubmit()}
+              onClick={retry}
               className="rounded-botao border-[1.5px] border-red-900 px-4 py-1.5 text-sm font-extrabold"
             >
               Tentar novamente
@@ -88,7 +109,7 @@ export function UploadForm() {
         </div>
       ) : null}
 
-      {state.status === "success" && !localError ? <ImportResult {...state} /> : null}
+      {state.status === "success" && !localError ? <ImportResult {...state} onRetry={retry} /> : null}
     </div>
   );
 }

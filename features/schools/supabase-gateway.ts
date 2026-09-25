@@ -6,7 +6,7 @@ import { createSchoolsRepository, type AdminGateway } from "./repository";
 import type { SchoolsImportRepository } from "./ports";
 
 const BATCH_COLUMNS =
-  "id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count,unchanged_count";
+  "id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count,unchanged_count,file_errors";
 
 /** Gateway real: supabase-js com a chave secreta (só servidor). */
 export function createSupabaseGateway(client = createAdminClient()): AdminGateway {
@@ -16,10 +16,10 @@ export function createSupabaseGateway(client = createAdminClient()): AdminGatewa
       if (error) throw new Error(`${fn}: ${error.message}`);
       return data;
     },
-    async finishBatch(batchId, status) {
+    async finishBatch(batchId, status, fileErrors) {
       const { error } = await client
         .from("import_batches")
-        .update({ status, finished_at: new Date().toISOString() })
+        .update({ status, finished_at: new Date().toISOString(), file_errors: status === "failed" ? fileErrors : [] })
         .eq("id", batchId)
         .neq("status", "completed");
       if (error) throw new Error(`import_batches update: ${error.message}`);

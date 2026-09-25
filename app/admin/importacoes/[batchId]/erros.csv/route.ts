@@ -5,6 +5,7 @@ import { buildErrorReportCsv, safeReportFileName } from "@/features/schools/erro
 import { getBatch, getErrorRows } from "@/features/schools/queries";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ batchId: string }> }) {
   if (!(await getCurrentUser())) return new Response("Não autenticado", { status: 401 });
@@ -12,8 +13,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ batchId: strin
   const { batchId } = await ctx.params;
   const id = z.string().uuid().safeParse(batchId);
   if (!id.success) return new Response("Lote inválido", { status: 404 });
-  if (!(await getBatch(id.data))) return new Response("Lote não encontrado", { status: 404 });
-  const csv = buildErrorReportCsv(await getErrorRows(id.data));
+  const batch = await getBatch(id.data);
+  if (!batch) return new Response("Lote não encontrado", { status: 404 });
+  const csv = buildErrorReportCsv(await getErrorRows(id.data), batch.fileErrors);
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

@@ -24,6 +24,9 @@ create table public.import_batches (
   duplicate_count integer not null default 0 check (duplicate_count >= 0),
   rejected_count integer not null default 0 check (rejected_count >= 0),
   unchanged_count integer not null default 0 check (unchanged_count >= 0), -- escolas já iguais (import_rows.unchanged)
+  -- erros do arquivo (colunas ausentes, codificação, falha de processamento): gravados ao fechar o lote como failed.
+  file_errors jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(file_errors) = 'array' and length(file_errors::text) <= 20000),
   status public.import_status not null default 'pending',
   imported_by uuid references public.profiles (id) on delete set null,
   started_at timestamptz,
@@ -165,7 +168,8 @@ begin
   end if;
 
   update public.import_batches b
-     set status = 'processing', started_at = coalesce(b.started_at, now()), finished_at = null
+     set status = 'processing', started_at = coalesce(b.started_at, now()), finished_at = null,
+         file_errors = '[]'::jsonb
    where b.file_hash = p_file_hash
      and b.is_demo = v_demo
      and (b.status in ('pending', 'failed')

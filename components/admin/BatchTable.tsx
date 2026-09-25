@@ -21,15 +21,9 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
       <table className="w-full border-collapse text-[15px] whitespace-nowrap">
         <thead>
           <tr className="border-linha border-b">
-            <th className={TH}>Arquivo</th>
-            <th className={TH}>Data</th>
+            <th className={TH}>Arquivo e data</th>
             <th className={TH}>Status</th>
-            <th className={TH}>Total</th>
-            <th className={TH}>Ins.</th>
-            <th className={TH}>Atual.</th>
-            <th className={TH}>Sem alt.</th>
-            <th className={TH}>Dupl.</th>
-            <th className={TH}>Rej.</th>
+            <th className={TH}>Resultado</th>
             <th className={TH}>Erros</th>
           </tr>
         </thead>
@@ -41,19 +35,23 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
                   {b.file_name}
                 </Link>{" "}
                 {b.is_demo ? <DemoBadge /> : null}
+                <span className="text-texto-3 mt-0.5 block text-[13px] font-normal">
+                  {dateFmt.format(new Date(b.created_at))}
+                </span>
               </td>
-              <td className="px-5 py-4">{dateFmt.format(new Date(b.created_at))}</td>
               <td className="px-5 py-4">
                 <StatusChip status={b.status} />
               </td>
-              <td className="px-5 py-4">{b.total_rows}</td>
-              <td className="px-5 py-4">{b.inserted_count}</td>
-              <td className="px-5 py-4">{b.updated_count}</td>
-              <td className="px-5 py-4">{b.unchanged_count}</td>
-              <td className="px-5 py-4">{b.duplicate_count}</td>
-              <td className="px-5 py-4">{b.rejected_count}</td>
+              <td className="text-texto-2 px-5 py-4 text-[13px] leading-snug">
+                <span className="block">
+                  {b.total_rows} linhas · {b.inserted_count} inseridas · {b.updated_count} atualizadas
+                </span>
+                <span className="block">
+                  {b.unchanged_count} sem alteração · {b.duplicate_count} duplicadas · {b.rejected_count} rejeitadas
+                </span>
+              </td>
               <td className="px-5 py-4">
-                {b.rejected_count + b.duplicate_count > 0 ? (
+                {b.rejected_count + b.duplicate_count + b.file_errors.length > 0 ? (
                   <a href={`/admin/importacoes/${b.id}/erros.csv`} className="text-verde-fundo font-extrabold underline">
                     Baixar erros
                   </a>

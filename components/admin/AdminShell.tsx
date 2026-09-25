@@ -9,7 +9,8 @@ const NAV = [
 
 type Props = {
   active: "/admin" | "/admin/importacoes";
-  email: string | undefined;
+  /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
+  email: string | null | undefined;
   breadcrumb: string;
   title: string;
   children: React.ReactNode;
@@ -37,12 +38,14 @@ export function AdminShell({ active, email, breadcrumb, title, children }: Props
             </Link>
           ))}
         </nav>
-        <div className="mt-auto flex items-center gap-3">
-          <span className="bg-verde-certo text-tinta flex size-10 items-center justify-center rounded-full text-xs font-extrabold">
-            {initials}
-          </span>
-          <span className="truncate text-[13px]">{email ?? "indisponível"}</span>
-        </div>
+        {email === null ? null : (
+          <div className="mt-auto flex items-center gap-3">
+            <span className="bg-verde-certo text-tinta flex size-10 items-center justify-center rounded-full text-xs font-extrabold">
+              {initials}
+            </span>
+            <span className="truncate text-[13px]">{email ?? "indisponível"}</span>
+          </div>
+        )}
       </aside>
       <main className="flex min-w-0 flex-1 flex-col gap-6 px-10 py-9">
         <header>

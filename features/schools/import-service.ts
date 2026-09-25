@@ -97,7 +97,7 @@ export async function importInepFile(input: ImportInput, deps: ImportDeps): Prom
 
   const parsed = parseInepCsv(input.buffer);
   if (parsed.errors.length > 0) {
-    await repo.finishBatch(claim.batchId, "failed");
+    await repo.finishBatch(claim.batchId, "failed", parsed.errors);
     return {
       batchId: claim.batchId,
       alreadyExisted: claim.alreadyExisted,
@@ -122,16 +122,14 @@ export async function importInepFile(input: ImportInput, deps: ImportDeps): Prom
       totals.rejected += t.rejected;
       totals.unchanged += t.unchanged;
     }
-  } catch (e) {
+  } catch {
     status = "failed";
-    fileErrors.push({
-      code: "processing_failed",
-      message: `Falha ao processar o arquivo: ${e instanceof Error ? e.message : "erro desconhecido"}`,
-    });
+    // Detalhe técnico fica fora da mensagem (pode vir do banco); o lote failed permite retomar.
+    fileErrors.push({ code: "processing_failed", message: "Falha ao processar o arquivo." });
   }
 
   try {
-    await repo.finishBatch(claim.batchId, status);
+    await repo.finishBatch(claim.batchId, status, fileErrors);
   } catch (e) {
     if (status === "completed") throw e; // sem fechar o lote não há como afirmar sucesso.
   }

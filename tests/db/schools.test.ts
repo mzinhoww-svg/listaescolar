@@ -66,7 +66,7 @@ describe("schools e importações: schema", () => {
     ],
     import_batches: [
       "id", "file_name", "file_hash", "source", "total_rows", "inserted_count", "updated_count",
-      "duplicate_count", "rejected_count", "unchanged_count", "status", "imported_by", "started_at", "finished_at", "is_demo",
+      "duplicate_count", "rejected_count", "unchanged_count", "file_errors", "status", "imported_by", "started_at", "finished_at", "is_demo",
       "created_at", "updated_at",
     ],
     import_rows: ["id", "batch_id", "row_number", "raw", "normalized", "errors", "action", "unchanged", "created_at", "updated_at"],

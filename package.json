@@ -15,7 +15,8 @@
     "db:stop": "node scripts/supa.mjs stop",
     "db:reset": "node scripts/supa.mjs db reset",
     "db:status": "node scripts/supa.mjs status",
-    "db:env": "node scripts/supa.mjs env"
+    "db:env": "node scripts/supa.mjs env",
+    "import:inep": "tsx --conditions=react-server scripts/import-inep.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "^11.0.0",
@@ -48,6 +49,7 @@
     "prettier": "^3.9.9",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.1"
   },

@@ -6,6 +6,7 @@ import type {
   ClaimInput,
   ClaimResult,
   ErrorRow,
+  FileError,
   RowAction,
   RowError,
   SchoolCounts,
@@ -15,7 +16,7 @@ import type {
 
 type School = { inep: string; name: string; normalized: string; ibge: string; network: string; verification: string; isDemo: boolean };
 type MemRow = { action: RowAction; inep: string | null; errors: RowError[]; raw: Record<string, string>; unchanged: boolean };
-type Batch = { id: string; hash: string; status: BatchStatus; isDemo: boolean; stale: boolean; rows: Map<number, MemRow> };
+type Batch = { id: string; hash: string; status: BatchStatus; isDemo: boolean; stale: boolean; fileErrors: FileError[]; rows: Map<number, MemRow> };
 
 /**
  * Repositório em memória que aproxima `import_apply_rows`/`import_claim_batch` só para testar a orquestração do
@@ -51,11 +52,12 @@ export class MemoryRepo implements SchoolsImportRepository {
       if (owner) {
         b.status = "processing";
         b.stale = false;
+        b.fileErrors = [];
       }
       return { batchId: b.id, alreadyExisted: true, status: b.status, owner, isDemo: b.isDemo };
     }
     const id = `batch-${this.batches.size + 1}`;
-    this.batches.set(id, { id, hash: input.fileHash, status: "processing", isDemo: input.isDemo, stale: false, rows: new Map() });
+    this.batches.set(id, { id, hash: input.fileHash, status: "processing", isDemo: input.isDemo, stale: false, fileErrors: [], rows: new Map() });
     return { batchId: id, alreadyExisted: false, status: "processing", owner: true, isDemo: input.isDemo };
   }
 
@@ -73,7 +75,7 @@ export class MemoryRepo implements SchoolsImportRepository {
     const b = this.batches.get(batchId);
     if (!b) return null;
     const t = this.totalsOf(b);
-    return { batchId, status: b.status, isDemo: b.isDemo, totals: { ...t, total: b.rows.size } };
+    return { batchId, status: b.status, isDemo: b.isDemo, totals: { ...t, total: b.rows.size }, fileErrors: b.fileErrors };
   }
 
   async applyRows(batchId: string, rows: ApplyRow[]): Promise<Totals> {
@@ -121,9 +123,16 @@ export class MemoryRepo implements SchoolsImportRepository {
     return this.totalsOf(b, rows.map((r) => r.row_number));
   }
 
-  async finishBatch(batchId: string, status: "completed" | "failed"): Promise<void> {
+  async finishBatch(batchId: string, status: "completed" | "failed", fileErrors: FileError[] = []): Promise<void> {
     const b = this.batches.get(batchId);
-    if (b && b.status !== "completed") b.status = status;
+    if (b && b.status !== "completed") {
+      b.status = status;
+      b.fileErrors = status === "failed" ? fileErrors : [];
+    }
+  }
+
+  async getErrorRowsPreview(batchId: string, limit: number): Promise<ErrorRow[]> {
+    return (await this.getErrorRows(batchId)).slice(0, limit);
   }
 
   async getErrorRows(batchId: string): Promise<ErrorRow[]> {

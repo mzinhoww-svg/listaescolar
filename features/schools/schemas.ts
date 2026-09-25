@@ -130,6 +130,7 @@ export const batchRowSchema = z.object({
   duplicate_count: int,
   rejected_count: int,
   unchanged_count: int,
+  file_errors: z.array(z.object({ code: z.string(), message: z.string(), column: z.string().optional() })),
 });
 export const errorRowSchema = z.object({
   row_number: z.number().int().positive(),

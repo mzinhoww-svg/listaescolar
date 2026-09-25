@@ -55,3 +55,12 @@ describe("safeReportFileName", () => {
     expect(safeReportFileName('a"b\r\nc/../d')).toBe("erros-importacao-abcd.csv");
   });
 });
+
+describe("buildErrorReportCsv com erros do arquivo", () => {
+  it("inclui os erros do arquivo como linhas sem número, antes das linhas com problema", () => {
+    const csv = buildErrorReportCsv([], [{ code: "missing_column", message: "Coluna obrigatória ausente: TP_DEPENDENCIA" }]);
+    const lines = csv.replace("\uFEFF", "").trim().split("\r\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]?.startsWith(";Arquivo;missing_column;Coluna obrigatória ausente: TP_DEPENDENCIA;")).toBe(true);
+  });
+});

@@ -9,6 +9,8 @@ import { countSchools, listBatches } from "@/features/schools/queries";
 import { UploadForm } from "./UploadForm";
 
 export const dynamic = "force-dynamic";
+// A Server Action de upload herda o limite desta rota (ver Ruling de limite de tempo em ledger-dados.md).
+export const maxDuration = 60;
 
 async function load() {
   try {

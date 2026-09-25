@@ -28,15 +28,15 @@ const gateway: AdminGateway = {
     ]);
     return r.rows[0]?.r;
   },
-  async finishBatch(id, status) {
+  async finishBatch(id, status, fileErrors) {
     await client.query(
-      "update public.import_batches set status = $2::public.import_status, finished_at = now() where id = $1 and status <> 'completed'",
-      [id, status],
+      "update public.import_batches set status = $2::public.import_status, finished_at = now(), file_errors = $3::jsonb where id = $1 and status <> 'completed'",
+      [id, status, JSON.stringify(status === "failed" ? fileErrors : [])],
     );
   },
   async selectBatch(id) {
     const r = await client.query(
-      "select id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count,unchanged_count from public.import_batches where id = $1",
+      "select id,status,is_demo,total_rows,inserted_count,updated_count,duplicate_count,rejected_count,unchanged_count,file_errors from public.import_batches where id = $1",
       [id],
     );
     return r.rows[0] ?? null;
@@ -70,6 +70,7 @@ async function clean(): Promise<void> {
   await withSuperuser(async (c) => {
     await c.query("delete from public.import_batches where file_name like 'repo-test%'");
     await c.query("delete from public.schools where inep = any($1::text[])", [INEPS]);
+    await c.query("delete from public.municipalities where ibge_code = '5100102' and name = 'Acorizal repo-test'");
   });
 }
 
@@ -142,6 +143,33 @@ describe("repositório real (service_role) + fixture demo", () => {
     expect(r.fileErrors.length).toBe(2);
     expect((await client.query("select count(*)::int as n from public.schools")).rows[0]?.n).toBe(before.rows[0]?.n);
     expect((await client.query("select status from public.import_batches where id = $1", [r.batchId])).rows[0]?.status).toBe("failed");
+    // erros do arquivo persistidos: sobrevivem ao recarregamento (getBatch lê do banco)
+    const stored = await createSchoolsRepository(gateway).getBatch(r.batchId);
+    expect(stored?.fileErrors.map((e) => e.code).sort()).toEqual(r.fileErrors.map((e) => e.code).sort());
+    expect(stored?.fileErrors.length).toBe(2);
+  });
+
+  it("retomada bem-sucedida limpa os erros do arquivo gravados", async () => {
+    const repo = createSchoolsRepository(gateway);
+    const claim = await repo.claimBatch({ fileHash: "repo-test-fe-hash", fileName: "repo-test-fe.csv", importedBy: null, isDemo: true });
+    await repo.finishBatch(claim.batchId, "failed", [{ code: "processing_failed", message: "Falha ao processar o arquivo." }]);
+    expect((await repo.getBatch(claim.batchId))?.fileErrors).toHaveLength(1);
+    const again = await repo.claimBatch({ fileHash: "repo-test-fe-hash", fileName: "repo-test-fe.csv", importedBy: null, isDemo: true });
+    expect(again.owner).toBe(true);
+    expect((await repo.getBatch(claim.batchId))?.fileErrors).toEqual([]);
+  });
+
+  it("countWarningRows conta linhas com aviso de município (filtro positivo)", async () => {
+    const repo = createSchoolsRepository(gateway);
+    await withSuperuser((c) =>
+      c.query("insert into public.municipalities (ibge_code, uf, name, is_enabled) values ('5100102','MT','Acorizal repo-test',true) on conflict (ibge_code) do nothing"),
+    );
+    await run(FIXTURE);
+    const moved = Buffer.from(FIXTURE.toString("utf8").replace("Escola Demonstração 1;5103403", "Escola Demonstração 1;5100102"));
+    const r = await run(moved, "repo-test-moved.csv");
+    expect(r.totals.updated).toBe(1);
+    expect(await repo.countWarningRows(r.batchId)).toBe(1);
+    expect(await repo.countWarningRows((await run(FIXTURE)).batchId)).toBe(0);
   });
 
   it("falha no meio do lote: failed parcial e retomada completa", async () => {
@@ -161,6 +189,30 @@ describe("repositório real (service_role) + fixture demo", () => {
     expect(resumed).toMatchObject({ batchId: failed.batchId, alreadyExisted: true, status: "completed" });
     expect(resumed.totals).toEqual({ total: 8, inserted: 3, updated: 0, duplicate: 2, rejected: 3, unchanged: 0 });
   });
+  it("claim concorrente em conexões separadas: exatamente um owner=true", async () => {
+    const clients = await Promise.all(
+      Array.from({ length: 4 }, async () => {
+        const c = new Client({ connectionString: DATABASE_URL });
+        await c.connect();
+        await c.query("set role service_role");
+        return c;
+      }),
+    );
+    try {
+      for (let round = 0; round < 5; round++) {
+        const hash = `repo-test-race-${round}`;
+        const results = await Promise.all(
+          clients.map((c) => c.query("select * from public.import_claim_batch($1,$2,$3,$4)", [hash, "repo-test-race.csv", null, true])),
+        );
+        const rows = results.map((r) => r.rows[0]);
+        expect(rows.filter((r) => r.owner === true)).toHaveLength(1);
+        expect(new Set(rows.map((r) => r.batch_id)).size).toBe(1);
+      }
+    } finally {
+      await Promise.all(clients.map((c) => c.end()));
+    }
+  });
+
   it("uploads concorrentes do mesmo arquivo: só um processa, o outro recebe o lote existente", async () => {
     const [a, b] = await Promise.all([run(FIXTURE, "repo-test-conc.csv"), run(FIXTURE, "repo-test-conc.csv")]);
     expect(a.batchId).toBe(b.batchId);

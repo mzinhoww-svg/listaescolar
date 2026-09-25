@@ -13,7 +13,14 @@ export type BatchTotals = Totals & { total: number };
 export type ClaimInput = { fileHash: string; fileName: string; importedBy: string | null; isDemo: boolean };
 /** `owner`: só quem recebe true pode processar o lote (claim atômico); `isDemo` é a natureza já gravada no lote. */
 export type ClaimResult = { batchId: string; alreadyExisted: boolean; status: BatchStatus; owner: boolean; isDemo: boolean };
-export type BatchInfo = { batchId: string; status: BatchStatus; totals: BatchTotals; isDemo: boolean };
+export type BatchInfo = {
+  batchId: string;
+  status: BatchStatus;
+  totals: BatchTotals;
+  isDemo: boolean;
+  /** Erros do arquivo gravados ao fechar o lote como `failed` (vazio nos demais casos). */
+  fileErrors: FileError[];
+};
 
 /** Linha enviada a `import_apply_rows` (chaves em snake_case, como a função SQL espera). */
 export type ApplyRow = {
@@ -46,9 +53,12 @@ export interface SchoolsImportRepository {
   getBatch(batchId: string): Promise<BatchInfo | null>;
   /** Aplica linhas já validadas; idempotente por (lote, row_number). Devolve o que está gravado para essas linhas. */
   applyRows(batchId: string, rows: ApplyRow[]): Promise<Totals>;
-  /** Só status/finished_at, e nunca sobre lote `completed`; os contadores já são mantidos por `applyRows`. */
-  finishBatch(batchId: string, status: "completed" | "failed"): Promise<void>;
+  /** Só status/finished_at (+ `file_errors` quando `failed`), nunca sobre lote `completed`; os contadores já são de `applyRows`. */
+  finishBatch(batchId: string, status: "completed" | "failed", fileErrors?: FileError[]): Promise<void>;
+  /** Todas as linhas com problema (relatório erros.csv). */
   getErrorRows(batchId: string): Promise<ErrorRow[]>;
+  /** Só as primeiras `limit` linhas com problema (pré-visualização); o total é `rejected + duplicate` do lote. */
+  getErrorRowsPreview(batchId: string, limit: number): Promise<ErrorRow[]>;
   /** Linhas gravadas com aviso (município alterado ou mantido). */
   countWarningRows(batchId: string): Promise<number>;
   countSchools(): Promise<SchoolCounts>;

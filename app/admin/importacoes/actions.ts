@@ -42,6 +42,7 @@ export async function uploadInepCsv(_prev: UploadState, formData: FormData): Pro
       status: "success",
       batchId: result.batchId,
       alreadyExisted: result.alreadyExisted,
+      resumed: result.resumed,
       isDemo,
       batchStatus: result.status,
       totals: result.totals,

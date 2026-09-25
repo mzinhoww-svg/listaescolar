@@ -109,11 +109,14 @@ describe("importInepFile", () => {
     expect(failed.totals).toMatchObject({ total: 3, inserted: 3 });
     expect(failed.fileErrors[0]?.code).toBe("processing_failed");
     expect(repo.batches.get(failed.batchId)?.status).toBe("failed");
+    expect(failed.fileErrors[0]?.message).toBe("Falha ao processar o arquivo.");
+    expect((await repo.getBatch(failed.batchId))?.fileErrors).toEqual(failed.fileErrors);
 
     repo.failOnApplyCall = null;
     const again = await importInepFile(input(buffer), { repo, chunkSize: 3 });
     expect(again).toMatchObject({ batchId: failed.batchId, alreadyExisted: true, status: "completed" });
     expect(again.totals).toEqual({ total: 7, inserted: 7, updated: 0, duplicate: 0, rejected: 0, unchanged: 0 });
+    expect((await repo.getBatch(failed.batchId))?.fileErrors).toEqual([]);
     expect(await repo.countSchools()).toEqual({ real: 7, demo: 0 });
     expect(repo.batches.size).toBe(1);
   });

@@ -18,6 +18,7 @@ const batchListRow = z.object({
   unchanged_count: z.number().int(),
   duplicate_count: z.number().int(),
   rejected_count: z.number().int(),
+  file_errors: z.array(z.object({ code: z.string() })),
 });
 export type BatchListItem = z.infer<typeof batchListRow>;
 
@@ -25,7 +26,7 @@ export async function listBatches(limit = 50): Promise<BatchListItem[]> {
   const { data, error } = await createAdminClient()
     .from("import_batches")
     .select(
-      "id,file_name,status,is_demo,created_at,total_rows,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count",
+      "id,file_name,status,is_demo,created_at,total_rows,inserted_count,updated_count,unchanged_count,duplicate_count,rejected_count,file_errors",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -37,3 +38,5 @@ export const countSchools = () => createSupabaseSchoolsRepository().countSchools
 export const getBatch = (id: string) => createSupabaseSchoolsRepository().getBatch(id);
 export const countWarningRows = (id: string) => createSupabaseSchoolsRepository().countWarningRows(id);
 export const getErrorRows = (id: string) => createSupabaseSchoolsRepository().getErrorRows(id);
+export const getErrorRowsPreview = (id: string, limit: number) =>
+  createSupabaseSchoolsRepository().getErrorRowsPreview(id, limit);

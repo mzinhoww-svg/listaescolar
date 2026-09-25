@@ -5,7 +5,7 @@ import { decideListPublication, resumePublication, type PublicationDeps } from "
 import { runPublicationSweep } from "../../supabase/functions/_shared/publication/sweep";
 import { createRpcPublicationStore } from "../../supabase/functions/_shared/publication/rpc-store";
 import type { ListPublisher, PublishRequest, PublishResult } from "../../supabase/functions/_shared/publication/ports";
-import { cleanupUsers, IDS, seedUsers, withSuperuser } from "./helpers";
+import { cleanupUsers, ensureSchool, IDS, seedUsers, withSuperuser } from "./helpers";
 import { goodResult } from "../publication/helpers";
 
 const SCHOOL = "50000000-0000-4000-8000-0000000000d1";
@@ -53,6 +53,7 @@ async function seed(opts: { source?: "school" | "parent"; status?: string; resul
   return withSuperuser(async (c) => {
     const id = randomUUID();
     const consent = randomUUID();
+    await ensureSchool(c, SCHOOL);
     await c.query("insert into public.consents (id, profile_id, purpose, text_version) values ($1, $2, 'list_upload', 'v1')", [consent, IDS.school_member]);
     await c.query(
       `insert into public.list_submissions (id, submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type, size_bytes, consent_id)

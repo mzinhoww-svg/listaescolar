@@ -246,3 +246,13 @@ Nota: escrito sobre `main` @ `e198162`, antes do merge da S10 (lida só pelo pla
 - Ruling: central em `/conta/notificacoes` com App16 como referência visual e sino em `/conta`, `PanelShell`, `AdminShell` e `SchoolShell`; o cabeçalho do site e o resto de `/conta` ficam para S15/S18 — custo se errada: baixo.
 - Ruling: `SessionActor` unificado na S11 (D-046): `features/stationeries/actor.ts` reexporta `features/auth/actor.ts` — custo se errada: baixo.
 - Ruling: D-023 (upload direto por signed upload URL) transferida à S19 — não é integração entre trilhas e mexe no teto de upload/segurança — custo se errada: PDF grande continua exigindo compressão até a S19.
+
+## S11 · Task 1 (revalidação)
+
+Base: `main` @ 02dfe00 (S10 mesclada), já contida em `slice/S11-integracao`. Levantamento de colunas uuid sem FK entre as faixas 01xx/02xx/03xx (0001–0303, inclusive 0203/0204): as únicas soltas continuam sendo as 4 do plano, mais as polimórficas/históricas já decididas. As colunas novas da 0204 (`review_versions.submission_id`, `parent_list_copies.submission_id`, `publication_leases.submission_id`) já nascem com FK para `list_submissions` (cascade); nenhuma FK candidata nova.
+
+- Ruling: `list_kind` NÃO entra na 0600 — o plano a atribui à 0601 (`carts.list_id`/`leads.list_id` seguem polimórficas, sem FK); a 0600 só cria as 4 FKs — custo se errada: baixo (a 0601 acrescenta a coluna).
+- Ruling: órfão de `list_versions.submission_id` é demo quando `school_lists.is_demo` da lista; `cart_items` pelo `carts.is_demo`; `list_submissions` e `leads` pela própria linha; `school_id`/`submission_id`/`list_item_id`/`consent_id` são anuláveis, então demo vira null — custo se errada: baixo.
+- Ruling: a migration aborta com `23503` e `0600 abortada: órfãos não demo por FK: <col>=<n> ...` antes de anular qualquer demo (tudo ou nada) — custo se errada: baixo.
+- Ruling: fixtures de teste que semeavam `school_id`/`submission_id` aleatórios passam a criar escola/envio reais (`ensureSchool` em tests/db/helpers.ts; `cleanupUsers` apaga as escolas 'Escola Fixture' sem uso); asserções "sem FK" de S07/S12/S14 viraram "com FK" (mudança intencional da 0600) — custo se errada: baixo.
+- Divergências S10 (itens 1–7 do plano): sem impacto na 0600; conferência das portas/códigos/contrato fica para a Task 2.

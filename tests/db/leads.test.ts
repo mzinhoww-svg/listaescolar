@@ -53,14 +53,14 @@ describe("S14 leads · colunas e checks", () => {
     });
   });
 
-  it("não há FK para tabelas de outras trilhas (só profiles, municipalities, carts, stationeries e o próprio lead)", async () => {
+  it("só referencia profiles, municipalities, carts, stationeries, consents (0600) e o próprio lead; list_id segue sem FK", async () => {
     await withSuperuser(async (c) => {
       const r = await c.query(
         `select distinct cl.relname as referenced from pg_constraint k
            join pg_class t on t.oid = k.conrelid join pg_class cl on cl.oid = k.confrelid
           where k.contype = 'f' and t.relnamespace = 'public'::regnamespace and t.relname in ('leads', 'lead_items', 'lead_events')`,
       );
-      expect(r.rows.map((x) => x.referenced).sort()).toEqual(["carts", "leads", "municipalities", "profiles", "stationeries"]);
+      expect(r.rows.map((x) => x.referenced).sort()).toEqual(["carts", "consents", "leads", "municipalities", "profiles", "stationeries"]);
     });
   });
 

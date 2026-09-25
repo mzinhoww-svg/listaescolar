@@ -17,11 +17,15 @@ async function signUp(meta: Record<string, unknown> | null): Promise<string> {
 }
 
 async function profile(id: string) {
-  return withSuperuser(async (c) => (await c.query("select * from public.profiles where id = $1", [id])).rows);
+  return withSuperuser(
+    async (c) => (await c.query("select * from public.profiles where id = $1", [id])).rows,
+  );
 }
 
 afterEach(async () => {
-  await withSuperuser((c) => c.query("delete from auth.users where id = any($1::uuid[])", [created.splice(0)]));
+  await withSuperuser((c) =>
+    c.query("delete from auth.users where id = any($1::uuid[])", [created.splice(0)]),
+  );
 });
 
 describe("handle_new_user", () => {
@@ -37,7 +41,9 @@ describe("handle_new_user", () => {
     expect((await profile(id))[0].role).toBe("parent");
   });
   it("display_name vem de full_name, depois name", async () => {
-    expect((await profile(await signUp({ full_name: "Ana Souza", name: "Outro" })))[0].display_name).toBe("Ana Souza");
+    expect(
+      (await profile(await signUp({ full_name: "Ana Souza", name: "Outro" })))[0].display_name,
+    ).toBe("Ana Souza");
     expect((await profile(await signUp({ name: "Bia" })))[0].display_name).toBe("Bia");
     expect((await profile(await signUp({ full_name: "  " })))[0].display_name).toBeNull();
   });
@@ -51,12 +57,33 @@ describe("handle_new_user", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].role).toBe("admin");
   });
+  it("profile pré-existente: on conflict do nothing não falha nem rebaixa o papel", async () => {
+    const id = randomUUID();
+    created.push(id);
+    await withSuperuser(async (c) => {
+      // Cria o profile antes do usuário (FK ignorada só nesta sessão) para exercitar o conflito.
+      await c.query("set session_replication_role = replica");
+      await c.query("insert into public.profiles (id, role) values ($1, 'admin')", [id]);
+      await c.query("set session_replication_role = origin");
+      await c.query(
+        "insert into auth.users (id, aud, role, email) values ($1, 'authenticated', 'authenticated', $2)",
+        [id, `${id}@teste.invalid`],
+      );
+    });
+    const rows = await profile(id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].role).toBe("admin");
+  });
   it("aparece no audit_log", async () => {
     const id = await signUp(null);
     const rows = await withSuperuser(
       async (c) =>
-        (await c.query("select action, after from public.audit_log where entity_table='profiles' and entity_id=$1", [id]))
-          .rows,
+        (
+          await c.query(
+            "select action, after from public.audit_log where entity_table='profiles' and entity_id=$1",
+            [id],
+          )
+        ).rows,
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].action).toBe("INSERT");

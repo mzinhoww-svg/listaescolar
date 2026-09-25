@@ -6,8 +6,7 @@ export async function proxy(request: NextRequest) {
   return updateSession(request);
 }
 
+// Tudo, exceto `_next/` e `brand/`. Não excluir por extensão: `/admin.json` não pode contornar o gate.
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|json|webmanifest|js)$).*)",
-  ],
+  matcher: ["/((?!_next/|brand/).*)"],
 };

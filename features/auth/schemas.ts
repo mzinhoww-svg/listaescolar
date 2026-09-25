@@ -28,6 +28,13 @@ export const callbackQuerySchema = z.object({
   next: nextSchema,
 });
 
+/** Query do link mágico (`/auth/confirm`). */
+export const confirmQuerySchema = z.object({
+  token_hash: optionalText,
+  type: z.enum(["email", "magiclink"]),
+  next: nextSchema,
+});
+
 export type AuthActionState = { status: "idle" | "sent" | "error"; message?: string };
 
 export const roleSchema = z.enum([

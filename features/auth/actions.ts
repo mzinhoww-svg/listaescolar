@@ -3,20 +3,26 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getSiteOrigin } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 
 import { googleInputSchema, magicLinkInputSchema, type AuthActionState } from "./schemas";
 
+const RATE_LIMIT_ERROR = "Aguarde um minuto para pedir outro link.";
 const GENERIC_ERROR = "Não foi possível continuar. Tente novamente.";
 
-async function callbackUrl(next: string): Promise<string> {
+async function siteOrigin(): Promise<string> {
+  // A origem da requisição só é usada por getSiteOrigin fora de produção.
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto =
-    h.get("x-forwarded-proto") ??
-    (host?.startsWith("localhost") || host?.startsWith("127.") ? "http" : "https");
-  const origin = h.get("origin") ?? `${proto}://${host}`;
-  return `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
+  return getSiteOrigin(h.get("origin") ?? undefined);
+}
+
+function isRateLimit(error: { status?: number; code?: string }): boolean {
+  return (
+    error.status === 429 ||
+    error.code === "over_email_send_rate_limit" ||
+    error.code === "over_request_rate_limit"
+  );
 }
 
 export async function signInWithMagicLink(formData: FormData): Promise<AuthActionState> {
@@ -29,9 +35,17 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email: parsed.data.email,
-      options: { shouldCreateUser: true, emailRedirectTo: await callbackUrl(parsed.data.next) },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${await siteOrigin()}/auth/confirm?next=${encodeURIComponent(parsed.data.next)}`,
+      },
     });
-    if (error) return { status: "error", message: GENERIC_ERROR };
+    if (error) {
+      return {
+        status: "error",
+        message: isRateLimit(error) ? RATE_LIMIT_ERROR : GENERIC_ERROR,
+      };
+    }
     return { status: "sent", message: "Verifique seu e-mail." };
   } catch {
     return { status: "error", message: GENERIC_ERROR };
@@ -45,7 +59,10 @@ export async function signInWithGoogle(formData: FormData): Promise<AuthActionSt
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: await callbackUrl(parsed.next), skipBrowserRedirect: true },
+      options: {
+        redirectTo: `${await siteOrigin()}/auth/callback?next=${encodeURIComponent(parsed.next)}`,
+        skipBrowserRedirect: true,
+      },
     });
     url = error ? null : data.url;
   } catch {

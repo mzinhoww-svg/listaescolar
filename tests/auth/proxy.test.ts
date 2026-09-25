@@ -51,6 +51,14 @@ describe("decideAccess", () => {
       "rewrite-403",
     );
   });
+  it("userId presente e papel nulo: rewrite-403 explícito, mesmo em rota de qualquer papel", () => {
+    for (const p of ["/conta", "/escola", "/papelaria", "/admin"]) {
+      expect(decideAccess({ pathname: p, userId: "u", role: null })).toEqual({
+        action: "rewrite-403",
+        location: "/403",
+      });
+    }
+  });
   it("papel system nunca acessa área de usuário", () => {
     expect(decideAccess({ pathname: "/conta", userId: "u", role: "system" }).action).toBe(
       "rewrite-403",

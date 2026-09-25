@@ -20,11 +20,18 @@ export function decideAccess({
   userId,
   role,
 }: DecideAccessInput): AccessAction {
-  const decision = canAccess(userId === null ? null : (role ?? "system"), pathname);
-  if (decision === "allow") return { action: "next" };
   if (userId === null) {
+    if (canAccess(null, pathname) === "allow") return { action: "next" };
     const next = safeNextPath(`${pathname}${search}`);
     return { action: "redirect-login", location: `/entrar?next=${encodeURIComponent(next)}` };
   }
-  return { action: "rewrite-403", location: "/403" };
+  // Logado sem papel (profile ausente): só rota pública passa; o resto é 403, sem laço de login.
+  if (role === null) {
+    return canAccess(null, pathname) === "allow"
+      ? { action: "next" }
+      : { action: "rewrite-403", location: "/403" };
+  }
+  return canAccess(role, pathname) === "allow"
+    ? { action: "next" }
+    : { action: "rewrite-403", location: "/403" };
 }

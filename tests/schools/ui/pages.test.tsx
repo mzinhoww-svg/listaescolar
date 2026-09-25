@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+import { academicYears, defaultAcademicYear } from "@/features/grades/catalog";
 import SearchPage, { generateMetadata as searchMeta } from "@/app/escolas/page";
 import SchoolPage, { generateMetadata as schoolMeta } from "@/app/escolas/[inep]/page";
 import ClaimPage from "@/app/escolas/[inep]/reivindicar/page";
@@ -108,6 +109,8 @@ describe("/escolas/[inep]", () => {
     const { container } = render(await SchoolPage(props()));
     expect(container.querySelector('script[type="application/ld+json"]')).toBeNull();
     expect(screen.getAllByText("Demonstração").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Demonstração: dados fictícios/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Reivindicar perfil" })).toBeNull();
     const m = await schoolMeta(props());
     expect(m.robots).toMatchObject({ index: false });
     expect(String(m.title)).toContain("Demonstração");
@@ -123,14 +126,15 @@ describe("/escolas/[inep]", () => {
 
   it("série e ano válidos da URL chegam ao seletor; inválidos são ignorados", async () => {
     getSchoolByInep.mockResolvedValue(school());
-    const y = new Date().getUTCFullYear();
+    const now = new Date();
+    const [y] = academicYears(now);
     const { unmount } = render(await SchoolPage(props("51001234", { serie: "ef-4", ano: String(y + 1) })));
     expect(screen.getByLabelText("Série")).toHaveValue("ef-4");
     expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(y + 1));
     unmount();
     render(await SchoolPage(props("51001234", { serie: "xx", ano: "1900" })));
     expect(screen.getByLabelText("Série")).toHaveValue("");
-    expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(y));
+    expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(defaultAcademicYear(now)));
   });
 });
 

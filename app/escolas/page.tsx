@@ -31,7 +31,6 @@ export default async function SearchPage({ searchParams }: Props) {
   const paramOfNetwork = Object.entries(NETWORK_PARAMS).find(([, v]) => v === input.network)?.[0];
   const preserve: Record<string, string> = {};
   if (paramOfNetwork) preserve.rede = paramOfNetwork;
-  if (input.neighborhood) preserve.bairro = input.neighborhood;
   if (input.municipalityId) preserve.municipio = input.municipalityId;
 
   return (
@@ -46,7 +45,7 @@ export default async function SearchPage({ searchParams }: Props) {
         </Link>
         <h1 className="grow pr-12 text-center text-base font-bold">Buscar escola</h1>
       </div>
-      <SearchForm defaultValue={input.q ?? ""} preserve={preserve} />
+      <SearchForm defaultValue={input.q ?? ""} neighborhood={input.neighborhood ?? ""} preserve={preserve} />
       <NetworkChips input={input} />
       <SearchResults input={input} result={result} />
     </main>

@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ClaimBlock } from "@/components/schools/ClaimBlock";
 import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
-import { academicYears, parseGradeSelection } from "@/features/grades/catalog";
+import { ProfileNotices } from "@/components/schools/ProfileNotices";
+import { academicYears, defaultAcademicYear, parseGradeSelection } from "@/features/grades/catalog";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { buildSchoolMetadata } from "@/features/schools/search/seo";
@@ -34,7 +35,7 @@ export default async function SchoolPage({ params, searchParams }: Props) {
   const sp = await searchParams;
   const now = new Date();
   const { grade, year } = parseGradeSelection(first(sp.serie), first(sp.ano), now);
-  const jsonLd = buildSchoolJsonLd(school, siteBase());
+  const jsonLd = buildSchoolJsonLd(school, siteBase() ?? undefined);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -43,8 +44,14 @@ export default async function SchoolPage({ params, searchParams }: Props) {
       ) : null}
       <ProfileHeader school={school} />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
-        <GradeYearPicker inep={school.inep} serie={grade?.slug ?? null} ano={year} years={academicYears(now)} />
-        <ClaimBlock inep={school.inep} status={school.verificationStatus} />
+        <ProfileNotices school={school} />
+        <GradeYearPicker
+          inep={school.inep}
+          serie={grade?.slug ?? null}
+          ano={year ?? defaultAcademicYear(now)}
+          years={academicYears(now)}
+        />
+        <ClaimBlock inep={school.inep} status={school.verificationStatus} isDemo={school.isDemo} />
         <ProfileInfo school={school} />
       </main>
     </div>

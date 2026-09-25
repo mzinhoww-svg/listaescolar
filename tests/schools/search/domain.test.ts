@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { academicYears, findGrade, GRADES, parseGradeSelection } from "@/features/grades/catalog";
+import { academicYears, defaultAcademicYear, findGrade, GRADES, parseGradeSelection } from "@/features/grades/catalog";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
 import { buildSchoolMetadata, buildSearchMetadata, isIndexableSchool } from "@/features/schools/search/seo";
 import { statusLabel } from "@/features/schools/search/status";
@@ -164,7 +164,24 @@ describe("catálogo de séries", () => {
 
   it("anos derivados de now", () => {
     expect(academicYears(new Date("2026-09-25T12:00:00Z"))).toEqual([2026, 2027]);
-    expect(academicYears(new Date("2031-01-01T00:00:00Z"))).toEqual([2031, 2032]);
+    expect(academicYears(new Date("2031-01-01T12:00:00Z"))).toEqual([2031, 2032]);
+  });
+
+  it.each([
+    // [instante UTC, [ano corrente, próximo], ano padrão] — fuso America/Cuiaba (UTC-4)
+    ["2026-01-15T12:00:00Z", [2026, 2027], 2026],
+    ["2026-07-31T23:59:00Z", [2026, 2027], 2026],
+    ["2026-08-01T03:59:00Z", [2026, 2027], 2026], // 31/07 23:59 em Cuiabá: ainda antes do corte
+    ["2026-08-01T04:00:00Z", [2026, 2027], 2027], // 01/08 00:00 em Cuiabá: corte
+    ["2026-09-25T12:00:00Z", [2026, 2027], 2027],
+    ["2026-12-31T12:00:00Z", [2026, 2027], 2027],
+    ["2027-01-01T03:30:00Z", [2026, 2027], 2027], // 31/12 23:30 em Cuiabá: ainda 2026 (UTC já é 2027)
+    ["2027-01-01T04:00:00Z", [2027, 2028], 2027], // virada do ano em Cuiabá: padrão volta ao corrente
+    ["2027-03-10T12:00:00Z", [2027, 2028], 2027],
+  ] as const)("%s → anos %j, padrão %i", (iso, years, def) => {
+    const now = new Date(iso);
+    expect(academicYears(now)).toEqual(years);
+    expect(defaultAcademicYear(now)).toBe(def);
   });
 
   it("seleção valida série e ano", () => {

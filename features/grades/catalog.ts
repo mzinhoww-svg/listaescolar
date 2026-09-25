@@ -22,10 +22,27 @@ export function findGrade(slug: string | undefined): Grade | null {
   return GRADES.find((g) => g.slug === slug) ?? null;
 }
 
-/** Ano letivo corrente e o próximo, derivados de `now` (sem ano fixo no código). */
+/** Fuso do piloto (Cuiabá/MT, UTC-4, sem horário de verão): o corte do ano letivo usa a data local, não UTC. */
+const SCHOOL_TZ = "America/Cuiaba";
+/** Mês (1-12) a partir do qual o ano letivo padrão passa a ser o seguinte: agosto (matrículas e listas do ano seguinte). */
+export const DEFAULT_YEAR_CUTOFF_MONTH = 8;
+
+function localYearMonth(now: Date): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: SCHOOL_TZ, year: "numeric", month: "numeric" }).formatToParts(now);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  return { year: get("year"), month: get("month") };
+}
+
+/** Ano letivo corrente e o próximo, derivados de `now` no fuso de Cuiabá (sem ano fixo no código). */
 export function academicYears(now: Date): [number, number] {
-  const y = now.getUTCFullYear();
-  return [y, y + 1];
+  const { year } = localYearMonth(now);
+  return [year, year + 1];
+}
+
+/** Ano pré-selecionado: o seguinte a partir de agosto (fuso de Cuiabá), o corrente antes disso. */
+export function defaultAcademicYear(now: Date): number {
+  const { year, month } = localYearMonth(now);
+  return month >= DEFAULT_YEAR_CUTOFF_MONTH ? year + 1 : year;
 }
 
 /** Valida `?serie=&ano=`: valores inválidos viram null. */

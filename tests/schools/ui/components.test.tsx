@@ -6,6 +6,7 @@ import { foundLabel, formatPhone, initials } from "@/components/schools/format";
 import { NetworkChips } from "@/components/schools/NetworkChips";
 import { Pagination } from "@/components/schools/Pagination";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
+import { ProfileNotices } from "@/components/schools/ProfileNotices";
 import { SchoolCard } from "@/components/schools/SchoolCard";
 import { SearchResults } from "@/components/schools/SearchResults";
 import { StatusBadges } from "@/components/schools/StatusBadges";
@@ -139,9 +140,18 @@ describe("ProfileInfo / ClaimBlock", () => {
     expect(container.textContent).not.toMatch(/N\/A|null|undefined/);
   });
 
-  it("escola demo avisa que os dados são fictícios", () => {
-    render(<ProfileInfo school={profile({ isDemo: true })} />);
+  it("ProfileNotices: demo e suspensa avisam; escola comum não", () => {
+    const { container, rerender } = render(<ProfileNotices school={profile({ isDemo: true })} />);
     expect(screen.getByText(/Demonstração: dados fictícios/)).toBeInTheDocument();
+    rerender(<ProfileNotices school={profile({ verificationStatus: "suspended" })} />);
+    expect(screen.getByText(/perfil está suspenso/)).toBeInTheDocument();
+    rerender(<ProfileNotices school={profile()} />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("ClaimBlock não aparece para escola demonstrativa", () => {
+    const { container } = render(<ClaimBlock inep="99001001" status="registered" isDemo />);
+    expect(container.textContent).toBe("");
   });
 
   it("botão Reivindicar perfil aponta para a rota da S06; suspensa não oferece", () => {
@@ -161,6 +171,15 @@ describe("SearchForm", () => {
     expect(container.querySelector('input[name="rede"]')).toHaveValue("privada");
     expect(container.querySelector('input[name="pagina"]')).toBeNull();
     expect(screen.getByLabelText("Buscar escola pelo nome ou INEP")).toHaveValue("silva");
+  });
+
+  it("campo Bairro opcional (visível) vai no GET e mantém o valor", () => {
+    const { container } = render(<SearchForm neighborhood="Centro Sul" preserve={{ rede: "privada" }} />);
+    const bairro = screen.getByLabelText("Bairro (opcional)");
+    expect(bairro).toHaveValue("Centro Sul");
+    expect(bairro).toHaveAttribute("name", "bairro");
+    expect(bairro).not.toBeRequired();
+    expect(container.querySelector('input[type="hidden"][name="bairro"]')).toBeNull();
   });
 
   it("botão limpar esvazia o campo", () => {

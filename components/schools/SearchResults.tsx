@@ -8,7 +8,7 @@ type Results = Extract<SearchResult, { kind: "results" }>;
 
 export function EmptyState({ tooShort }: { tooShort: boolean }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-[22px] border-[1.5px] border-dashed border-[#BFB8A8] p-[18px]" role="status">
+    <div className="flex flex-col gap-1.5 rounded-[22px] border-[1.5px] border-dashed border-linha-tracejada p-[18px]" role="status">
       <p className="text-[15px] font-extrabold">{tooShort ? "Digite um pouco mais" : "Nenhuma escola encontrada"}</p>
       <p className="text-texto-2 text-[13px] leading-[1.4] font-medium">
         {tooShort

@@ -10,8 +10,10 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+const base = siteBase();
+
 export const metadata: Metadata = {
-  metadataBase: new URL(siteBase()),
+  ...(base ? { metadataBase: new URL(base) } : {}),
   title: "ListaCerta",
   description:
     "Plataforma neutra de listas oficiais de material escolar: organiza, compara e redireciona.",

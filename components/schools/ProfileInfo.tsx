@@ -23,8 +23,7 @@ export function ProfileInfo({ school }: { school: SchoolProfile }) {
         ))}
       </dl>
       <p className="bg-campo text-texto-2 rounded-campo px-3 py-3 text-xs leading-[1.4] font-semibold">
-        {status.description}
-        {status.demoLabel ? " Demonstração: dados fictícios, sem valor real." : ""}
+        {school.verificationStatus === "suspended" ? "Situação do cadastro: suspenso." : status.description}
       </p>
     </section>
   );

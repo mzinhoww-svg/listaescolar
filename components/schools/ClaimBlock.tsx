@@ -9,9 +9,10 @@ const COPY: Record<VerificationStatus, string | null> = {
   suspended: null,
 };
 
-export function ClaimBlock({ inep, status }: { inep: string; status: VerificationStatus }) {
+/** Sem CTA para suspensa nem para escola demonstrativa (não há administrador a reivindicar em dado fictício). */
+export function ClaimBlock({ inep, status, isDemo = false }: { inep: string; status: VerificationStatus; isDemo?: boolean }) {
   const copy = COPY[status];
-  if (!copy) return null;
+  if (!copy || isDemo) return null;
   return (
     <section aria-labelledby="reivindicar" className="bg-campo flex flex-col gap-3 rounded-3xl p-5">
       <h2 id="reivindicar" className="text-base font-extrabold">

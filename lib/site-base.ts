@@ -1,13 +1,15 @@
 import { getSiteOrigin } from "@/lib/site-url";
 
 /**
- * Base para metadados públicos (canonical, JSON-LD). Diferente de `getSiteOrigin`, não lança quando a
- * origem não está configurada: cai no host local (só afeta URLs absolutas de SEO, nunca links de e-mail/OAuth).
+ * Base para metadados públicos (canonical, JSON-LD). Diferente de `getSiteOrigin`, não lança.
+ * Em deploy (`VERCEL_ENV` definido) sem origem válida devolve null: o chamador omite `metadataBase` e o `url`
+ * do JSON-LD em vez de publicar localhost. Fora de deploy (dev/E2E local) cai no host local.
+ * Nunca afeta links de e-mail/OAuth (esses usam `getSiteOrigin`, que lança).
  */
-export function siteBase(): string {
+export function siteBase(): string | null {
   try {
     return getSiteOrigin();
   } catch {
-    return "http://localhost:3000";
+    return process.env.VERCEL_ENV ? null : "http://localhost:3000";
   }
 }

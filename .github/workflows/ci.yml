@@ -47,8 +47,8 @@ jobs:
         with:
           version: 2.117.0
       - run: pnpm install --frozen-lockfile
-      - name: Sobe o Supabase local (só o necessário)
-        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - name: Sobe o Supabase local (db, auth, api e storage)
+        run: supabase start -x realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - run: supabase db reset
       - run: pnpm test:db
       - if: always()

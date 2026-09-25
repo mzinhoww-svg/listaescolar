@@ -8,7 +8,7 @@
 
 ## Concluídas (merge squash em `main`)
 
-Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jobs `verify` e `db` do GitHub Actions; `Vercel` = status do deploy de preview; `E2E` = roteiro agent-browser (build de produção local, pois o preview é protegido; ver Ruling do ledger). ✓ = verde declarado no PR; ✗ = falhou; `n/d` = sem dado no PR nem no relatório.
+Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jobs `verify` e `db` do GitHub Actions; `Vercel` = status do deploy de preview; `E2E` = roteiro agent-browser (build de produção local até 2026-09-25; a partir do primeiro deploy verde com previews públicos, no preview da Vercel; ver Ruling do ledger). ✓ = verde declarado no PR; ✗ = falhou; `n/d` = sem dado no PR nem no relatório.
 
 | Fatia | PR | SHA | Data (UTC) | typecheck | lint | unit | db | build | CI | Vercel | E2E |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -78,8 +78,8 @@ Produção: nenhuma migration (o projeto não existe).
 ## Pendências humanas (consolidadas)
 
 Ambiente e deploy:
-- Vercel: definir `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (e as de servidor do `.env.example`) no projeto `listaescolar`. Sem elas o deploy da Vercel falha em todos os PRs desde o #4.
-- Vercel: o preview está protegido (Deployment Protection). Liberar o acesso do agent-browser (Trusted Sources ou bypass) ou desligar a proteção só nos Previews. Até lá o E2E roda no build local.
+- Vercel: verificado pela API em 2026-09-25 17:58 UTC: o projeto `listaescolare` (o conectado ao GitHub) NÃO tem variáveis de ambiente (a proteção está desativada, confirmado); o projeto `listaescolar` (sem `e`) tem as 4 variáveis só no ambiente Production. Criar no `listaescolare` as variáveis para Preview e Production (D-058); o preview continua falhando no build até lá.
+- Vercel: a proteção dos previews foi DESATIVADA pelo humano em 2026-09-25 (previews públicos; `X-Robots-Tag: noindex` em tudo fora da produção). REATIVAR antes de entrar dado real: checklist da S20 (D-074).
 - Vercel: `CRON_SECRET` (16 caracteres ou mais) nos ambientes e aceite do cron diário `/api/cron/leads-expire` no plano da conta (S14).
 - Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio; canonical, JSON-LD, links de login e do lead, OG, sitemap e QR dependem dele).
 - Supabase (staging): deploy da Edge Function `ocr-worker`, agendamento pg_cron/pg_net com Vault (`supabase/functions/ocr-worker/README.md`) e secrets `WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_CHEAP`, `AI_MODEL_STRONG`, `AI_MODEL_VISION`.

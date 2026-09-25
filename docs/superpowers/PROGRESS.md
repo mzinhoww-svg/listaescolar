@@ -118,4 +118,4 @@ Conteúdo e dados:
 ## Aguardando humano
 Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
 
-- (vazia em 2026-09-25)
+- **OPENROUTER_KEY da Edge Function `ocr-worker` (staging) recusada pelo OpenRouter (401).** E2E de 2026-09-25 no alias `listaescolare.vercel.app`: login e envio passaram; o worker (cron, 200) chamou o provedor e recebeu `http_401` (envio `rejected`, job `dead`, 2 linhas `failed` em `ai_decisions`). Ação do humano: no painel do Supabase (Edge Functions > Secrets) conferir/regravar `OPENROUTER_KEY` com uma chave válida e conferir `AI_MODEL_CHEAP/STRONG/VISION` (o modelo usado foi um de texto, `deepseek/deepseek-chat`, sobre um PDF). Depois disso o orquestrador reenvia o teste (nenhuma ação do humano além do secret). Também conferir a `OPENROUTER_KEY` no projeto Vercel `listaescolare` (a primeira decisão foi um `provider_timeout` de 9 s, provavelmente da leitura inline do app).

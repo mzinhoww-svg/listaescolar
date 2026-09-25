@@ -24,7 +24,7 @@ type Props = {
   publicationAvailable: boolean;
   /** A publicação usaria a porta em memória: "Lista publicada." leva o selo "Demonstração". */
   demoPublication: boolean;
-  actions: { approveAndPublish: Act; reject: Act; publish: Act };
+  actions: { approveAndPublish: Act; reject: Act; publish: Act; reconcile: Act };
 };
 
 const UNAVAILABLE = "Lista aprovada pela equipe. Publicação indisponível neste ambiente até a integração.";
@@ -53,6 +53,7 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
   const [approveState, approveAction, approving] = useActionState(actions.approveAndPublish, IDLE);
   const [rejectState, rejectAction, rejecting] = useActionState(actions.reject, IDLE);
   const [publishState, publishAction, publishing] = useActionState(actions.publish, IDLE);
+  const [reconcileState, reconcileAction, reconciling] = useActionState(actions.reconcile, IDLE);
   const known = blockers ?? [];
   const needsAck = known.includes("critical_alerts_unconfirmed");
   const open = known.filter((c) => !(c === "critical_alerts_unconfirmed" && ack));
@@ -67,7 +68,16 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
   return (
     <aside aria-labelledby="decisao-titulo" className="flex flex-col gap-4 rounded-[24px] bg-white p-5">
       <h2 id="decisao-titulo" className="text-[17px] font-extrabold">Decisão</h2>
-      {orphaned ? <p role="note" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Existe uma publicação automática não reconciliada; a conciliação é feita na integração (S11).</p> : null}
+      {orphaned ? (
+        <div className="flex flex-col gap-2">
+          <p role="note" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Existe uma publicação automática não reconciliada (a lista saiu, mas o envio não registrou). Confira a lista publicada e concilie.</p>
+          <form action={reconcileAction}>
+            {hidden}
+            <button type="submit" disabled={reconciling} className="border-tinta text-tinta rounded-botao min-h-11 border-2 px-6 text-[14px] font-extrabold disabled:opacity-50">Conciliar publicação</button>
+          </form>
+        </div>
+      ) : null}
+      <Result s={reconcileState} />
       {status !== "human_review" ? (
         <>
           <p className="text-[14px] font-semibold">{READ_ONLY[status] ?? "Este envio não está em revisão."}</p>
@@ -89,7 +99,7 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
             </div>
           ) : null}
           {blockers === null ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível verificar as pendências desta lista. Recarregue a página antes de aprovar.</p> : null}
-          {orphaned ? <p role="alert" className="text-erro-texto text-[14px] font-bold">Aprovar e publicar está bloqueado até a conciliação da publicação automática (S11).</p> : null}
+          {orphaned ? <p role="alert" className="text-erro-texto text-[14px] font-bold">Aprovar e publicar está bloqueado até a conciliação da publicação pendente.</p> : null}
           {dirty ? <p role="status" className="text-erro-texto text-[14px] font-bold">Salve a edição antes de aprovar.</p> : null}
           <form action={approveAction} className="flex flex-col gap-3">
             {hidden}

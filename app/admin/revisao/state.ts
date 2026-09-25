@@ -5,6 +5,8 @@ export type ReviewActionKind =
   | "approved"
   | "rejected"
   | "published"
+  | "reconciled"
+  | "assigned"
   | "pending"
   | "unavailable"
   | "blocked"

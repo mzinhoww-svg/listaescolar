@@ -15,7 +15,8 @@ import { requireAccess } from "@/features/auth/guard";
 import { getReviewDetail } from "@/features/review/queries";
 import type { ReviewDetail } from "@/features/review/read-models";
 import { submissionIdSchema } from "@/features/review/schemas";
-import { approveAndPublishAction, publishAction, rejectAction, saveReviewAction } from "../actions";
+import { approveAndPublishAction, assignSchoolAction, publishAction, reconcileAction, rejectAction, saveReviewAction } from "../actions";
+import { AssignSchool } from "@/components/review/AssignSchool";
 import { reasonPhrase } from "@/features/review/phrases";
 import { buildReviewService, loadPublicationInfo, loadSchoolLabels, loadThresholds } from "../loaders";
 
@@ -68,7 +69,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     reviewing ? buildReviewService().blockers(actor, s.id, false).catch(() => null) : Promise.resolve([]),
   ]);
   const pub = loadPublicationInfo();
-  const lastHuman = detail.decisions.filter((d) => d.kind === "review" && d.decision !== "edited").at(-1);
+  const lastHuman = detail.decisions.filter((d) => d.kind === "review" && d.decision !== "edited" && d.decision !== "reconciled").at(-1);
   const failure = reviewing && lastHuman?.decision === "publish_failed" ? (lastHuman.reasons[0] ?? null) : null;
   const unreadable = reviewing && current.items.length === 0 && detail.extraction === null;
   const reasons = detail.decisions.find((d) => d.kind === "publication" && d.decision === "human_review")?.reasons ?? [];
@@ -84,6 +85,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <div className="flex min-w-0 flex-col gap-4">
             {failure ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">A última tentativa de publicação falhou e o envio voltou à fila. {reasonPhrase(failure)}.</p> : null}
             {unreadable ? <p role="note" className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível ler os itens desta lista: recuse ou digite os itens.</p> : null}
+            {reviewing && s.schoolId === null ? <AssignSchool submissionId={s.id} version={current.version} action={assignSchoolAction} /> : null}
             <ReasonsList reasons={reasons} />
             {[...new Set([...critical, ...docAlerts])].map((a) => <AlertNote key={a} code={a} critical={critical.includes(a)} />)}
             <ReviewItemsEditor
@@ -106,7 +108,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               orphaned={detail.hasOrphan}
               publicationAvailable={pub.available}
               demoPublication={pub.demo}
-              actions={{ approveAndPublish: approveAndPublishAction, reject: rejectAction, publish: publishAction }}
+              actions={{ approveAndPublish: approveAndPublishAction, reject: rejectAction, publish: publishAction, reconcile: reconcileAction }}
             />
           </div>
         </div>

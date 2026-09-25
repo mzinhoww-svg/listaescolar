@@ -1,5 +1,5 @@
 import { isDemoEnabled, type DemoEnv } from "./demo-provider";
-import type { ListItem, ListReader } from "./ports";
+import type { ListItem, ListReader, ListSnapshot } from "./ports";
 
 export class InMemoryListReader implements ListReader {
   constructor(private readonly lists: ReadonlyMap<string, readonly ListItem[]>) {}
@@ -8,6 +8,28 @@ export class InMemoryListReader implements ListReader {
     const items = this.lists.get(listId);
     return items ? items.map((i) => ({ ...i })) : null;
   }
+
+  /** Listas em memória são de demonstração/teste: `kind: 'demo'` e `isDemo`. */
+  async getList(listId: string): Promise<ListSnapshot | null> {
+    const items = await this.getItems(listId);
+    return items ? { items, kind: "demo", isDemo: true } : null;
+  }
+}
+
+/** Primeiro leitor que conhecer a lista vence (real antes da demonstração). */
+export function createCompositeListReader(readers: readonly ListReader[]): ListReader {
+  return {
+    async getList(listId, options) {
+      for (const r of readers) {
+        const found = await r.getList(listId, options);
+        if (found) return found;
+      }
+      return null;
+    },
+    async getItems(listId, options) {
+      return (await this.getList(listId, options))?.items ?? null;
+    },
+  };
 }
 
 export const DEMO_LIST_ID = "00000000-0000-4000-8000-00000000d3a0";

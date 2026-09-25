@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { outlineButton } from "@/components/auth/Screen";
 
@@ -7,10 +8,13 @@ export function UnpublishedState({
   inep,
   gradeLabel,
   year,
+  notify,
 }: {
   inep: string;
   gradeLabel: string;
   year: number;
+  /** "Me avise" (App24, S11): só quando há como avisar. */
+  notify?: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-3">
@@ -23,6 +27,7 @@ export function UnpublishedState({
           aqui.
         </p>
       </div>
+      {notify}
       <Link href={`/escolas/${inep}`} className={outlineButton}>
         Escolher outra série
       </Link>

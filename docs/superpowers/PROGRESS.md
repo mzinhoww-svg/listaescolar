@@ -6,6 +6,17 @@
 
 **Em andamento:** S10 (Pipeline; branch `slice/S10-revisao`, plano pronto, Task 1 em implementação no worktree T2). Depois: S11.
 
+## Pesquisa com mães (fora do PLAN, ADR-005)
+
+Fatia isolada fora da numeração S00–S27, autorizada pelo fundador em 25/09/2026 (sessão `claude/vigilant-einstein-75bp5d`, PR #28 reaproveitado). Spec vinculante em `docs/superpowers/specs/2026-09-25-pesquisa-maes-design.md`; decisão de escopo e autorizações em `docs/decisions/ADR-005-pesquisa-maes-fora-do-plan.md`. Plano em `docs/superpowers/plans/2026-09-25-pesquisa-maes.md`. Estado: **implementada, revisada e verificada no preview**; merge squash em `main` pelo PR #28 (autorizado por escrito pelo fundador no ADR-005, condições: CI verde, revisão independente registrada, 7 cenários E2E verdes no preview, nada fora do escopo).
+
+- Entregue: `/pesquisa` (12 telas + boas-vindas + final com lead e compartilhamento), `/pesquisa/resultados` (senha, cartões, funil, por pergunta, por origem, frases, CSV), `/pesquisa/privacidade`, `app/api/pesquisa/{resposta,concluir,lead,login,export}`.
+- Migrations aditivas `0700_pesquisa_maes.sql` e `0701_pesquisa_maes_ajustes.sql` aplicadas no ListaEscolar (staging = único projeto; ver tabela de migrations). Tabelas `survey_*` nunca entram em reset/truncate de nenhuma fatia (ADR-005).
+- Variáveis `PESQUISA_RESULTS_PASSWORD` e `IP_HASH_SALT` cadastradas na Vercel (Production/Preview/Development); valores fora do repositório.
+- Gate: typecheck ✓, lint ✓, `pnpm test` 2604 (106 da pesquisa), build ✓, CI `verify` ✓ `db` ✓, 7 cenários E2E no preview (`docs/superpowers/e2e/pesquisa-maes.md`; 25 capturas 390×844 + 4 de desktop 1280×800 em `docs/superpowers/evidencias/pesquisa/`), revisão independente por subagente em três rodadas (implementação, polimento visual, rodada `/impeccable` + achados) registrada no ledger. Passe de design com `/impeccable` (detector 0 achados) descrito no relatório E2E, seção "Rodada 2".
+- Pós-merge: repetir os cenários na URL de produção (`https://listaescolare.vercel.app/pesquisa`), apagar só as linhas `source_group = 'e2e-teste'` e confirmar contagem zero; kit de divulgação em `docs/superpowers/pesquisa-divulgacao.md`.
+- Pendência futura (S20, ADR-005): migrar os dados `survey_*` para o projeto de produção quando ele existir; até lá, backup semanal por CSV pela página de resultados.
+
 ## Concluídas (merge squash em `main`)
 
 Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jobs `verify` e `db` do GitHub Actions; `Vercel` = status do deploy de preview; `E2E` = roteiro agent-browser (build de produção local até 2026-09-25; a partir do primeiro deploy verde com previews públicos, no preview da Vercel; ver Ruling do ledger). ✓ = verde declarado no PR; ✗ = falhou; `n/d` = sem dado no PR nem no relatório.
@@ -32,6 +43,8 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | docs PROGRESS/DEBT e agendamento da refatoração | #18 | 7f68737 | 2026-09-25 | n/a | n/a | n/a | n/a | n/a | n/d | n/d | n/a (só docs) |
 | S27 Site público e páginas de sistema (Comércio) | #19 | 8cbd458 | 2026-09-25 | ✓ | ✓ | 2073 | n/a (sem migration) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 265 verificações, 0 falhas (`e2e/S27.md`) |
 | S09 Motor de aprovação automática (Pipeline) | #20 | b905cce | 2026-09-25 | ✓ | ✓ | 2279 (árvore mesclada) | 1312 (3 skipped) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
+| Pesquisa com mães (ADR-005, fora do PLAN) | #28 | squash (ver PR) | 2026-09-25 | ✓ | ✓ | 2604 | n/a (sem Docker nesta sessão; CI `db` ✓) | ✓ | verify ✓ db ✓ | ✓ (preview público) | 7 cenários no preview da Vercel, 25 capturas mobile + 4 desktop (`e2e/pesquisa-maes.md`); repetição em produção após o merge |
+
 | chore previews públicos + noindex (D-049, D-058, D-074) | #22 | d735874 | 2026-09-25 | ✓ | ✓ | ✓ | n/a | ✓ | verify ✓ db ✓ | ✓ (primeiro preview READY) | n/a (curl: 200 + X-Robots-Tag noindex) |
 | S10 Revisão humana e revisão do pai (Pipeline) | #23 | 02dfe00 | 2026-09-25 | ✓ | ✓ | 2494 | 1375 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 124 verificações, 0 falhas (`e2e/S10.md`) |
 | chore indexamento só com SITE_INDEXING=1 + operações no staging | #24 | 4e1b27e | 2026-09-25 | ✓ | ✓ | ✓ | n/a | ✓ | verify ✓ db ✓ | ✓ | n/a |
@@ -44,7 +57,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-16 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+18 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -60,12 +73,15 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0302_stationeries.sql | S13 | stationeries | 20260925060339 |
 | 0303_leads.sql | S14 | leads | 20260925131816 |
 | 0203_publication_decisions.sql | S09 | publication_decisions | 20260925161635 (aplicada em uma única chamada transacional, com conferências antes e depois) |
+| 0700_pesquisa_maes.sql | Pesquisa com mães (ADR-005) | pesquisa_maes | aplicada 2026-09-25 via MCP `apply_migration` (aditiva: `survey_responses`, `survey_leads`, RLS sem policy, função `survey_upsert_answer`) |
+| 0701_pesquisa_maes_ajustes.sql | Pesquisa com mães (ADR-005) | pesquisa_maes_ajustes | aplicada 2026-09-25 via MCP (aditiva: `created_at`/`updated_at` faltantes, função recriada com `search_path = ''`) |
+
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
 | 0601_integration.sql | S11 | integration | aplicada em 2026-09-25 (perfil `system` criado; `auth.users` do hospedado conferido antes) |
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
 
-Pendente de staging: nenhuma do PLAN. Atenção: o staging tem tabelas `survey_leads`/`survey_responses` que NÃO vêm de migration deste repositório (PR #28 "Pesquisa com mães", ADR-005, aberto por outra sessão; fora do PLAN) — reconciliar antes da S20.
+Pendente de staging: nenhuma. As tabelas `survey_*` vêm das migrations 0700/0701 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado pelo humano em 2026-09-25); os advisors apontam RLS sem policy nelas (só service_role) — conferir na revisão de segurança da S19.
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -130,5 +146,4 @@ Conteúdo e dados:
 ## Aguardando humano
 Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
 
-- **PR #28 "Pesquisa com mães (fora do PLAN, ADR-005)"**: aberto por outra sessão (branch `claude/vigilant-einstein-75bp5d`), com tabelas já presentes no staging (`survey_leads`, `survey_responses`, RLS sem policy). O orquestrador não o revisa nem mescla sem instrução do humano; se for para entrar, precisa de ADR aceito, revisão registrada e migration versionada no repositório.
 - **OPENROUTER_KEY da Edge Function `ocr-worker` (staging) recusada pelo OpenRouter (401).** E2E de 2026-09-25 no alias `listaescolare.vercel.app`: login e envio passaram; o worker (cron, 200) chamou o provedor e recebeu `http_401` (envio `rejected`, job `dead`, 2 linhas `failed` em `ai_decisions`). Ação do humano: no painel do Supabase (Edge Functions > Secrets) conferir/regravar `OPENROUTER_KEY` com uma chave válida e conferir `AI_MODEL_CHEAP/STRONG/VISION` (o modelo usado foi um de texto, `deepseek/deepseek-chat`, sobre um PDF). Depois disso o orquestrador reenvia o teste (nenhuma ação do humano além do secret). Também conferir a `OPENROUTER_KEY` no projeto Vercel `listaescolare` (a primeira decisão foi um `provider_timeout` de 9 s, provavelmente da leitura inline do app).

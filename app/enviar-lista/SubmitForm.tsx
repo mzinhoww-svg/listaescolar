@@ -8,6 +8,7 @@ import { prepareUpload } from "@/components/submissions/prepareUpload";
 import { ConsentField } from "@/components/submissions/ConsentField";
 import { BoltIcon, CameraIcon, ChevronLeftIcon, ClockIcon } from "@/components/submissions/icons";
 import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
+import { SchoolSearchPicker } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
 import { ACCEPT_ATTR, REVIEW_NOTICE } from "@/features/submissions/copy";
 import { idleState } from "@/features/submissions/form-schema";
@@ -92,6 +93,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
           ) : null}
         </section>
 
+        <SchoolSearchPicker />
         <SeriesFields years={years} defaultYear={defaultYear} />
         <ConsentField invalid={message !== null && /consentimento/i.test(message)} />
         <div aria-live="polite">

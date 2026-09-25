@@ -50,13 +50,13 @@ describe("S07 schema", () => {
     });
   }
 
-  it("list_submissions.school_id não tem FK (ADR-004)", async () => {
+  it("list_submissions.school_id tem FK restrict para schools (0600)", async () => {
     await withSuperuser(async (c) => {
       const r = await c.query(
         `select 1 from pg_constraint where conrelid = 'public.list_submissions'::regclass and contype = 'f'
            and conkey @> array[(select attnum from pg_attribute where attrelid = 'public.list_submissions'::regclass and attname = 'school_id')]`,
       );
-      expect(r.rowCount).toBe(0);
+      expect(r.rowCount).toBe(1);
     });
   });
 

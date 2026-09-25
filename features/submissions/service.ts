@@ -19,7 +19,7 @@ export type SubmitInput = {
   file: UploadFile;
 };
 
-export type SubmissionErrorCode = "consent_required" | "invalid_input" | UploadErrorCode;
+export type SubmissionErrorCode = "consent_required" | "invalid_input" | "school_not_linked" | UploadErrorCode;
 
 /** Erro de validação: nada foi gravado. */
 export class SubmissionError extends Error {

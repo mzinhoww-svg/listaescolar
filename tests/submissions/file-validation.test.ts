@@ -44,6 +44,21 @@ describe("validateUpload", () => {
     expect(validateUpload(f)).toEqual({ ok: false, code });
   });
 
+  it("poliglota: vale o que o conteúdo diz (o primeiro tipo reconhecido), não o que vem depois", () => {
+    const tail = new TextEncoder().encode("\n%%EOF");
+    const concat = (...parts: Uint8Array[]) => Uint8Array.from(parts.flatMap((p) => [...p]));
+    // PDF que carrega uma PNG dentro: é PDF, e declarar image/png é assinatura mentirosa
+    const pdfWithPng = concat(pdf(), png(10, 10), tail);
+    expect(validateUpload(file(pdfWithPng, "application/pdf"))).toEqual({ ok: true, mime: "application/pdf" });
+    expect(validateUpload(file(pdfWithPng, "image/png"))).toEqual({ ok: false, code: "signature_mismatch" });
+    // PNG com um PDF anexado ao final: é PNG
+    const pngWithPdf = concat(png(10, 10), pdf());
+    expect(validateUpload(file(pngWithPdf, "image/png"))).toEqual({ ok: true, mime: "image/png" });
+    expect(validateUpload(file(pngWithPdf, "application/pdf"))).toEqual({ ok: false, code: "signature_mismatch" });
+    // executável com cabeçalho PDF depois de bytes de MZ: não é reconhecido
+    expect(validateUpload(file(concat(exe(), pdf()), "application/pdf"))).toEqual({ ok: false, code: "unsupported_type" });
+  });
+
   it("checkUploadSize barra antes de ler o conteúdo", () => {
     expect(checkUploadSize(0)).toEqual({ ok: false, code: "empty_file" });
     expect(checkUploadSize(11 * 1024 * 1024)).toEqual({ ok: false, code: "file_too_large" });
@@ -64,6 +79,17 @@ describe("sanitizeFileName", () => {
     ["semextensao", "semextensao.pdf"],
   ])("%j -> %j", (input, expected) => {
     expect(sanitizeFileName(input, "application/pdf")).toBe(expected);
+  });
+
+  it("extensão forçada pelo tipo detectado, não pelo nome enviado", () => {
+    expect(sanitizeFileName("lista.exe", "application/pdf")).toBe("lista.pdf");
+    expect(sanitizeFileName("lista.PNG", "application/pdf")).toBe("lista.pdf");
+    expect(sanitizeFileName("foto.pdf", "image/jpeg")).toBe("foto.jpg");
+    expect(sanitizeFileName("foto.jpeg", "image/jpeg")).toBe("foto.jpeg");
+    expect(sanitizeFileName("IMG.HEIF", "image/heic")).toBe("IMG.HEIF");
+    expect(sanitizeFileName("a.php.pdf", "application/pdf")).toBe("a.php.pdf");
+    expect(sanitizeFileName("a.pdf.exe", "application/pdf")).toBe("a.pdf");
+    expect(sanitizeFileName(".pdf", "image/png")).toBe("pdf.png");
   });
 
   it("nunca devolve separador, .. ou controle e limita o tamanho", () => {

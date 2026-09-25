@@ -11,18 +11,7 @@ export const submitMetaSchema = z.object({
 });
 export type SubmitMeta = z.infer<typeof submitMetaSchema>;
 
-export const extractionResultSchema = z.object({
-  items: z.array(
-    z.object({
-      name: z.string().min(1).max(300),
-      quantity: z.number().nonnegative().nullable(),
-      unit: z.string().max(40).nullable(),
-      confidence: z.number().min(0).max(1),
-    }),
-  ),
-  overallConfidence: z.number().min(0).max(1),
-  warnings: z.array(z.string().max(300)),
-});
-export type ExtractionResult = z.infer<typeof extractionResultSchema>;
+// Fonte única em supabase/functions/_shared (a Edge Function valida a saída do pipeline com o mesmo schema).
+export { extractionResultSchema, type ExtractionResult } from "../../supabase/functions/_shared/extraction-schema";
 
 export const notifyChannelSchema = z.enum(["none", "browser", "email", "whatsapp"]);

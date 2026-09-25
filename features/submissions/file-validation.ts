@@ -109,13 +109,27 @@ const EXT: Record<AllowedMime, string> = {
   "image/webp": "webp",
   "image/heic": "heic",
 };
+const OK_EXT: Record<AllowedMime, readonly string[]> = {
+  "application/pdf": ["pdf"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+  "image/heic": ["heic", "heif"],
+};
 
-/** Sem diretórios, `..`, caracteres de controle ou separadores; sempre um nome utilizável (<= 120). */
+/**
+ * Sem diretórios, `..`, caracteres de controle ou separadores; sempre um nome utilizável (<= 120). A extensão é
+ * FORÇADA pelo tipo detectado no conteúdo (`mime`): "lista.exe" com PDF dentro vira "lista.pdf".
+ */
 export function sanitizeFileName(name: string, mime: AllowedMime): string {
   const last = name.split(/[\\/]/).pop() ?? "";
   let clean = last.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\.{2,}/g, ".");
   clean = clean.normalize("NFD").replace(/\p{M}/gu, "").replace(/[^A-Za-z0-9 ._()-]/g, "_").replace(/^[.\s]+/, "").trim();
-  if (clean.length > 120) clean = clean.slice(-120);
+  const ext = /\.([A-Za-z0-9]{1,5})$/.exec(clean);
+  if (ext && !OK_EXT[mime].includes(ext[1]!.toLowerCase())) clean = clean.slice(0, ext.index);
+  const hasOkExt = OK_EXT[mime].some((e) => clean.toLowerCase().endsWith(`.${e}`));
+  const stem = hasOkExt ? "" : `.${EXT[mime]}`;
+  if (clean.length + stem.length > 120) clean = clean.slice(-(120 - stem.length));
   if (clean === "" || clean === "." ) clean = "arquivo";
-  return /\.[A-Za-z0-9]{2,5}$/.test(clean) ? clean : `${clean}.${EXT[mime]}`;
+  return `${clean}${stem}`;
 }

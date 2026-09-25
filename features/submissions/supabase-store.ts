@@ -5,8 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { OCR_JOB_KIND, UPLOAD_BUCKET } from "./constants";
 import type { NewSubmission, SubmissionStore } from "./ports";
 import type { ExtractionResult } from "./schemas";
-
-const OPEN_STATES = ["submitted", "processing", "processing_async"];
+import { rpcOf } from "./supabase-queue";
 
 /**
  * Store sobre o cliente com a chave secreta (server-only): grava consentimento, arquivo e envio de uma vez
@@ -54,53 +53,41 @@ export function createSupabaseStore(client: SupabaseClient): SubmissionStore {
         });
         if (row.error) throw new Error("insert");
         const moved = await client.from("list_submissions").update({ status: "processing" }).eq("id", submissionId);
-        if (moved.error) throw new Error("insert");
+        if (moved.error) throw new Error("update");
+        // O job nasce com o envio: `running` com lease, chave = id do envio. Se o processo morrer daqui em diante,
+        // jobs_requeue_stale o recoloca na fila depois da lease (nenhum envio fica preso em `processing`).
+        const job = await client.from("jobs").insert({
+          kind: OCR_JOB_KIND,
+          payload: { submission_id: submissionId },
+          status: "running",
+          attempts: 1,
+          locked_at: new Date().toISOString(),
+          idempotency_key: submissionId,
+          submission_id: submissionId,
+        });
+        if (job.error) throw new Error("job");
         return { submissionId };
       } catch (e) {
-        await client.from("list_submissions").delete().eq("id", submissionId);
+        await client.from("list_submissions").delete().eq("id", submissionId); // o job cai junto (cascade)
         if (uploaded) await client.storage.from(UPLOAD_BUCKET).remove([path]);
         if (consentId) await client.from("consents").delete().eq("id", consentId);
         throw e;
       }
     },
 
-    async setStatus(submissionId, status) {
-      const { error } = await client
-        .from("list_submissions")
-        .update({ status })
-        .eq("id", submissionId)
-        .in("status", OPEN_STATES);
-      if (error) throw new Error("setStatus");
+    async reject(submissionId, reason) {
+      const { error } = await rpcOf(client)("submissions_reject", { p_submission_id: submissionId, p_error: reason });
+      if (error) throw new Error("reject");
     },
 
-    /**
-     * Resultado dentro do orçamento: job já `succeeded` (sem mensagem na fila, então nenhum worker o pega) +
-     * ocr_jobs, para o status consultável devolver o resultado. Chave `sync:<envio>`: não colide com a do job assíncrono.
-     */
+    /** Uma única função SQL (transação): job succeeded + ocr_jobs + envio review_needed. */
     async recordSyncResult(submissionId: string, result: ExtractionResult, durationMs: number) {
-      const job = await client
-        .from("jobs")
-        .insert({
-          kind: OCR_JOB_KIND,
-          payload: { submission_id: submissionId, sync: true },
-          status: "succeeded",
-          attempts: 1,
-          idempotency_key: `sync:${submissionId}`,
-          submission_id: submissionId,
-        })
-        .select("id")
-        .single();
-      if (job.error) throw new Error("recordSyncResult");
-      const ocr = await client
-        .from("ocr_jobs")
-        .insert({ job_id: job.data.id, submission_id: submissionId, result, duration_ms: Math.round(durationMs) });
-      if (ocr.error) throw new Error("recordSyncResult");
-      const st = await client
-        .from("list_submissions")
-        .update({ status: "review_needed" })
-        .eq("id", submissionId)
-        .in("status", OPEN_STATES);
-      if (st.error) throw new Error("recordSyncResult");
+      const { data, error } = await rpcOf(client)("submissions_record_sync_result", {
+        p_submission_id: submissionId,
+        p_result: result,
+        p_duration_ms: Math.round(durationMs),
+      });
+      if (error || data !== true) throw new Error("recordSyncResult");
     },
   };
 }

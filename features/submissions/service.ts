@@ -31,7 +31,8 @@ type Outcome =
 /**
  * Envio com orçamento de tempo. Ordem: consentimento e arquivo validados ANTES de gravar; grava (status
  * `processing`); roda o pipeline contra o relógio. Estourou: cancela o pipeline (o resultado tardio é
- * descartado), marca `processing_async` ANTES de enfileirar (o worker nunca é sobrescrito) e devolve o job.
+ * descartado) e devolve o job à fila (um só passo atômico no banco: job `queued` + mensagem + `processing_async`).
+ * O job existe desde a criação do envio (`running` com lease); envio órfão é recuperado por `jobs_requeue_stale`.
  */
 export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<SubmitResult> {
   if (input.consent !== true) throw new SubmissionError("consent_required");
@@ -58,11 +59,11 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
 
   const enqueueAsync = async (): Promise<SubmitResult> => {
     try {
-      await store.setStatus(submissionId, "processing_async");
+      // Atômico no banco: job `queued` + mensagem + envio `processing_async` (o worker nunca é sobrescrito).
       const { jobId } = await queue.enqueue(submissionId);
       return { status: "processing_async", submissionId, jobId, pipelineAvailable: pipeline !== null };
     } catch {
-      await store.setStatus(submissionId, "rejected").catch(() => undefined);
+      await store.reject(submissionId, "enqueue_failed").catch(() => undefined);
       return { status: "failed", submissionId, reason: "enqueue_failed" };
     }
   };
@@ -97,19 +98,20 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     return enqueueAsync();
   }
   if (outcome.kind === "error") {
-    await store.setStatus(submissionId, "rejected").catch(() => undefined);
+    await store.reject(submissionId, "extraction_failed").catch(() => undefined);
     return { status: "failed", submissionId, reason: "extraction_failed" };
   }
   const parsed = extractionResultSchema.safeParse(outcome.result);
   if (!parsed.success) {
-    await store.setStatus(submissionId, "rejected").catch(() => undefined);
+    await store.reject(submissionId, "invalid_extraction").catch(() => undefined);
     return { status: "failed", submissionId, reason: "invalid_extraction" };
   }
   try {
     await store.recordSyncResult(submissionId, parsed.data, Math.max(0, clock.now() - started));
   } catch {
-    await store.setStatus(submissionId, "rejected").catch(() => undefined);
-    return { status: "failed", submissionId, reason: "persist_failed" };
+    // Não gravou (banco instável ou job já devolvido à fila): o job segue `running`/`queued`, então o caminho
+    // assíncrono refaz a leitura em vez de perder o envio.
+    return enqueueAsync();
   }
   return { status: "review_needed", submissionId, result: parsed.data };
 }

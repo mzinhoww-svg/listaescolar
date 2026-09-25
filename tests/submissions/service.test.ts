@@ -14,13 +14,13 @@ const RESULT: ExtractionResult = {
 };
 
 function makeStore() {
-  const calls = { created: [] as NewSubmission[], statuses: [] as string[], synced: [] as string[] };
+  const calls = { created: [] as NewSubmission[], rejected: [] as string[], synced: [] as string[] };
   const store: SubmissionStore = {
     createSubmission: vi.fn(async (i: NewSubmission) => {
       calls.created.push(i);
       return { submissionId: "sub-1" };
     }),
-    setStatus: vi.fn(async (_id: string, s: string) => void calls.statuses.push(s)),
+    reject: vi.fn(async (_id: string, reason: string) => void calls.rejected.push(reason)),
     recordSyncResult: vi.fn(async (id: string) => void calls.synced.push(id)),
   };
   return { store, calls };
@@ -100,13 +100,13 @@ describe("submitList", () => {
       pipelineAvailable: true,
     });
     expect(p.state.signal?.aborted).toBe(true);
-    expect(calls.statuses).toEqual(["processing_async"]); // marcado ANTES de enfileirar
+    expect(calls.rejected).toEqual([]); // nada rejeitado: o enqueue (atômico no banco) marca processing_async
     expect(jobs.size).toBe(1);
     // resultado tardio é descartado: nada é gravado depois
     p.resolve(RESULT);
     await new Promise((r) => setTimeout(r, 0));
     expect(calls.synced).toEqual([]);
-    expect(calls.statuses).toEqual(["processing_async"]);
+    expect(calls.rejected).toEqual([]);
   });
 
   it("orçamento injetável", async () => {
@@ -129,7 +129,7 @@ describe("submitList", () => {
     p.reject(new Error("boom com dado pessoal ana@x.com"));
     const r = await run;
     expect(r).toEqual({ status: "failed", submissionId: "sub-1", reason: "extraction_failed" });
-    expect(calls.statuses).toEqual(["rejected"]);
+    expect(calls.rejected).toEqual(["extraction_failed"]);
     expect(jobs.size).toBe(0);
   });
 
@@ -141,7 +141,18 @@ describe("submitList", () => {
     const r = await submitList(input(), { pipeline, store, queue, clock: new FakeClock() });
     expect(r).toMatchObject({ status: "failed", reason: "invalid_extraction" });
     expect(calls.synced).toEqual([]);
-    expect(calls.statuses).toEqual(["rejected"]);
+    expect(calls.rejected).toEqual(["invalid_extraction"]);
+  });
+
+  it("falha ao gravar o resultado síncrono: cai no caminho assíncrono (o worker refaz), sem rejeitar", async () => {
+    const { store, calls } = makeStore();
+    (store.recordSyncResult as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("db"));
+    const { queue, jobs } = makeQueue();
+    const pipeline: ExtractionPipeline = { extract: async () => RESULT };
+    const r = await submitList(input(), { pipeline, store, queue, clock: new FakeClock() });
+    expect(r).toMatchObject({ status: "processing_async", jobId: "job-1" });
+    expect(jobs.size).toBe(1);
+    expect(calls.rejected).toEqual([]);
   });
 
   it("falha ao enfileirar: envio rejected (nunca preso em processing)", async () => {
@@ -153,7 +164,7 @@ describe("submitList", () => {
     await vi.waitFor(() => expect(clock.pending()).toBe(1));
     clock.advance(10_000);
     await expect(run).resolves.toMatchObject({ status: "failed", reason: "enqueue_failed" });
-    expect(calls.statuses).toEqual(["processing_async", "rejected"]);
+    expect(calls.rejected).toEqual(["enqueue_failed"]);
   });
 
   it("sem pipeline configurado: grava, enfileira, não inventa itens", async () => {
@@ -163,13 +174,6 @@ describe("submitList", () => {
     expect(r).toEqual({ status: "processing_async", submissionId: "sub-1", jobId: "job-1", pipelineAvailable: false });
     expect(calls.created).toHaveLength(1);
     expect(calls.synced).toEqual([]);
-  });
-
-  it("mesmo envio enfileirado duas vezes não duplica job; reenvio do arquivo é envio novo", async () => {
-    const { queue, jobs } = makeQueue();
-    expect(await queue.enqueue("sub-1")).toEqual(await queue.enqueue("sub-1"));
-    await queue.enqueue("sub-2");
-    expect(jobs.size).toBe(2);
   });
 
   it("marca is_demo quando o pipeline é de demonstração e sanitiza o nome", async () => {

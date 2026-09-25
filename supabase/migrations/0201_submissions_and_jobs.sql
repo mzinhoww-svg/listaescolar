@@ -163,6 +163,25 @@ create trigger list_submissions_check_insert before insert on public.list_submis
   for each row execute function public.list_submissions_check_insert();
 revoke execute on function public.list_submissions_check_insert() from public, anon, authenticated, service_role;
 
+-- Identidade do envio é imutável: nem o service_role troca dono, consentimento, arquivo ou id depois de criado
+-- (o consentimento que sustentou o envio não pode ser substituído por outro). Status, is_demo etc. seguem livres.
+create function public.list_submissions_guard_update() returns trigger
+language plpgsql
+as $$
+begin
+  if new.id is distinct from old.id
+     or new.submitted_by is distinct from old.submitted_by
+     or new.consent_id is distinct from old.consent_id
+     or new.source is distinct from old.source
+     or new.storage_path is distinct from old.storage_path then
+    raise exception 'identidade do envio é imutável' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+create trigger list_submissions_guard_update before update on public.list_submissions
+  for each row execute function public.list_submissions_guard_update();
+
 -- Consentimento é imutável, exceto a revogação (revoked_at nulo -> data, uma única vez).
 create function public.consents_guard_update() returns trigger
 language plpgsql
@@ -364,7 +383,11 @@ begin
 end;
 $$;
 
-create function public.jobs_complete(p_job_id uuid, p_result jsonb, p_duration_ms int) returns void
+-- p_attempts (fencing): só conclui se o job ainda estiver na tentativa que este worker reivindicou; um worker antigo
+-- (lease vencida, job reivindicado por outro) vira no-op. Nulo = sem fencing. p_is_demo: resultado do pipeline demo.
+create function public.jobs_complete(
+  p_job_id uuid, p_result jsonb, p_duration_ms int, p_attempts int default null, p_is_demo boolean default false
+) returns void
 language plpgsql
 security definer
 set search_path = ''
@@ -374,21 +397,26 @@ declare
 begin
   update public.jobs
      set status = 'succeeded', locked_at = null, last_error = null
-   where id = p_job_id and status = 'running'
+   where id = p_job_id and status = 'running' and (p_attempts is null or attempts = p_attempts)
    returning * into j;
   if j.id is null then
-    return; -- idempotente: já concluído, ou nunca reivindicado
+    return; -- idempotente: já concluído, nunca reivindicado ou tentativa superada
   end if;
   insert into public.ocr_jobs (job_id, submission_id, result, duration_ms)
   values (j.id, j.submission_id, p_result, p_duration_ms)
   on conflict (job_id) do nothing;
+  if coalesce(p_is_demo, false) and j.submission_id is not null then
+    update public.list_submissions set is_demo = true where id = j.submission_id;
+  end if;
   perform public.jobs_touch_submission(j.submission_id, 'review_needed');
 end;
 $$;
 
 -- p_permanent = true (ex.: arquivo armazenado inválido): vai direto a dead (DLQ + envio rejected), sem esgotar tentativas.
-create function public.jobs_fail(p_job_id uuid, p_error text, p_retry_in_seconds int, p_permanent boolean default false)
-returns public.job_status
+-- p_attempts (fencing): tentativa reivindicada por este worker; diferente da atual = no-op (devolve o status atual).
+create function public.jobs_fail(
+  p_job_id uuid, p_error text, p_retry_in_seconds int, p_permanent boolean default false, p_attempts int default null
+) returns public.job_status
 language plpgsql
 security definer
 set search_path = ''
@@ -403,6 +431,9 @@ begin
   if j.status <> 'running' then
     return j.status; -- no-op: já finalizado ou não reivindicado
   end if;
+  if p_attempts is not null and j.attempts <> p_attempts then
+    return j.status; -- tentativa superada: outro worker assumiu o job
+  end if;
   if not coalesce(p_permanent, false) and j.attempts < j.max_attempts then
     update public.jobs
        set status = 'retrying', locked_at = null, last_error = left(p_error, 500),
@@ -412,6 +443,69 @@ begin
   end if;
   perform public.jobs_mark_dead(j.id, p_error);
   return 'dead';
+end;
+$$;
+
+-- Envio síncrono (S07). O job nasce junto com o envio (idempotency_key = id do envio), `running` com lease: se o
+-- processo do app morrer, jobs_requeue_stale recupera o órfão depois da lease. As funções abaixo fecham o envio.
+
+-- Resultado dentro do orçamento de 10 s, TUDO numa transação: job succeeded + ocr_jobs + envio review_needed.
+-- Devolve false se o job não estiver mais `running` (ex.: já foi devolvido à fila); nada é gravado nesse caso.
+create function public.submissions_record_sync_result(p_submission_id uuid, p_result jsonb, p_duration_ms int)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  j public.jobs;
+begin
+  select * into j from public.jobs where idempotency_key = p_submission_id::text for update;
+  if not found or j.status <> 'running' then
+    return false;
+  end if;
+  perform public.jobs_complete(j.id, p_result, p_duration_ms, j.attempts, false);
+  return true;
+end;
+$$;
+
+-- Estourou o orçamento: o job `running` vira `queued` (tentativas zeradas), entra na fila e o envio vira
+-- processing_async, atomicamente (o worker nunca vê o envio no estado errado). Idempotente; sem job, cria um.
+create function public.jobs_defer(p_submission_id uuid) returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  j public.jobs;
+begin
+  select * into j from public.jobs where idempotency_key = p_submission_id::text for update;
+  if not found then
+    insert into public.jobs (kind, payload, idempotency_key, submission_id)
+    values ('ocr_jobs', jsonb_build_object('submission_id', p_submission_id), p_submission_id::text, p_submission_id)
+    returning * into j;
+    perform pgmq.send('ocr_jobs', jsonb_build_object('job_id', j.id));
+  elsif j.status = 'running' then
+    update public.jobs set status = 'queued', attempts = 0, locked_at = null, run_after = now() where id = j.id;
+    perform pgmq.send('ocr_jobs', jsonb_build_object('job_id', j.id));
+  end if;
+  perform public.jobs_touch_submission(p_submission_id, 'processing_async');
+  return j.id;
+end;
+$$;
+
+-- Falha do envio antes de haver worker (pipeline falhou, enfileirar falhou): job dead (sem DLQ: não é falha de
+-- fila) e envio rejected, juntos, para nenhum job órfão ser retomado depois.
+create function public.submissions_reject(p_submission_id uuid, p_error text) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.jobs
+     set status = 'dead', locked_at = null, last_error = left(p_error, 500)
+   where idempotency_key = p_submission_id::text and status not in ('dead', 'succeeded');
+  perform public.jobs_touch_submission(p_submission_id, 'rejected');
 end;
 $$;
 
@@ -448,8 +542,11 @@ revoke execute on function public.jobs_touch_submission(uuid, public.list_status
 revoke execute on function public.jobs_mark_dead(uuid, text) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_enqueue(text, jsonb, text, uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_claim(uuid) from public, anon, authenticated, service_role;
-revoke execute on function public.jobs_complete(uuid, jsonb, int) from public, anon, authenticated, service_role;
-revoke execute on function public.jobs_fail(uuid, text, int, boolean) from public, anon, authenticated, service_role;
+revoke execute on function public.jobs_complete(uuid, jsonb, int, int, boolean) from public, anon, authenticated, service_role;
+revoke execute on function public.jobs_fail(uuid, text, int, boolean, int) from public, anon, authenticated, service_role;
+revoke execute on function public.submissions_record_sync_result(uuid, jsonb, int) from public, anon, authenticated, service_role;
+revoke execute on function public.jobs_defer(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.submissions_reject(uuid, text) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_read(int, int) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_ack(bigint) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_set_vt(bigint, int) from public, anon, authenticated, service_role;
@@ -457,8 +554,11 @@ revoke execute on function public.jobs_requeue_stale() from public, anon, authen
 revoke execute on function public.consents_revoke(uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.jobs_enqueue(text, jsonb, text, uuid) to service_role;
 grant execute on function public.jobs_claim(uuid) to service_role;
-grant execute on function public.jobs_complete(uuid, jsonb, int) to service_role;
-grant execute on function public.jobs_fail(uuid, text, int, boolean) to service_role;
+grant execute on function public.jobs_complete(uuid, jsonb, int, int, boolean) to service_role;
+grant execute on function public.jobs_fail(uuid, text, int, boolean, int) to service_role;
+grant execute on function public.submissions_record_sync_result(uuid, jsonb, int) to service_role;
+grant execute on function public.jobs_defer(uuid) to service_role;
+grant execute on function public.submissions_reject(uuid, text) to service_role;
 grant execute on function public.jobs_read(int, int) to service_role;
 grant execute on function public.jobs_ack(bigint) to service_role;
 grant execute on function public.jobs_set_vt(bigint, int) to service_role;

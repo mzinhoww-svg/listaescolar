@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # E2E da S07 (envio de lista) com agent-browser contra o build local da trilha 2.
 # Pré-requisitos: `pnpm db:start && pnpm db:reset`; `.env.local` (só neste worktree) com as variáveis de `pnpm db:env`
-# mais DEMO_PIPELINE=1, ALLOW_DEMO_IN_PRODUCTION=1 (build de produção local) e WORKER_SHARED_SECRET;
+# mais DEMO_PIPELINE=1, APP_ENV=local (o demo só liga com APP_ENV explícito não produtivo) e WORKER_SHARED_SECRET;
 # `pnpm build && PORT=3002 pnpm start`; worker servido como em supabase/functions/ocr-worker/README.md
-# (DEMO_SLOW_MS=6000). Segredo do worker em $SECRET_FILE (fora do repositório). Nada aqui contém chaves.
+# (DEMO_SLOW_MS=6000, DEMO_PIPELINE=1, APP_ENV=local). Segredo do worker em $SECRET_FILE (fora do repositório). Nada aqui contém chaves.
 set -u
 cd "$(dirname "$0")/.."
 BASE=${BASE:-http://127.0.0.1:3002}
@@ -14,10 +14,10 @@ DB=${DB:-supabase_db_listacerta-t2}
 OUT=docs/superpowers/e2e/screenshots
 TMP=$(mktemp -d)
 PASS=0; FAIL=0
-export AGENT_BROWSER_SESSION_PREFIX=s07
+export AGENT_BROWSER_SESSION_PREFIX=t2s07
 
-for s in anon p o a dbg; do AGENT_BROWSER_SESSION="s07-$s" agent-browser close >/dev/null 2>&1; done   # sessões limpas (sem login anterior)
-ab() { local s=$1; shift; AGENT_BROWSER_SESSION="s07-$s" agent-browser "$@"; }
+for s in anon p o a dbg; do AGENT_BROWSER_SESSION="t2s07-$s" agent-browser close >/dev/null 2>&1; done   # sessões limpas (sem login anterior)
+ab() { local s=$1; shift; AGENT_BROWSER_SESSION="t2s07-$s" agent-browser "$@"; }
 sql() { docker exec "$DB" psql -U postgres -At -c "$1"; }
 ok() { PASS=$((PASS+1)); echo "PASS  $1"; }
 bad() { FAIL=$((FAIL+1)); echo "FAIL  $1  ($2)"; }
@@ -179,7 +179,7 @@ wait_text a "Lista lida" 20 && ok "escola: envio conclui" || bad "envio da escol
 [[ $(sql "select source||'/'||(school_id is not null) from public.list_submissions order by created_at desc limit 1") == "school/true" ]] && ok "banco: origem school com school_id" || bad "origem school" ""
 
 echo "== k) sem pipeline configurado (servidor reiniciado com DEMO_PIPELINE=0 e sem WORKER_SHARED_SECRET: ninguém processa)"
-pkill -f next-server; sleep 2
+kill "$(lsof -ti tcp:3002 -sTCP:LISTEN)" 2>/dev/null; sleep 2   # só o servidor desta trilha (porta 3002)
 ( DEMO_PIPELINE=0 WORKER_SHARED_SECRET= PORT=3002 nohup pnpm start > /tmp/s07-next-nopipe.log 2>&1 & ); sleep 6
 ab p open "$BASE/enviar-lista" >/dev/null; fill_form p "$TMP/lista-rapida.pdf" "5º ano"; ab p check 'input[name=consent]' >/dev/null
 send p
@@ -191,6 +191,6 @@ NOPIPE=$(last_id)
 [[ $(sql "select count(*) from public.ocr_jobs where submission_id='$NOPIPE'") == 0 ]] && ok "nenhum resultado inventado (ocr_jobs vazio)" || bad "ocr_jobs sem pipeline" ""
 
 echo; echo "RESULTADO: $PASS ok, $FAIL falhas"
-for s in anon p o a; do AGENT_BROWSER_SESSION="s07-$s" agent-browser close >/dev/null 2>&1; done
+for s in anon p o a; do AGENT_BROWSER_SESSION="t2s07-$s" agent-browser close >/dev/null 2>&1; done
 rm -rf "$TMP"
 [ "$FAIL" -eq 0 ]

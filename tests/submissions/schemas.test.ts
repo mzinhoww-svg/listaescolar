@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { assertDemoAllowed, getPipelineFlags } from "@/lib/env";
+import { getPipelineFlags } from "@/lib/env";
+import { assertPipelineEnv, isDemoEnabled } from "@/lib/pipeline-env";
+import { parseSlowMs } from "../../supabase/functions/_shared/demo-lock";
 import { extractionResultSchema, submitMetaSchema } from "@/features/submissions/schemas";
 
 const meta = {
@@ -41,25 +43,63 @@ describe("extractionResultSchema", () => {
 describe("flags do pipeline (env)", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("DEMO_PIPELINE=1 em produção sem ALLOW_DEMO_IN_PRODUCTION é erro de validação", () => {
-    expect(() => assertDemoAllowed({ DEMO_PIPELINE: "1" }, "production")).toThrow(/DEMO_PIPELINE/);
+  it("demo pedido sem APP_ENV explícito ou em produção: desligado e erro de boot", () => {
+    for (const appEnv of ["", "production", "prod", "qa"]) {
+      vi.stubEnv("DEMO_PIPELINE", "1");
+      vi.stubEnv("APP_ENV", appEnv);
+      expect(isDemoEnabled()).toBe(false);
+      expect(() => assertPipelineEnv()).toThrow(/APP_ENV/);
+    }
+  });
+  it("NODE_ENV=production não libera o demo (só APP_ENV conta)", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("DEMO_PIPELINE", "1");
-    vi.stubEnv("ALLOW_DEMO_IN_PRODUCTION", "");
-    expect(() => getPipelineFlags()).toThrow(/DEMO_PIPELINE/);
+    vi.stubEnv("APP_ENV", "");
+    expect(isDemoEnabled()).toBe(false);
   });
-  it("com a flag explícita, ou fora de produção, passa", () => {
-    expect(() => assertDemoAllowed({ DEMO_PIPELINE: "1", ALLOW_DEMO_IN_PRODUCTION: "1" }, "production")).not.toThrow();
-    expect(() => assertDemoAllowed({ DEMO_PIPELINE: "1" }, "development")).not.toThrow();
-    expect(() => assertDemoAllowed({}, "production")).not.toThrow();
+  it.each(["local", "development", "preview", "staging"])("DEMO_PIPELINE=1 com APP_ENV=%s liga", (appEnv) => {
+    vi.stubEnv("DEMO_PIPELINE", "1");
+    vi.stubEnv("APP_ENV", appEnv);
+    expect(isDemoEnabled()).toBe(true);
+    expect(() => assertPipelineEnv()).not.toThrow();
+  });
+  it("sem DEMO_PIPELINE, desligado e sem erro, em qualquer ambiente", () => {
+    vi.stubEnv("DEMO_PIPELINE", "");
+    for (const appEnv of ["", "production", "local"]) {
+      vi.stubEnv("APP_ENV", appEnv);
+      expect(isDemoEnabled()).toBe(false);
+      expect(() => assertPipelineEnv()).not.toThrow();
+    }
   });
   it("valida valores e o tamanho do segredo do worker", () => {
     vi.stubEnv("DEMO_PIPELINE", "sim");
     expect(() => getPipelineFlags()).toThrow(/DEMO_PIPELINE/);
     vi.stubEnv("DEMO_PIPELINE", "");
+    vi.stubEnv("APP_ENV", "producao");
+    expect(() => getPipelineFlags()).toThrow(/APP_ENV/);
+    vi.stubEnv("APP_ENV", "");
     vi.stubEnv("WORKER_SHARED_SECRET", "curto");
     expect(() => getPipelineFlags()).toThrow(/WORKER_SHARED_SECRET/);
     vi.stubEnv("WORKER_SHARED_SECRET", "x".repeat(32));
     expect(getPipelineFlags().WORKER_SHARED_SECRET).toHaveLength(32);
+  });
+  it("DEMO_SLOW_MS inválido (NaN, negativo, vazio) cai no padrão", () => {
+    expect(parseSlowMs("abc")).toBe(15_000);
+    expect(parseSlowMs("-5")).toBe(15_000);
+    expect(parseSlowMs("")).toBe(15_000);
+    expect(parseSlowMs(undefined)).toBe(15_000);
+    expect(parseSlowMs("3000")).toBe(3000);
+    expect(parseSlowMs("9999999")).toBe(120_000);
+  });
+});
+
+describe("instrumentation.register", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("aborta o boot (nodejs) com demo em ambiente não permitido", async () => {
+    vi.stubEnv("NEXT_RUNTIME", "nodejs");
+    vi.stubEnv("DEMO_PIPELINE", "1");
+    vi.stubEnv("APP_ENV", "production");
+    const { register } = await import("../../instrumentation");
+    await expect(register()).rejects.toThrow(/APP_ENV/);
   });
 });

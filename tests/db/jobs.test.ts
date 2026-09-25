@@ -1,13 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
-import { attempt, cleanupUsers, DATABASE_URL, seedUsers, withClaims, withSuperuser } from "./helpers";
+import { attempt, cleanupUsers, DATABASE_URL, IDS, seedUsers, withClaims, withSuperuser } from "./helpers";
 import { insertJob, insertSubmission, purgeQueues, SUB } from "./s07-fixtures";
 
 const FUNCS = [
   "jobs_enqueue(text, jsonb, text, uuid)",
   "jobs_claim(uuid)",
-  "jobs_complete(uuid, jsonb, integer)",
-  "jobs_fail(uuid, text, integer, boolean)",
+  "jobs_complete(uuid, jsonb, integer, integer, boolean)",
+  "jobs_fail(uuid, text, integer, boolean, integer)",
+  "jobs_defer(uuid)",
+  "submissions_record_sync_result(uuid, jsonb, integer)",
+  "submissions_reject(uuid, text)",
   "jobs_read(integer, integer)",
   "jobs_ack(bigint)",
   "jobs_set_vt(bigint, integer)",
@@ -375,5 +378,128 @@ describe("jobs_* (fila pgmq)", () => {
     expect(ack).toBe(true);
     await sys((c) => q(c, "select public.jobs_set_vt($1, 0)", [msg]));
     expect(await sys(async (c) => (await q(c, "select * from public.jobs_read(5, 30)")).rows)).toHaveLength(0);
+  });
+  describe("fencing, envio síncrono atômico e órfãos", () => {
+    const subStatus = async () =>
+      withSuperuser(async (c) => (await c.query("select status::text s, is_demo from public.list_submissions where id = $1", [SUB.parent])).rows[0]!);
+    const jobRow = async (id: string) =>
+      withSuperuser(async (c) => (await c.query("select status::text s, attempts from public.jobs where id = $1", [id])).rows[0]!);
+    const runningSync = () =>
+      withSuperuser(async (c) => {
+        const id = await insertJob(c, SUB.parent, SUB.parent, { status: "running", attempts: 1 });
+        await aged(c, id, "locked_at = now()"); // lease vigente, como o store grava
+        return id;
+      });
+
+    it("jobs_complete com tentativa superada é no-op; com a tentativa certa conclui e marca is_demo", async () => {
+      const id = await enqueue();
+      await claim(id); // attempts = 1
+      await sys((c) => q(c, "select public.jobs_complete($1, '{}'::jsonb, 5, 2, true)", [id])); // token de outra tentativa
+      expect(await jobRow(id)).toEqual({ s: "running", attempts: 1 });
+      expect(await subStatus()).toMatchObject({ s: "submitted", is_demo: false });
+      await sys((c) => q(c, "select public.jobs_complete($1, '{\"items\":[]}'::jsonb, 5, 1, true)", [id]));
+      expect(await jobRow(id)).toEqual({ s: "succeeded", attempts: 1 });
+      expect(await subStatus()).toMatchObject({ s: "review_needed", is_demo: true });
+    });
+
+    it("jobs_complete sem is_demo não marca demonstração", async () => {
+      const id = await enqueue();
+      await claim(id);
+      await sys((c) => q(c, "select public.jobs_complete($1, '{}'::jsonb, 5, 1, false)", [id]));
+      expect(await subStatus()).toMatchObject({ s: "review_needed", is_demo: false });
+    });
+
+    it("jobs_fail com tentativa superada é no-op (não derruba o job do worker novo)", async () => {
+      const id = await enqueue();
+      await claim(id);
+      const st = await sys(async (c) => (await q(c, "select public.jobs_fail($1, 'x', 0, true, 9)::text s", [id])).rows[0]!.s);
+      expect(st).toBe("running");
+      expect(await queueDepth("ocr_jobs_dlq")).toBe(0);
+      const ok = await sys(async (c) => (await q(c, "select public.jobs_fail($1, 'x', 0, false, 1)::text s", [id])).rows[0]!.s);
+      expect(ok).toBe("retrying");
+    });
+
+    it("submissions_record_sync_result: job succeeded + ocr_jobs + envio review_needed numa só chamada; repetir devolve false", async () => {
+      const id = await runningSync();
+      const ok = await sys(async (c) => (await q(c, "select public.submissions_record_sync_result($1, '{\"items\":[]}'::jsonb, 42) r", [SUB.parent])).rows[0]!.r);
+      expect(ok).toBe(true);
+      expect(await jobRow(id)).toEqual({ s: "succeeded", attempts: 1 });
+      expect(await subStatus()).toMatchObject({ s: "review_needed" });
+      await withSuperuser(async (c) => {
+        expect((await c.query("select result, duration_ms from public.ocr_jobs where job_id = $1", [id])).rows).toEqual([{ result: { items: [] }, duration_ms: 42 }]);
+      });
+      const again = await sys(async (c) => (await q(c, "select public.submissions_record_sync_result($1, '{}'::jsonb, 1) r", [SUB.parent])).rows[0]!.r);
+      expect(again).toBe(false);
+    });
+
+    it("submissions_record_sync_result não grava nada se o job já voltou à fila", async () => {
+      const id = await withSuperuser((c) => insertJob(c, SUB.parent, SUB.parent, { status: "queued" }));
+      const r = await sys(async (c) => (await q(c, "select public.submissions_record_sync_result($1, '{}'::jsonb, 1) r", [SUB.parent])).rows[0]!.r);
+      expect(r).toBe(false);
+      expect(await jobRow(id)).toEqual({ s: "queued", attempts: 0 });
+      await withSuperuser(async (c) => expect((await c.query("select count(*)::int n from public.ocr_jobs")).rows[0]!.n).toBe(0));
+    });
+
+    it("jobs_defer: running -> queued com tentativas zeradas, uma mensagem e envio processing_async; idempotente", async () => {
+      const id = await runningSync();
+      const a = await sys(async (c) => (await q(c, "select public.jobs_defer($1) id", [SUB.parent])).rows[0]!.id);
+      expect(a).toBe(id);
+      expect(await jobRow(id)).toEqual({ s: "queued", attempts: 0 });
+      expect(await subStatus()).toMatchObject({ s: "processing_async" });
+      expect(await queueDepth("ocr_jobs")).toBe(1);
+      await sys((c) => q(c, "select public.jobs_defer($1)", [SUB.parent]));
+      expect(await queueDepth("ocr_jobs")).toBe(1);
+      expect(await claim(id)).toBe("claimed");
+    });
+
+    it("jobs_defer sem job existente cria um (chave = id do envio) com mensagem", async () => {
+      const id = await sys(async (c) => (await q(c, "select public.jobs_defer($1) id", [SUB.parent])).rows[0]!.id as string);
+      await withSuperuser(async (c) => {
+        expect((await c.query("select idempotency_key k, status::text s from public.jobs where id = $1", [id])).rows[0]).toEqual({ k: SUB.parent, s: "queued" });
+      });
+      expect(await queueDepth("ocr_jobs")).toBe(1);
+    });
+
+    it("submissions_reject: job dead (sem DLQ) e envio rejected juntos", async () => {
+      const id = await runningSync();
+      await sys((c) => q(c, "select public.submissions_reject($1, 'falhou')", [SUB.parent]));
+      expect(await jobRow(id)).toEqual({ s: "dead", attempts: 1 });
+      expect(await subStatus()).toMatchObject({ s: "rejected" });
+      expect(await queueDepth("ocr_jobs_dlq")).toBe(0);
+    });
+
+    it("órfão (app morreu com o job running): passada a lease, requeue_stale o recoloca e o worker o processa", async () => {
+      const id = await runningSync();
+      await withSuperuser((c) => aged(c, id, "locked_at = now() - interval '6 minutes'"));
+      expect(await sys(async (c) => (await q(c, "select public.jobs_requeue_stale() n")).rows[0]!.n)).toBe(1);
+      expect(await queueDepth("ocr_jobs")).toBe(1);
+      expect(await claim(id)).toBe("claimed");
+      await sys((c) => q(c, "select public.jobs_complete($1, '{}'::jsonb, 1, 2, false)", [id]));
+      expect(await subStatus()).toMatchObject({ s: "review_needed" });
+    });
+
+    it("órfão dentro da lease não é recolocado", async () => {
+      await runningSync();
+      expect(await sys(async (c) => (await q(c, "select public.jobs_requeue_stale() n")).rows[0]!.n)).toBe(0);
+    });
+
+    it("list_submissions: dono, consentimento, origem e arquivo são imutáveis (até para superuser/service_role); status segue livre", async () => {
+      await withSuperuser(async (c) => {
+        await c.query("begin");
+        const other = await c.query("insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1') returning id", [IDS.school_member]);
+        for (const [set, params] of [
+          ["submitted_by = $2", [IDS.school_member]],
+          ["consent_id = $2", [other.rows[0]!.id]],
+          ["source = 'school'", []],
+          ["storage_path = 'x/y/z.pdf'", []],
+          ["id = gen_random_uuid()", []],
+        ] as const) {
+          const r = await attempt(c, `update public.list_submissions set ${set} where id = $1`, [SUB.parent, ...params]);
+          expect(r.code, set).toBe("42501");
+        }
+        expect((await attempt(c, "update public.list_submissions set status = 'processing', is_demo = true where id = $1", [SUB.parent])).error).toBeNull();
+        await c.query("rollback");
+      });
+    });
   });
 });

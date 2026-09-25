@@ -15,6 +15,7 @@ import {
   type WorkerJobs,
   type WorkerQueue,
 } from "../../supabase/functions/_shared/worker-core";
+import { extractionResultSchema } from "../../supabase/functions/_shared/extraction-schema";
 import { FakeClock } from "../helpers/fake-clock";
 import { pdf } from "../helpers/files";
 
@@ -25,6 +26,7 @@ type FakeJob = { status: string; attempts: number; maxAttempts: number; runAfter
 /** Emula as funções SQL jobs_* (claim atômico, lease de 5 min, fail com retry/dead). */
 function fakeJobsDb(clock: FakeClock) {
   const jobs = new Map<string, FakeJob>();
+  const failRequeue = { on: false };
   const effects: string[] = [];
   const api: WorkerJobs = {
     async get(id) {
@@ -50,15 +52,17 @@ function fakeJobsDb(clock: FakeClock) {
       j.lockedAt = clock.now();
       return "claimed";
     },
-    async complete(id) {
+    async complete(id, _result, _ms, fence) {
       const j = jobs.get(id)!;
-      if (j.status !== "running") return;
+      if (j.status !== "running" || j.attempts !== fence.attempts) return; // fencing por tentativa
       j.status = "succeeded";
       effects.push(`complete:${id}`);
+      if (fence.isDemo) effects.push(`demo:${id}`);
     },
-    async fail(id, _e, retryIn, permanent) {
+    async fail(id, _e, retryIn, permanent, attempts) {
       const j = jobs.get(id)!;
       if (j.status !== "running") return j.status;
+      if (attempts !== undefined && j.attempts !== attempts) return j.status; // fencing por tentativa
       if (permanent || j.attempts >= j.maxAttempts) {
         j.status = "dead";
         effects.push(`dead:${id}`);
@@ -71,24 +75,26 @@ function fakeJobsDb(clock: FakeClock) {
     },
     async requeueStale() {
       effects.push("requeueStale");
+      if (failRequeue.on) throw new Error("banco fora");
     },
   };
   const add = (id: string, over: Partial<FakeJob> = {}) =>
     jobs.set(id, { status: "queued", attempts: 0, maxAttempts: 5, runAfter: 0, lockedAt: null, submissionId: `sub-${id}`, ...over });
-  return { api, jobs, effects, add };
+  return { api, jobs, effects, add, failRequeue };
 }
 
 const GOOD: WorkerInput = { bytes: pdf(), mime: "application/pdf", fileName: "lista.pdf" };
 const RESULT = { items: [], overallConfidence: 1, warnings: [] };
 
-function setup(over: { extract?: WorkerDeps["pipeline"]["extract"]; input?: WorkerInput | null } = {}) {
+function setup(over: { extract?: WorkerDeps["pipeline"]["extract"]; input?: WorkerInput | null; isDemo?: boolean } = {}) {
   const clock = new FakeClock();
   const db = fakeJobsDb(clock);
   db.add("j1");
   const extract = vi.fn(over.extract ?? (async () => RESULT));
   const deps: WorkerDeps = {
     jobs: db.api,
-    pipeline: { extract },
+    pipeline: { extract, isDemo: over.isDemo },
+    resultSchema: extractionResultSchema,
     loadInput: async () => (over.input === undefined ? GOOD : over.input),
     clock,
   };
@@ -184,7 +190,7 @@ describe("processJob", () => {
     const { deps, db, extract } = setup({ input: { ...GOOD, bytes: new TextEncoder().encode("MZ....") } });
     const failSpy = vi.spyOn(deps.jobs, "fail");
     expect(await processMessage("j1", deps)).toEqual({ outcome: "dead", ack: true });
-    expect(failSpy).toHaveBeenCalledWith("j1", "invalid_file", 30, true);
+    expect(failSpy).toHaveBeenCalledWith("j1", "invalid_file", 30, true, 1);
     expect(db.jobs.get("j1")?.status).toBe("dead");
     expect(extract).not.toHaveBeenCalled();
   });
@@ -207,6 +213,48 @@ describe("processJob", () => {
     clock.advance(90_000);
     expect((await run).outcome).toBe("retry");
     expect(signal?.aborted).toBe(true);
+  });
+
+  it("saída inválida do pipeline: nunca chega ao jobs_complete; falha com retry", async () => {
+    const bad = [{ items: "x" }, { items: [], overallConfidence: 3, warnings: [] }, null, "texto"];
+    for (const value of bad) {
+      const { deps, db } = setup({ extract: async () => value });
+      const completeSpy = vi.spyOn(deps.jobs, "complete");
+      const r = await processMessage("j1", deps);
+      expect(r).toMatchObject({ outcome: "retry", ack: false });
+      expect(completeSpy).not.toHaveBeenCalled();
+      expect(db.jobs.get("j1")?.status).toBe("retrying");
+    }
+  });
+
+  it("entrega ao complete o resultado JÁ validado (sem campos extras) e o marcador de demonstração", async () => {
+    const { deps } = setup({ isDemo: true, extract: async () => ({ ...RESULT, extra: "x" }) });
+    const completeSpy = vi.spyOn(deps.jobs, "complete");
+    await processMessage("j1", deps);
+    expect(completeSpy).toHaveBeenCalledWith("j1", RESULT, expect.any(Number), { attempts: 1, isDemo: true });
+  });
+
+  it("pipeline real não marca demonstração", async () => {
+    const { deps, db } = setup();
+    await processMessage("j1", deps);
+    expect(db.effects).toEqual(["complete:j1"]);
+  });
+
+  it("fencing: worker antigo (lease vencida, outro assumiu) não conclui nem falha o job do novo", async () => {
+    const { deps, db, clock } = setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    deps.pipeline = { extract: async () => { calls += 1; if (calls === 1) await gate; return RESULT; } };
+    const stale = processMessage("j1", deps); // tentativa 1, fica presa
+    await vi.waitFor(() => expect(calls).toBe(1));
+    clock.advance(LEASE_MS + 1);
+    expect((await processMessage("j1", deps)).outcome).toBe("done"); // tentativa 2 conclui
+    expect(db.jobs.get("j1")?.attempts).toBe(2);
+    release();
+    await stale; // tentativa 1 termina depois: no-op
+    expect(db.effects.filter((e) => e.startsWith("complete"))).toHaveLength(1);
+    expect(db.jobs.get("j1")?.status).toBe("succeeded");
   });
 
   it("dois workers na mesma mensagem: só um processa, o outro vê busy (sem ack, vt 60 s)", async () => {
@@ -299,7 +347,73 @@ describe("handleTick", () => {
   });
 });
 
+describe("handleTick: prazo, lote e erros", () => {
+  it("prazo do tick: depois dele não reivindica novas mensagens e devolve as lidas à fila", async () => {
+    const { deps, db, clock } = setup({ extract: async () => { clock.advance(95_000); return RESULT; } });
+    db.add("j2");
+    db.add("j3");
+    const q = fakeQueue(clock, ["j1", "j2", "j3"]);
+    const s = await handleTick(q.queue, deps, { batch: 3 });
+    expect(s).toMatchObject({ read: 3, done: 1, deferred: 2 });
+    expect(db.jobs.get("j2")?.status).toBe("queued"); // nunca reivindicado (sem tentativa gasta)
+    expect(db.jobs.get("j2")?.attempts).toBe(0);
+    expect(q.acked).toEqual([1]);
+    expect(q.vts[2]).toBeLessThanOrEqual(10);
+    expect(q.vts[3]).toBeLessThanOrEqual(10);
+  });
+
+  it("o teto de cada extração respeita o que resta do prazo do tick", async () => {
+    const { deps, db, clock } = setup({ extract: async () => { clock.advance(60_000); return RESULT; } });
+    db.add("j2");
+    const seen: number[] = [];
+    deps.clock = { now: () => clock.now(), delay: (ms, sig) => { seen.push(ms); return clock.delay(ms, sig); } };
+    const q = fakeQueue(clock, ["j1", "j2"]);
+    await handleTick(q.queue, deps, { batch: 2, deadlineMs: 100_000 });
+    expect(seen).toEqual([90_000, 40_000]); // 1ª: teto normal; 2ª: o que resta de 100 s
+  });
+
+  it("lote padrão é 3", async () => {
+    const { deps, clock } = setup();
+    const reads: number[] = [];
+    const q = fakeQueue(clock, []);
+    const wrapped = { ...q.queue, read: async (qty: number, vt: number) => { reads.push(qty); return q.queue.read(qty, vt); } };
+    await handleTick(wrapped, deps);
+    expect(reads).toEqual([3]);
+  });
+
+  it("falha do requeueStale não aborta o tick: segue lendo e processando, e registra sem PII", async () => {
+    const { deps, db, clock } = setup();
+    db.failRequeue.on = true;
+    const errors: { stage: string; message: string }[] = [];
+    const q = fakeQueue(clock, ["j1"]);
+    const s = await handleTick(q.queue, deps, { onError: (e) => errors.push(e) });
+    expect(s).toMatchObject({ read: 1, done: 1, errors: 1 });
+    expect(errors).toEqual([{ stage: "requeue", message: expect.stringContaining("banco fora") }]);
+  });
+
+  it("erro de infra por mensagem é registrado sanitizado (sem e-mail nem número longo)", async () => {
+    const { deps, clock } = setup();
+    const boom = { ...deps, loadInput: async () => { throw new Error("rede ana@escola.com 12345678901"); } };
+    const errors: { stage: string; jobId?: string; message: string }[] = [];
+    const q = fakeQueue(clock, ["j1"]);
+    const s = await handleTick(q.queue, boom, { onError: (e) => errors.push(e) });
+    expect(s.errors).toBe(1);
+    expect(errors[0]).toMatchObject({ stage: "message", jobId: "j1" });
+    expect(errors[0]?.message).not.toMatch(/ana@escola|12345678901/);
+  });
+});
+
 describe("utilitários", () => {
+  it("sanitizeError: controle antes de tudo, tokens, JWT, Bearer e URLs com query", () => {
+    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcDEF123_-xyz";
+    // montado em tempo de execução: o literal completo dispararia a varredura de segredos do GitHub
+    const fakeKey = ["sk", "live", "ABCDEFGHIJKLMNOPQRSTUV12"].join("_");
+    const out = sanitizeError(new Error(`Bearer abc.def-123\u0000 ${jwt} https://x.co/a?token=SEGREDO&b=1 chave ${fakeKey}`));
+    expect(out).not.toMatch(/eyJ|SEGREDO|abc\.def|ABCDEFGHIJKLMNOPQRSTUV12/);
+    expect(out).not.toMatch(/[\u0000-\u001f]/);
+    expect(sanitizeError("ab ".repeat(200)).length).toBe(300);
+    expect(sanitizeError({ toString: () => "obj" })).toBe("obj");
+  });
   it("sanitizeError remove e-mail e números longos e trunca", () => {
     const out = sanitizeError(new Error(`falhou para ana@escola.com cpf 12345678901 ${"x".repeat(500)}`));
     expect(out).not.toContain("ana@escola.com");
@@ -322,9 +436,15 @@ describe("adaptador RPC de jobs_fail", () => {
       },
       async () => null,
     );
-    expect(await jobs.fail("j1", "invalid_file", 30, true)).toBe("dead");
+    expect(await jobs.fail("j1", "invalid_file", 30, true, 2)).toBe("dead");
     await jobs.fail("j1", "x", 30);
-    expect(calls[0]?.args).toMatchObject({ p_job_id: "j1", p_permanent: true });
-    expect(calls[1]?.args).toMatchObject({ p_permanent: false });
+    expect(calls[0]?.args).toMatchObject({ p_job_id: "j1", p_permanent: true, p_attempts: 2 });
+    expect(calls[1]?.args).toMatchObject({ p_permanent: false, p_attempts: null });
+  });
+  it("jobs_complete leva a tentativa (fencing) e o marcador de demonstração", async () => {
+    const calls: { fn: string; args?: Record<string, unknown> }[] = [];
+    const jobs = createRpcWorkerJobs(async (fn, args) => { calls.push({ fn, args }); return { data: null, error: null }; }, async () => null);
+    await jobs.complete("j1", RESULT, 12, { attempts: 3, isDemo: true });
+    expect(calls[0]).toEqual({ fn: "jobs_complete", args: { p_job_id: "j1", p_result: RESULT, p_duration_ms: 12, p_attempts: 3, p_is_demo: true } });
   });
 });

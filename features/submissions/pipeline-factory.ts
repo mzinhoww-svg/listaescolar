@@ -1,16 +1,16 @@
 import "server-only";
 
-import { getPipelineFlags } from "@/lib/env";
+import { isDemoEnabled } from "@/lib/pipeline-env";
 
 import { DemoExtractionPipeline } from "./demo-pipeline";
 import type { ExtractionPipeline } from "./ports";
+import { parseSlowMs } from "../../supabase/functions/_shared/demo-lock";
 
 /**
- * Pipeline configurado, ou `null` (o envio só grava e enfileira). Demonstração só com DEMO_PIPELINE=1 e
- * nunca em produção: `getPipelineFlags` lança em produção sem ALLOW_DEMO_IN_PRODUCTION. A S08 troca aqui.
+ * Pipeline configurado, ou `null` (o envio só grava e enfileira). Demonstração só com DEMO_PIPELINE=1 E
+ * APP_ENV explícito em {local, development, preview, staging}; ausente = desligado. A S08 troca aqui.
  */
 export function getExtractionPipeline(): ExtractionPipeline | null {
-  const flags = getPipelineFlags();
-  if (flags.DEMO_PIPELINE === "1") return new DemoExtractionPipeline();
+  if (isDemoEnabled()) return new DemoExtractionPipeline({ slowMs: parseSlowMs(process.env.DEMO_SLOW_MS) });
   return null;
 }

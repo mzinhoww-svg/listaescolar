@@ -1,9 +1,12 @@
 // Edge Function ocr-worker (Deno). Um ciclo: lê a fila `ocr_jobs` (pgmq via public.jobs_read), processa com
-// worker-core e confirma. Acionada pelo pg_cron a cada minuto (migration 0202) e, best effort, pelo enfileiramento.
+// worker-core e confirma. Acionada a cada minuto pelo pg_cron/pg_net (configurado fora do SQL versionado, ver README
+// desta pasta) e, best effort, pelo enfileiramento do app.
 // Local: `pnpm exec supabase --workdir .track-workdir functions serve ocr-worker --no-verify-jwt --env-file <arquivo>`.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+import { demoConfigError, demoEnabled, parseSlowMs } from "../_shared/demo-lock.ts";
 import { DemoExtractionPipeline } from "../_shared/demo-pipeline.ts";
+import { extractionResultSchema } from "../_shared/extraction-schema.ts";
 import {
   createRpcWorkerJobs,
   createRpcWorkerQueue,
@@ -39,12 +42,13 @@ function authorized(req: Request): boolean {
   return [serviceKey, secretKey].some((k) => !!k && bearer !== "" && safeEqual(bearer, k));
 }
 
-// Pipeline: a S08 troca por a implementação real. Demonstração só com DEMO_PIPELINE=1 e nunca em produção.
+// Pipeline: a S08 troca por a implementação real. Demonstração só com DEMO_PIPELINE=1 E APP_ENV explícito em
+// {local, development, preview, staging}; APP_ENV ausente ou outro = desligado (mesma regra do app Node).
 function pipelineOrNull() {
-  const demo = Deno.env.get("DEMO_PIPELINE") === "1";
-  const isProd = Deno.env.get("APP_ENV") === "production" || Deno.env.get("NODE_ENV") === "production";
-  if (demo && isProd && Deno.env.get("ALLOW_DEMO_IN_PRODUCTION") !== "1") return null;
-  return demo ? new DemoExtractionPipeline({ slowMs: Number(Deno.env.get("DEMO_SLOW_MS") ?? 15_000) }) : null;
+  const env = { DEMO_PIPELINE: Deno.env.get("DEMO_PIPELINE"), APP_ENV: Deno.env.get("APP_ENV") };
+  const bad = demoConfigError(env);
+  if (bad) console.error(JSON.stringify({ level: "error", fn: "ocr-worker", message: bad }));
+  return demoEnabled(env) ? new DemoExtractionPipeline({ slowMs: parseSlowMs(Deno.env.get("DEMO_SLOW_MS")) }) : null;
 }
 
 Deno.serve(async (req) => {
@@ -90,6 +94,7 @@ Deno.serve(async (req) => {
   const summary = await handleTick(createRpcWorkerQueue(rpc), {
     jobs,
     pipeline,
+    resultSchema: extractionResultSchema, // a saída do pipeline é validada antes de jobs_complete
     loadInput,
     clock: {
       now: () => Date.now(),
@@ -100,6 +105,9 @@ Deno.serve(async (req) => {
         }),
     },
     random: Math.random,
+  }, {
+    // erro de infra do tick: sem PII (o core já sanitiza) e sem derrubar a resposta
+    onError: (e) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", ...e })),
   });
   return json({ status: "ok", ...summary });
 });

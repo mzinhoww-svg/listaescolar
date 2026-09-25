@@ -67,14 +67,18 @@ describe("envio + worker contra o Postgres local", () => {
     await pg.query("select pgmq.purge_queue('ocr_jobs')");
   });
 
-  const workerDeps = (extract: ExtractionPipeline["extract"]): { deps: WorkerDeps; queue: ReturnType<typeof createNodeWorker>["queue"] } => {
+  const workerDeps = (
+    extract: ExtractionPipeline["extract"],
+    isDemo = false,
+  ): { deps: WorkerDeps; queue: ReturnType<typeof createNodeWorker>["queue"] } => {
     const w = createNodeWorker(sb);
     return {
       queue: w.queue,
       deps: {
         jobs: w.jobs,
         loadInput: w.loadInput,
-        pipeline: { extract },
+        pipeline: { extract, isDemo },
+        resultSchema: w.resultSchema,
         clock: { now: () => Date.now(), delay: (ms, s) => new Promise((r) => { const t = setTimeout(r, ms); s?.addEventListener("abort", () => clearTimeout(t)); }) },
       },
     };
@@ -91,6 +95,9 @@ describe("envio + worker contra o Postgres local", () => {
     expect(await rows("select 1 from public.consents where purpose = 'list_upload'")).toHaveLength(1);
     expect((await rows("select result from public.ocr_jobs"))[0].result).toEqual(RESULT);
     expect((await rows("select count(*)::int as n from pgmq.q_ocr_jobs"))[0].n).toBe(0);
+    // o job nasceu com o envio (chave = id do envio) e fechou como succeeded, sem chave `sync:`
+    const job = (await rows("select status::text s, attempts, idempotency_key k, submission_id from public.jobs"))[0];
+    expect(job).toMatchObject({ s: "succeeded", attempts: 1, k: r.submissionId, submission_id: r.submissionId });
     const dl = await sb.storage.from("list-uploads").download(sub.storage_path);
     expect(dl.error).toBeNull();
   });
@@ -190,6 +197,96 @@ describe("envio + worker contra o Postgres local", () => {
     const s = await handleTick(queue, deps);
     expect(s).toMatchObject({ read: 1, done: 1 });
     expect((await rows("select status from public.jobs where id = $1", [r.jobId]))[0].status).toBe("succeeded");
+  });
+
+  const failingOn = (table: string, method: "insert" | "update"): SupabaseClient =>
+    new Proxy(sb, {
+      get(target, prop) {
+        if (prop !== "from") return Reflect.get(target, prop, target) as unknown;
+        return (t: string) => {
+          const builder = target.from(t);
+          if (t !== table) return builder;
+          return new Proxy(builder, {
+            get(b, m) {
+              if (m === method) {
+                return () => ({ eq: async () => ({ error: { message: "boom" } }), select: () => ({ single: async () => ({ error: { message: "boom" } }) }), then: (ok: (v: unknown) => void) => ok({ error: { message: "boom" } }) });
+              }
+              const v = Reflect.get(b, m, b) as unknown;
+              return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(b) : v;
+            },
+          });
+        };
+      },
+    });
+
+  const newSubmission = () => ({
+    profileId: IDS.parent, source: "parent" as const, grade: "3º ano", schoolYear: 2027,
+    fileName: "lista.pdf", mime: "application/pdf", sizeBytes: pdf().length, bytes: pdf(),
+    isDemo: false, consent: { purpose: "list_upload", textVersion: "v1" },
+  });
+  const storageCount = async () => ((await sb.storage.from("list-uploads").list(IDS.parent, { limit: 1000 })).data ?? []).length;
+  const nothingLeft = async (storageBefore: number) => {
+    for (const t of ["consents", "list_submissions", "jobs"]) expect(await rows(`select 1 from public.${t}`), t).toHaveLength(0);
+    expect(await storageCount(), "storage").toBe(storageBefore);
+  };
+
+  it.each([
+    ["falha no insert do envio (o banco recusa)", () => sb, { source: "school" as const }],
+    ["falha no update para processing", () => failingOn("list_submissions", "update"), {}],
+    ["falha ao criar o job", () => failingOn("jobs", "insert"), {}],
+  ])("rollback completo: %s", async (_n, client, patch) => {
+    const before = await storageCount();
+    await expect(createSupabaseStore(client()).createSubmission({ ...newSubmission(), ...patch })).rejects.toThrow();
+    await nothingLeft(before);
+  });
+
+  it("recordSyncResult atômico: job que não está mais running não grava nada e lança", async () => {
+    const store = createSupabaseStore(sb);
+    const { submissionId } = await store.createSubmission(newSubmission());
+    await pg.query("update public.jobs set status = 'queued' where idempotency_key = $1", [submissionId]);
+    await expect(store.recordSyncResult(submissionId, RESULT, 5)).rejects.toThrow();
+    expect(await rows("select 1 from public.ocr_jobs")).toHaveLength(0);
+    expect((await rows("select status::text s from public.list_submissions"))[0].s).toBe("processing");
+  });
+
+  it("envio órfão (app morreu depois de gravar): passada a lease o tick o recupera e conclui", async () => {
+    const store = createSupabaseStore(sb);
+    const { submissionId } = await store.createSubmission(newSubmission()); // ... e o processo "morre"
+    expect((await rows("select status::text s, attempts from public.jobs"))[0]).toEqual({ s: "running", attempts: 1 });
+    const { deps, queue } = workerDeps(async () => RESULT);
+    expect(await handleTick(queue, deps)).toMatchObject({ read: 0 }); // lease vigente: ninguém mexe
+    await pg.query("update public.jobs set locked_at = now() - interval '6 minutes' where idempotency_key = $1", [submissionId]);
+    expect(await handleTick(queue, deps)).toMatchObject({ read: 1, done: 1, errors: 0 });
+    expect((await rows("select status::text s from public.list_submissions"))[0].s).toBe("review_needed");
+    expect((await rows("select attempts from public.jobs"))[0].attempts).toBe(2);
+  });
+
+  it("timeout do envio: o mesmo job (chave = envio) volta à fila com tentativas zeradas; sem job `sync:`", async () => {
+    const r = await slowSubmit();
+    const jobs = await rows("select id, status::text s, attempts, idempotency_key k from public.jobs");
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ id: r.jobId, s: "queued", attempts: 0, k: r.submissionId });
+  });
+
+  it("worker com pipeline demo marca list_submissions.is_demo; o pipeline real não marca", async () => {
+    await slowSubmit();
+    const { deps, queue } = workerDeps(async () => RESULT, true);
+    await handleTick(queue, deps);
+    expect((await rows("select is_demo from public.list_submissions"))[0].is_demo).toBe(true);
+    await pg.query("delete from public.list_submissions");
+    await slowSubmit();
+    const real = workerDeps(async () => RESULT, false);
+    await handleTick(real.queue, real.deps);
+    expect((await rows("select is_demo from public.list_submissions"))[0].is_demo).toBe(false);
+  });
+
+  it("saída inválida do pipeline no worker: nada em ocr_jobs, envio não vai a review_needed, job em retrying", async () => {
+    await slowSubmit();
+    const { deps, queue } = workerDeps(async () => ({ items: [], overallConfidence: 9, warnings: [] }));
+    expect(await handleTick(queue, deps)).toMatchObject({ retry: 1, done: 0 });
+    expect(await rows("select 1 from public.ocr_jobs")).toHaveLength(0);
+    expect((await rows("select status::text s from public.list_submissions"))[0].s).toBe("processing_async");
+    expect((await rows("select status::text s from public.jobs"))[0].s).toBe("retrying");
   });
 
   it("consentimento revogado não sustenta novo envio", async () => {

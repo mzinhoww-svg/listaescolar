@@ -36,15 +36,25 @@ export type NewSubmission = {
 };
 
 export interface SubmissionStore {
-  /** Grava consentimento, arquivo e envio (status `processing`), tudo ou nada. */
+  /**
+   * Grava consentimento, arquivo, envio (status `processing`) e o job do envio (`running`, com lease, chave =
+   * id do envio), tudo ou nada. O job existir desde já é o que permite recuperar um envio órfão.
+   */
   createSubmission(input: NewSubmission): Promise<{ submissionId: string }>;
-  setStatus(submissionId: string, status: "processing_async" | "rejected"): Promise<void>;
-  /** Resultado dentro do orçamento: persiste e leva o envio a `review_needed`. */
+  /** Falha antes de haver worker: envio `rejected` e job `dead`, juntos. */
+  reject(submissionId: string, reason: string): Promise<void>;
+  /**
+   * Resultado dentro do orçamento, UMA operação atômica: job `succeeded` + ocr_jobs + envio `review_needed`.
+   * Lança se o job não estiver mais `running` (nada é gravado).
+   */
   recordSyncResult(submissionId: string, result: ExtractionResult, durationMs: number): Promise<void>;
 }
 
 export interface JobQueue {
-  /** Idempotente por envio: nunca dois jobs para o mesmo `submissionId`. */
+  /**
+   * Devolve o job do envio à fila (`queued` + mensagem) e marca o envio `processing_async`, atomicamente.
+   * Idempotente por envio: nunca dois jobs para o mesmo `submissionId`.
+   */
   enqueue(submissionId: string): Promise<{ jobId: string }>;
 }
 

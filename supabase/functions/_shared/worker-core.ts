@@ -27,12 +27,16 @@ export type WorkerInput = {
 export interface WorkerJobs {
   get(jobId: string): Promise<WorkerJobRow | null>;
   claim(jobId: string): Promise<ClaimResult>;
-  complete(jobId: string, result: unknown, durationMs: number): Promise<void>;
+  /**
+   * `attempts` é o token de fencing (a tentativa reivindicada): um worker antigo, cuja lease venceu e cujo job
+   * foi reivindicado por outro, não conclui nem falha o job do novo. `isDemo`: resultado do pipeline demo.
+   */
+  complete(jobId: string, result: unknown, durationMs: number, fence: { attempts: number; isDemo: boolean }): Promise<void>;
   /**
    * Devolve o novo status do job (`retrying` ou `dead`). `permanent`: falha sem chance de sucesso
-   * (ex.: arquivo armazenado inválido); vai direto a `dead`.
+   * (ex.: arquivo armazenado inválido); vai direto a `dead`. `attempts`: token de fencing (ver `complete`).
    */
-  fail(jobId: string, error: string, retryInSeconds: number, permanent?: boolean): Promise<string>;
+  fail(jobId: string, error: string, retryInSeconds: number, permanent?: boolean, attempts?: number): Promise<string>;
   /** Re-envia à fila mensagens de jobs vencidos (lease expirado, retry devido) e mata os sem tentativas. */
   requeueStale(): Promise<void>;
 }
@@ -43,11 +47,20 @@ export interface WorkerQueue {
   setVt(msgId: number, vtSeconds: number): Promise<void>;
 }
 
+/** Validador da saída do pipeline (o `extractionResultSchema` do Zod, de _shared/extraction-schema.ts). */
+export interface ResultSchema {
+  safeParse(value: unknown): { success: true; data: unknown } | { success: false };
+}
+
 export type WorkerDeps = {
   jobs: WorkerJobs;
   pipeline: {
+    /** Pipeline de demonstração: o envio fica marcado `is_demo` ao concluir. */
+    isDemo?: boolean;
     extract(input: WorkerInput, opts: { signal: AbortSignal }): Promise<unknown>;
   };
+  /** A saída do pipeline SEMPRE passa por aqui antes de `jobs.complete`; inválida = falha (retry). */
+  resultSchema: ResultSchema;
   loadInput(submissionId: string): Promise<WorkerInput | null>;
   clock: { now(): number; delay(ms: number, signal?: AbortSignal): Promise<void> };
   /** Teto de uma extração no worker. */
@@ -64,6 +77,14 @@ export const BACKOFF_MAX_JITTER = 0.2;
 export const WORKER_TIMEOUT_MS = 90_000;
 export const BUSY_RETRY_SECONDS = 60;
 export const DEFAULT_NOT_DUE_SECONDS = 30;
+/** Prazo total de um tick (a Edge Function tem limite de parede): depois dele, nenhuma mensagem nova é reivindicada. */
+export const TICK_DEADLINE_MS = 100_000;
+/** Lote padrão: pequeno, pois uma extração pode levar até WORKER_TIMEOUT_MS. */
+export const TICK_BATCH = 3;
+/** Não reivindica mensagem se restam menos que isto do prazo do tick. */
+export const MIN_CLAIM_WINDOW_MS = 15_000;
+/** Mensagem lida mas não processada por falta de prazo volta à fila em poucos segundos. */
+export const DEFERRED_RETRY_SECONDS = 5;
 
 /**
  * Atraso antes da próxima tentativa (`attempt` é 1 para a primeira falha): 30, 60, 120, 240, 480, 900 (teto).
@@ -76,13 +97,20 @@ export function nextDelaySeconds(attempt: number, jitter = 0): number {
   return Math.min(Math.round(base * (1 + BACKOFF_MAX_JITTER * j)), BACKOFF_CAP_SECONDS);
 }
 
-/** Mensagem de erro para `jobs.last_error`: sem e-mail, telefone/números longos, truncada. */
+/**
+ * Mensagem de erro para `jobs.last_error` e logs: sem PII nem segredo. Controle primeiro, depois e-mail, JWT,
+ * Bearer, URL com query, chaves longas e números longos; truncada em 300.
+ */
 export function sanitizeError(e: unknown): string {
   const raw = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
   return raw
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]")
+    .replace(/eyJ[\w-]+\.[\w-]+\.[\w-]*/g, "[jwt]")
+    .replace(/\bBearer\s+\S+/gi, "Bearer [token]")
+    .replace(/(https?:\/\/[^\s?#]+)[?#]\S*/g, "$1")
+    .replace(/\b[A-Za-z0-9_-]{24,}\b/g, "[chave]")
     .replace(/\d{6,}/g, "[num]")
-      .replace(/[\u0000-\u001f]/g, " ")
     .slice(0, 300);
 }
 
@@ -142,7 +170,7 @@ export async function processMessage(jobId: string, deps: WorkerDeps): Promise<M
   const attempts = job?.attempts ?? 1;
   const failWith = async (error: string, permanent = false): Promise<MessageResult> => {
     const delay = nextDelaySeconds(attempts, deps.random?.() ?? 0);
-    const status = await deps.jobs.fail(jobId, error, delay, permanent);
+    const status = await deps.jobs.fail(jobId, error, delay, permanent, attempts);
     return status === "dead"
       ? { outcome: "dead", ack: true }
       : { outcome: "retry", ack: false, retryInSeconds: delay };
@@ -161,7 +189,12 @@ export async function processMessage(jobId: string, deps: WorkerDeps): Promise<M
   } catch (e) {
     return failWith(sanitizeError(e));
   }
-  await deps.jobs.complete(jobId, result, Math.max(0, Math.round(deps.clock.now() - started)));
+  const parsed = deps.resultSchema.safeParse(result);
+  if (!parsed.success) return failWith("resultado inválido do pipeline");
+  await deps.jobs.complete(jobId, parsed.data, Math.max(0, Math.round(deps.clock.now() - started)), {
+    attempts,
+    isDemo: deps.pipeline.isDemo === true,
+  });
   return { outcome: "done", ack: true };
 }
 
@@ -169,18 +202,36 @@ export async function processJob(jobId: string, deps: WorkerDeps): Promise<JobOu
   return (await processMessage(jobId, deps)).outcome;
 }
 
-export type TickSummary = Record<JobOutcome, number> & { errors: number; read: number };
+export type TickSummary = Record<JobOutcome, number> & { errors: number; read: number; deferred: number };
+export type TickError = { stage: "requeue" | "read" | "message"; jobId?: string; message: string };
 
-/** Um ciclo do worker: lê mensagens, processa, confirma ou reprograma. Erro de infraestrutura não confirma. */
+/**
+ * Um ciclo do worker: lê mensagens, processa, confirma ou reprograma. Erro de infraestrutura não confirma e é
+ * reportado (sem PII) a `onError`. Prazo total `deadlineMs`: passado o prazo, mensagens já lidas voltam à fila e
+ * nada novo é reivindicado; o teto de cada extração também respeita o que resta do prazo.
+ */
 export async function handleTick(
   queue: WorkerQueue,
   deps: WorkerDeps,
-  opts: { batch?: number; vtSeconds?: number } = {},
+  opts: { batch?: number; vtSeconds?: number; deadlineMs?: number; onError?: (e: TickError) => void } = {},
 ): Promise<TickSummary> {
-  const summary: TickSummary = { done: 0, retry: 0, dead: 0, skipped: 0, errors: 0, read: 0 };
-  const vt = opts.vtSeconds ?? 120;
-  await deps.jobs.requeueStale(); // antes de ler: jobs vencidos voltam à fila
-  const messages = await queue.read(opts.batch ?? 5, vt);
+  const summary: TickSummary = { done: 0, retry: 0, dead: 0, skipped: 0, errors: 0, read: 0, deferred: 0 };
+  const start = deps.clock.now();
+  const deadline = opts.deadlineMs ?? TICK_DEADLINE_MS;
+  const report = (stage: TickError["stage"], e: unknown, jobId?: string) => {
+    summary.errors += 1;
+    try {
+      opts.onError?.({ stage, ...(jobId ? { jobId } : {}), message: sanitizeError(e) });
+    } catch {
+      // o log nunca derruba o tick
+    }
+  };
+  try {
+    await deps.jobs.requeueStale(); // antes de ler: jobs vencidos voltam à fila
+  } catch (e) {
+    report("requeue", e); // rede de segurança: falhar não impede de drenar a fila
+  }
+  const messages = await queue.read(opts.batch ?? TICK_BATCH, opts.vtSeconds ?? 120);
   summary.read = messages.length;
   for (const m of messages) {
     if (!m.jobId) {
@@ -188,13 +239,26 @@ export async function handleTick(
       summary.skipped += 1;
       continue;
     }
+    const remaining = deadline - (deps.clock.now() - start);
+    if (remaining < MIN_CLAIM_WINDOW_MS) {
+      summary.deferred += 1;
+      try {
+        await queue.setVt(m.msgId, DEFERRED_RETRY_SECONDS);
+      } catch (e) {
+        report("message", e, m.jobId);
+      }
+      continue;
+    }
     try {
-      const r = await processMessage(m.jobId, deps);
+      const r = await processMessage(m.jobId, {
+        ...deps,
+        timeoutMs: Math.min(deps.timeoutMs ?? WORKER_TIMEOUT_MS, remaining),
+      });
       summary[r.outcome] += 1;
       if (r.ack) await queue.ack(m.msgId);
       else if (r.retryInSeconds !== undefined) await queue.setVt(m.msgId, r.retryInSeconds);
-    } catch {
-      summary.errors += 1; // sem ack: a mensagem volta após o vt
+    } catch (e) {
+      report("message", e, m.jobId); // sem ack: a mensagem volta após o vt
     }
   }
   return summary;
@@ -220,16 +284,23 @@ export function createRpcWorkerJobs(rpc: RpcFn, get: WorkerJobs["get"]): WorkerJ
       const r = await call(rpc, "jobs_claim", { p_job_id: jobId });
       return r === "claimed" || r === "busy" || r === "not_due" || r === "finished" ? r : "busy";
     },
-    complete: async (jobId, result, durationMs) => {
-      await call(rpc, "jobs_complete", { p_job_id: jobId, p_result: result, p_duration_ms: durationMs });
+    complete: async (jobId, result, durationMs, fence) => {
+      await call(rpc, "jobs_complete", {
+        p_job_id: jobId,
+        p_result: result,
+        p_duration_ms: durationMs,
+        p_attempts: fence.attempts,
+        p_is_demo: fence.isDemo,
+      });
     },
-    fail: async (jobId, error, retryInSeconds, permanent = false) =>
+    fail: async (jobId, error, retryInSeconds, permanent = false, attempts) =>
       String(
         await call(rpc, "jobs_fail", {
           p_job_id: jobId,
           p_error: error,
           p_retry_in_seconds: retryInSeconds,
           p_permanent: permanent,
+          p_attempts: attempts ?? null,
         }),
       ),
     requeueStale: async () => {

@@ -10,7 +10,8 @@ import {
   type WorkerDeps,
   type WorkerInput,
 } from "../../supabase/functions/_shared/worker-core";
-import { OCR_JOB_KIND, UPLOAD_BUCKET } from "./constants";
+import { UPLOAD_BUCKET } from "./constants";
+import { extractionResultSchema } from "./schemas";
 import type { JobQueue } from "./ports";
 
 export function rpcOf(client: SupabaseClient): RpcFn {
@@ -18,8 +19,8 @@ export function rpcOf(client: SupabaseClient): RpcFn {
 }
 
 /**
- * Enfileira via public.jobs_enqueue (idempotente por envio). `kick` acorda a Edge Function (best effort);
- * o pg_cron do minuto seguinte cobre qualquer falha.
+ * Devolve o job do envio à fila via public.jobs_defer (atômico: job `queued` + mensagem + envio `processing_async`;
+ * idempotente por envio). `kick` acorda a Edge Function (best effort); o pg_cron do minuto seguinte cobre qualquer falha.
  */
 export function createJobQueue(
   client: SupabaseClient,
@@ -27,12 +28,7 @@ export function createJobQueue(
 ): JobQueue {
   return {
     async enqueue(submissionId) {
-      const { data, error } = await rpcOf(client)("jobs_enqueue", {
-        p_kind: OCR_JOB_KIND,
-        p_payload: { submission_id: submissionId },
-        p_idempotency_key: submissionId,
-        p_submission_id: submissionId,
-      });
+      const { data, error } = await rpcOf(client)("jobs_defer", { p_submission_id: submissionId });
       if (error || typeof data !== "string") throw new Error("enqueue");
       if (opts.kick) {
         try {
@@ -82,5 +78,11 @@ export function createNodeWorker(client: SupabaseClient) {
       .maybeSingle();
     return data ? toWorkerJobRow(data) : null;
   });
-  return { jobs, queue: createRpcWorkerQueue(rpc), loadInput: createInputLoader(client) };
+  return {
+    jobs,
+    queue: createRpcWorkerQueue(rpc),
+    loadInput: createInputLoader(client),
+    /** A saída do pipeline sempre passa por este schema antes de `jobs_complete`. */
+    resultSchema: extractionResultSchema,
+  };
 }

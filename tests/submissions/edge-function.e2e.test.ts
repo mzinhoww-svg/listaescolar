@@ -68,7 +68,7 @@ describe.skipIf(!URL_ || !SECRET)("ocr-worker (Deno) de ponta a ponta", () => {
     const t = await tick();
     expect(t.status).toBe(200);
     expect(t.body).toMatchObject({ status: "ok", read: 1, done: 1 });
-    expect((await rows("select status from public.list_submissions"))[0].status).toBe("review_needed");
+    expect((await rows("select status, is_demo from public.list_submissions"))[0]).toEqual({ status: "review_needed", is_demo: true }); // worker com pipeline demo marca is_demo
     expect((await rows("select status from public.jobs where id = $1", [r.jobId]))[0].status).toBe("succeeded");
     expect(await rows("select 1 from public.ocr_jobs where job_id = $1", [r.jobId])).toHaveLength(1);
     await pg.query("select pgmq.send('ocr_jobs', jsonb_build_object('job_id', $1::uuid))", [r.jobId]);

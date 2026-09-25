@@ -10,6 +10,8 @@ export const statusPayloadSchema = z.object({
   notifyChannel: z.string().nullable(),
   isDemo: z.boolean(),
   pipelineAvailable: z.boolean(),
+  /** Publicação feita pela porta em memória (só local): a tela mostra o selo "Demonstração". */
+  publicationDemo: z.boolean().optional(),
   result: extractionResultSchema.optional(),
 });
 export type StatusPayload = z.infer<typeof statusPayloadSchema>;

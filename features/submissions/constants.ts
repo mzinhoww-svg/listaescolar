@@ -26,3 +26,6 @@ export const CONSENT_PURPOSE = "list_upload";
 export const CONSENT_TEXT_VERSION = "2026-09-v1";
 
 export const OCR_JOB_KIND = "ocr_jobs";
+
+/** Teto da decisão de publicação inline no envio síncrono (S09): passou disso, o envio segue e o varredor decide. */
+export const PUBLICATION_INLINE_TIMEOUT_MS = 3_000;

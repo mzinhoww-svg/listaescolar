@@ -4,7 +4,7 @@
 
 **Regra de manutenção:** atualizar este arquivo a cada merge (em PR `docs/` próprio ou junto do PR da fatia). Contagens só com fonte (PR ou relatório); sem fonte, `n/d`. Dívida técnica fica em `docs/superpowers/DEBT.md`, não aqui.
 
-**Em andamento:** S09 (trilha Pipeline) e S27 (fora de trilha, depois da Comércio). Próxima a iniciar: S10.
+**Em andamento:** S09 em revisão (PR #20 a mesclar) e S27 (fora de trilha, depois da Comércio). Próxima a iniciar: S10.
 
 ## Concluídas (merge squash em `main`)
 
@@ -29,6 +29,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S14 Leads e WhatsApp (Comércio) | #15 | 639b93e | 2026-09-25 | ✓ | ✓ | 1632 | 949 | ✓ | verify ✓ db ✓ | ✗ | build local, 80 verificações, 0 falhas (`e2e/S14.md`) |
 | S06 Reivindicação (Dados) | #16 | 789a8de | 2026-09-25 | ✓ | ✓ | 1869 | 1057 | ✓ | verify ✓ db ✓ | ✗ | build local, fase 1: 58 asserções; fase 2: 21; 0 falhas (`e2e/S06.md`) |
 | chore soft-404 | #17 | 06f988a | 2026-09-25 | ✓ | ✓ | 1869 | n/a (sem banco) | ✓ | verify ✓ db ✓ | ✗ | curl: 404/307 reais (`e2e/soft-404.md`, `scripts/e2e-soft-404.sh`) |
+| S09 Motor de aprovação automática (Pipeline) | #20 (a mesclar) | n/d | 2026-09-25 | ✓ | ✓ | 1834 | 1104 (3 skipped) | ✓ | n/d | ✗ | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
 
 Observação: o check "Vercel" falha em todos os PRs desde o #4 (não só do #8 em diante). A causa apontada pelo orquestrador é a falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto da Vercel (ver pendências humanas).
 
@@ -49,8 +50,9 @@ Aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O 
 | 0301_cart_retailers_affiliates.sql | S12 | cart_retailers_affiliates | 20260925041851 |
 | 0302_stationeries.sql | S13 | stationeries | 20260925060339 |
 | 0303_leads.sql | S14 | leads | 20260925131816 |
+| 0203_publication_decisions.sql | S09 | publication_decisions | n/d (aplicada no staging após o merge, pelo orquestrador) |
 
-Pendente de staging: `0203_publication_decisions.sql` (S09, branch `slice/S09-aprovacao`; aplicar depois da revisão final, antes do merge).
+Pendente de staging: nenhuma; a `0203_publication_decisions.sql` (S09) é aplicada no staging após o merge (orquestrador).
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -59,12 +61,12 @@ Produção: nenhuma migration (o projeto não existe).
 | Trilha | Fatias | Estado |
 |---|---|---|
 | Dados | S03, S04, S05, S06 | **Completa** |
-| Pipeline | S07, S08, S09, S10 | S07 e S08 completas. **S09 em andamento** (branch `slice/S09-aprovacao`; Task 1 revisada e corrigida, Task 2 em curso). S10 não iniciada |
+| Pipeline | S07, S08, S09, S10 | S07 e S08 completas. **S09 em revisão / PR aberto** (#20, branch `slice/S09-aprovacao`). S10 não iniciada |
 | Comércio | S12, S13, S14 | **Completa**. Depois dela, **S27 em andamento** (branch `slice/S27-site-publico`; Tasks 1 e 2 revisadas, Task 3 (E2E) em curso) |
 
 ## Próximos passos (ordem do PLAN)
 
-1. S09 (terminar) → S10.
+1. S09 (mesclar #20) → S10. A publicação automática fica DESLIGADA até a S11 (`ai_settings.auto_publish_enabled` default false; portas reais e ligar o interruptor por dado só na S11). A S10 deve mostrar "Publicada automaticamente" a partir da linha `publication:published` automática, não só do status (ver D-071).
 2. S11: integração das trilhas, com a migration `0600_cross_track_fks` e a ligação das portas (leitor de lista real no carrinho e no lead, cotação local no carrinho, `SessionActor` unificado, provedor de e-mail, Web Push); consolidar os ledgers de trilha em `ledger.md` (ADR-004).
 3. Em paralelo: [S21, S22, S23] e [S24, S25, S26].
 4. S15, S16 (e S27, se ainda aberta).

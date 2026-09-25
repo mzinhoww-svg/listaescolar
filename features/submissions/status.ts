@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { publicationIsDemo } from "@/features/publication";
 import { getExtractionPipeline } from "./pipeline-factory";
 import { extractionResultSchema } from "./schemas";
 import type { StatusPayload } from "./status-model";
@@ -44,6 +45,7 @@ export async function getSubmissionStatus(supabase: SupabaseClient, id: string):
     notifyChannel: job.data ? String(job.data.notify_channel) : null,
     isDemo: sub.data.is_demo === true,
     pipelineAvailable: isPipelineAvailable(),
+    publicationDemo: publicationIsDemo({ NODE_ENV: process.env.NODE_ENV, APP_ENV: process.env.APP_ENV, VERCEL_ENV: process.env.VERCEL_ENV, FAKE_PUBLICATION_FIXTURE: process.env.FAKE_PUBLICATION_FIXTURE }),
     ...(result.success ? { result: result.data } : {}),
   };
 }

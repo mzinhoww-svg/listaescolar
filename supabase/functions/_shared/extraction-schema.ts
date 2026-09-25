@@ -50,7 +50,7 @@ export const extractionResultSchema = z.object({
   criticalAlerts: z.array(alertCode).max(7).optional(),
   /** Aceito com confiança abaixo do limiar (última rota): revisão humana obrigatória. */
   lowConfidence: z.boolean().optional(),
-  /** Sempre `true` no pipeline real: nada sai daqui como publicável automático. */
+  /** Sempre `true` no pipeline real: a extração sozinha não publica. O motor de publicação (S09) NÃO lê este campo: decide pelas regras. */
   requiresReview: z.literal(true).optional(),
 });
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;

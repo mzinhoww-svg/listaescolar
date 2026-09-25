@@ -101,7 +101,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-057 | ledger-dados S06 T2; ledger-comercio S14 T2; varredura | Refatorar módulos acima de 250 linhas sem mudar comportamento (suítes verdes): `features/stationeries/repository.ts` (630), `features/leads/repository.ts` (612; dividir em leitura do solicitante, leitura da papelaria e escrita), `features/cart/options-engine.ts` (445), `supabase/functions/_shared/worker-core.ts` (372), `features/cart/repository.ts` (276), `features/claims/queries.ts` (266; ex.: `queries-admin.ts`), `supabase/functions/_shared/ai/router.ts` (261), `supabase/functions/_shared/ai/extraction.ts` (260), `features/claims/repository.ts` (258; ex.: `repository-evidence.ts`, `repository-tokens.ts`) | média | S18 | aberta |
+| D-057 | ledger-dados S06 T2; ledger-comercio S14 T2; varredura | Refatorar módulos acima de 250 linhas sem mudar comportamento (suítes verdes): `features/stationeries/repository.ts` (630), `features/leads/repository.ts` (612; dividir em leitura do solicitante, leitura da papelaria e escrita), `features/cart/options-engine.ts` (445), `supabase/functions/_shared/worker-core.ts` (424; S09 M-4), `supabase/functions/_shared/publication/decide.ts` (300; S09 M-4), `features/cart/repository.ts` (276), `features/claims/queries.ts` (266; ex.: `queries-admin.ts`), `supabase/functions/_shared/ai/router.ts` (261), `supabase/functions/_shared/ai/extraction.ts` (260), `features/claims/repository.ts` (258; ex.: `repository-evidence.ts`, `repository-tokens.ts`) | média | S18 | aberta |
 
 ## Ambiente e infraestrutura
 
@@ -114,6 +114,13 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-062 | ledger-comercio S12 T2 | Formato do link de afiliado do Mercado Livre (`matt_tool`/`matt_word`) não confirmado | média | Humano / S20 | aberta |
 | D-063 | ledger.md (S02) | Supabase Auth hospedado sem Site URL/redirects/templates/SMTP: o link mágico só funciona no mesmo navegador | alta | Humano / S20 | aberta |
 | D-064 | ledger-pipeline S07 T3 | `bodySizeLimit` de 11 MB divergia do teto da Vercel | média | S07 | resolvida em S07 onda final (teto único de 4 MB) |
+| D-065 | ledger-pipeline S09 (M-2) | `ocr-worker`: o ramo sem pipeline responde 500 `misconfigured`/`pipeline_unavailable` mesmo varrendo publicação; sem regressão em deploys hospedados | baixa | S11 | aberta |
+| D-066 | ledger-pipeline S09 (M-7) | Quando a porta publica e o envio já não está `approved` (`not_approved`), a versão fica órfã sem linha persistente própria; só alerta `published_not_recorded` | média | S11 | aberta |
+| D-067 | ledger-pipeline S09 | O array `calls` do `MemoryListPublisher` (singleton em memória por processo) cresce sem limite | baixa | S18 | aberta |
+| D-068 | ledger-pipeline S09 (pendência) | Regra 5 só bloqueia lista-alvo `archived`; lista em `human_review`/`review_needed` passa pelo motor | média | S10 / S11 | aberta |
+| D-069 | ledger-pipeline S09 (pendência) | Índice `ai_decisions_publication_once` limita a um `published`/`publish_failed` por envio; republicação após `publish_failed` + aprovação humana exige outro `kind`/`decision` | média | S10 / S11 | aberta |
+| D-070 | ledger-pipeline S09 | `PortError` tipado (`transient`) obrigatório na porta real; versão real idempotente por `list_versions.submission_id`, perfil `system` e ajuste na 0600 (`p_actor_id` obrigatório) | alta | S11 | aberta |
+| D-071 | ledger-pipeline S09; OBRIGAÇÃO da S10 | `ReviewSummary` mostra "Publicada automaticamente" para qualquer status `published`; deve vir da linha `publication:published` automática (`actor_id` nulo), não só do status (aprovação humana também vira `published`) | alta | S10 | aberta |
 
 ## Resumo
 

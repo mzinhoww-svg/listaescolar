@@ -54,3 +54,22 @@ export const GRADE_OPTIONS = [
 ] as const;
 
 export const ACCEPT_ATTR = "application/pdf,image/jpeg,image/png,image/webp,image/heic,.pdf,.jpg,.jpeg,.png,.webp,.heic";
+
+/**
+ * Estado da decisão de publicação (S09). Só o estado: nenhum prazo, contagem ou motivo em texto livre
+ * (os códigos de motivo ficam em `ai_decisions`, para a equipe; a S10 os mostra ao admin).
+ */
+export const PUBLICATION_STATE_COPY: Record<"human_review" | "approved" | "published", { title: string; body: string }> = {
+  human_review: {
+    title: "Em revisão pela equipe",
+    body: "A equipe confere a lista antes de ela aparecer para outras famílias.",
+  },
+  approved: {
+    title: "Aprovada, aguardando publicação",
+    body: "A lista foi aprovada e a publicação ainda não terminou.",
+  },
+  published: {
+    title: "Publicada automaticamente",
+    body: "A lista passou pelas verificações e foi publicada.",
+  },
+};

@@ -123,8 +123,9 @@ export async function requestTokenAction(_prev: ClaimActionState, formData: Form
   const claimId = uuidSchema.safeParse(formData.get("claimId"));
   if (!claimId.success) return failed(errorMessage({ code: "invalid_argument" }));
   try {
-    const { channel } = await serviceClaimsRepository().issueToken(actor, { claimId: claimId.data, sender: envSenderFor, origin: linkOrigin() });
+    const { channel, demo } = await serviceClaimsRepository().issueToken(actor, { claimId: claimId.data, sender: envSenderFor, origin: linkOrigin });
     refresh(inep);
+    if (demo) return ok(channel === "email" ? "Modo demonstração: o link foi para o log local do servidor." : "Modo demonstração: o código foi para o log local do servidor.");
     return ok(channel === "email" ? "Enviamos o link ao e-mail registrado da escola." : "Enviamos o código ao WhatsApp registrado da escola.");
   } catch (error) {
     console.error("emitir token", error instanceof Error ? error.message : "erro");

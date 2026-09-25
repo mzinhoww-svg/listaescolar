@@ -23,7 +23,7 @@ export function sniffEvidence(bytes: Uint8Array, declaredMime: string): Evidence
   if (bytes.length > MAX_EVIDENCE_BYTES) return { ok: false, reason: "too_large" };
   const found = detect(bytes);
   if (!found) return { ok: false, reason: "unsupported_type" };
-  if (found !== declaredMime) return { ok: false, reason: "mime_mismatch" };
+  if (declaredMime !== "" && found !== declaredMime) return { ok: false, reason: "mime_mismatch" };
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   return { ok: true, mime: found, ext: EXT[found], size: bytes.length, sha256 };
 }

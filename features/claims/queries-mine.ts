@@ -8,14 +8,15 @@ import { createClient } from "@/lib/supabase/server";
 
 import { ClaimRepositoryError } from "./repository";
 import { CLAIM_STATUSES } from "./state";
+import { verificationStatusSchema, type VerificationStatus } from "./types";
 
-export type MySchoolRow = { schoolId: string; inep: string; name: string; verificationStatus: string; isDemo: boolean; memberRole: string };
+export type MySchoolRow = { schoolId: string; inep: string; name: string; verificationStatus: VerificationStatus; isDemo: boolean; memberRole: string };
 export type MyClaimRow = { id: string; status: (typeof CLAIM_STATUSES)[number]; decisionReason: string | null; createdAt: string; isDemo: boolean; school: { inep: string; name: string } };
 
 const memberRow = z.object({
   school_id: z.uuid(),
   member_role: z.string(),
-  schools: z.object({ inep: z.string(), name: z.string(), verification_status: z.string(), is_demo: z.boolean() }),
+  schools: z.object({ inep: z.string(), name: z.string(), verification_status: verificationStatusSchema, is_demo: z.boolean() }),
 });
 const claimRow = z.object({
   id: z.uuid(),

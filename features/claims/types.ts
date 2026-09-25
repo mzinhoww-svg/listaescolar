@@ -1,4 +1,9 @@
+import { z } from "zod";
+
 import type { ClaimMethod, ClaimStatus } from "./state";
+
+export const verificationStatusSchema = z.enum(["registered", "claimed", "verified", "suspended"]);
+export type VerificationStatus = z.infer<typeof verificationStatusSchema>;
 
 export type ConfirmResult = "confirmed" | "expired" | "invalid" | "locked" | "already_confirmed";
 
@@ -35,18 +40,18 @@ export type QueueRow = {
   isDemo: boolean;
   evidenceCount: number;
   evidenceNote: string | null;
-  school: { inep: string; name: string; verificationStatus: string };
+  school: { inep: string; name: string; verificationStatus: VerificationStatus };
 };
 export type AdminClaimView = QueueRow & {
   decisionReason: string | null;
   decidedAt: string | null;
   events: ClaimEventView[];
   evidence: EvidenceView[];
-  school: { id: string; inep: string; name: string; verificationStatus: string };
+  school: { id: string; inep: string; name: string; verificationStatus: VerificationStatus };
 };
 
 export type SchoolClaimContext = {
-  school: { id: string; inep: string; name: string; municipality: string; verificationStatus: string; isDemo: boolean };
+  school: { id: string; inep: string; name: string; municipality: string; verificationStatus: VerificationStatus; isDemo: boolean };
   /** Motivo fixo (texto) quando a escola não aceita reivindicação; `null` = pode reivindicar. */
   blockedReason: string | null;
   methods: Record<ClaimMethod, { available: true } | { available: false; reason: string }>;

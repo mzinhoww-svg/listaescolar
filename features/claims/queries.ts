@@ -13,7 +13,7 @@ import { getClaimTokenSender, type SenderEnv } from "./senders";
 import { claimQueueFilterSchema, inepSchema, uuidSchema, type ClaimQueueFilter } from "./schemas";
 import { createSupabaseEvidenceStorage } from "./evidence-storage";
 import { CLAIM_METHODS, CLAIM_STATUSES, OPEN_CLAIM_STATUSES } from "./state";
-import type { AdminClaimView, ClaimEventView, ClaimStatusView, ClaimView, EvidenceView, QueueRow, SchoolClaimContext } from "./types";
+import { verificationStatusSchema, type AdminClaimView, type ClaimEventView, type ClaimStatusView, type ClaimView, type EvidenceView, type QueueRow, type SchoolClaimContext, type VerificationStatus } from "./types";
 
 /**
  * Leituras de reivindicação. O reivindicante lê pelo cliente de SESSÃO (RLS + grants por coluna, sem `decided_by`);
@@ -141,12 +141,12 @@ const schoolRow = z.object({
   name: z.string(),
   email: z.string().nullable(),
   phone: z.string().nullable(),
-  verification_status: z.enum(["registered", "claimed", "verified", "suspended"]),
+  verification_status: verificationStatusSchema,
   is_demo: z.boolean(),
   municipalities: z.object({ name: z.string(), is_enabled: z.boolean() }),
 });
 
-const BLOCK: Partial<Record<string, string>> = {
+const BLOCK: Partial<Record<VerificationStatus, string>> = {
   verified: "Esta escola já tem administrador. O pedido de acesso adicional ainda não está disponível.",
   suspended: "Esta escola não aceita reivindicação no momento.",
 };
@@ -187,7 +187,7 @@ const queueRow = z.object({
   created_at: z.string(),
   is_demo: z.boolean(),
   evidence_note: z.string().nullable(),
-  schools: z.object({ inep: z.string(), name: z.string(), verification_status: z.string() }),
+  schools: z.object({ inep: z.string(), name: z.string(), verification_status: verificationStatusSchema }),
   claim_evidence: z.array(z.object({ count: z.number() })),
 });
 
@@ -227,7 +227,7 @@ const adminRow = claimRow.extend({
   claimant_id: z.uuid(),
   contact_email: z.string(),
   submitted_at: z.string().nullable(),
-  schools: z.object({ id: z.uuid(), inep: z.string(), name: z.string(), verification_status: z.string() }),
+  schools: z.object({ id: z.uuid(), inep: z.string(), name: z.string(), verification_status: verificationStatusSchema }),
 });
 
 /** Visão completa do admin (motivo, linha do tempo, evidências). Sem `actor_id`, sem contato da escola. */

@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { isSessionActor, type SessionActor } from "@/features/auth/actor";
 
-import type { ClaimErrorCode } from "./messages";
+import { ClaimRepositoryError, fail, mapError } from "./errors";
 import type { ClaimTokenSender, EvidenceStorage } from "./ports";
 import { PRIVACY_TEXT_VERSION, confirmInputSchema, decisionInputSchema, type ConfirmInput, type DecisionInput } from "./schemas";
 import { sanitizeFileName, sniffEvidence } from "./files";
@@ -18,43 +18,9 @@ import type { ConfirmResult } from "./types";
 /**
  * Repositório de ESCRITA das reivindicações (service role, injetável). Toda operação recebe um `SessionActor`
  * (marca de `getSessionActor`) e o `p_actor_id` vem sempre dele; nunca um id cru. O banco confere de novo
- * (papel e dono) nas funções SECURITY DEFINER. Erros do banco viram `ClaimRepositoryError` com código fixo:
- * a mensagem do Postgres nunca sobe para a tela.
+ * (papel e dono) nas funções SECURITY DEFINER. Erros: ver `errors.ts`.
  */
-export class ClaimRepositoryError extends Error {
-  constructor(
-    readonly code: ClaimErrorCode,
-    message: string,
-    readonly pgCode?: string,
-  ) {
-    super(message);
-    this.name = "ClaimRepositoryError";
-  }
-}
-
-const fail = (code: ClaimErrorCode, what: string, pg?: string): ClaimRepositoryError =>
-  new ClaimRepositoryError(code, `${what}: ${code}`, pg);
-
-type PgError = { code?: string; message: string };
-
-/** errcode + texto estável da função -> código fixo. O texto só classifica; nunca é exibido. */
-function mapError(e: PgError, what: string): ClaimRepositoryError {
-  switch (e.code) {
-    case "P0002":
-      return fail("not_found", what, e.code);
-    case "42501":
-      return fail("forbidden", what, e.code);
-    case "22023":
-      return fail("invalid_argument", what, e.code);
-    case "23514":
-      if (/escola (suspensa|verificada)|município não habilitado|escola .* não aceita/.test(e.message)) return fail("school_closed", what, e.code);
-      if (/^aguarde/.test(e.message)) return fail("wait", what, e.code);
-      if (/^limite de/.test(e.message)) return fail("limit", what, e.code);
-      return fail("invalid_state", what, e.code);
-    default:
-      return fail("database", what, e.code);
-  }
-}
+export { ClaimRepositoryError };
 
 const uuid = z.uuid();
 const issueRows = z.array(
@@ -79,7 +45,8 @@ export type CreateClaimArgs = {
 export type AddEvidenceArgs = { claimId: string; bytes: Uint8Array; declaredMime: string; originalName: string };
 /** O entregador pode depender da escola da reivindicação (demo); `null` = sem provedor. */
 export type SenderSource = ClaimTokenSender | null | ((school: { isDemo: boolean }) => ClaimTokenSender | null);
-export type IssueTokenArgs = { claimId: string; sender: SenderSource; origin: string };
+/** `origin` só é calculada quando há entregador (função preguiçosa). */
+export type IssueTokenArgs = { claimId: string; sender: SenderSource; origin: string | (() => string) };
 export type ClaimsDeps = {
   storage: EvidenceStorage;
   /** Só para teste: forçar colisão de hash. */
@@ -89,6 +56,7 @@ export type ClaimsDeps = {
 
 const MAX_TOKEN_TRIES = 3;
 const SIGNED_URL_SECONDS = 60;
+const MAX_EVIDENCE_FILES = 5;
 
 export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps) {
   const newEmailToken = deps.generateEmailToken ?? generateEmailToken;
@@ -132,19 +100,28 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
       return uuid.parse(data);
     },
 
-    /** Um arquivo por chamada: bytes conferidos ANTES do Storage; o objeto sai se a função recusar. */
+    /**
+     * Um arquivo por chamada. Ordem: bytes -> dono, estado e contagem (antes de tocar no Storage) -> Storage ->
+     * função do banco (que confere tudo de novo); o objeto sai se a função recusar.
+     */
     async addEvidence(actor: SessionActor, a: AddEvidenceArgs): Promise<{ id: string }> {
       assertActor(actor);
       const sniff = sniffEvidence(a.bytes, a.declaredMime);
       if (!sniff.ok) throw fail(sniff.reason === "too_large" ? "file_too_large" : "invalid_file", "evidência");
-      const path = `${uuid.parse(a.claimId)}/${randomUUID()}.${sniff.ext}`;
+      const claim = await ownClaim(actor, a.claimId);
+      const accepts = (claim.status === "submitted" && claim.method === "documents") || claim.status === "insufficient_evidence";
+      if (!accepts) throw fail("invalid_state", "evidência");
+      const { count, error: countError } = await client.from("claim_evidence").select("id", { count: "exact", head: true }).eq("claim_id", claim.id);
+      if (countError) throw mapError(countError, "evidência");
+      if ((count ?? 0) >= MAX_EVIDENCE_FILES) throw fail("limit", "evidência");
+      const path = `${claim.id}/${randomUUID()}.${sniff.ext}`;
       try {
         await deps.storage.put(path, a.bytes, sniff.mime);
       } catch {
         throw fail("storage", "evidência");
       }
       const { data, error } = await client.rpc("claim_add_evidence", {
-        p_claim_id: a.claimId,
+        p_claim_id: claim.id,
         p_actor_id: actor.userId,
         p_storage_path: path,
         p_mime_type: sniff.mime,
@@ -153,7 +130,7 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
         p_original_name: sanitizeFileName(a.originalName),
       });
       if (error) {
-        await deps.storage.remove(path).catch(() => undefined);
+        await deps.storage.remove(path).catch(() => console.error("limpar objeto de evidência recusado"));
         throw mapError(error, "evidência");
       }
       return { id: uuid.parse(data) };
@@ -164,7 +141,7 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
       const { data, error } = await client.rpc("claim_remove_evidence", { p_evidence_id: uuid.parse(evidenceId), p_actor_id: actor.userId });
       if (error) throw mapError(error, "remover evidência");
       const path = z.string().parse(data);
-      await deps.storage.remove(path).catch((e: unknown) => console.error("remover objeto de evidência", e));
+      await deps.storage.remove(path).catch(() => console.error("remover objeto de evidência"));
     },
 
     async submitForReview(actor: SessionActor, a: { claimId: string; evidenceNote?: string | undefined }): Promise<void> {
@@ -182,7 +159,7 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
      * Sem entregador para o canal: nada é emitido. Falha na entrega: o token existe, mas o reivindicante só o
      * recebe pedindo outro (intervalo de 60 s do banco).
      */
-    async issueToken(actor: SessionActor, a: IssueTokenArgs): Promise<{ channel: "email" | "whatsapp"; expiresAt: string }> {
+    async issueToken(actor: SessionActor, a: IssueTokenArgs): Promise<{ channel: "email" | "whatsapp"; expiresAt: string; demo: boolean }> {
       assertActor(actor);
       const claim = await ownClaim(actor, a.claimId);
       if (claim.method === "documents") throw fail("invalid_state", "emitir token");
@@ -190,6 +167,7 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
       const sender = typeof a.sender === "function" ? a.sender({ isDemo: claim.schools.is_demo }) : a.sender;
       if (!sender?.channels[channel]) throw fail("delivery_unavailable", "emitir token");
 
+      const origin = typeof a.origin === "function" ? a.origin() : a.origin;
       for (let attempt = 1; attempt <= MAX_TOKEN_TRIES; attempt++) {
         const secret = channel === "email" ? newEmailToken() : newCode();
         const hash = hashToken(channel === "email" ? { channel, token: secret } : { channel, claimId: claim.id, code: secret });
@@ -204,7 +182,7 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
         const ctx = { schoolName: claim.schools.name, inep: claim.schools.inep };
         try {
           if (channel === "email") {
-            await sender.sendEmailLink(row.destination, `${a.origin}/escolas/${claim.schools.inep}/reivindicar/confirmar?token=${secret}`, ctx);
+            await sender.sendEmailLink(row.destination, `${origin}/escolas/${claim.schools.inep}/reivindicar/confirmar?token=${secret}`, ctx);
           } else {
             await sender.sendWhatsappCode(row.destination, secret, ctx);
           }
@@ -212,7 +190,7 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
           console.error("entrega de token de reivindicação", e instanceof Error ? e.name : "erro");
           throw fail("delivery_failed", "emitir token");
         }
-        return { channel: row.channel, expiresAt: row.expires_at };
+        return { channel: row.channel, expiresAt: row.expires_at, demo: sender.demo === true };
       }
       throw fail("database", "emitir token");
     },
@@ -263,12 +241,12 @@ export function createClaimsRepository(client: SupabaseClient, deps: ClaimsDeps)
     /** URL assinada de 60 s da evidência (só admin). */
     async evidenceSignedUrl(actor: SessionActor, evidenceId: string): Promise<string> {
       assertAdmin(actor);
-      const { data, error } = await client.from("claim_evidence").select("storage_path").eq("id", uuid.parse(evidenceId)).maybeSingle();
+      const { data, error } = await client.from("claim_evidence").select("storage_path, original_name").eq("id", uuid.parse(evidenceId)).maybeSingle();
       if (error) throw mapError(error, "evidência");
-      const path = z.object({ storage_path: z.string() }).safeParse(data);
+      const path = z.object({ storage_path: z.string(), original_name: z.string() }).safeParse(data);
       if (!path.success) throw fail("not_found", "evidência");
       try {
-        return await deps.storage.signedUrl(path.data.storage_path, SIGNED_URL_SECONDS);
+        return await deps.storage.signedUrl(path.data.storage_path, SIGNED_URL_SECONDS, path.data.original_name);
       } catch {
         throw fail("storage", "evidência");
       }

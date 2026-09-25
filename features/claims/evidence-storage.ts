@@ -18,8 +18,8 @@ export function createSupabaseEvidenceStorage(client: SupabaseClient): EvidenceS
       const { error } = await bucket().remove([path]);
       if (error) throw new Error("falha ao remover a evidência do Storage");
     },
-    async signedUrl(path, seconds) {
-      const { data, error } = await bucket().createSignedUrl(path, seconds);
+    async signedUrl(path, seconds, downloadName) {
+      const { data, error } = await bucket().createSignedUrl(path, seconds, downloadName ? { download: downloadName } : undefined);
       if (error || !data?.signedUrl) throw new Error("falha ao assinar a URL da evidência");
       return data.signedUrl;
     },

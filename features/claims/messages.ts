@@ -54,6 +54,10 @@ export type ClaimErrorCode =
   | "storage"
   | "invalid_file"
   | "file_too_large"
+  | "conflict"
+  | "account_email"
+  | "approval_needs_channel"
+  | "approval_needs_evidence"
   | "database";
 
 const BY_CODE: Record<ClaimErrorCode, string> = {
@@ -69,11 +73,15 @@ const BY_CODE: Record<ClaimErrorCode, string> = {
   storage: "Não foi possível guardar o arquivo agora. Tente de novo.",
   invalid_file: "Arquivo inválido. Envie um PDF, PNG ou JPEG que corresponda ao tipo do arquivo.",
   file_too_large: "O arquivo passa de 4 MB.",
+  conflict: "Já existe uma reivindicação em aberto ou aprovada para esta escola.",
+  account_email: "O e-mail da sua conta está ausente ou inválido. Corrija o e-mail da conta e tente de novo.",
+  approval_needs_channel: "Não dá para aprovar: o canal (e-mail ou WhatsApp) ainda não foi confirmado.",
+  approval_needs_evidence: "Não dá para aprovar: falta ao menos uma evidência enviada.",
   database: "Não foi possível concluir agora. Tente de novo.",
 };
 
 /** Mensagem fixa para um erro do repositório; erro desconhecido vira a mensagem genérica (nunca o texto do banco). */
 export function errorMessage(error: unknown): string {
-  const code = error instanceof Error && "code" in error ? String((error as { code: unknown }).code) : "";
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
   return (BY_CODE as Record<string, string>)[code] ?? BY_CODE.database;
 }

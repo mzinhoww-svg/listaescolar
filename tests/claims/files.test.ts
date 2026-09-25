@@ -16,6 +16,12 @@ describe("sniffEvidence", () => {
     expect(sniffEvidence(pdf(), "image/png")).toEqual({ ok: false, reason: "mime_mismatch" });
     expect(sniffEvidence(png(), "application/pdf")).toEqual({ ok: false, reason: "mime_mismatch" });
   });
+  it("MIME declarado vazio vale pelos bytes; declarado não vazio e diferente é recusado", () => {
+    expect(sniffEvidence(pdf(), "")).toMatchObject({ ok: true, mime: "application/pdf" });
+    expect(sniffEvidence(png(), "")).toMatchObject({ ok: true, mime: "image/png" });
+    expect(sniffEvidence(png(), "application/pdf")).toEqual({ ok: false, reason: "mime_mismatch" });
+    expect(sniffEvidence(enc("<html>"), "")).toEqual({ ok: false, reason: "unsupported_type" });
+  });
   it("tipo não suportado, vazio e HTML disfarçado", () => {
     expect(sniffEvidence(enc("<html><script>alert(1)</script>"), "application/pdf")).toEqual({ ok: false, reason: "unsupported_type" });
     expect(sniffEvidence(enc("GIF89a"), "image/gif")).toEqual({ ok: false, reason: "unsupported_type" });

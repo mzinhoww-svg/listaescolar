@@ -7,6 +7,8 @@ export type SendContext = { schoolName: string; inep: string };
  * e-mail entra na S11; WhatsApp depende de credencial do humano.
  */
 export interface ClaimTokenSender {
+  /** `true` = entrega de demonstração (só log local). */
+  readonly demo?: boolean;
   readonly channels: { readonly email: boolean; readonly whatsapp: boolean };
   sendEmailLink(to: string, link: string, ctx: SendContext): Promise<void>;
   sendWhatsappCode(to: string, code: string, ctx: SendContext): Promise<void>;
@@ -16,7 +18,7 @@ export interface ClaimTokenSender {
 export interface EvidenceStorage {
   put(path: string, bytes: Uint8Array, mime: string): Promise<void>;
   remove(path: string): Promise<void>;
-  signedUrl(path: string, seconds: number): Promise<string>;
+  signedUrl(path: string, seconds: number, downloadName?: string): Promise<string>;
 }
 
 export type { SenderCapabilities };

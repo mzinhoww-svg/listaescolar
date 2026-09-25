@@ -187,6 +187,47 @@ describe("fluxo por documentos", () => {
     expect(storage.objects.size).toBe(1);
   });
 
+  it("addEvidence confere dono e estado ANTES do Storage: nada é gravado se recusar", async () => {
+    await school(INEPS[0]!);
+    const id = await claimOf(INEPS[0]!);
+    const args = (claimId: string) => ({ claimId, bytes: pdf(), declaredMime: "application/pdf", originalName: "a.pdf" });
+    const put = vi.spyOn(storage, "put");
+    expect((await errCode(repo.addEvidence(spare, args(id))))?.code).toBe("not_found"); // alheio
+    expect((await errCode(repo.addEvidence(parent, args("3f2b8c1e-5d4a-4b6f-9c3d-1a2b3c4d5e6f"))))?.code).toBe("not_found"); // inexistente
+    await repo.addEvidence(parent, args(id));
+    await repo.submitForReview(parent, { claimId: id });
+    put.mockClear();
+    expect((await errCode(repo.addEvidence(parent, args(id))))?.code).toBe("invalid_state"); // estado errado
+    expect(put).not.toHaveBeenCalled();
+    expect(storage.objects.size).toBe(1);
+    put.mockRestore();
+  });
+
+  it("addEvidence: sexta evidência é recusada antes do Storage", async () => {
+    await school(INEPS[0]!);
+    const id = await claimOf(INEPS[0]!);
+    for (let i = 0; i < 5; i++) await repo.addEvidence(parent, { claimId: id, bytes: pdf(), declaredMime: "application/pdf", originalName: `a${i}.pdf` });
+    const put = vi.spyOn(storage, "put");
+    expect((await errCode(repo.addEvidence(parent, { claimId: id, bytes: pdf(), declaredMime: "application/pdf", originalName: "6.pdf" })))?.code).toBe("limit");
+    expect(put).not.toHaveBeenCalled();
+    expect(storage.objects.size).toBe(5);
+    put.mockRestore();
+  });
+
+  it("falha ao limpar o objeto recusado é registrada com texto fixo, sem caminho", async () => {
+    await school(INEPS[0]!);
+    const id = await claimOf(INEPS[0]!);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(storage, "remove").mockRejectedValue(new Error(`boom ${id}/x.pdf`));
+    // força a recusa do banco depois do put: reivindicação passa a suspensa entre a conferência e a função
+    const rpc = vi.spyOn(service, "rpc").mockResolvedValue({ data: null, error: { code: "23514", message: "estado" } } as never);
+    expect((await errCode(repo.addEvidence(parent, { claimId: id, bytes: pdf(), declaredMime: "application/pdf", originalName: "a.pdf" })))?.code).toBe("invalid_state");
+    rpc.mockRestore();
+    expect(spy).toHaveBeenCalled();
+    expect(JSON.stringify(spy.mock.calls)).not.toContain(id);
+    spy.mockRestore();
+  });
+
   it("removeEvidence apaga a linha e o objeto; outro usuário não remove", async () => {
     await school(INEPS[0]!);
     const id = await claimOf(INEPS[0]!);
@@ -223,7 +264,7 @@ describe("fluxo por e-mail", () => {
     expect(await statusOf_(id)).toBe("awaiting_verification");
 
     // aprovar sem canal confirmado é recusado
-    expect((await errCode(repo.decide(admin, { claimId: id, to: "approved" })))?.code).toBe("invalid_state");
+    expect((await errCode(repo.decide(admin, { claimId: id, to: "approved" })))?.code).toBe("approval_needs_channel");
     // outro usuário não confirma; o token errado nunca levanta
     expect(await repo.confirmToken(spare, { channel: "email", token })).toBe("invalid");
     expect(await repo.confirmToken(parent, { channel: "email", token: "A".repeat(43) })).toBe("invalid");

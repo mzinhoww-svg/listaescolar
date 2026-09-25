@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.hoisted(() => ({ actor: null as unknown }));
-const repo = vi.hoisted(() => ({ decide: vi.fn(), confirmToken: vi.fn(), createClaim: vi.fn(), issueToken: vi.fn() }));
+const repo = vi.hoisted(() => ({
+  decide: vi.fn(), confirmToken: vi.fn(), createClaim: vi.fn(), issueToken: vi.fn(),
+  addEvidence: vi.fn(), removeEvidence: vi.fn(), submitForReview: vi.fn(),
+}));
 const redirect = vi.hoisted(() =>
   vi.fn((to: string) => {
     throw new Error(`REDIRECT:${to}`);
@@ -25,7 +28,7 @@ vi.mock("@/features/claims/queries", () => ({ getClaimForAdmin: async () => null
 
 import { decideClaimAction } from "@/app/admin/reivindicacoes/actions";
 import { confirmTokenAction } from "@/app/escolas/[inep]/reivindicar/confirmar/actions";
-import { createClaimAction, requestTokenAction } from "@/app/escolas/[inep]/reivindicar/actions";
+import { createClaimAction, removeEvidenceAction, requestTokenAction, submitClaimAction, uploadEvidenceAction } from "@/app/escolas/[inep]/reivindicar/actions";
 import { IDLE } from "@/features/claims/form-state";
 
 const ID = "3f2b8c1e-5d4a-4b6f-9c3d-1a2b3c4d5e6f";
@@ -78,6 +81,61 @@ describe("ações do reivindicante", () => {
     const r = await requestTokenAction(IDLE, form({ inep: "51999801", claimId: ID }));
     expect(r).toMatchObject({ status: "ok" });
     expect(JSON.stringify(r)).not.toMatch(/@|token=/);
+  });
+});
+
+describe("evidência e envio", () => {
+  const withFile = (file: unknown) => {
+    const f = form({ inep: "51999801", claimId: ID });
+    f.set("file", file as Blob);
+    return f;
+  };
+  const pdfFile = (bytes = 10) => new File([new Uint8Array(bytes)], "a.pdf", { type: "application/pdf" });
+  it("upload recusa não-File, arquivo vazio e acima de 4 MB sem tocar no repositório", async () => {
+    session.actor = { userId: ID, role: "parent" };
+    expect(await uploadEvidenceAction(IDLE, withFile("texto"))).toMatchObject({ status: "error" });
+    expect(await uploadEvidenceAction(IDLE, withFile(pdfFile(0)))).toMatchObject({ status: "error" });
+    const big = await uploadEvidenceAction(IDLE, withFile(pdfFile(4_000_001)));
+    expect(big).toMatchObject({ status: "error", message: "O arquivo passa de 4 MB." });
+    expect(repo.addEvidence).not.toHaveBeenCalled();
+  });
+  it("upload válido chama o repositório com o ator da sessão; erro vira texto fixo", async () => {
+    session.actor = { userId: ID, role: "parent" };
+    repo.addEvidence.mockResolvedValue({ id: ID });
+    expect(await uploadEvidenceAction(IDLE, withFile(pdfFile()))).toMatchObject({ status: "ok" });
+    expect(repo.addEvidence).toHaveBeenCalledWith(session.actor, expect.objectContaining({ claimId: ID, declaredMime: "application/pdf", originalName: "a.pdf" }));
+    repo.addEvidence.mockRejectedValue(Object.assign(new Error("pg: relation x"), { code: "limit" }));
+    const r = await uploadEvidenceAction(IDLE, withFile(pdfFile()));
+    expect(r).toMatchObject({ status: "error" });
+    expect(JSON.stringify(r)).not.toContain("relation");
+  });
+  it("removeEvidenceAction: id inválido não chama; papel bloqueado; sucesso e erro", async () => {
+    session.actor = { userId: ID, role: "stationery_member" };
+    expect(await removeEvidenceAction(IDLE, form({ inep: "51999801", evidenceId: ID }))).toMatchObject({ status: "error" });
+    session.actor = { userId: ID, role: "parent" };
+    expect(await removeEvidenceAction(IDLE, form({ inep: "51999801", evidenceId: "x" }))).toMatchObject({ status: "error" });
+    expect(repo.removeEvidence).not.toHaveBeenCalled();
+    repo.removeEvidence.mockResolvedValue(undefined);
+    expect(await removeEvidenceAction(IDLE, form({ inep: "51999801", evidenceId: ID }))).toMatchObject({ status: "ok" });
+    repo.removeEvidence.mockRejectedValue(Object.assign(new Error("x"), { code: "forbidden" }));
+    expect(await removeEvidenceAction(IDLE, form({ inep: "51999801", evidenceId: ID }))).toMatchObject({ status: "error", message: "Você não tem permissão para esta ação." });
+  });
+  it("submitClaimAction: valida entrada, chama com o ator e traduz o erro", async () => {
+    session.actor = { userId: ID, role: "school_member" };
+    expect(await submitClaimAction(IDLE, form({ inep: "51999801", claimId: "x" }))).toMatchObject({ status: "error" });
+    expect(repo.submitForReview).not.toHaveBeenCalled();
+    repo.submitForReview.mockResolvedValue(undefined);
+    expect(await submitClaimAction(IDLE, form({ inep: "51999801", claimId: ID, evidenceNote: "nota" }))).toMatchObject({ status: "ok" });
+    expect(repo.submitForReview).toHaveBeenCalledWith(session.actor, { claimId: ID, evidenceNote: "nota" });
+    repo.submitForReview.mockRejectedValue(Object.assign(new Error("x"), { code: "invalid_state" }));
+    expect(await submitClaimAction(IDLE, form({ inep: "51999801", claimId: ID }))).toMatchObject({ status: "error" });
+  });
+  it("token em demonstração diz que foi para o log local, sem prometer e-mail", async () => {
+    session.actor = { userId: ID, role: "parent" };
+    repo.issueToken.mockResolvedValue({ channel: "email", expiresAt: "2026-01-01T00:00:00Z", demo: true });
+    const r = await requestTokenAction(IDLE, form({ inep: "51999801", claimId: ID }));
+    expect(r).toMatchObject({ status: "ok", message: expect.stringMatching(/log local/) });
+    expect(JSON.stringify(r)).not.toMatch(/e-mail registrado/);
   });
 });
 

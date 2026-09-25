@@ -4,6 +4,7 @@ export type SenderEnv = { DEMO_CLAIM_DELIVERY?: string; APP_ENV?: string; VERCEL
 
 /** Só imprime no log do servidor (demonstração local). Nunca chega ao cliente. */
 export class ConsoleClaimTokenSender implements ClaimTokenSender {
+  readonly demo = true;
   readonly channels = { email: true, whatsapp: true } as const;
   constructor(private readonly log: (line: string) => void = (l) => console.info(l)) {}
   async sendEmailLink(_to: string, link: string, ctx: SendContext): Promise<void> {
@@ -38,13 +39,12 @@ export class MemoryClaimTokenSender implements ClaimTokenSender {
 const t = (v: string | undefined) => (v ?? "").trim();
 
 /**
- * Entregador do ambiente: console só com `DEMO_CLAIM_DELIVERY=1` E `APP_ENV` local/development (e nunca com
- * `VERCEL_ENV=production`) E escola demonstrativa. Fora disso não há provedor (`null`): os métodos por token ficam
+ * Entregador do ambiente: console só com `DEMO_CLAIM_DELIVERY=1` E `APP_ENV` local/development (e `VERCEL_ENV` vazio ou development) E escola demonstrativa. Fora disso não há provedor (`null`): os métodos por token ficam
  * "indisponíveis" e nada finge envio.
  */
 export function getClaimTokenSender(env: SenderEnv, school: { isDemo: boolean }): ClaimTokenSender | null {
   const allowedEnv = t(env.APP_ENV) === "local" || t(env.APP_ENV) === "development";
-  if (t(env.DEMO_CLAIM_DELIVERY) === "1" && allowedEnv && t(env.VERCEL_ENV) !== "production" && school.isDemo) {
+  if (t(env.DEMO_CLAIM_DELIVERY) === "1" && allowedEnv && (t(env.VERCEL_ENV) === "" || t(env.VERCEL_ENV) === "development") && school.isDemo) {
     return new ConsoleClaimTokenSender();
   }
   return null;

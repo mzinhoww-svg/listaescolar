@@ -25,11 +25,3 @@ export const UpdateStatusInputSchema = z.strictObject({
 });
 export const DeclareSaleInputSchema = z.strictObject({ amount: AmountText });
 export const CloseLostInputSchema = z.strictObject({ reason: z.enum(CLOSE_REASONS) });
-
-/** Campos do formulário de criação (o checkbox marcado chega como `on`). */
-export const CreateLeadFormSchema = z.object({
-  carrinho: z.string().max(80),
-  stationeryId: z.string().max(80),
-  neighborhood: z.string().max(200),
-  idempotencyKey: z.string().max(80),
-});

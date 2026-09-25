@@ -147,3 +147,14 @@ describe("buildLeadWhatsappUrl", () => {
     expect(textOf(url)).toContain("A&B #1 ? 🎒 Escola");
   });
 });
+
+describe("cleanLeadText (revisão T2)", () => {
+  it("remove marca bidi U+061C, hífen suave e caracteres de tag", async () => {
+    const { cleanLeadText } = await import("@/features/leads/message");
+    expect(cleanLeadText("Es؜cola­X\u{E0041}Y", 50)).toBe("Es cola X Y");
+  });
+  it("redige URLs", async () => {
+    const { cleanLeadText } = await import("@/features/leads/message");
+    expect(cleanLeadText("Escola https://evil.example/x?a=1 e www.evil.example/p", 80)).toBe("Escola e");
+  });
+});

@@ -45,7 +45,7 @@ export type KpiRow = {
   /** Data do evento `sale_declared` (nulo se o lead não foi vendido). */
   saleDeclaredAt: Date | null;
 };
-export type Kpis = { newCount: number; awaitingCount: number; soldThisWeek: number; declaredMonthCents: number };
+export type Kpis = { newCount: number; awaitingCount: number; soldThisWeek: number; declaredMonthCents: number | null };
 
 const WEEK_MS = 7 * 24 * 3_600_000;
 const TIME_ZONE = "America/Cuiaba";
@@ -75,5 +75,5 @@ export function computeKpis(rows: readonly KpiRow[], now: Date): Kpis {
     if (nowMs - t <= WEEK_MS) soldThisWeek += 1;
     if (r.declaredSaleCents !== null && monthKey(r.saleDeclaredAt) === thisMonth) monthAmounts.push(r.declaredSaleCents);
   }
-  return { newCount, awaitingCount, soldThisWeek, declaredMonthCents: sumCents(monthAmounts) ?? 0 };
+  return { newCount, awaitingCount, soldThisWeek, declaredMonthCents: monthAmounts.length === 0 ? null : sumCents(monthAmounts) };
 }

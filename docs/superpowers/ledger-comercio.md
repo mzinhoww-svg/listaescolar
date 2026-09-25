@@ -144,3 +144,11 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orqu
 - Ruling (S14 T2): cron `GET /api/cron/leads-expire`: `CRON_SECRET` com menos de 16 caracteres conta como não configurado (503); Bearer comparado por digest SHA-256 em `timingSafeEqual`; resposta sempre `no-store` e sem eco; `vercel.json` agenda `0 7 * * *` (04:00 em Cuiabá) — custo se errada: baixo.
 - Ruling (S14 T2): `LOCAL_QUOTE_FUTURE_TOLERANCE_MS` passou a ser exportado de `features/stationeries/local-quote-provider.ts` para a estimativa do lead usar a MESMA validade de preço da cotação local (única alteração em arquivo da S13) — custo se errada: baixo.
 - Ruling (S14 T2): KPI "vendidos na semana"/"vendas declaradas no mês" usam a data do evento `sale_declared` (embutido no select da lista) e ignoram data futura; mês por `Intl` em America/Cuiaba — custo se errada: baixo.
+
+## S14 · Task 2 · rodada de correções da revisão
+- Ruling (S14 T2 revisão): o texto de consentimento passa a dizer que a papelaria vê "o bairro informado" (o grant por coluna inclui `neighborhood`) e a versão sobe para `lead-whatsapp-2026-09b`; a mensagem do WhatsApp continua sem bairro (SENDS inalterado) — custo se errada: baixo.
+- Ruling (S14 T2 revisão): `cleanLeadText` usa `\p{Cc}\p{Cf}\p{Zl}\p{Zp}` (cobre U+061C, U+00AD, tags) e redige URLs; `computeKpis.declaredMonthCents` é `null` sem venda com valor no mês (a UI mostra "indisponível"); `CreateLeadFormSchema` (morto) removido — custo se errada: baixo.
+- Dívida (S14 T2): `CRON_SECRET` com `min(16)` no `lib/env.ts` falha o boot com segredo curto, enquanto o contrato da rota é 503; alinhar depois — baixo.
+- Dívida (S14 T2): `listCandidateStationeries` corta silenciosamente acima do limite; mostrar "e mais N" ou paginar quando houver muitas papelarias — baixo.
+- Dívida (S14 T2): `features/leads/repository.ts` passa de 600 linhas; dividir (leitura do solicitante, da papelaria, escrita) depois — baixo.
+- Dívida (S14 T2): rótulo "últimos 7 dias" dos KPIs vs. `WEEK_MS` rolante; revisar o texto na UI — baixo.

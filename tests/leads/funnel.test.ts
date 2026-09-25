@@ -76,9 +76,9 @@ describe("computeKpis", () => {
   });
 
   it("ignora venda no futuro e lista vazia dá zero", () => {
-    expect(computeKpis([], now)).toEqual({ newCount: 0, awaitingCount: 0, soldThisWeek: 0, declaredMonthCents: 0 });
+    expect(computeKpis([], now)).toEqual({ newCount: 0, awaitingCount: 0, soldThisWeek: 0, declaredMonthCents: null });
     const k = computeKpis([row({ status: "converted", declaredSaleCents: 100, saleDeclaredAt: new Date("2026-09-26T15:00:00Z") })], now);
     expect(k.soldThisWeek).toBe(0);
-    expect(k.declaredMonthCents).toBe(0);
+    expect(k.declaredMonthCents).toBeNull();
   });
 });

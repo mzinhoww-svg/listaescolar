@@ -7,7 +7,8 @@ import { LeadError } from "./errors";
 
 // Controle, quebras de linha, separadores Unicode e formatação invisível (inclui bidi): viram espaço ANTES da
 // remoção de dados pessoais, para não juntar dígitos separados por uma quebra.
-const CONTROL = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u2028-\\u202E\\u2060-\\u206F\\uFEFF]", "g");
+const CONTROL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+const URL_LIKE = /(?:https?:\/\/|www\.)\S+/gi;
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
 const CPF = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
 const PHONE = /\+?\d(?:[\s().-]{0,2}\d){7,}/g;
@@ -17,6 +18,7 @@ export function cleanLeadText(value: string, max: number): string {
   return value
     .normalize("NFC")
     .replace(CONTROL, " ")
+    .replace(URL_LIKE, " ")
     .replace(EMAIL, " ")
     .replace(CPF, " ")
     .replace(PHONE, " ")

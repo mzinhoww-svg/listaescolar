@@ -5,6 +5,8 @@ export type Legal = {
   dpoEmail: string | null;
   contactEmail: string | null;
   retention: string | null;
+  legalBasis: string | null;
+  operators: string | null;
   lastUpdated: string | null;
 };
 
@@ -14,6 +16,8 @@ export const LEGAL: Legal = {
   dpoEmail: null,
   contactEmail: null,
   retention: null,
+  legalBasis: null,
+  operators: null,
   lastUpdated: null,
 };
 
@@ -45,8 +49,6 @@ export const TERMS_SECTIONS: LegalSection[] = [
     title: "Conta",
     paragraphs: [["Você é responsável pelo acesso à sua conta, por e-mail ou conta Google."]],
   },
-  { title: "Dúvidas", paragraphs: [["Fale com o encarregado de dados: ", dpo, "."]] },
-  { title: "Última atualização", paragraphs: [[{ key: "lastUpdated", label: "data da última atualização" }]] },
 ];
 
 export const PRIVACY_SECTIONS: LegalSection[] = [
@@ -59,12 +61,28 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     title: "Dados que coletamos",
     paragraphs: [
-      ["Nome e e-mail da conta (e-mail ou conta Google), cidade e escola. Do estudante, guardamos apenas apelido e série. Não pedimos documento nem nome completo."],
+      ["Conta: e-mail (login por e-mail ou conta Google) e nome de exibição, quando existir."],
+      ["Listas enviadas: o arquivo da lista (PDF ou imagem), a escola, a série e o ano, com o registro do seu consentimento (finalidade, versão do texto e data)."],
+      ["Uso: carrinhos que você monta e cliques em links de loja, ligados à sua conta."],
+      ["Pedidos de cotação: escola, série, ano, número de itens, bairro (se informado) e o registro do consentimento. O pedido é compartilhado com a papelaria escolhida."],
+      ["Não pedimos documento nem nome completo de estudante."],
     ],
   },
   {
     title: "Dados de crianças",
-    paragraphs: [["Não coletamos dado de criança além de apelido e série, informados pelo responsável para montar a lista escolar."]],
+    paragraphs: [["Hoje a plataforma não tem campo de estudante. Se passar a ter, será só apelido e série, informados pelo responsável para montar a lista escolar."]],
+  },
+  {
+    title: "Com quem os dados passam",
+    paragraphs: [
+      ["Usamos o Supabase (banco de dados, autenticação e arquivos), a Vercel (hospedagem) e um provedor de IA, acessado pelo OpenRouter, que lê os arquivos de lista enviados para extrair os itens."],
+      ["Operadores, contratos e local de tratamento: ", { key: "operators", label: "operadores e contratos" }, "."],
+      ["Ao abrir um link de loja, você sai da ListaCerta e passa às regras da loja."],
+    ],
+  },
+  {
+    title: "Base legal",
+    paragraphs: [["Base legal do tratamento: ", { key: "legalBasis", label: "base legal" }, "."]],
   },
   {
     title: "Por quanto tempo",
@@ -73,9 +91,5 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     title: "Seus direitos",
     paragraphs: [["Para pedir acesso, correção ou exclusão dos seus dados, fale com o encarregado: ", dpo, "."]],
-  },
-  {
-    title: "Última atualização",
-    paragraphs: [[{ key: "lastUpdated", label: "data da última atualização" }]],
   },
 ];

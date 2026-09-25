@@ -9,13 +9,16 @@ const initials = (name: string) =>
     .slice(0, 2)
     .toUpperCase();
 
-function Chip({ abbr, name }: { abbr: string; name: string }) {
+function Chip({ abbr, name, accent = false }: { abbr: string; name: string; accent?: boolean }) {
   return (
-    <li className="bg-white rounded-botao flex min-h-11 items-center gap-2.5 py-1.5 pr-4 pl-1.5">
-      <span aria-hidden className="bg-campo text-tinta flex size-8 items-center justify-center rounded-full text-xs font-extrabold">
+    <li className="flex w-20 flex-col items-center gap-1.5 text-center">
+      <span
+        aria-hidden
+        className={`flex size-12 items-center justify-center rounded-full border text-xs font-extrabold ${accent ? "bg-verde-certo border-verde-certo text-tinta" : "border-linha bg-white text-tinta"}`}
+      >
         {abbr}
       </span>
-      <span className="text-sm font-bold">{name}</span>
+      <span className="text-[11px] leading-tight font-bold">{name}</span>
     </li>
   );
 }
@@ -24,13 +27,13 @@ function Chip({ abbr, name }: { abbr: string; name: string }) {
 export function ChannelsStrip({ channels }: { channels: PurchaseChannels | null }) {
   if (!channels || (channels.retailers.length === 0 && !channels.hasStationeries)) return null;
   return (
-    <div className="mt-8">
+    <div className="bg-white rounded-card mt-4 flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
       <h3 className="text-base font-extrabold">{SITE_COPY.steps.channelsTitle}</h3>
-      <ul className="mt-3 flex flex-wrap gap-2.5">
+      <ul className="flex flex-wrap gap-x-3 gap-y-4 md:justify-end">
         {channels.retailers.map((r) => (
           <Chip key={r.slug} abbr={initials(r.name)} name={r.name} />
         ))}
-        {channels.hasStationeries ? <Chip abbr="PB" name={SITE_COPY.steps.stationeries} /> : null}
+        {channels.hasStationeries ? <Chip accent abbr="PB" name={SITE_COPY.steps.stationeries} /> : null}
       </ul>
     </div>
   );

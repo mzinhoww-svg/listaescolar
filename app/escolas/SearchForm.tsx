@@ -10,13 +10,16 @@ type Props = {
   neighborhood?: string;
   /** Filtros a preservar no envio (rede, município). */
   preserve?: Record<string, string>;
+  /** Campo Bairro visível (padrão). A landing o omite. */
+  showNeighborhood?: boolean;
+  submitLabel?: string;
 };
 
 /**
  * Busca como `<form method="get">`: funciona sem JS. O JS só acrescenta o botão de limpar.
  * Não envia `pagina`: uma nova busca sempre começa na página 1.
  */
-export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {} }: Props) {
+export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}, showNeighborhood = true, submitLabel = "Buscar" }: Props) {
   const [value, setValue] = useState(defaultValue);
   return (
     <form method="get" action="/escolas" role="search">
@@ -52,9 +55,10 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
           </button>
         ) : null}
         <button type="submit" className="bg-tinta text-papel rounded-botao h-10 shrink-0 px-4 text-sm font-extrabold">
-          Buscar
+          {submitLabel}
         </button>
       </div>
+      {showNeighborhood ? (
       <div className="mt-3 flex flex-col gap-1">
         <label htmlFor="bairro" className="text-texto-3 text-xs font-semibold">
           Bairro (opcional)
@@ -70,6 +74,7 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
           className="border-tinta focus-visible:outline-verde-fundo rounded-campo h-12 w-full border-[1.5px] bg-white px-3 text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
         />
       </div>
+      ) : null}
     </form>
   );
 }

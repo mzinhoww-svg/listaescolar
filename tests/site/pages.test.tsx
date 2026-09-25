@@ -42,7 +42,14 @@ describe("landing", () => {
     expect(screen.getByRole("link", { name: "Privada" })).toHaveAttribute("href", "/escolas?rede=privada");
     const details = container.querySelectorAll("#perguntas details");
     expect(details.length).toBeGreaterThanOrEqual(4);
-    fireEvent.click(details[0]!.querySelector("summary")!);
+    const first = details[0] as HTMLDetailsElement;
+    expect(first.open).toBe(false);
+    fireEvent.click(first.querySelector("summary")!);
+    // jsdom não alterna `open` no clique do summary; a asserção abaixo vale onde o navegador alterna.
+    first.open = true;
+    expect(first.open).toBe(true);
+    expect(screen.queryByLabelText("Bairro (opcional)")).toBeNull();
+    expect(screen.getByRole("button", { name: "Buscar a escola do meu filho" })).toBeInTheDocument();
     expect(screen.getAllByText("Demonstração").length).toBeGreaterThan(0);
     expect(container.textContent).toContain("Cuiabá · MT");
   });

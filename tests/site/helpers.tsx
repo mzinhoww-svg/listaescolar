@@ -1,6 +1,5 @@
 import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { vi } from "vitest";
 
 import SiteLayout from "@/app/(site)/layout";
 
@@ -11,8 +10,6 @@ export const CHANNELS = {
   ],
   hasStationeries: false,
 };
-
-export const channelsMock = vi.fn();
 
 /** Renderiza a página dentro do layout do grupo (site), como o Next faz. */
 export async function renderInSite(page: () => ReactElement | Promise<ReactElement>) {

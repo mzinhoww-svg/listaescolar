@@ -6,12 +6,12 @@ export const SITE_PAGES = {
   home: {
     title: "ListaCerta · Lista de material escolar",
     description:
-      "Encontre a lista oficial de material da escola, marque o que já tem e compare lojas. Piloto em Cuiabá, MT.",
+      "Encontre a lista oficial de material da escola e compare as opções de carrinho. Piloto em Cuiabá, MT.",
     path: "/",
   },
   comoFunciona: {
     title: "Como funciona · ListaCerta",
-    description: "Da lista oficial à compra certa: encontre a escola, compare lojas e confira item a item.",
+    description: "Da lista oficial à compra certa: encontre a escola, veja a lista item a item e compare as opções de carrinho.",
     path: "/como-funciona",
   },
   sobre: {
@@ -60,8 +60,8 @@ export const SITE_COPY = {
     title: "Sem adivinhar item, sem rodar papelaria",
     items: [
       { title: "Lista certa", text: "A lista vem da escola, não de foto no grupo." },
-      { title: "Marque o que já tem", text: "Itens de casa saem do carrinho." },
-      { title: "Compare lojas", text: "As lojas lado a lado, cada preço com origem e data." },
+      { title: "Veja item a item", text: "A lista oficial da escola, com cada item e a quantidade pedida." },
+      { title: "Monte o carrinho", text: "Compare as opções de compra e abra a loja que preferir; cada preço com origem e data." },
     ] satisfies Item[],
   },
   schools: {
@@ -69,7 +69,7 @@ export const SITE_COPY = {
     eyebrow: "Para escolas",
     title: "Publique uma vez. Pare de responder a mesma dúvida.",
     items: [
-      { title: "Envie o PDF", text: "A IA lê os itens, você só revisa." },
+      { title: "Envie o PDF", text: "Você envia o PDF da lista; os itens são lidos e revisados antes de a lista ir ao ar." },
       { title: "Link e QR code", text: "Pronto para o grupo de pais e o mural." },
       {
         title: "Sinalização para revisão",
@@ -84,9 +84,9 @@ export const SITE_COPY = {
     eyebrow: "Como funciona",
     title: "Encontre, compare, confira",
     items: [
-      { title: "Encontre a lista", text: "Busque a escola pelo nome ou INEP e marque o que já tem." },
+      { title: "Encontre a lista", text: "Busque a escola pelo nome ou INEP e abra a lista oficial da série." },
       { title: "Compare", text: "Compare lojas online ou peça orçamento à papelaria do bairro pelo WhatsApp." },
-      { title: "Confira", text: "Confira, item a item, tudo o que a escola pediu antes de comprar." },
+      { title: "Confira", text: "Veja a lista oficial item a item e confira o que a escola pediu antes de comprar." },
     ] satisfies Item[],
     channelsTitle: "Onde comprar",
     stationeries: "Papelarias do bairro",
@@ -127,8 +127,8 @@ export const SITE_COPY = {
       {
         n: "3",
         title: "Confira",
-        text: "Marque cada item conforme chega, sem esquecer nada da lista.",
-        screen: { head: "Lista de exemplo", sub: "Conferência item a item", items: ["Caderno universitário", "Lápis preto", "Borracha macia", "Cola bastão"], foot: "Você marca o que já tem e o que já comprou." },
+        text: "Volte à lista oficial e confira, item a item, o que a escola pediu.",
+        screen: { head: "Lista de exemplo", sub: "Lista oficial, item a item", items: ["Caderno universitário", "Lápis preto", "Borracha macia", "Cola bastão"], foot: "Cada item com a quantidade pedida pela escola." },
       },
     ],
   },
@@ -137,10 +137,9 @@ export const SITE_COPY = {
     stepsTitle: "Como funciona",
     steps: [
       { title: "A escola publica", text: "Lista oficial por série, revisada antes de ir ao ar." },
-      { title: "A família encontra", text: "Busca pela escola e marca o que já tem em casa." },
+      { title: "A família encontra", text: "Busca pela escola e abre a lista oficial da série." },
       { title: "A família compara", text: "Opções de carrinho: mais barato, recomendado, menos lojas ou papelaria local." },
     ] satisfies Item[],
     neutral: "A ListaCerta não vende material escolar: organiza, compara e leva você à loja que escolher.",
-    origin: "Piloto em Cuiabá · MT.",
-  },
+      },
 } as const;

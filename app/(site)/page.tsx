@@ -20,10 +20,10 @@ export default async function Landing() {
   return (
     <main id="conteudo" className="flex-1">
       <Hero />
-      <Section id={parents.id} eyebrow={parents.eyebrow} title={parents.title}>
+      <Section id={parents.id} eyebrow={parents.eyebrow} title={parents.title} tone="white">
         <FeatureGrid items={parents.items} />
       </Section>
-      <Section id={schools.id} eyebrow={schools.eyebrow} title={schools.title} dark>
+      <Section id={schools.id} eyebrow={schools.eyebrow} title={schools.title} tone="tinta">
         <FeatureGrid items={schools.items} dark />
         <div className="mt-8 flex flex-col gap-3">
           <Link
@@ -39,7 +39,7 @@ export default async function Landing() {
         <StepsSection items={steps.items} />
         <ChannelsStrip channels={channels} />
       </Section>
-      <Section id={faq.id} eyebrow={faq.eyebrow} title={faq.title}>
+      <Section id={faq.id} eyebrow={faq.eyebrow} title={faq.title} tone="white">
         <Faq items={faq.items} />
       </Section>
     </main>

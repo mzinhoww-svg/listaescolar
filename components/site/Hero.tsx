@@ -15,14 +15,14 @@ const CHIPS = [
 export function Hero() {
   const c = SITE_COPY.hero;
   return (
-    <section aria-labelledby="hero-t" className="mx-auto grid w-full max-w-[1200px] items-center gap-10 px-6 py-12 md:grid-cols-2 md:gap-16 md:py-20">
-      <div className="flex flex-col gap-5">
-        <p className="text-verde-fundo text-sm font-extrabold">{c.eyebrow}</p>
+    <section aria-labelledby="hero-t" className="bg-papel"><div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 items-center gap-10 px-6 py-12 md:grid-cols-2 md:gap-16 md:py-20">
+      <div className="flex min-w-0 flex-col gap-5">
+        <p className="text-verde-fundo text-xs font-extrabold tracking-[0.14em] uppercase">{c.eyebrow}</p>
         <h1 id="hero-t" className="text-[34px] leading-[1.05] font-extrabold tracking-[-0.035em] md:text-[56px]">
           {c.title}
         </h1>
         <p className="text-texto-2 text-base leading-relaxed font-medium md:text-lg">{c.lead}</p>
-        <SearchForm />
+        <SearchForm showNeighborhood={false} submitLabel="Buscar a escola do meu filho" />
         <nav aria-label="Buscar por rede" className="-mx-6 overflow-x-auto px-6 md:mx-0 md:px-0">
           <ul className="flex gap-2">
             {CHIPS.map((ch) => (
@@ -45,6 +45,6 @@ export function Hero() {
         </Link>
       </div>
       <HeroListCard />
-    </section>
+    </div></section>
   );
 }

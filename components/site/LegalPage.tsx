@@ -2,6 +2,7 @@ import { Fragment } from "react";
 
 import { LEGAL, PRELIMINARY_BANNER, type LegalSection } from "@/features/site/legal";
 
+import { MailIcon } from "./icons";
 import { Placeholder } from "./Placeholder";
 
 type Props = { title: string; sections: LegalSection[] };
@@ -13,6 +14,9 @@ export function LegalPage({ title, sections }: Props) {
         {PRELIMINARY_BANNER}
       </p>
       <h1 className="text-[32px] leading-[1.1] font-extrabold tracking-[-0.03em] md:text-5xl">{title}</h1>
+      <p className="text-texto-3 mt-3 text-[13px] font-bold">
+        Última atualização: <Placeholder label="data da última atualização" value={LEGAL.lastUpdated} />
+      </p>
       <ol className="mt-8 flex flex-col gap-7">
         {sections.map((s, i) => (
           <li key={s.title}>
@@ -33,6 +37,12 @@ export function LegalPage({ title, sections }: Props) {
           </li>
         ))}
       </ol>
+      <aside aria-label="Dúvidas" className="bg-white rounded-card mt-12 flex items-center gap-3 px-5 py-4 text-sm font-extrabold">
+        <MailIcon />
+        <p>
+          Dúvidas: <Placeholder label="e-mail do encarregado de dados" value={LEGAL.dpoEmail} />
+        </p>
+      </aside>
     </main>
   );
 }

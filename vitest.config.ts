@@ -14,6 +14,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     include: ["tests/**/*.test.{ts,tsx}"],
+    // tests/db roda em `pnpm test:db` (exige Supabase local).
+    exclude: ["tests/db/**", "node_modules/**"],
     globals: false,
   },
 });

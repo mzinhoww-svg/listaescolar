@@ -1,7 +1,27 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Client } from "pg";
 
+// Porta do Postgres local: lida do config da trilha (.track-workdir, gerado por scripts/supa.mjs) ou do
+// supabase/config.toml. Falha alto se o arquivo existir e a porta não for encontrada.
+function localDbPort(): number {
+  const candidates = [".track-workdir/supabase/config.toml", "supabase/config.toml"];
+  for (const rel of candidates) {
+    let toml: string;
+    try {
+      toml = readFileSync(resolve(process.cwd(), rel), "utf8");
+    } catch {
+      continue;
+    }
+    const match = /\[db\]\n(?:[^\n[][^\n]*\n|\n)*?port\s*=\s*(\d+)/.exec(toml);
+    if (!match?.[1]) throw new Error(`porta do [db] não encontrada em ${rel}`);
+    return Number(match[1]);
+  }
+  return 54322;
+}
+
 export const DATABASE_URL =
-  process.env.SUPABASE_DB_URL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+  process.env.SUPABASE_DB_URL ?? `postgresql://postgres:postgres@127.0.0.1:${localDbPort()}/postgres`;
 
 // audit_log é append-only: rodar estes testes em banco remoto deixaria linhas permanentes.
 const host = new URL(DATABASE_URL).hostname;

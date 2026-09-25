@@ -82,7 +82,7 @@ Ambiente e deploy:
 - Vercel: a proteção dos previews foi DESATIVADA pelo humano em 2026-09-25 (previews públicos; `X-Robots-Tag: noindex` em tudo fora da produção). REATIVAR antes de entrar dado real: checklist da S20 (D-074).
 - Vercel: `CRON_SECRET` (16 caracteres ou mais) nos ambientes e aceite do cron diário `/api/cron/leads-expire` no plano da conta (S14).
 - Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio; canonical, JSON-LD, links de login e do lead, OG, sitemap e QR dependem dele).
-- Supabase (staging): FEITO pelo orquestrador em 2026-09-25: `pg_cron` e `pg_net`, segredos `ocr_worker_url`/`ocr_worker_secret`/`audit_ip_pepper` no Vault, job `ocr-worker-tick` (inativo) e deploy da Edge Function `ocr-worker` (v1, `verify_jwt=false`, pelo MCP). O tick de teste voltou 401: `WORKER_SHARED_SECRET` da função e `ocr_worker_secret` do Vault não conferem (D-060). FALTA (humano): reconferir os dois valores no painel; depois o orquestrador repete o tick e ativa o job.
+- Supabase (staging): FEITO em 2026-09-25: `pg_cron`/`pg_net`, segredos no Vault, Edge Function `ocr-worker` (v1, `verify_jwt=false`) e job `ocr-worker-tick` ATIVO (a cada minuto). Tick de teste: 200 `status: ok` (D-060 resolvida). Falta o teste ponta a ponta no preview.
 - Rodar `scripts/ai-smoke.ts` com chave e modelos reais (tem custo; os agentes não rodam).
 - Supabase Auth hospedado: FEITO pelo humano em 2026-09-25 (Site URL, Redirect URLs incl. `https://listaescolare-*.vercel.app/**`, templates `magic_link` e `confirmation`); falta validar o link mágico em outro navegador no preview e SMTP próprio antes de produção (D-063). Referência do que foi configurado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
 - Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
@@ -112,4 +112,10 @@ Conteúdo e dados:
 - Sonnet nos implementadores e nas revisões comuns; Opus só nas revisões de segurança (RLS, cobrança, B2B e dados de menor).
 - Juntar correções pequenas numa única rodada.
 - Se o limite estiver perto do fim: registrar o estado neste arquivo e parar num ponto limpo, com push feito.
-- Bloqueio conhecido: o tick do worker devolve 401 até o `WORKER_SHARED_SECRET` da função bater com o `ocr_worker_secret` do Vault (D-060); o job de cron segue inativo. O classificador impede o orquestrador de copiar credencial de arquivo local para sistema remoto.
+- Bloqueio conhecido: o classificador impede o orquestrador de copiar credencial de arquivo local para sistema remoto e de mesclar PR revisado só por subagente ("Self-Approval"): esses itens vão para "Aguardando humano" (regra permanente no CLAUDE.md, seção Autonomia).
+
+
+## Aguardando humano
+Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
+
+- (vazia em 2026-09-25)

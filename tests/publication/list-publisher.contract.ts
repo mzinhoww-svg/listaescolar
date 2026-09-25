@@ -7,6 +7,8 @@ export type PublisherHarness = {
   publisher: ListPublisher;
   /** Arquiva a lista-alvo (escola, série, ano) para provar que a porta recusa lista arquivada. */
   archiveList(target: { schoolId: string; gradeSlug: string; schoolYear: number }): Promise<void> | void;
+  /** Faz a PRÓXIMA chamada falhar com um `PortError` transitório (queda de rede/banco simulada). */
+  failNextTransiently(): Promise<void> | void;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -87,6 +89,35 @@ export function runListPublisherContract(name: string, make: () => PublisherHarn
       const e = await rejection(publisher.publish(request({ items: [] })));
       expect(e.name).toBe("PortError");
       expect(e.transient).toBe(false);
+    });
+
+    it("duas chamadas simultâneas com a mesma chave: uma versão só e resultados iguais", async () => {
+      const { publisher } = await make();
+      const [a, b] = await Promise.all([publisher.publish(request()), publisher.publish(request())]);
+      expect(b).toEqual(a);
+      const next = await publisher.publish(request({ idempotencyKey: "10000000-0000-4000-8000-0000000000c7", submissionId: "10000000-0000-4000-8000-0000000000c7" }));
+      expect(next.previousVersionId).toBe(a.newVersionId);
+    });
+
+    it("erro transitório é tipado (PortError com transient true) e a repetição da mesma chave depois funciona", async () => {
+      const h = await make();
+      await h.failNextTransiently();
+      const e = await rejection(h.publisher.publish(request()));
+      expect(e.name).toBe("PortError");
+      expect(e.transient).toBe(true);
+      expect(e.code).toMatch(/^[a-z][a-z0-9_]{0,59}$/);
+      const ok = await h.publisher.publish(request());
+      expect(ok.newVersionId).toMatch(UUID);
+    });
+
+    it("mesma chave com payload diferente é recusada com erro permanente", async () => {
+      const { publisher } = await make();
+      await publisher.publish(request());
+      const e = await rejection(publisher.publish(request({ gradeSlug: "ef-5" })));
+      expect(e.name).toBe("PortError");
+      expect(e.transient).toBe(false);
+      const e2 = await rejection(publisher.publish(request({ items: [{ position: 1, originalName: "Outro", normalizedName: "outro", category: "papelaria", quantity: 1, unit: null, confidence: 0.9 }] })));
+      expect(e2.transient).toBe(false);
     });
   });
 }

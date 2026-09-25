@@ -542,13 +542,43 @@ describe("handleTick: publicação automática (S09)", () => {
     expect(await handleTick(q.queue, deps)).toMatchObject({ done: 1, errors: 0 });
   });
 
-  it("decide não roda para mensagem duplicada (skipped) nem para job que falhou", async () => {
+  it("decide não roda para mensagem duplicada (skipped)", async () => {
     const { deps, db, clock } = setup();
     db.jobs.get("j1")!.submissionId = null;
     const decide = vi.fn(async () => ({}));
     const q = fakeQueue(clock, ["j1"]);
     await handleTick(q.queue, { ...deps, decide });
     expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("decide não roda para job que falhou (extração com erro), nem para job já concluído", async () => {
+    const decide = vi.fn(async () => ({}));
+    const failing = setup({ extract: async () => { throw new Error("provedor fora"); } });
+    const q = fakeQueue(failing.clock, ["j1"]);
+    const s = await handleTick(q.queue, { ...failing.deps, decide });
+    expect(s).toMatchObject({ retry: 1, done: 0 });
+    expect(failing.db.jobs.get("j1")?.status).toBe("retrying");
+    expect(decide).not.toHaveBeenCalled();
+    const ok = setup();
+    await processJob("j1", ok.deps); // já concluído
+    await handleTick(fakeQueue(ok.clock, ["j1"]).queue, { ...ok.deps, decide });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("decide recebe o prazo restante do tick como budgetMs", async () => {
+    const { deps, clock } = setup({ extract: async () => { clock.advance(30_000); return RESULT; } });
+    const budgets: number[] = [];
+    const decide = vi.fn(async (_id: string, o: { budgetMs: number }) => { budgets.push(o.budgetMs); return {}; });
+    await handleTick(fakeQueue(clock, ["j1"]).queue, { ...deps, decide }, { deadlineMs: 100_000 });
+    expect(budgets).toEqual([70_000]);
+  });
+
+  it("o resumo do sweep entra na resposta do tick", async () => {
+    const { deps, clock } = setup();
+    const s = await handleTick(fakeQueue(clock, []).queue, deps, { sweep: async () => ({ found: 2, handled: 1, skipped: 0, errors: 1 }) });
+    expect(s.sweep).toEqual({ found: 2, handled: 1, skipped: 0, errors: 1 });
+    const none = await handleTick(fakeQueue(clock, []).queue, deps);
+    expect("sweep" in none).toBe(false);
   });
 
   it("sweep roda no fim do tick com o prazo restante; o erro do sweep é reportado sem derrubar", async () => {

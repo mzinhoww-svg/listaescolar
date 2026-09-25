@@ -40,6 +40,20 @@ describe("submitList: decisão de publicação inline (S09)", () => {
     expect("publication" in r).toBe(false);
   });
 
+  it("erro do decide é registrado no log só com o código (sem mensagem nem conteúdo)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const decide = vi.fn(async () => { throw new Error("banco fora para a@b.com"); });
+      await submitList(input(), { pipeline, store: store(), queue: queue(), clock: new FakeClock(), publication: { decide } });
+      expect(spy).toHaveBeenCalledTimes(1);
+      const line = String(spy.mock.calls[0]?.[0]);
+      expect(JSON.parse(line)).toEqual({ level: "error", fn: "submissions.decide_inline", code: "decide_error" });
+      expect(line).not.toContain("a@b.com");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("decide que estoura 3 s não segura o envio (e não muda o resultado)", async () => {
     const clock = new FakeClock();
     const decide = vi.fn(() => new Promise<{ status: string }>(() => undefined));

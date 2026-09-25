@@ -10,7 +10,10 @@ import {
   type PublicationContextReader,
   type PublicationStore,
   type PublishItem,
+  type PublishRequest,
+  type PublishResult,
   type ListPublisher,
+  publishResultSchema,
   type StoredInput,
   type VerdictPayload,
 } from "./ports.ts";
@@ -48,6 +51,11 @@ export type DecideResult =
 export const PUBLISH_LEASE_SECONDS = 120;
 /** Teto de uma chamada à porta. */
 export const PUBLISH_TIMEOUT_MS = 45_000;
+/** Com menos que isto do prazo do tick, a porta não é chamada (fica `approved`; o varredor do próximo tick retoma). */
+export const MIN_PUBLISH_WINDOW_MS = 5_000;
+
+/** `budgetMs`: prazo restante do tick de quem chamou (worker ou varredor); sem ele vale só o teto de 45 s. */
+export type DecideOptions = { budgetMs?: number };
 /** `approved` sem publicação há mais que isto vira `publish_failed` e volta a `human_review`. */
 export const PUBLISH_EXPIRY_SECONDS = 3600;
 
@@ -96,43 +104,85 @@ function alert(deps: PublicationDeps, code: string, submissionId: string): void 
   }
 }
 
-/** Chama a porta com teto de tempo; estouro = erro transitório (a chamada em voo é idempotente pela chave). */
-async function publishWithTimeout(publisher: ListPublisher, req: Parameters<ListPublisher["publish"]>[0], clock: PublicationClock) {
+/**
+ * Chama a porta com teto de tempo e `AbortSignal`; estouro = erro transitório (a chamada em voo é idempotente pela
+ * chave). Resultado que chega DEPOIS do teto não se perde: `settleLate` conclui (envio ainda `approved`) ou registra
+ * `publish_orphaned` (já expirou) e sempre alerta.
+ */
+async function publishWithTimeout(id: string, publisher: ListPublisher, req: PublishRequest, timeoutMs: number, deps: PublicationDeps) {
+  const abort = new AbortController();
   const timer = new AbortController();
-  const timeout = clock.delay(PUBLISH_TIMEOUT_MS, timer.signal).then((): never => {
+  let timedOut = false;
+  const call = Promise.resolve().then(() => publisher.publish({ ...req, signal: abort.signal }));
+  const timeout = deps.clock.delay(timeoutMs, timer.signal).then((): never => {
+    timedOut = true;
+    abort.abort();
     throw new PortError("publish_timeout", true);
   });
   try {
-    return await Promise.race([Promise.resolve().then(() => publisher.publish(req)), timeout]);
+    return await Promise.race([call, timeout]);
+  } catch (e) {
+    if (timedOut) call.then((late) => settleLate(id, late, deps), () => undefined);
+    throw e;
   } finally {
     timer.abort();
   }
 }
 
+/** Resultado tardio: valida, conclui pelo `complete` (que já decide entre `completed` e `orphaned`) e alerta. */
+async function settleLate(id: string, late: unknown, deps: PublicationDeps): Promise<void> {
+  try {
+    const parsed = publishResultSchema.safeParse(late);
+    if (!parsed.success) return alert(deps, "publish_result_invalid", id);
+    const done = await deps.store.complete(id, { newVersionId: parsed.data.newVersionId, previousVersionId: parsed.data.previousVersionId });
+    alert(deps, done === "orphaned" ? "published_after_failure" : done === "not_approved" ? "published_not_recorded" : "publish_result_late", id);
+  } catch {
+    alert(deps, "publish_result_late_unrecorded", id);
+  }
+}
+
 /** Publicação: lease -> porta -> registro. O veredito `auto_publish` já está gravado (envio `approved`). */
-async function publishStage(id: string, input: StoredInput, r: ExtractionResult, ctx: PublicationContext | null, deps: PublicationDeps): Promise<DecideResult> {
+async function publishStage(
+  id: string,
+  input: StoredInput,
+  r: ExtractionResult,
+  ctx: PublicationContext | null,
+  deps: PublicationDeps,
+  deadlineAt: number | null,
+): Promise<DecideResult> {
   const { store, publisher } = deps;
   const items = toPublishItems(r);
   if (!publisher) return failStage(id, "publisher_unavailable", deps);
   if (!ctx?.gradeSlug || input.schoolId === null || input.schoolYear === null) return failStage(id, "context_unavailable", deps);
   if (!items || items.length === 0) return failStage(id, "invalid_extraction_result", deps);
 
+  const timeoutMs = deadlineAt === null ? PUBLISH_TIMEOUT_MS : Math.min(PUBLISH_TIMEOUT_MS, deadlineAt - deps.clock.now());
+  if (timeoutMs < MIN_PUBLISH_WINDOW_MS) return { status: "publish_pending" }; // sem folga no tick: o varredor retoma
+
   const lease = await store.beginPublish(id, PUBLISH_LEASE_SECONDS);
   if (lease === "busy") return { status: "publish_pending" };
   if (lease !== "leased") return { status: "already_decided" };
 
-  let out;
+  let out: PublishResult;
   try {
     out = await publishWithTimeout(
+      id,
       publisher,
       { idempotencyKey: id, submissionId: id, schoolId: input.schoolId, gradeSlug: ctx.gradeSlug, schoolYear: input.schoolYear, source: "school_upload", actor: { kind: "system" }, items },
-      deps.clock,
+      timeoutMs,
+      deps,
     );
   } catch (e) {
     const known = asPortError(e);
     if (known && !known.transient) return failStage(id, REASON_ALPHABET.test(known.code) ? known.code : "publish_rejected", deps);
     return { status: "publish_pending" }; // transitório ou desconhecido: o varredor repete; a lease vence sozinha
   }
+  const checked = publishResultSchema.safeParse(out);
+  if (!checked.success) {
+    alert(deps, "publish_result_invalid", id);
+    return failStage(id, "invalid_publish_result", deps);
+  }
+  out = checked.data;
   const done = await store.complete(id, { newVersionId: out.newVersionId, previousVersionId: out.previousVersionId });
   if (done === "orphaned" || done === "not_approved") {
     // A porta publicou, mas o envio já não está `approved` (o expirador venceu a corrida ou o estado mudou).
@@ -158,8 +208,9 @@ async function loadContext(input: StoredInput, deps: PublicationDeps): Promise<{
   }
 }
 
-export async function decideListPublication(submissionId: string, deps: PublicationDeps): Promise<DecideResult> {
+export async function decideListPublication(submissionId: string, deps: PublicationDeps, opts: DecideOptions = {}): Promise<DecideResult> {
   const startedAt = deps.clock.now();
+  const deadlineAt = opts.budgetMs === undefined ? null : startedAt + opts.budgetMs;
   const input = await deps.store.loadInput(submissionId);
   const stage = stageOf(input.status);
   if (stage === "not_ready") return { status: "not_ready" };
@@ -198,14 +249,15 @@ export async function decideListPublication(submissionId: string, deps: Publicat
   const recorded = await deps.store.recordVerdict(submissionId, payload);
   if (recorded !== "recorded") return { status: recorded };
   if (verdict.outcome === "human_review" || !result) return { status: "human_review", reasons: verdict.reasons };
-  return publishStage(submissionId, input, result, loaded.ctx, deps);
+  return publishStage(submissionId, input, result, loaded.ctx, deps, deadlineAt);
 }
 
 /**
  * Retoma um envio `approved` (veredito `auto_publish` gravado, publicação pendente). Primeiro o expirador: `approved`
  * há mais de 1 h e sem chamada em andamento vira `publish_failed`; com chamada em andamento (lease) não se toca.
  */
-export async function resumePublication(submissionId: string, deps: PublicationDeps): Promise<DecideResult> {
+export async function resumePublication(submissionId: string, deps: PublicationDeps, opts: DecideOptions = {}): Promise<DecideResult> {
+  const deadlineAt = opts.budgetMs === undefined ? null : deps.clock.now() + opts.budgetMs;
   const exp = await deps.store.expire(submissionId, PUBLISH_EXPIRY_SECONDS);
   if (exp === "failed") return { status: "publish_failed", reason: "publish_expired" };
   if (exp === "in_progress") return { status: "publish_pending" };
@@ -216,7 +268,33 @@ export async function resumePublication(submissionId: string, deps: PublicationD
   const parsed = extractionResultSchema.safeParse(input.result);
   if (!parsed.success) return failStage(submissionId, "invalid_extraction_result", deps);
   if (!deps.publisher) return failStage(submissionId, "publisher_unavailable", deps);
+
+  // Reavalia interruptor e contexto: entre a tentativa e a retomada o interruptor pode ter sido desligado, a escola
+  // suspensa ou o vínculo removido. Transitório = tenta depois; qualquer regra que falhe = falha com o primeiro código.
+  let settings;
+  try {
+    settings = await deps.settings.load();
+  } catch {
+    return { status: "retry_later" };
+  }
+  if (!settings || !settings.autoPublishEnabled) return failStage(submissionId, "auto_publish_disabled", deps);
   const loaded = await loadContext(input, deps);
   if (loaded === "retry") return { status: "retry_later" };
-  return publishStage(submissionId, input, parsed.data, loaded.ctx, deps);
+  const verdict = evaluatePublication(
+    {
+      submissionId,
+      schoolId: input.schoolId,
+      submittedBy: input.submittedBy,
+      source: input.source,
+      grade: input.grade,
+      schoolYear: input.schoolYear,
+      isDemo: input.isDemo,
+      result: input.result,
+      context: loaded.ctx,
+      publisherAvailable: true,
+    },
+    settings,
+  );
+  if (verdict.outcome !== "auto_publish") return failStage(submissionId, verdict.reasons[0] ?? "context_unavailable", deps);
+  return publishStage(submissionId, input, parsed.data, loaded.ctx, deps, deadlineAt);
 }

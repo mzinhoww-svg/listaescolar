@@ -30,14 +30,20 @@ describe("decideListPublication: fluxo feliz", () => {
     expect(k.publisher.calls[0]!.items[0]).toMatchObject({ position: 1, originalName: "Caderno", normalizedName: "caderno", category: "papelaria", quantity: 2, unit: "un" });
   });
 
-  it("segunda publicação da mesma lista: previousVersionId = a versão anterior", async () => {
+  it("segunda publicação da mesma lista, pelo SERVIÇO: previousVersionId repassado à porta e gravado", async () => {
     const k = kit();
     const first = await decideListPublication(SUBMISSION, k.deps);
-    // segundo envio (outro id) na mesma escola/série/ano, pela mesma porta
-    const second = await k.publisher.publish({ ...(k.publisher.calls[0] as PublishRequest), idempotencyKey: "outro", submissionId: "outro" });
+    // segundo envio (outro id) na mesma escola/série/ano: outro store, a MESMA porta
+    const SECOND = "10000000-0000-4000-8000-0000000000bb";
+    const k2 = kit({ publisher: k.publisher });
+    const second = await decideListPublication(SECOND, k2.deps);
     expect(first.status).toBe("auto_published");
-    if (first.status !== "auto_published") return;
+    expect(second.status).toBe("auto_published");
+    if (first.status !== "auto_published" || second.status !== "auto_published") return;
+    expect(first.previousVersionId).toBeNull();
     expect(second.previousVersionId).toBe(first.newVersionId);
+    expect(k.publisher.calls.map((c) => c.idempotencyKey)).toEqual([SUBMISSION, SECOND]);
+    expect(k2.store.rows.at(-1)).toMatchObject({ decision: "published", previousVersionId: first.newVersionId, newVersionId: second.newVersionId });
   });
 
   it("payload do veredito: só chaves permitidas e códigos do alfabeto; sem texto do documento", async () => {
@@ -229,7 +235,7 @@ describe("decideListPublication: concorrência e corridas", () => {
     k.deps.publisher = { publish: spy };
     expect(await resumePublication(SUBMISSION, k.deps)).toEqual({ status: "publish_pending" });
     expect(spy).not.toHaveBeenCalled();
-    release({ listId: "l", previousVersionId: null, newVersionId: "70000000-0000-4000-8000-000000000001" });
+    release({ listId: "30000000-0000-4000-8000-000000000001", previousVersionId: null, newVersionId: "70000000-0000-4000-8000-000000000001" });
     expect((await first).status).toBe("auto_published");
   });
 
@@ -253,7 +259,7 @@ describe("decideListPublication: concorrência e corridas", () => {
     expect(sweeper).toEqual({ status: "publish_pending" });
     expect(k.store.status).toBe("approved");
     expect(k.store.rows.map((x) => x.decision)).toEqual(["auto_publish"]);
-    release({ listId: "l", previousVersionId: null, newVersionId: "70000000-0000-4000-8000-000000000002" });
+    release({ listId: "30000000-0000-4000-8000-000000000001", previousVersionId: null, newVersionId: "70000000-0000-4000-8000-000000000002" });
     expect((await inFlight).status).toBe("auto_published");
     expect(k.store.status).toBe("published");
   });
@@ -282,5 +288,118 @@ describe("decideListPublication: concorrência e corridas", () => {
     k.deps.onAlert = () => { throw new Error("log fora do ar"); };
     k.deps.publisher = { publish: async (req) => { const o = await real.publish(req); await k.store.fail(SUBMISSION, "publish_expired"); return o; } };
     expect((await decideListPublication(SUBMISSION, k.deps)).status).toBe("publish_orphaned");
+  });
+});
+
+describe("resumePublication: reavalia interruptor e contexto (I-1)", () => {
+  const flaky = () => kit({ publisher: { publish: async () => { throw transient("port_down"); } } });
+
+  it("aprovado + transitório, depois interruptor desligado, depois varredura: publish_failed/auto_publish_disabled, porta não chamada", async () => {
+    const k = flaky();
+    await decideListPublication(SUBMISSION, k.deps);
+    expect(k.store.status).toBe("approved");
+    const spy = vi.fn(async (r: PublishRequest) => k.publisher.publish(r));
+    k.deps.publisher = { publish: spy };
+    k.deps.settings = { load: async () => settings({ autoPublishEnabled: false }) };
+    k.clock.advance(200_000);
+    expect(await resumePublication(SUBMISSION, k.deps)).toEqual({ status: "publish_failed", reason: "auto_publish_disabled" });
+    expect(spy).not.toHaveBeenCalled();
+    expect(k.store.status).toBe("human_review");
+  });
+
+  it("settings nulo na retomada: auto_publish_disabled; settings transitório: retry_later", async () => {
+    const k = flaky();
+    await decideListPublication(SUBMISSION, k.deps);
+    k.clock.advance(200_000);
+    k.deps.settings = { load: async () => { throw transient("settings_unavailable"); } };
+    expect(await resumePublication(SUBMISSION, k.deps)).toEqual({ status: "retry_later" });
+    expect(k.store.status).toBe("approved");
+    k.deps.settings = { load: async () => null };
+    expect(await resumePublication(SUBMISSION, k.deps)).toEqual({ status: "publish_failed", reason: "auto_publish_disabled" });
+  });
+
+  it("escola suspensa ou vínculo removido entre a tentativa e a retomada: falha com o primeiro código, sem chamar a porta", async () => {
+    for (const [ctx, code] of [
+      [goodContext({ school: { verification: "suspended", municipalityEnabled: true } }), "school_suspended"],
+      [goodContext({ submitterLinked: false }), "submitter_not_linked"],
+    ] as const) {
+      const k = flaky();
+      await decideListPublication(SUBMISSION, k.deps);
+      const spy = vi.fn(async (r: PublishRequest) => k.publisher.publish(r));
+      k.deps.publisher = { publish: spy };
+      k.deps.context = { load: async () => ctx };
+      k.clock.advance(200_000);
+      expect(await resumePublication(SUBMISSION, k.deps)).toEqual({ status: "publish_failed", reason: code });
+      expect(spy).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe("publicação: sinal, resultado tardio, resultado inválido e prazo (I-3, M-1)", () => {
+  const LIST = "30000000-0000-4000-8000-000000000001";
+  const VER = "70000000-0000-4000-8000-000000000009";
+
+  it("a porta recebe um AbortSignal que é abortado no teto de 45 s", async () => {
+    let seen: AbortSignal | undefined;
+    const k = kit({ publisher: { publish: (req) => { seen = req.signal; return new Promise<PublishResult>(() => undefined); } } });
+    const p = decideListPublication(SUBMISSION, k.deps);
+    await vi.waitFor(() => expect(seen).toBeDefined());
+    expect(seen!.aborted).toBe(false);
+    k.clock.advance(45_000);
+    expect(await p).toEqual({ status: "publish_pending" });
+    expect(seen!.aborted).toBe(true);
+  });
+
+  it("resultado tardio com o envio ainda approved: conclui com complete e registra alerta", async () => {
+    let release!: (r: PublishResult) => void;
+    const k = kit({ publisher: { publish: () => new Promise<PublishResult>((res) => { release = res; }) } });
+    const p = decideListPublication(SUBMISSION, k.deps);
+    await vi.waitFor(() => expect(k.clock.pending()).toBeGreaterThan(0));
+    k.clock.advance(45_000);
+    expect(await p).toEqual({ status: "publish_pending" });
+    release({ listId: LIST, previousVersionId: null, newVersionId: VER });
+    await vi.waitFor(() => expect(k.store.status).toBe("published"));
+    expect(k.store.rows.map((x) => x.decision)).toEqual(["auto_publish", "published"]);
+    expect(k.alerts).toEqual([{ code: "publish_result_late", submissionId: SUBMISSION }]);
+  });
+
+  it("resultado tardio com o envio já expirado: publish_orphaned e alerta", async () => {
+    let release!: (r: PublishResult) => void;
+    const k = kit({ publisher: { publish: () => new Promise<PublishResult>((res) => { release = res; }) } });
+    const p = decideListPublication(SUBMISSION, k.deps);
+    await vi.waitFor(() => expect(k.clock.pending()).toBeGreaterThan(0));
+    k.clock.advance(45_000);
+    await p;
+    await k.store.fail(SUBMISSION, "publish_expired");
+    release({ listId: LIST, previousVersionId: null, newVersionId: VER });
+    await vi.waitFor(() => expect(k.store.rows.map((x) => x.decision)).toContain("publish_orphaned"));
+    expect(k.alerts.map((a) => a.code)).toContain("published_after_failure");
+  });
+
+  it("resultado da porta com id inválido: erro permanente com código estável (não 22P02)", async () => {
+    const k = kit({ publisher: { publish: async () => ({ listId: LIST, previousVersionId: null, newVersionId: "nao-e-uuid" }) } });
+    expect(await decideListPublication(SUBMISSION, k.deps)).toEqual({ status: "publish_failed", reason: "invalid_publish_result" });
+    expect(k.store.calls.complete).toBe(0);
+    expect(k.store.status).toBe("human_review");
+    expect(k.alerts).toEqual([{ code: "publish_result_invalid", submissionId: SUBMISSION }]);
+  });
+
+  it("teto da chamada = min(45 s, prazo restante do tick); sem folga, não chama a porta", async () => {
+    const k = kit();
+    const spy = vi.fn(async (r: PublishRequest) => k.publisher.publish(r));
+    k.deps.publisher = { publish: spy };
+    expect(await decideListPublication(SUBMISSION, k.deps, { budgetMs: 1_000 })).toEqual({ status: "publish_pending" });
+    expect(spy).not.toHaveBeenCalled();
+    expect(k.store.status).toBe("approved");
+
+    let seen: AbortSignal | undefined;
+    const k2 = kit({ publisher: { publish: (req) => { seen = req.signal; return new Promise<PublishResult>(() => undefined); } } });
+    const p = decideListPublication(SUBMISSION, k2.deps, { budgetMs: 20_000 });
+    await vi.waitFor(() => expect(seen).toBeDefined());
+    k2.clock.advance(19_000);
+    expect(seen!.aborted).toBe(false); // o teto é o que resta do tick (20 s), não 45 s
+    k2.clock.advance(1_000);
+    expect(await p).toEqual({ status: "publish_pending" });
+    expect(seen!.aborted).toBe(true);
   });
 });

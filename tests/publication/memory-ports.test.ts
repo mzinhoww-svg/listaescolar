@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { PortError } from "../../supabase/functions/_shared/publication/ports";
 import { MemoryListPublisher, MemoryPublicationContextReader, parsePublicationFixture } from "../../supabase/functions/_shared/publication/memory";
 import { runListPublisherContract, request } from "./list-publisher.contract";
 
 runListPublisherContract("MemoryListPublisher", () => {
   const publisher = new MemoryListPublisher();
-  return { publisher, archiveList: (t) => publisher.archive(t) };
+  return { publisher, archiveList: (t) => publisher.archive(t), failNextTransiently: () => publisher.failNext(new PortError("port_down", true)) };
 });
 
 const SCHOOL = "50000000-0000-4000-8000-0000000000c1";

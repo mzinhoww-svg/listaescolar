@@ -149,12 +149,29 @@ async function decideInline(
   const timer = new AbortController();
   try {
     return await Promise.race([
-      decider.decide(submissionId).then((r): { status: string } | null => ({ status: r.status }), (): null => null),
+      decider.decide(submissionId).then(
+        (r): { status: string } | null => ({ status: r.status }),
+        (e): null => {
+          logInlineError(e);
+          return null;
+        },
+      ),
       clock.delay(PUBLICATION_INLINE_TIMEOUT_MS, timer.signal).then((): null => null),
     ]);
   } catch {
     return null;
   } finally {
     timer.abort();
+  }
+}
+
+/** Log do erro da decisão inline: só o código (nunca mensagem, stack ou conteúdo do envio). */
+function logInlineError(e: unknown): void {
+  const code = (e as { code?: unknown } | null)?.code;
+  const safe = typeof code === "string" && /^[a-z][a-z0-9_]{0,59}$/.test(code) ? code : "decide_error";
+  try {
+    console.error(JSON.stringify({ level: "error", fn: "submissions.decide_inline", code: safe }));
+  } catch {
+    // o log nunca derruba o envio
   }
 }

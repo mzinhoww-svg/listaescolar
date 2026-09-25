@@ -49,35 +49,51 @@ const keyOf = (k: ListKey): string => `${k.schoolId}|${k.gradeSlug}|${k.schoolYe
 
 type MemList = { listId: string; status: "published" | "archived"; versions: string[] };
 
-/** Publicador em memória: idempotente por `idempotencyKey`, versão anterior = a publicada antes na mesma lista. */
+type Fingerprint = string;
+const fingerprint = (r: PublishRequest): Fingerprint => JSON.stringify([r.schoolId, r.gradeSlug, r.schoolYear, r.items]);
+
+/**
+ * Publicador em memória: idempotente por `idempotencyKey` (mesma chave com outro payload = erro permanente),
+ * versão anterior = a publicada antes na mesma lista, ids aleatórios. Só vale dentro de UM processo: app (Next) e
+ * worker (Edge Function) são processos distintos e NÃO compartilham este estado; é aparato de teste/E2E local.
+ */
 export class MemoryListPublisher implements ListPublisher {
   readonly calls: PublishRequest[] = [];
   private readonly lists = new Map<string, MemList>();
-  private readonly done = new Map<string, PublishResult>();
-  private counter = 0;
+  private readonly done = new Map<string, { fp: Fingerprint; out: PublishResult }>();
+  private nextError: PortError | null = null;
 
-  private nextId(prefix: string): string {
-    this.counter += 1;
-    return `${prefix}0000000-0000-4000-8000-${String(this.counter).padStart(12, "0")}`;
+  /** Gancho de teste da suíte de contrato: a PRÓXIMA chamada falha com este erro (uma vez). */
+  failNext(e: PortError): void {
+    this.nextError = e;
   }
 
   async publish(req: PublishRequest): Promise<PublishResult> {
     this.calls.push(req);
+    if (this.nextError) {
+      const e = this.nextError;
+      this.nextError = null;
+      throw e;
+    }
+    if (req.signal?.aborted) throw new PortError("publish_aborted", true);
     const again = this.done.get(req.idempotencyKey);
-    if (again) return again;
+    if (again) {
+      if (again.fp !== fingerprint(req)) throw new PortError("idempotency_conflict", false);
+      return again.out;
+    }
     if (req.items.length === 0) throw new PortError("no_items", false);
     const key = keyOf(req);
     let list = this.lists.get(key);
     if (list?.status === "archived") throw new PortError("list_archived", false);
     if (!list) {
-      list = { listId: this.nextId("3"), status: "published", versions: [] };
+      list = { listId: crypto.randomUUID(), status: "published", versions: [] };
       this.lists.set(key, list);
     }
     const previousVersionId = list.versions.at(-1) ?? null;
-    const newVersionId = this.nextId("4");
+    const newVersionId = crypto.randomUUID();
     list.versions.push(newVersionId);
     const out: PublishResult = { listId: list.listId, previousVersionId, newVersionId };
-    this.done.set(req.idempotencyKey, out);
+    this.done.set(req.idempotencyKey, { fp: fingerprint(req), out });
     return out;
   }
 

@@ -75,4 +75,34 @@ describe("runPublicationSweep", () => {
     expect(s.handled).toBe(1);
     expect(s.skipped).toBe(1);
   });
+
+  it("onError recebe só código e submissionId (nunca a mensagem)", async () => {
+    const k = kit();
+    k.clock.advance(60_000);
+    vi.spyOn(k.store, "loadInput").mockRejectedValueOnce(new Error("db down para a@b.com"));
+    const seen: unknown[] = [];
+    await runPublicationSweep(k.deps, { limit: 10, deadlineMs: 30_000, onError: (e) => seen.push(e) });
+    expect(seen).toEqual([{ code: "sweep_item_error", submissionId: SUBMISSION }]);
+    expect(JSON.stringify(seen)).not.toContain("a@b.com");
+    const k2 = kit();
+    k2.clock.advance(60_000);
+    vi.spyOn(k2.store, "loadInput").mockRejectedValueOnce(transient("store_down"));
+    const seen2: unknown[] = [];
+    await runPublicationSweep(k2.deps, { limit: 10, deadlineMs: 30_000, onError: (e) => { seen2.push(e); throw new Error("log fora"); } });
+    expect(seen2).toEqual([{ code: "store_down", submissionId: SUBMISSION }]); // erro no log não derruba o varredor
+  });
+
+  it("cada envio recebe o prazo restante: o teto da chamada à porta acompanha o que resta do tick", async () => {
+    const k = kit();
+    k.clock.advance(60_000);
+    let seen: AbortSignal | undefined;
+    k.deps.publisher = { publish: (req) => { seen = req.signal; return new Promise(() => undefined); } };
+    const p = runPublicationSweep(k.deps, { limit: 10, deadlineMs: 15_000 });
+    await vi.waitFor(() => expect(seen).toBeDefined());
+    k.clock.advance(14_000);
+    expect(seen!.aborted).toBe(false);
+    k.clock.advance(1_000);
+    await vi.waitFor(() => expect(seen!.aborted).toBe(true));
+    expect(await p).toMatchObject({ handled: 1, errors: 0 });
+  });
 });

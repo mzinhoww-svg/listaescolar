@@ -72,7 +72,9 @@ export type WorkerDeps = {
    * Decisão de publicação (S09): chamada com o id do envio DEPOIS de `jobs.complete`. Nunca muda o resultado do job:
    * a exceção vai a `onDecideError` (o tick a reporta, sanitizada) e o varredor cobre.
    */
-  decide?: (submissionId: string) => Promise<unknown>;
+  decide?: (submissionId: string, opts: { budgetMs: number }) => Promise<unknown>;
+  /** Instante (relógio do worker) em que o tick acaba; `decide` recebe o que resta como `budgetMs`. */
+  deadlineAt?: number;
   onDecideError?: (e: unknown) => void;
 };
 
@@ -231,7 +233,8 @@ export async function processMessage(jobId: string, deps: WorkerDeps): Promise<M
   });
   if (deps.decide) {
     try {
-      await deps.decide(job.submissionId);
+      const budgetMs = deps.deadlineAt === undefined ? TICK_DEADLINE_MS : Math.max(0, deps.deadlineAt - deps.clock.now());
+      await deps.decide(job.submissionId, { budgetMs });
     } catch (e) {
       try {
         deps.onDecideError?.(e);
@@ -247,7 +250,13 @@ export async function processJob(jobId: string, deps: WorkerDeps): Promise<JobOu
   return (await processMessage(jobId, deps)).outcome;
 }
 
-export type TickSummary = Record<JobOutcome, number> & { errors: number; read: number; deferred: number };
+export type TickSummary = Record<JobOutcome, number> & {
+  errors: number;
+  read: number;
+  deferred: number;
+  /** Resumo do varredor da publicação (contagens), quando rodou. */
+  sweep?: Record<string, number>;
+};
 export type TickError = { stage: "requeue" | "read" | "message" | "decide" | "sweep"; jobId?: string; message: string };
 
 /**
@@ -284,7 +293,8 @@ export async function handleTick(
   const left = deadline - (deps.clock.now() - start);
   if (opts.sweep && left >= MIN_SWEEP_WINDOW_MS) {
     try {
-      await opts.sweep(left);
+      const swept = await opts.sweep(left);
+      if (swept && typeof swept === "object") summary.sweep = swept as Record<string, number>;
     } catch (e) {
       report("sweep", e);
     }
@@ -319,6 +329,7 @@ export async function handleTick(
         const r = await processMessage(m.jobId, {
           ...deps,
           timeoutMs: Math.min(deps.timeoutMs ?? WORKER_TIMEOUT_MS, remaining),
+          deadlineAt: start + deadline,
           onDecideError: (e) => report("decide", e, m.jobId ?? undefined),
         });
         summary[r.outcome] += 1;

@@ -153,9 +153,14 @@ Deno.serve(async (req) => {
     loadInput,
     clock,
     random: Math.random,
-    decide: (submissionId) => decideListPublication(submissionId, publication),
+    decide: (submissionId, o) => decideListPublication(submissionId, publication, o),
   }, {
-    sweep: (remainingMs) => runPublicationSweep(publication, { limit: 10, deadlineMs: remainingMs }),
+    sweep: (remainingMs) => runPublicationSweep(publication, {
+      limit: 10,
+      deadlineMs: remainingMs,
+      // por envio: só código e id, nunca conteúdo
+      onError: (e) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", stage: "sweep_item", ...e })),
+    }),
     // erro de infra do tick: sem PII (o core já sanitiza) e sem derrubar a resposta
     onError: (e) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", ...e })),
   });

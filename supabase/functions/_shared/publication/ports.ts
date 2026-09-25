@@ -1,6 +1,7 @@
 // Portas da decisão de publicação (ADR-004): efeitos entre trilhas passam por aqui. TypeScript puro (Deno e Node).
 // `ListPublisher` e `PublicationContextReader` têm implementação em memória (memory.ts, só com fixture em ambiente
 // não produtivo); a implementação real (lists, versions, schools) é da S11 e roda a suíte de contrato.
+import { z } from "zod";
 import type { PublicationContext } from "./types.ts";
 
 /** Erro de uma porta ou do store. `transient`: vale repetir (rede, banco); permanente: não vale. Erro sem tipo = transitório. */
@@ -48,9 +49,15 @@ export type PublishRequest = {
   source: "school_upload";
   actor: { kind: "system" };
   items: PublishItem[];
+  /** Abortado no teto da chamada (45 s ou o que resta do tick): a implementação deve parar o que puder. */
+  signal?: AbortSignal;
 };
 
-export type PublishResult = { listId: string; previousVersionId: string | null; newVersionId: string };
+/** Resultado da porta, validado pelo serviço antes de gravar (id inválido = erro permanente `invalid_publish_result`). */
+export const publishResultSchema = z
+  .object({ listId: z.string().uuid(), previousVersionId: z.string().uuid().nullable(), newVersionId: z.string().uuid() })
+  .strict();
+export type PublishResult = z.infer<typeof publishResultSchema>;
 
 export interface ListPublisher {
   publish(req: PublishRequest): Promise<PublishResult>;

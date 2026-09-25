@@ -114,10 +114,21 @@ describe("RLS profiles", () => {
     });
   }
 
-  it("parent não muda o role nem trocando o id", async () => {
+  it("parent não troca o próprio id", async () => {
     await withClaims("parent", async (c) => {
       const r = await attempt(c, "update public.profiles set id = $2 where id = $1", [IDS.parent, IDS.spare]);
       expect(r.error !== null || r.rowCount === 0).toBe(true);
+    });
+  });
+
+  it("parent não muda o próprio role via update_own", async () => {
+    await withClaims("parent", async (c) => {
+      const r = await attempt(c, "update public.profiles set role = 'admin' where id = $1", [IDS.parent]);
+      expect(r.error !== null || r.rowCount === 0).toBe(true);
+    });
+    await withSuperuser(async (c) => {
+      const r = await c.query("select role from public.profiles where id = $1", [IDS.parent]);
+      expect(r.rows[0]?.role).toBe("parent");
     });
   });
 

@@ -1,5 +1,10 @@
 -- 0001_base_schema: enums, municipalities, profiles, audit_log, auth_role() e RLS (S01).
 -- Idempotente sob `supabase db reset` (banco recriado do zero).
+-- Riscos residuais aceitos (ver docs/superpowers/ledger.md):
+--  * o dono das tabelas (postgres/migrations) pode fazer DISABLE TRIGGER; ENABLE ALWAYS cobre só
+--    session_replication_role;
+--  * sem FORCE ROW LEVEL SECURITY (o dono grava o audit_log pelos triggers);
+--  * o guard de profiles.role usa current_user (SECURITY INVOKER), não um SECURITY DEFINER.
 -- Decisão: sem FORCE ROW LEVEL SECURITY. O dono (postgres) precisa gravar o audit_log pelos
 -- triggers SECURITY DEFINER e executar migrations; anon/authenticated/service_role seguem RLS
 -- ou grants mínimos.
@@ -70,7 +75,7 @@ create table public.audit_log (
   after jsonb,
   actor_id uuid, -- sem FK: o log sobrevive à remoção do usuário
   actor_role text,
-  ip_hash text, -- sha256 do IP; nunca o IP em claro
+  ip_hash text, -- sha256(ip || pepper); NULL sem pepper; nunca o IP em claro
   created_at timestamptz not null default clock_timestamp(), -- clock: ordem estável dentro da transação
   updated_at timestamptz not null default clock_timestamp()
 );
@@ -93,7 +98,8 @@ begin
   exception when others then
     jwt_role := null;
   end;
-  if jwt_role = 'service_role' then
+  -- claim sozinho não basta: o role de banco corrente também precisa ser service_role.
+  if jwt_role = 'service_role' and current_setting('role') = 'service_role' then
     return 'system'::public.user_role;
   end if;
   select p.role into result from public.profiles p where p.id = auth.uid();
@@ -101,7 +107,7 @@ begin
 end;
 $$;
 
-revoke all on function public.auth_role() from public;
+revoke execute on function public.auth_role() from public, anon, authenticated, service_role;
 grant execute on function public.auth_role() to anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
@@ -118,15 +124,25 @@ declare
   fwd text;
   ip text;
   hashed text;
+  pepper text := nullif(current_setting('app.audit_ip_pepper', true), '');
+  i int;
 begin
+  -- colunas sensíveis (argumentos do trigger) nunca entram no audit_log, que é imutável.
+  for i in 0 .. tg_nargs - 1 loop
+    old_j := old_j - tg_argv[i];
+    new_j := new_j - tg_argv[i];
+  end loop;
+
   begin
     fwd := nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-forwarded-for';
   exception when others then
     fwd := null;
   end;
-  ip := nullif(btrim(split_part(coalesce(fwd, ''), ',', 1)), '');
-  if ip is not null then
-    hashed := encode(sha256(convert_to(ip, 'utf8')), 'hex');
+  -- último valor: o acrescentado pelo proxy confiável (o primeiro é forjável pelo cliente).
+  ip := nullif(btrim((string_to_array(coalesce(fwd, ''), ','))[cardinality(string_to_array(coalesce(fwd, ''), ','))]), '');
+  -- sem pepper não há hash (sha256 puro de IPv4 é reversível por força bruta).
+  if ip is not null and pepper is not null then
+    hashed := encode(sha256(convert_to(ip || pepper, 'utf8')), 'hex');
   end if;
 
   insert into public.audit_log (action, entity_table, entity_id, before, after, actor_id, actor_role, ip_hash,
@@ -142,7 +158,7 @@ begin
 end;
 $$;
 
-revoke all on function public.audit_row_change() from public;
+revoke execute on function public.audit_row_change() from public, anon, authenticated, service_role;
 
 -- audit_log é append-only: bloqueia UPDATE/DELETE/TRUNCATE inclusive para o dono.
 create function public.audit_log_block_mutation() returns trigger
@@ -193,7 +209,18 @@ create trigger profiles_guard_role before update on public.profiles
 create trigger municipalities_audit after insert or update or delete on public.municipalities
   for each row execute function public.audit_row_change();
 create trigger profiles_audit after insert or update or delete on public.profiles
-  for each row execute function public.audit_row_change();
+  for each row execute function public.audit_row_change('display_name'); -- PII fora do audit_log
+
+-- Auditoria e append-only valem mesmo com session_replication_role = replica.
+alter table public.municipalities enable always trigger municipalities_audit;
+alter table public.profiles enable always trigger profiles_audit;
+alter table public.audit_log enable always trigger audit_log_no_update_delete;
+alter table public.audit_log enable always trigger audit_log_no_truncate;
+
+-- Funções de trigger não são chamáveis por anon/authenticated (o Supabase concede EXECUTE por padrão).
+revoke execute on function public.set_updated_at() from public, anon, authenticated, service_role;
+revoke execute on function public.audit_log_block_mutation() from public, anon, authenticated, service_role;
+revoke execute on function public.profiles_guard_role() from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- Grants (mínimos; RLS decide o resto)
@@ -201,9 +228,9 @@ create trigger profiles_audit after insert or update or delete on public.profile
 revoke all on public.municipalities, public.profiles, public.audit_log from anon, authenticated, service_role;
 grant select on public.municipalities to anon, authenticated;
 grant insert, update, delete on public.municipalities to authenticated;
-grant all on public.municipalities to service_role;
+grant select, insert, update, delete on public.municipalities to service_role;
 grant select, insert, update, delete on public.profiles to authenticated;
-grant all on public.profiles to service_role;
+grant select, insert, update, delete on public.profiles to service_role;
 grant select on public.audit_log to authenticated, service_role; -- sem insert/update/delete/truncate
 
 -- ---------------------------------------------------------------------------
@@ -218,39 +245,39 @@ create policy municipalities_select_enabled on public.municipalities
   for select to anon, authenticated using (is_enabled);
 -- municipalities: admin e system leem todos.
 create policy municipalities_select_admin on public.municipalities
-  for select to authenticated using (public.auth_role() in ('admin', 'system'));
+  for select to authenticated using ((select public.auth_role()) in ('admin', 'system'));
 -- municipalities: só admin/system inserem.
 create policy municipalities_insert_admin on public.municipalities
-  for insert to authenticated with check (public.auth_role() in ('admin', 'system'));
+  for insert to authenticated with check ((select public.auth_role()) in ('admin', 'system'));
 -- municipalities: só admin/system atualizam.
 create policy municipalities_update_admin on public.municipalities
   for update to authenticated
-  using (public.auth_role() in ('admin', 'system')) with check (public.auth_role() in ('admin', 'system'));
+  using ((select public.auth_role()) in ('admin', 'system')) with check ((select public.auth_role()) in ('admin', 'system'));
 -- municipalities: só admin/system apagam.
 create policy municipalities_delete_admin on public.municipalities
-  for delete to authenticated using (public.auth_role() in ('admin', 'system'));
+  for delete to authenticated using ((select public.auth_role()) in ('admin', 'system'));
 
 -- profiles: cada um lê a própria linha; admin e system leem todas.
 create policy profiles_select_own_or_admin on public.profiles
-  for select to authenticated using (id = auth.uid() or public.auth_role() in ('admin', 'system'));
+  for select to authenticated using (id = (select auth.uid()) or (select public.auth_role()) in ('admin', 'system'));
 -- profiles: só admin/system inserem; admin não cria 'system'.
 create policy profiles_insert_admin on public.profiles
   for insert to authenticated
-  with check (public.auth_role() = 'system' or (public.auth_role() = 'admin' and role <> 'system'));
+  with check ((select public.auth_role()) = 'system' or ((select public.auth_role()) = 'admin' and role <> 'system'));
 -- profiles: usuário atualiza a própria linha (id imutável; role protegido pelo trigger).
 create policy profiles_update_own on public.profiles
-  for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+  for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 -- profiles: admin/system atualizam qualquer linha (trigger limita o papel 'system' ao system).
 create policy profiles_update_admin on public.profiles
   for update to authenticated
-  using (public.auth_role() in ('admin', 'system')) with check (public.auth_role() in ('admin', 'system'));
+  using ((select public.auth_role()) in ('admin', 'system')) with check ((select public.auth_role()) in ('admin', 'system'));
 -- profiles: só system apaga.
 create policy profiles_delete_system on public.profiles
-  for delete to authenticated using (public.auth_role() = 'system');
+  for delete to authenticated using ((select public.auth_role()) = 'system');
 
 -- audit_log: só admin e system leem; sem políticas de insert/update/delete (append-only).
 create policy audit_log_select_admin on public.audit_log
-  for select to authenticated using (public.auth_role() in ('admin', 'system'));
+  for select to authenticated using ((select public.auth_role()) in ('admin', 'system'));
 
 -- ---------------------------------------------------------------------------
 -- Seed: piloto Cuiabá/MT (na migration para existir em qualquer ambiente)

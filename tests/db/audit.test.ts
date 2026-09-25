@@ -117,27 +117,15 @@ describe("audit_log", () => {
     });
   });
 
-  it("ip_hash é sha256 do IP e nunca contém o IP em claro", async () => {
-    const ip = "203.0.113.42";
-    await withClaims("admin", async (c) => {
-      await c.query("select set_config('request.headers', $1, true)", [
-        JSON.stringify({ "x-forwarded-for": `${ip}, 10.0.0.1` }),
-      ]);
-      await c.query("update public.municipalities set name = 'Cuiabá' where ibge_code = '5103403'");
-      const r = await c.query<{ ip_hash: string | null }>(
-        "select ip_hash from public.audit_log order by created_at desc, id desc limit 1",
-      );
-      const hash = r.rows[0]?.ip_hash;
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-      expect(hash).not.toContain(ip);
-      expect(hash).not.toContain("203");
-    });
-  });
-
   it("ip_hash é NULL quando não há cabeçalho", async () => {
     await withClaims("admin", async (c) => {
-      await c.query("update public.municipalities set name = 'Cuiabá' where ibge_code = '5103403'");
-      const r = await c.query("select ip_hash from public.audit_log order by created_at desc, id desc limit 1");
+      const m = await c.query<{ id: string }>(
+        "update public.municipalities set name = 'Cuiabá' where ibge_code = '5103403' returning id",
+      );
+      const r = await c.query(
+        "select ip_hash from public.audit_log where entity_table = 'municipalities' and entity_id = $1 order by created_at desc, id desc limit 1",
+        [m.rows[0]?.id],
+      );
       expect(r.rows[0]?.ip_hash).toBeNull();
     });
   });

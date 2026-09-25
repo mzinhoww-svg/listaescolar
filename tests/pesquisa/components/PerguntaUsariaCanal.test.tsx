@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PerguntaUsariaCanal } from "@/components/pesquisa/PerguntaUsariaCanal";
@@ -12,12 +12,12 @@ describe("PerguntaUsariaCanal (tela 11)", () => {
     render(<PerguntaUsariaCanal step={11} onResponder={onResponder} onVoltar={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Com certeza" }));
-    vi.advanceTimersByTime(250);
+    act(() => vi.advanceTimersByTime(250));
     expect(onResponder).not.toHaveBeenCalled();
 
     expect(screen.getByText("E onde preferiria comprar?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Tanto faz" }));
-    vi.advanceTimersByTime(250);
+    act(() => vi.advanceTimersByTime(250));
     expect(onResponder).toHaveBeenCalledWith(11, { usaria: "com_certeza", canal: "tanto_faz" });
   });
 
@@ -26,7 +26,7 @@ describe("PerguntaUsariaCanal (tela 11)", () => {
     render(<PerguntaUsariaCanal step={11} onResponder={onResponder} onVoltar={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("radio", { name: "Não" }));
-    vi.advanceTimersByTime(250);
+    act(() => vi.advanceTimersByTime(250));
 
     expect(screen.queryByText("E onde preferiria comprar?")).not.toBeInTheDocument();
     expect(onResponder).toHaveBeenCalledWith(11, { usaria: "nao" });

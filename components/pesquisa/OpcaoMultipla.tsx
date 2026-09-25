@@ -30,7 +30,10 @@ export function OpcaoMultipla({ nomeGrupo, opcoes, valoresSelecionados, max, onA
               className="h-5 w-5"
               checked={marcado}
               disabled={desabilitado}
-              onChange={() => onAlternar(o.slug)}
+              onChange={() => {
+                if (desabilitado) return;
+                onAlternar(o.slug);
+              }}
             />
             {o.rotulo}
           </label>

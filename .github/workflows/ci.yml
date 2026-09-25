@@ -32,3 +32,24 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+
+  db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - run: pnpm install --frozen-lockfile
+      - name: Sobe o Supabase local (só o necessário)
+        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - run: supabase db reset
+      - run: pnpm test:db
+      - if: always()
+        run: supabase stop --no-backup

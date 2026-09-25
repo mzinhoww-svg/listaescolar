@@ -8,6 +8,11 @@ Proibido nesta fatia: `supabase link`, `supabase db push`. Staging só a partir 
 - `pnpm db:start` sobe a stack local (`supabase start`).
 - `pnpm db:reset` recria o banco do zero e reaplica `supabase/migrations` e `supabase/seed.sql`.
 - `pnpm db:stop` derruba a stack.
+- `pnpm test:db` roda `tests/db/**` (schema, RLS, auditoria) contra o Postgres local (`127.0.0.1:54322`; `SUPABASE_DB_URL` sobrescreve). Exige a stack no ar e migrations aplicadas (`pnpm db:reset`). `pnpm test` não roda esses testes.
+
+## Migrations
+
+Uma migration por fatia, em `supabase/migrations/NNNN_descricao_curta.sql` (sequência de 4 dígitos, minúsculas e `_`; ex.: `0001_base_schema.sql`). Não edite migration já aplicada em staging: crie a próxima. Toda tabela nova: `id uuid default gen_random_uuid()`, `created_at`, `updated_at`, RLS habilitada e políticas por comando e por papel; funções SECURITY DEFINER com `set search_path = ''` e nomes qualificados.
 
 ## Popular `.env.local` para dev local
 

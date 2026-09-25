@@ -1,1 +1,1 @@
--- Seed local (vazio na S00).
+-- Seed local. O município piloto (Cuiabá) vive na migration 0001.

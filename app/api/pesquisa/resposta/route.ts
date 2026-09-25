@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getServerEnv } from "@/lib/env";
 import { answerSchemaForStep, RespostaEnvelopeSchema } from "@/lib/pesquisa/schemas";
 import { countNewSessionsForIpHash, sessionExists, upsertAnswer } from "@/lib/pesquisa/repositorio";
 import { hashIp, trustedIpFromHeaders } from "../_lib/ip";
@@ -27,12 +26,9 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = trustedIpFromHeaders(request.headers);
-  let salt: string | undefined;
-  try {
-    salt = getServerEnv().IP_HASH_SALT;
-  } catch {
-    salt = undefined;
-  }
+  // Lido direto (não via getServerEnv()): o rate limit não deve desligar por causa de
+  // uma variável de servidor não relacionada (ex. OPENROUTER_KEY) estar ausente/inválida.
+  const salt = process.env.IP_HASH_SALT || undefined;
   const ipHash = salt ? hashIp(ip, salt) : null;
 
   const isNewSession = !(await sessionExists(session_id));

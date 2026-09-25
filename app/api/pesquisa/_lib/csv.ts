@@ -23,9 +23,17 @@ const RESPOSTAS_COLUNAS = [
 
 const RESPOSTAS_METADADOS = ["source_group", "started_at", "completed_at", "last_step"] as const;
 
+/** Prefixa com `'` valores que começam com =, +, - ou @: sem isso, um Excel/Sheets
+ *  que abrir o CSV interpretaria texto livre da respondente (compra_ideal, escola)
+ *  como fórmula (CSV/formula injection). */
+function semFormula(value: string): string {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
 function escapeCsvField(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+  const seguro = semFormula(value);
+  if (/[",\n\r]/.test(seguro)) return `"${seguro.replace(/"/g, '""')}"`;
+  return seguro;
 }
 
 function toCell(value: unknown): string {

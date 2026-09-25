@@ -76,7 +76,7 @@ function main() {
   const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
   const workdir = join(root, ".track-workdir");
   const trackFile = join(root, ".track");
-  const index = parseTrack(process.env.TRACK ?? (existsSync(trackFile) ? readFileSync(trackFile, "utf8").trim() : "0"));
+  const index = parseTrack(process.env.TRACK || (existsSync(trackFile) ? readFileSync(trackFile, "utf8").trim() : "0"));
   const args = process.argv.slice(2);
   if (args[0] === "env") {
     if (index !== 0) prepareWorkdir(root, workdir, index);

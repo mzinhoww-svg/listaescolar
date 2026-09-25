@@ -15,7 +15,7 @@ function allAlerts(r: ExtractionResult): string[] {
   return [...(r.alerts ?? []), ...(r.criticalAlerts ?? []), ...r.items.flatMap((i) => i.alerts ?? [])];
 }
 
-const blank = (s: string | null): boolean => s === null || s.trim() === "";
+const blank = (s: string | null | undefined): boolean => s === null || s === undefined || s.trim() === "";
 
 /** (1) score geral >= limiar; `lowConfidence` nunca publica sozinho. */
 const overallScore: Rule = (input, settings) => {
@@ -59,7 +59,7 @@ const requiredFields: Rule = (input) => {
     out.push("invalid_extraction_result");
     return canonicalOrder(out);
   }
-  if (r.items.some((i) => !i.normalizedName || !i.category)) out.push("item_incomplete");
+  if (r.items.some((i) => blank(i.normalizedName) || !i.category)) out.push("item_incomplete");
   if (r.pipelineVersion === undefined || r.alerts === undefined || r.criticalAlerts === undefined || r.lowConfidence === undefined) {
     out.push("extraction_metadata_missing");
   }

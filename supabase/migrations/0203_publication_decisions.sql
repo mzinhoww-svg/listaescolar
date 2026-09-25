@@ -25,9 +25,10 @@ revoke execute on function public.ai_reason_codes_valid(jsonb) from public, anon
 grant execute on function public.ai_reason_codes_valid(jsonb) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
--- ai_settings: interruptor da publicação automática (auditado pelo trigger ai_settings_audit)
+-- ai_settings: interruptor da publicação automática (auditado pelo trigger ai_settings_audit).
+-- DEFAULT FALSE: só liga por dado, por decisão explícita (S11). A linha 'default' já existente fica desligada.
 -- ---------------------------------------------------------------------------
-alter table public.ai_settings add column auto_publish_enabled boolean not null default true;
+alter table public.ai_settings add column auto_publish_enabled boolean not null default false;
 
 -- ---------------------------------------------------------------------------
 -- ai_decisions: kind/decision por acoplamento, provider/model/prompt nulos só em publication, reasons
@@ -220,6 +221,8 @@ declare
   ];
   k text;
   st public.list_status;
+  src public.submission_source;
+  demo boolean;
   dec text;
 begin
   if p_verdict is null or jsonb_typeof(p_verdict) <> 'object' then
@@ -255,6 +258,11 @@ begin
   if (dec = 'auto_publish') <> (jsonb_array_length(p_verdict -> 'reasons') = 0) then
     raise exception 'veredito inválido: decision incoerente com reasons' using errcode = '22023';
   end if;
+  -- justificativa fixa: rules_passed em auto_publish; o primeiro motivo nos demais.
+  if (dec = 'auto_publish' and p_verdict ->> 'justification' <> 'rules_passed')
+     or (dec = 'human_review' and p_verdict ->> 'justification' is distinct from p_verdict -> 'reasons' ->> 0) then
+    raise exception 'veredito inválido: justification incoerente com decision' using errcode = '22023';
+  end if;
   if p_verdict ? 'overall_score' and jsonb_typeof(p_verdict -> 'overall_score') not in ('number', 'null') then
     raise exception 'veredito inválido: overall_score' using errcode = '22023';
   end if;
@@ -273,9 +281,13 @@ begin
     end if;
   end loop;
 
-  select status into st from public.list_submissions where id = p_submission_id for update;
+  select status, source, is_demo into st, src, demo from public.list_submissions where id = p_submission_id for update;
   if not found then
     raise exception 'envio inexistente' using errcode = 'P0002';
+  end if;
+  -- defesa em profundidade: lista de pai e envio demo nunca publicam sozinhos, mesmo que o chamador erre.
+  if dec = 'auto_publish' and (src = 'parent' or demo) then
+    raise exception 'veredito inválido: auto_publish não vale para envio de pai ou demo' using errcode = '22023';
   end if;
   if exists (
     select 1 from public.ai_decisions
@@ -388,7 +400,7 @@ declare
   st public.list_status;
   pv text;
 begin
-  if p_reason is null or p_reason !~ '^[a-z][a-z0-9_:.-]{0,59}$' then
+  if p_reason is null or p_reason !~ '^[a-z][a-z0-9_]{0,59}$' then -- mesmo alfabeto de reasons; <= 60 por causa de justification
     raise exception 'motivo inválido: esperado código' using errcode = '22023';
   end if;
   select status into st from public.list_submissions where id = p_submission_id for update;
@@ -435,6 +447,12 @@ as $$
     select s.id, 'publish'::text, s.updated_at
       from public.list_submissions s
      where s.status = 'approved'
+       and exists (
+         select 1 from public.ai_decisions d where d.kind = 'publication' and d.entity_id = s.id and d.decision = 'auto_publish'
+       )
+       and not exists (
+         select 1 from public.ai_decisions d where d.kind = 'publication' and d.entity_id = s.id and d.decision = 'publish_failed'
+       )
        and s.updated_at <= now() - make_interval(secs => greatest(coalesce(p_min_age_seconds, 0), 0))
        and not exists (
          select 1 from public.ai_decisions d where d.kind = 'publication' and d.entity_id = s.id and d.decision = 'published'

@@ -122,6 +122,7 @@ const rows: Row[] = [
   // 4. requiredFields
   ["item sem normalizedName", withItems({ normalizedName: undefined }), ["item_incomplete"]],
   ["item sem category", withItems({ category: undefined }), ["item_incomplete"]],
+  ["item com normalizedName só de espaços", withItems({ normalizedName: "   " }), ["item_incomplete"]],
   ["envio sem escola", { input: { schoolId: null } }, ["missing_school"]],
   ["envio sem série", { input: { grade: null } }, ["missing_grade"]],
   ["envio com série em branco", { input: { grade: "  " } }, ["missing_grade"]],
@@ -136,7 +137,7 @@ const rows: Row[] = [
   ["escola claimed", { ctx: { school: { verification: "claimed", municipalityEnabled: true } } }, ["school_not_verified"]],
   ["escola suspended", { ctx: { school: { verification: "suspended", municipalityEnabled: true } } }, ["school_suspended"]],
   ["município desabilitado", { ctx: { school: { verification: "verified", municipalityEnabled: false } } }, ["municipality_not_enabled"]],
-  ["série não resolvida (educação infantil)", { input: { grade: "Educação infantil" }, ctx: { gradeSlug: null } }, ["grade_unresolved"]],
+  ["série não resolvida", { ctx: { gradeSlug: null } }, ["grade_unresolved"]],
   ["ano fora da lista", { input: { schoolYear: 2031 } }, ["school_year_invalid"]],
   ["lista arquivada", { ctx: { currentList: { listId: "30000000-0000-4000-8000-000000000001", status: "archived", currentVersionId: null } } }, ["list_archived"]],
   ["sem lista atual (primeira publicação) passa", { ctx: { currentList: null } }, []],
@@ -240,12 +241,17 @@ describe("composição do veredito", () => {
     expect(run(hw).verdict.reasons).toEqual(["critical_alert"]);
   });
 
-  it("limiares do resultado da extração não valem: só os das settings atuais", () => {
-    const { verdict } = run({ result: { overallConfidence: 0.5, thresholdUsed: 0.4 } });
-    expect(verdict.reasons).toEqual(["overall_below_threshold"]);
+  it("limiares gravados no resultado da extração não valem: só os das settings atuais", () => {
+    // lowConfidence:false e criticalAlerts:[] são o julgamento da extração com os limiares DAQUELE momento.
+    const low = run({ result: { overallConfidence: 0.5, lowConfidence: false, criticalAlerts: [] } });
+    expect(low.verdict.reasons).toEqual(["overall_below_threshold"]);
+    const crit = run({ result: { alerts: ["handwritten"], criticalAlerts: [], lowConfidence: false }, settings: { criticalAlerts: ["handwritten"] } });
+    expect(crit.verdict.reasons).toEqual(["critical_alert"]);
+    // e o inverso: extração acusou crítico e settings atuais aliviaram; o resultado continua bloqueando (Ruling).
+    expect(run({ result: { criticalAlerts: ["handwritten"] }, settings: { criticalAlerts: [] } }).verdict.reasons).toEqual(["critical_alert"]);
   });
 
-  it("monotonicidade: acrescentar alerta ou baixar confiança nunca vira human_review em auto_publish", () => {
+  it("monotonicidade: piorar nunca vira human_review em auto_publish (merge explícito)", () => {
     const worse: Mut[] = [
       { result: { alerts: ["handwritten"] } },
       { result: { overallConfidence: 0.1 } },
@@ -253,14 +259,42 @@ describe("composição do veredito", () => {
       withItems({ alerts: ["ambiguous_item"] }),
       { result: { alerts: ["possible_collective_item"] }, settings: { criticalAlerts: ["possible_collective_item"] } },
     ];
-    const bads: Mut[] = [{ input: { source: "parent" } }, { input: { isDemo: true } }, { result: { lowConfidence: true } }, { items: [] }];
+    const bads: Mut[] = [{ input: { source: "parent" } }, { input: { isDemo: true } }, { result: { lowConfidence: true } }, { items: [] }, { ctx: { submitterLinked: false } }, { settings: { autoPublishEnabled: false } }];
+    const merge = (a: Mut, b: Mut): Mut => ({
+      input: { ...a.input, ...b.input },
+      result: { ...a.result, ...b.result },
+      ctx: { ...a.ctx, ...b.ctx },
+      settings: a.settings === null || b.settings === null ? null : { ...a.settings, ...b.settings },
+      items: b.items ?? a.items,
+    });
     for (const bad of bads) {
       expect(run(bad).verdict.outcome).toBe("human_review");
-      for (const w of worse) {
-        const merged: Mut = { ...bad, ...w, input: { ...bad.input, ...w.input }, result: { ...bad.result, ...w.result } };
-        expect(run(merged).verdict.outcome, JSON.stringify(w)).toBe("human_review");
-      }
+      for (const w of worse) expect(run(merge(bad, w)).verdict.outcome, JSON.stringify([bad, w])).toBe("human_review");
     }
+  });
+
+  it("a partir da base auto_publish, cada tipo de piora isolada nunca resulta em auto_publish", () => {
+    expect(run().verdict.outcome).toBe("auto_publish");
+    const worse: Mut[] = [
+      { result: { overallConfidence: T - 0.001 } },
+      { result: { lowConfidence: true } },
+      { result: { alerts: ["handwritten"] } },
+      { result: { criticalAlerts: ["handwritten"] } },
+      withItems({ confidence: TI - 0.001 }),
+      withItems({ alerts: ["ambiguous_item"] }),
+      withItems({ quantity: null }),
+      { items: [] },
+      { input: { schoolId: null } },
+      { input: { schoolYear: null } },
+      { input: { source: "parent" } },
+      { input: { isDemo: true } },
+      { input: { publisherAvailable: false } },
+      { ctx: { submitterLinked: false } },
+      { ctx: { school: { verification: "claimed", municipalityEnabled: true } } },
+      { settings: { autoPublishEnabled: false } },
+      { settings: null },
+    ];
+    for (const w of worse) expect(run(w).verdict.outcome, JSON.stringify(w)).toBe("human_review");
   });
 
   it("veredito só é auto_publish com reasons vazio", () => {

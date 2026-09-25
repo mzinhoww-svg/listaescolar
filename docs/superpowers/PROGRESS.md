@@ -1,13 +1,13 @@
 # PROGRESS
 
-**Fatia atual:** S01 (PR #3, migration aplicada no staging). Próxima: S02.
+**Fatia atual:** S02 (PR #4 em revisão). Próxima: trilhas paralelas (Dados, Pipeline, Comércio).
 
 ## Concluídas
 | Fatia | PR | SHA do merge | Gate |
 |---|---|---|---|
 | Docs (autonomia, ADR-003) | #1 | a952c0b | revisão + docs |
 | S00 Fundação | #2 | a400899 | CI verde; E2E no build local (preview protegido) |
-| S01 Schema base | #3 | (preencher no próximo PR) | CI verde (verify + db), 88 testes de banco, migration aplicada no staging |
+| S01 Schema base | #3 | e14ba7f | CI verde (verify + db), 88 testes de banco, migration aplicada no staging |
 
 ## Trilhas em andamento
 (nenhuma)
@@ -17,6 +17,12 @@
 - Preview da Vercel protegido: o agente não abre o preview no agent-browser. Ação do humano: liberar acesso (Trusted Sources/bypass) ou desativar a proteção só de Previews. Até lá o E2E roda no build local (Ruling no ledger).
 - Credenciais: Pix, afiliados (MELI/Amazon), VAPID de produção, chave de produção do OpenRouter.
 - Pepper do IP de auditoria (`app.audit_ip_pepper`): definir no staging/produção antes da S20 (preferir Vault).
+
+## Ações do humano no Supabase hospedado (staging) para o login funcionar
+- Authentication → URL Configuration: Site URL do ambiente e Redirect URLs com `/auth/confirm**`, `/auth/callback**` e o glob dos previews da Vercel.
+- Authentication → Email Templates: `magic_link` e `confirmation` usando `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`), ou desligar "Confirm email". Sem isso o link só funciona no mesmo navegador (fallback por `code`).
+- Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
+- Vercel: `NEXT_PUBLIC_SITE_URL` nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio próprio).
 
 ## Notas operacionais
 - Ferramentas: Colima + Docker, Supabase CLI e agent-browser instalados. Worktrees em `../listaescolar-wt/SNN`.

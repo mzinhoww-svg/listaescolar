@@ -43,11 +43,6 @@ export const PANEL_NAV: readonly NavItem[] = [
   { href: "/papelaria/areas", label: "Bairros atendidos" },
 ];
 
-export const ADMIN_NAV: readonly NavItem[] = [
-  { href: "/admin", label: "Visão geral" },
-  { href: "/admin/papelarias", label: "Papelarias" },
-];
-
 export function PageHeader({ crumb, title, children }: { crumb: string; title: string; children?: ReactNode }) {
   return (
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">

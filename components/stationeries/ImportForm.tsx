@@ -18,7 +18,7 @@ export function ImportForm({ action }: { action: Action }) {
   // Depois de importar, sai o aviso antigo ("Item salvo.") da URL e a tabela é relida do servidor.
   useEffect(() => {
     if (done && window.location.search !== "") router.replace("/papelaria/catalogo");
-  }, [done, router]);
+  }, [state, done, router]);
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-card bg-white p-5" aria-busy={pending}>
       <h2 className="text-[18px] font-extrabold">Importar planilha</h2>

@@ -3,6 +3,12 @@ import { Client } from "pg";
 export const DATABASE_URL =
   process.env.SUPABASE_DB_URL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 
+// audit_log é append-only: rodar estes testes em banco remoto deixaria linhas permanentes.
+const host = new URL(DATABASE_URL).hostname;
+if (!["127.0.0.1", "localhost"].includes(host) && process.env.ALLOW_REMOTE_DB_TESTS !== "1") {
+  throw new Error("Testes de banco só rodam em banco local (host 127.0.0.1 ou localhost).");
+}
+
 export type Identity =
   | "anon"
   | "parent"

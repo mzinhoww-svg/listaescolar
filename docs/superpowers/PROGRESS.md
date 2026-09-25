@@ -8,7 +8,14 @@
 
 ## Pesquisa com mães (fora do PLAN, ADR-005)
 
-Fatia isolada fora da numeração S00–S27, autorizada pelo fundador em 25/09/2026 (sessão `claude/vigilant-einstein-75bp5d`, PR #28 reaproveitado). Spec vinculante em `docs/superpowers/specs/2026-09-25-pesquisa-maes-design.md`; decisão de escopo e autorizações em `docs/decisions/ADR-005-pesquisa-maes-fora-do-plan.md`. Plano em `docs/superpowers/plans/2026-09-25-pesquisa-maes.md`. Estado: implementação iniciada.
+Fatia isolada fora da numeração S00–S27, autorizada pelo fundador em 25/09/2026 (sessão `claude/vigilant-einstein-75bp5d`, PR #28 reaproveitado). Spec vinculante em `docs/superpowers/specs/2026-09-25-pesquisa-maes-design.md`; decisão de escopo e autorizações em `docs/decisions/ADR-005-pesquisa-maes-fora-do-plan.md`. Plano em `docs/superpowers/plans/2026-09-25-pesquisa-maes.md`. Estado: **implementada, revisada e verificada no preview**; merge squash em `main` pelo PR #28 (autorizado por escrito pelo fundador no ADR-005, condições: CI verde, revisão independente registrada, 7 cenários E2E verdes no preview, nada fora do escopo).
+
+- Entregue: `/pesquisa` (12 telas + boas-vindas + final com lead e compartilhamento), `/pesquisa/resultados` (senha, cartões, funil, por pergunta, por origem, frases, CSV), `/pesquisa/privacidade`, `app/api/pesquisa/{resposta,concluir,lead,login,export}`.
+- Migrations aditivas `0700_pesquisa_maes.sql` e `0701_pesquisa_maes_ajustes.sql` aplicadas no ListaEscolar (staging = único projeto; ver tabela de migrations). Tabelas `survey_*` nunca entram em reset/truncate de nenhuma fatia (ADR-005).
+- Variáveis `PESQUISA_RESULTS_PASSWORD` e `IP_HASH_SALT` cadastradas na Vercel (Production/Preview/Development); valores fora do repositório.
+- Gate: typecheck ✓, lint ✓, `pnpm test` 2592 (94 da pesquisa), build ✓, CI `verify` ✓ `db` ✓, 7 cenários E2E no preview (`docs/superpowers/e2e/pesquisa-maes.md`, 25 capturas 390×844 em `docs/superpowers/evidencias/pesquisa/`), revisão independente por subagente em duas rodadas (implementação e polimento visual) registrada no ledger.
+- Pós-merge: repetir os cenários na URL de produção (`https://listaescolare.vercel.app/pesquisa`), apagar só as linhas `source_group = 'e2e-teste'` e confirmar contagem zero; kit de divulgação em `docs/superpowers/pesquisa-divulgacao.md`.
+- Pendência futura (S20, ADR-005): migrar os dados `survey_*` para o projeto de produção quando ele existir; até lá, backup semanal por CSV pela página de resultados.
 
 ## Concluídas (merge squash em `main`)
 
@@ -36,6 +43,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | docs PROGRESS/DEBT e agendamento da refatoração | #18 | 7f68737 | 2026-09-25 | n/a | n/a | n/a | n/a | n/a | n/d | n/d | n/a (só docs) |
 | S27 Site público e páginas de sistema (Comércio) | #19 | 8cbd458 | 2026-09-25 | ✓ | ✓ | 2073 | n/a (sem migration) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 265 verificações, 0 falhas (`e2e/S27.md`) |
 | S09 Motor de aprovação automática (Pipeline) | #20 | b905cce | 2026-09-25 | ✓ | ✓ | 2279 (árvore mesclada) | 1312 (3 skipped) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
+| Pesquisa com mães (ADR-005, fora do PLAN) | #28 | squash (ver PR) | 2026-09-25 | ✓ | ✓ | 2592 | n/a (sem Docker nesta sessão; CI `db` ✓) | ✓ | verify ✓ db ✓ | ✓ (preview público) | 7 cenários no preview da Vercel, 25 capturas (`e2e/pesquisa-maes.md`); repetição em produção após o merge |
 
 Observação: o check "Vercel" falha em todos os PRs desde o #4 (não só do #8 em diante). A causa apontada pelo orquestrador é a falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto da Vercel (ver pendências humanas).
 
@@ -57,6 +65,8 @@ Observação: o check "Vercel" falha em todos os PRs desde o #4 (não só do #8 
 | 0302_stationeries.sql | S13 | stationeries | 20260925060339 |
 | 0303_leads.sql | S14 | leads | 20260925131816 |
 | 0203_publication_decisions.sql | S09 | publication_decisions | 20260925161635 (aplicada em uma única chamada transacional, com conferências antes e depois) |
+| 0700_pesquisa_maes.sql | Pesquisa com mães (ADR-005) | pesquisa_maes | aplicada 2026-09-25 via MCP `apply_migration` (aditiva: `survey_responses`, `survey_leads`, RLS sem policy, função `survey_upsert_answer`) |
+| 0701_pesquisa_maes_ajustes.sql | Pesquisa com mães (ADR-005) | pesquisa_maes_ajustes | aplicada 2026-09-25 via MCP (aditiva: `created_at`/`updated_at` faltantes, função recriada com `search_path = ''`) |
 
 Pendente de staging: nenhuma.
 

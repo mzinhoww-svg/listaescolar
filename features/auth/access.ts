@@ -2,6 +2,7 @@ export type UserRole = "parent" | "school_member" | "admin" | "stationery_member
 export type ProtectedPrefix =
   | "/conta"
   | "/carrinho"
+  | "/cotacao"
   | "/ir-para"
   | "/enviar-lista"
   | "/escola"
@@ -12,6 +13,7 @@ export type AccessDecision = "allow" | "login" | "forbidden";
 const PREFIXES: readonly ProtectedPrefix[] = [
   "/conta",
   "/carrinho",
+  "/cotacao",
   "/ir-para",
   "/enviar-lista",
   "/escola",
@@ -23,6 +25,7 @@ const PREFIXES: readonly ProtectedPrefix[] = [
 const ALLOWED: Record<ProtectedPrefix, readonly UserRole[]> = {
   "/conta": ["parent", "school_member", "admin", "stationery_member"],
   "/carrinho": ["parent", "school_member", "admin", "stationery_member"],
+  "/cotacao": ["parent", "school_member", "admin", "stationery_member"],
   "/ir-para": ["parent", "school_member", "admin", "stationery_member"],
   "/enviar-lista": ["parent", "school_member", "admin"],
   "/escola": ["school_member", "admin"],

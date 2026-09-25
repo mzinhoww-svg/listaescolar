@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+vi.mock("@/features/site/channels", () => ({ getPurchaseChannels: vi.fn() }));
 
 import SchoolError from "@/app/escolas/[inep]/error";
 import SearchError from "@/app/escolas/error";
-import Home from "@/app/page";
+import Home from "@/app/(site)/page";
+import { getPurchaseChannels } from "@/features/site/channels";
 
 describe("error.tsx", () => {
   it.each([
@@ -24,8 +26,9 @@ describe("error.tsx", () => {
 });
 
 describe("home", () => {
-  it("busca primeiro, sem contagens inventadas", () => {
-    const { container } = render(<Home />);
+  it("busca primeiro, sem contagens inventadas", async () => {
+    vi.mocked(getPurchaseChannels).mockResolvedValue(null);
+    const { container } = render(await Home());
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(container.querySelector('form[method="get"][action="/escolas"]')).not.toBeNull();
     expect(screen.getByRole("link", { name: "Privada" })).toHaveAttribute("href", "/escolas?rede=privada");

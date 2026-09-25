@@ -15,6 +15,8 @@ vi.mock("@/features/lists/queries", () => ({
   getPublishedList: (...a: unknown[]) => getPublishedList(...a),
   listVersionHistory: vi.fn().mockResolvedValue([]),
 }));
+vi.mock("@/features/auth/actor", () => ({ getSessionActor: vi.fn().mockResolvedValue(null) }));
+vi.mock("@/features/claims/queries", () => ({ getMyClaimForSchool: vi.fn().mockResolvedValue(null) }));
 vi.mock("react", async (orig) => ({
   ...(await orig<typeof import("react")>()),
   cache: <T,>(f: T) => f,
@@ -32,7 +34,6 @@ vi.mock("next/navigation", () => ({
 import { academicYears, defaultAcademicYear } from "@/features/grades/catalog";
 import SearchPage, { generateMetadata as searchMeta } from "@/app/escolas/page";
 import SchoolPage, { generateMetadata as schoolMeta } from "@/app/escolas/[inep]/page";
-import ClaimPage from "@/app/escolas/[inep]/reivindicar/page";
 
 const school = (over: Partial<SchoolProfile> = {}): SchoolProfile => ({
   id: "3f2b8c1e-5d4a-4b6f-9a7e-1c2d3e4f5a6b",
@@ -120,16 +121,18 @@ describe("/escolas/[inep]", () => {
     expect(ld?.innerHTML).not.toContain("<");
     expect(JSON.parse(ld?.innerHTML ?? "{}").name).toBe("</script><b>X");
     expect(container.innerHTML).not.toMatch(/mailto:|[\w.]+@[\w.]+/);
-    expect(screen.getByRole("link", { name: "Reivindicar perfil" })).toBeInTheDocument();
+    expect(screen.getByText("Esta escola já tem administrador")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Reivindicar/ })).toBeNull();
   });
 
   it("escola demo: selo Demonstração e sem JSON-LD; metadados noindex", async () => {
-    getSchoolByInep.mockResolvedValue(school({ isDemo: true }));
+    getSchoolByInep.mockResolvedValue(school({ isDemo: true, verificationStatus: "registered" }));
     const { container } = render(await SchoolPage(props()));
     expect(container.querySelector('script[type="application/ld+json"]')).toBeNull();
     expect(screen.getAllByText("Demonstração").length).toBeGreaterThan(0);
     expect(screen.getByText(/Demonstração: dados fictícios/)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Reivindicar perfil" })).toBeNull();
+    expect(screen.getByText("Você trabalha nesta escola?")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Reivindicar escola" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
     const m = await schoolMeta(props());
     expect(m.robots).toMatchObject({ index: false });
     expect(String(m.title)).toContain("Demonstração");
@@ -140,7 +143,7 @@ describe("/escolas/[inep]", () => {
     const { container } = render(await SchoolPage(props()));
     expect(screen.getByText(/perfil está suspenso/)).toBeInTheDocument();
     expect(container.querySelector('script[type="application/ld+json"]')).toBeNull();
-    expect(screen.queryByRole("link", { name: "Reivindicar perfil" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Reivindicar escola" })).toBeNull();
   });
 
   it("falha ao consultar a lista vira 'indisponível' no bloco e não derruba o perfil", async () => {
@@ -171,22 +174,5 @@ describe("/escolas/[inep]", () => {
     render(await SchoolPage(props("51001234", { serie: "xx", ano: "1900" })));
     expect(screen.getByLabelText("Série")).toHaveValue("");
     expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(defaultAcademicYear(now)));
-  });
-});
-
-describe("/escolas/[inep]/reivindicar", () => {
-  it("página honesta, sem formulário; 404 se a escola não existe", async () => {
-    getSchoolByInep.mockResolvedValueOnce(school());
-    const { container } = render(
-      await ClaimPage({ params: Promise.resolve({ inep: "51001234" }) }),
-    );
-    expect(
-      screen.getByRole("heading", { name: "Reivindicação em implantação" }),
-    ).toBeInTheDocument();
-    expect(container.querySelector("form, input")).toBeNull();
-    getSchoolByInep.mockResolvedValueOnce(null);
-    await expect(ClaimPage({ params: Promise.resolve({ inep: "99999999" }) })).rejects.toThrow(
-      "NOT_FOUND",
-    );
   });
 });

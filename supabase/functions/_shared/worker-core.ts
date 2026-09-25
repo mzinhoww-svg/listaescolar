@@ -76,6 +76,14 @@ export const BACKOFF_CAP_SECONDS = 15 * 60;
 export const BACKOFF_MAX_JITTER = 0.2;
 /** Tempo máximo de uma extração no worker. Tem de ficar abaixo da lease de `running` do banco (5 min). */
 export const WORKER_TIMEOUT_MS = 90_000;
+/**
+ * Margem entre o orçamento do roteador e o timer de fora (Server Action e worker): o roteador recebe
+ * `orçamento - margem`, fecha a tentativa e grava `provider_timeout` ANTES de o abort externo (que não grava decisão)
+ * disparar. Cobre o `settings.load()` e a gravação da decisão, que consomem tempo antes/depois do relógio do roteador.
+ */
+export const PIPELINE_ABORT_MARGIN_MS = 500;
+/** Teto de tentativas (todas pagas) de um job com erro de IA transitório: depois disso o job morre em vez de repetir. */
+export const MAX_PAID_ATTEMPTS = 3;
 export const BUSY_RETRY_SECONDS = 60;
 export const DEFAULT_NOT_DUE_SECONDS = 30;
 /** Prazo total de um tick (a Edge Function tem limite de parede): depois dele, nenhuma mensagem nova é reivindicada. */
@@ -149,10 +157,17 @@ async function runWithTimeout(deps: WorkerDeps, input: WorkerInput & { submissio
       throw new Error("timeout do pipeline");
     });
   try {
-    return await Promise.race([deps.pipeline.extract(input, { signal: abort.signal, budgetMs }), timeout]);
+    const routerBudget = Math.max(1, budgetMs - PIPELINE_ABORT_MARGIN_MS);
+    return await Promise.race([deps.pipeline.extract(input, { signal: abort.signal, budgetMs: routerBudget }), timeout]);
   } finally {
     timer.abort();
   }
+}
+
+function isPermanentAiError(e: unknown, attempts: number): boolean {
+  const x = e as { name?: unknown; code?: unknown; transient?: unknown } | null;
+  if (!x || x.name !== "AiError") return false;
+  return x.transient === false || x.code === "invalid_output" || attempts >= MAX_PAID_ATTEMPTS;
 }
 
 export async function processMessage(jobId: string, deps: WorkerDeps): Promise<MessageResult> {
@@ -189,7 +204,9 @@ export async function processMessage(jobId: string, deps: WorkerDeps): Promise<M
   try {
     result = await runWithTimeout(deps, { ...input, submissionId: job.submissionId });
   } catch (e) {
-    return failWith(sanitizeError(e));
+    // Erro de IA sem chance de sucesso (4xx do provedor, modelo/config ausente, saída inválida depois da escalada)
+    // não se repete: cada tentativa é paga. Os transitórios repetem até MAX_PAID_ATTEMPTS.
+    return failWith(sanitizeError(e), isPermanentAiError(e, attempts));
   }
   const parsed = deps.resultSchema.safeParse(result);
   if (!parsed.success) return failWith("resultado inválido do pipeline");

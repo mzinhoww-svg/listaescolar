@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ExtractionPipeline, JobQueue, SubmissionStore } from "@/features/submissions/ports";
 import { submitList, type SubmitInput } from "@/features/submissions/service";
+import { PIPELINE_ABORT_MARGIN_MS } from "@/supabase/functions/_shared/worker-core";
 import { AiError } from "@/supabase/functions/_shared/ai/errors";
 import { FakeClock } from "../helpers/fake-clock";
 import { pdf } from "../helpers/files";
@@ -40,7 +41,7 @@ describe("submitList com o pipeline de IA", () => {
     expect(r.status).toBe("review_needed");
     expect(extract).toHaveBeenCalledWith(
       expect.objectContaining({ submissionId: "sub-1" }),
-      expect.objectContaining({ budgetMs: 10_000 }),
+      expect.objectContaining({ budgetMs: 10_000 - PIPELINE_ABORT_MARGIN_MS }),
     );
   });
 
@@ -59,13 +60,40 @@ describe("submitList com o pipeline de IA", () => {
     expect(s.reject).not.toHaveBeenCalled();
   });
 
-  it("outro erro do pipeline continua rejeitando o envio", async () => {
+  it.each([
+    ["vision_model_missing", new AiError("vision_model_missing"), false],
+    ["provider_error 401 (config)", new AiError("provider_error", { status: 401 }), false],
+    ["provider_timeout", new AiError("provider_timeout"), true],
+    ["429 após escalada", new AiError("provider_error", { transient: true, status: 429 }), true],
+    ["decision_record_failed", new AiError("provider_error", { detail: "decision_record_failed" }), false],
+  ])("falha de infraestrutura (%s): segue para o caminho assíncrono, não rejeita o envio", async (_n, err, available) => {
     const s = store();
-    const pipeline: ExtractionPipeline = {
-      extract: async () => Promise.reject(new AiError("provider_error")),
-    };
+    const q = queue();
     const r = await submitList(input(), {
-      pipeline,
+      pipeline: { extract: async () => Promise.reject(err) },
+      store: s,
+      queue: q,
+      clock: new FakeClock(),
+    });
+    expect(r).toMatchObject({ status: "processing_async", pipelineAvailable: available });
+    expect(s.reject).not.toHaveBeenCalled();
+  });
+
+  it("erro de conteúdo (saída inválida da IA após a escalada) rejeita o envio", async () => {
+    const s = store();
+    const r = await submitList(input(), {
+      pipeline: { extract: async () => Promise.reject(new AiError("invalid_output")) },
+      store: s,
+      queue: queue(),
+      clock: new FakeClock(),
+    });
+    expect(r).toMatchObject({ status: "failed", reason: "extraction_failed" });
+  });
+
+  it("exceção que não é da IA (bug) continua rejeitando o envio", async () => {
+    const s = store();
+    const r = await submitList(input(), {
+      pipeline: { extract: async () => Promise.reject(new Error("boom")) },
       store: s,
       queue: queue(),
       clock: new FakeClock(),

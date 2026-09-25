@@ -1,3 +1,4 @@
+import { PIPELINE_ABORT_MARGIN_MS } from "../../supabase/functions/_shared/worker-core";
 import { SYNC_BUDGET_MS, CONSENT_PURPOSE, CONSENT_TEXT_VERSION } from "./constants";
 import {
   sanitizeFileName,
@@ -31,8 +32,15 @@ export class SubmissionError extends Error {
 type Outcome =
   | { kind: "ok"; result: unknown }
   | { kind: "error" }
-  | { kind: "unconfigured" }
+  | { kind: "infra"; pipelineAvailable: boolean }
   | { kind: "timeout" };
+
+function classifyFailure(e: unknown): Outcome {
+  const x = e as { name?: unknown; code?: unknown; transient?: unknown } | null;
+  if (!x || x.name !== "AiError") return { kind: "error" };
+  if (x.code === "invalid_output" || x.code === "low_confidence") return { kind: "error" }; // conteúdo
+  return { kind: "infra", pipelineAvailable: x.transient === true };
+}
 
 /**
  * Envio com orçamento de tempo. Ordem: consentimento e arquivo validados ANTES de gravar; grava (status
@@ -91,16 +99,14 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
           grade: meta.data.grade,
           schoolYear: meta.data.schoolYear,
         },
-        { signal: abort.signal, budgetMs },
+        { signal: abort.signal, budgetMs: Math.max(1, budgetMs - PIPELINE_ABORT_MARGIN_MS) },
       )
       .then(
         (result): Outcome => ({ kind: "ok", result }),
-        // IA não configurada (settings/modelo/chave ausentes): nada foi lido nem cobrado; segue o caminho assíncrono
-        // com "leitura automática indisponível" em vez de rejeitar o envio.
-        (e: unknown): Outcome =>
-          (e as { code?: unknown } | null)?.code === "ai_not_configured"
-            ? { kind: "unconfigured" }
-            : { kind: "error" },
+        // Falha de infraestrutura/configuração da IA (settings/modelo/chave, 4xx/429/5xx, timeout, gravação da decisão)
+        // não é culpa do arquivo: o envio segue o caminho assíncrono. Só erro de conteúdo (saída inválida da IA) e
+        // exceção que não é da IA rejeitam. `pipelineAvailable` é falso quando a falha é permanente (config).
+        (e: unknown): Outcome => classifyFailure(e),
       ),
     clock.delay(budgetMs, timer.signal).then((): Outcome => ({ kind: "timeout" })),
   ]);
@@ -110,7 +116,7 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     abort.abort(); // cancela o trabalho; se ainda assim resolver, o resultado já é descartado
     return enqueueAsync();
   }
-  if (outcome.kind === "unconfigured") return enqueueAsync(false);
+  if (outcome.kind === "infra") return enqueueAsync(outcome.pipelineAvailable);
   if (outcome.kind === "error") {
     await store.reject(submissionId, "extraction_failed").catch(() => undefined);
     return { status: "failed", submissionId, reason: "extraction_failed" };

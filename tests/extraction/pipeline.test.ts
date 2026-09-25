@@ -121,7 +121,26 @@ describe("pipeline real com provedor falso", () => {
     expect(decisions).toEqual([]);
   });
 
-  it("o abort do orçamento chega ao provedor e não grava decisão", async () => {
+  it("orçamento estourado sem abort externo: o roteador fecha a tentativa paga e grava provider_timeout", async () => {
+    const { rpc, decisions } = memoryRpc();
+    const env = withScript({ cheap: [{ hang: true }], strong: [good()] });
+    const p = createAiPipeline({ env, rpc, budgetMs: 10_000 }).extract(pdf(), { signal: signal(), budgetMs: 40 });
+    await expect(p).rejects.toMatchObject({ code: "provider_timeout" });
+    expect(decisions.map((d) => `${d.decision}:${d.justification}`)).toEqual(["failed:provider_timeout"]);
+  });
+
+  it("foto com baixa confiança NÃO escala para a rota forte (pode não aceitar imagem): aceita a visão com aviso", async () => {
+    const { rpc, decisions } = memoryRpc();
+    const low = good([item("Caderno", { confidence: 0.3 })], { overallConfidence: 0.3 });
+    const env = withScript({ vision: [low], strong: [good()] });
+    const r = await createAiPipeline({ env, rpc, budgetMs: 10_000 }).extract(pdf({ bytes: PNG, mime: "image/png" }), {
+      signal: signal(),
+    });
+    expect(r.lowConfidence).toBe(true);
+    expect(decisions.map((d) => `${d.decision}:${d.model}`)).toEqual(["accepted:fake-vision"]);
+  });
+
+  it("o abort externo (cancelamento do chamador) chega ao provedor e não grava decisão", async () => {
     const { rpc, decisions } = memoryRpc();
     const env = withScript({ cheap: [{ hang: true }], strong: [good()] });
     const ac = new AbortController();
@@ -202,6 +221,9 @@ describe("mensagem ao modelo", () => {
     expect(all.match(/<\/documento>/g)).toHaveLength(1);
     expect(all.match(/<documento>/g)).toHaveLength(1);
     expect(all.match(/[<>]/g)).toHaveLength(4); // só as duas tags do sistema
+    // a série informada (dado do formulário) fica DENTRO do bloco de dados, nunca solta no prompt
+    expect(texts.indexOf("<documento>")).toBeLessThan(texts.findIndex((t) => t.includes("série informada")));
+    expect(texts.findIndex((t) => t.includes("série informada"))).toBeLessThan(texts.indexOf("</documento>"));
     const kinds = (user as { type: string }[]).map((p) => p.type);
     expect(kinds.indexOf("file")).toBeGreaterThan(kinds.indexOf("text"));
     expect(req.messages[0]).toEqual({ role: "system", content: "sys" }); // o documento nunca vira instrução do sistema

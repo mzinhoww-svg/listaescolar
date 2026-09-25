@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { REVIEW_NOTICE } from "@/features/submissions/copy";
+import { WARNING_LOW_CONFIDENCE } from "@/supabase/functions/_shared/ai/extraction";
 import type { ExtractionResult } from "@/features/submissions/schemas";
 
 // Rótulos neutros: sinalizações para revisão, nunca parecer jurídico.
@@ -54,7 +55,7 @@ export function ReviewSummary({ result, isDemo }: { result?: ExtractionResult; i
       {result?.warnings.map((w) => (
         <p
           key={w}
-          role={attention ? "alert" : undefined}
+          role={w === WARNING_LOW_CONFIDENCE ? "alert" : undefined}
           className={
             attention
               ? "text-tinta rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-extrabold"

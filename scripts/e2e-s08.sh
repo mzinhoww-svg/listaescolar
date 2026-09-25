@@ -5,6 +5,11 @@
 # pelo git); `pnpm build`; worker servido com o mesmo script falso (ver docs/superpowers/e2e/S08.md). Sem chaves aqui.
 set -u
 cd "$(dirname "$0")/.."
+# Trava de custo: chave/modelos reais no shell poderiam gastar dinheiro de verdade. Aborta e nunca os repassa.
+for v in OPENROUTER_KEY AI_MODEL_CHEAP AI_MODEL_STRONG AI_MODEL_VISION; do
+  if [ -n "${!v:-}" ]; then echo "ABORTADO: $v está definida no shell; rode com um shell limpo (E2E só usa provedor falso)." >&2; exit 2; fi
+done
+NOAI="env -u OPENROUTER_KEY -u AI_MODEL_CHEAP -u AI_MODEL_STRONG -u AI_MODEL_VISION"
 BASE=${BASE:-http://127.0.0.1:3002}
 MAILPIT=${MAILPIT:-http://127.0.0.1:54524}
 WORKER=${WORKER:-http://127.0.0.1:54521/functions/v1/ocr-worker}
@@ -21,7 +26,7 @@ bad() { FAIL=$((FAIL+1)); echo "FAIL  $1  ($2)"; }
 expect_text() { local t; t=$(ab "$1" get text body 2>/dev/null); if grep -qF -- "$2" <<<"$t"; then ok "$3"; else bad "$3" "esperava '$2'; veio: ${t:0:200}"; fi; }
 wait_text() { for _ in $(seq 1 "$3"); do ab "$1" get text body 2>/dev/null | grep -qF -- "$2" && return 0; sleep 1; done; return 1; }
 last_id() { sql "select id from public.list_submissions order by created_at desc limit 1"; }
-chain() { sql "select string_agg(decision||':'||attempt||':'||justification||':'||model, ' > ' order by attempt) from public.ai_decisions where entity_id='$1'"; }
+chain() { sql "select string_agg(decision||':'||attempt||':'||justification||':'||model, ' > ' order by started_at, attempt) from public.ai_decisions where entity_id='$1'"; }
 
 # --- scripts falsos (dados sintéticos, sem nada de escola real) ---
 LOW='{"items":[{"name":"Caderno brochura (exemplo)","quantity":2,"unit":"un","category":"papelaria","confidence":0.5}],"overallConfidence":0.5}'
@@ -33,9 +38,9 @@ export FAKE_FAST="$FAST" FAKE_SLOW="$SLOW"
 start_app() { # script falso ("" = sem provedor)
   stop_app
   if [ -n "$1" ]; then
-    APP_ENV=local FAKE_AI_SCRIPT="$1" ./node_modules/.bin/next start -p 3002 >/tmp/s08-app.log 2>&1 &
+    $NOAI APP_ENV=local FAKE_AI_SCRIPT="$1" ./node_modules/.bin/next start -p 3002 >/tmp/s08-app.log 2>&1 &
   else
-    APP_ENV=local ./node_modules/.bin/next start -p 3002 >/tmp/s08-app.log 2>&1 &
+    $NOAI APP_ENV=local ./node_modules/.bin/next start -p 3002 >/tmp/s08-app.log 2>&1 &
   fi
   echo $! >/tmp/s08-app.pid
   for _ in $(seq 1 30); do curl -s -o /dev/null "$BASE/" && return 0; sleep 1; done
@@ -115,10 +120,10 @@ sleep 32   # a sessão do navegador continua logada
 submit
 wait_text p "Continuar aguardando" 40 && ok "estado assíncrono após estourar 10 s" || bad "assíncrono" "$(ab p get text body | head -c 200)"
 S4=$(last_id)
-[[ $(sql "select count(*) from public.ai_decisions where entity_id='$S4'") == 0 ]] && ok "cancelado pelo orçamento: nenhuma decisão" || bad "decisões 4" ""
+[[ $(chain "$S4") == "failed:1:provider_timeout:fake-cheap" ]] && ok "orçamento estourado: o roteador fecha a tentativa paga (failed:provider_timeout)" || bad "decisões 4" "$(chain "$S4")"
 curl -s -m 100 -X POST -H "x-worker-secret: $(cat "$SECRET_FILE")" "$WORKER" | head -c 200; echo
 wait_text p "Lista lida" 90 && ok "worker concluiu; painel mudou sozinho" || bad "worker" "$(ab p get text body | head -c 200)"
-[[ $(chain "$S4") == "escalated:1:low_confidence:fake-cheap > accepted:2:accepted:fake-strong" ]] && ok "worker: mesma cadeia com entity_id do envio" || bad "cadeia worker" "$(chain "$S4")"
+[[ $(chain "$S4") == "failed:1:provider_timeout:fake-cheap > escalated:1:low_confidence:fake-cheap > accepted:2:accepted:fake-strong" ]] && ok "worker: mesma cadeia com entity_id do envio (após a decisão do síncrono)" || bad "cadeia worker" "$(chain "$S4")"
 ab p screenshot "$OUT/S08-worker.png" >/dev/null
 
 echo "== fase 3: sem OPENROUTER_KEY/modelos/fake -> leitura automática indisponível"

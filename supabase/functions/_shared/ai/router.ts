@@ -130,7 +130,9 @@ export function createRouter(deps: RouterDeps) {
     const prompt = await closed(() => deps.prompts.get(task.promptKey), "prompt_unavailable");
     if (external?.aborted) throw new AiError("aborted");
 
-    const chain: Route[] = task.needsVision ? ["vision", "strong"] : ["cheap", "strong"];
+    // Foto NÃO escala para `strong`: o modelo forte pode não aceitar imagem (o padrão do .env.example é só texto), e
+    // não existe rota forte de visão em `ai_settings`. Baixa confiança na visão = aceita com `lowConfidence` + revisão.
+    const chain: Route[] = task.needsVision ? ["vision"] : ["cheap", "strong"];
     const maxAttempts = 1 + Math.min(settings.maxEscalations, chain.length - 1);
 
     // Resolve TODA a cadeia antes da 1ª tentativa: se a rota de escalada não está configurada, falha fechado

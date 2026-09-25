@@ -71,8 +71,12 @@ describe("0601: perfil técnico system", () => {
       body: JSON.stringify({ email: "system@listacerta.invalid", create_user: false }),
     });
     // Se o GoTrue emitir o código (usuário banido, mas o pedido é aceito), o código NÃO abre sessão: a verificação é recusada.
+    // No CI o Mailpit não sobe (`supabase start -x mailpit`): sem caixa de e-mail, a parte do código é pulada; a recusa por
+    // senha e a ausência de sessão (abaixo) valem em todo ambiente.
     const mail = env.MAILPIT_URL || env.INBUCKET_URL;
-    const list = (await (await fetch(`${mail}/api/v1/messages`)).json()) as { messages?: { ID: string; To: { Address: string }[] }[] };
+    const list = mail
+      ? ((await (await fetch(`${mail}/api/v1/messages`)).json()) as { messages?: { ID: string; To: { Address: string }[] }[] })
+      : { messages: [] };
     const mine = (list.messages ?? []).filter((m) => m.To.some((t) => t.Address === "system@listacerta.invalid"));
     for (const m of mine) {
       const body = (await (await fetch(`${mail}/api/v1/message/${m.ID}`)).json()) as { Text?: string };

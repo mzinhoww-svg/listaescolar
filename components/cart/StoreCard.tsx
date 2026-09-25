@@ -22,8 +22,10 @@ export function StoreCard({ cartId, info, lines, itemIdFor, opened, primary }: P
   const subtotal = lines.reduce((s, l) => s + (l.lineTotalCents ?? 0), 0);
   const first = lines[0];
   const itemId = first ? itemIdFor(first) : undefined;
-  const href = `/ir-para/${cartId}/${info.id}${itemId ? `?item=${itemId}` : ""}`;
-  const newest = lines.reduce<Date | null>(
+  const hrefFor = (id: string | undefined) =>
+    `/ir-para/${cartId}/${info.id}${id ? `?item=${id}` : ""}`;
+  const href = hrefFor(itemId);
+  const oldest = lines.reduce<Date | null>(
     (d, l) => (l.checkedAt && (!d || l.checkedAt < d) ? l.checkedAt : d),
     null,
   );
@@ -35,7 +37,7 @@ export function StoreCard({ cartId, info, lines, itemIdFor, opened, primary }: P
       <div className="flex items-center gap-3">
         <StoreMark initials={info.initials} />
         <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-extrabold">{info.name}</h3>
+          <h2 className="text-[15px] font-extrabold">{info.name}</h2>
           <p className="text-texto-3 text-xs font-medium">
             {lines.length} {lines.length === 1 ? "item" : "itens"} · subtotal {formatBRL(subtotal)}
           </p>
@@ -48,20 +50,25 @@ export function StoreCard({ cartId, info, lines, itemIdFor, opened, primary }: P
       </div>
       <ul className="divide-linha divide-y">
         {lines.map((l) => (
-          <LineRow key={l.itemKey} line={l} />
+          <LineRow
+            key={l.itemKey}
+            line={l}
+            storeLabel={info.name}
+            searchHref={hrefFor(itemIdFor(l))}
+          />
         ))}
       </ul>
-      {newest ? (
+      {oldest ? (
         <p className="text-texto-3 text-[11px] font-medium">
-          Preço mais antigo verificado em {formatCheckedAt(newest)}.
+          Preço mais antigo verificado em {formatCheckedAt(oldest)}.
         </p>
       ) : null}
       {/* Âncora simples (não Link): o clique é registrado no servidor e não pode ser pré-carregado. */}
       <a
         href={href}
-        className={`${primary ? "bg-tinta text-papel" : "border-tinta text-tinta border-[1.5px]"} rounded-botao flex h-11 w-full items-center justify-center text-sm font-extrabold`}
+        className={`${primary ? "bg-tinta text-papel" : "border-tinta text-tinta border-[1.5px]"} rounded-botao flex min-h-11 w-full items-center justify-center px-4 py-2 text-center text-sm font-extrabold`}
       >
-        Abrir em {info.name}
+        Abrir busca de {first?.name ?? "item"} em {info.name}
       </a>
       <BoughtToggle cartId={cartId} slug={info.id} name={info.name} />
     </li>

@@ -11,8 +11,10 @@ import {
   listActiveRetailers,
   recordClick,
   RepositoryError,
+  saveCartChoice,
   saveOptionsSnapshot,
 } from "@/features/cart/repository";
+import { chooseCartStrategy, snapshotCartOptions } from "@/features/cart/service";
 import { SnapshotRetailerProvider } from "@/features/cart/snapshot-provider";
 
 import { withSuperuser } from "../db/helpers";
@@ -273,6 +275,44 @@ describe("features/cart/repository (Postgres local, RLS)", () => {
       .single();
     expect(Array.isArray(data?.options_snapshot)).toBe(true);
     expect((data?.options_snapshot as unknown[]).length).toBe(4);
+  });
+
+  it("escolha persistida: strategy + snapshot no banco; outro usuário e opção indisponível não alteram", async () => {
+    const id = await createCart(alice.client, {
+      ownerId: alice.id,
+      listId: null,
+      items: [{ name: "Cola branca", quantity: 1 }],
+    });
+    const now = new Date();
+    const env = {};
+    const view = await snapshotCartOptions(alice.client, id, alice.id, env, now);
+    expect(view?.options).toHaveLength(4);
+    const read = () =>
+      alice.client.from("carts").select("strategy, options_snapshot").eq("id", id).single();
+    expect((await read()).data).toMatchObject({ strategy: "cheapest" });
+    expect(((await read()).data?.options_snapshot as unknown[]).length).toBe(4);
+
+    expect(await chooseCartStrategy(alice.client, id, alice.id, "fewest_stores", env, now)).toBe(
+      "ok",
+    );
+    const after = (await read()).data;
+    expect(after?.strategy).toBe("fewest_stores");
+    const snap = after?.options_snapshot as { strategy: string; totalCents: number | null }[];
+    expect(snap.find((o) => o.strategy === "fewest_stores")?.totalCents).not.toBeNull();
+
+    // Papelaria local não tem cotação: não persiste.
+    expect(await chooseCartStrategy(alice.client, id, alice.id, "local_stationery", env, now)).toBe(
+      "unavailable",
+    );
+    expect((await read()).data?.strategy).toBe("fewest_stores");
+    // Outro usuário: não vê o carrinho, nada muda.
+    expect(await chooseCartStrategy(bob.client, id, bob.id, "cheapest", env, now)).toBe(
+      "not_found",
+    );
+    expect((await read()).data?.strategy).toBe("fewest_stores");
+    // saveCartChoice direto (RLS): bob não consegue atualizar o carrinho da alice.
+    await saveCartChoice(bob.client, id, "cheapest", []).catch(() => undefined);
+    expect((await read()).data?.strategy).toBe("fewest_stores");
   });
 
   it("falha nos itens não deixa carrinho pela metade", async () => {

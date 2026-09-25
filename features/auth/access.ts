@@ -1,12 +1,22 @@
 export type UserRole = "parent" | "school_member" | "admin" | "stationery_member" | "system";
-export type ProtectedPrefix = "/conta" | "/escola" | "/papelaria" | "/admin";
+export type ProtectedPrefix =
+  "/conta" | "/carrinho" | "/ir-para" | "/escola" | "/papelaria" | "/admin";
 export type AccessDecision = "allow" | "login" | "forbidden";
 
-const PREFIXES: readonly ProtectedPrefix[] = ["/conta", "/escola", "/papelaria", "/admin"];
+const PREFIXES: readonly ProtectedPrefix[] = [
+  "/conta",
+  "/carrinho",
+  "/ir-para",
+  "/escola",
+  "/papelaria",
+  "/admin",
+];
 
 /** Papéis permitidos por prefixo. `system` nunca é usuário logado no app. */
 const ALLOWED: Record<ProtectedPrefix, readonly UserRole[]> = {
   "/conta": ["parent", "school_member", "admin", "stationery_member"],
+  "/carrinho": ["parent", "school_member", "admin", "stationery_member"],
+  "/ir-para": ["parent", "school_member", "admin", "stationery_member"],
   "/escola": ["school_member", "admin"],
   "/papelaria": ["stationery_member", "admin"],
   "/admin": ["admin"],

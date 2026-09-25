@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { Screen } from "@/components/auth/Screen";
 import { EmptyState } from "@/components/cart/CartStates";
-import { requireUserOrLogin } from "@/features/cart/page-data";
+import { SubmitButton } from "@/components/cart/SubmitButton";
+import { requireAccess } from "@/features/auth/guard";
 import { getListReader, readServiceEnv } from "@/features/cart/service";
 
 import { createCartAction } from "./actions";
@@ -15,13 +16,18 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
   const raw = Array.isArray(sp.lista) ? sp.lista[0] : sp.lista;
   const listId = z.uuid().safeParse(raw);
   const next = listId.success ? `/carrinho/novo?lista=${listId.data}` : "/carrinho/novo";
-  await requireUserOrLogin(next);
+  await requireAccess(next);
+  const listError = (Array.isArray(sp.erro) ? sp.erro[0] : sp.erro) === "lista";
 
   if (!listId.success) {
     return (
       <EmptyState
-        title="Nenhuma lista escolhida"
-        text="Abra o carrinho a partir de uma lista de material para comparar as opções de compra."
+        title={listError ? "Não foi possível montar o carrinho" : "Nenhuma lista escolhida"}
+        text={
+          listError
+            ? "Não conseguimos ler os itens desta lista. Volte e tente de novo."
+            : "Abra o carrinho a partir de uma lista de material para comparar as opções de compra."
+        }
       />
     );
   }
@@ -48,6 +54,11 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
         Montar carrinho com {items.length} {items.length === 1 ? "item" : "itens"}
       </h1>
+      {listError ? (
+        <p role="alert" className="bg-campo rounded-campo px-3.5 py-3 text-[13px] font-bold">
+          Não conseguimos ler os itens desta lista. Tente de novo.
+        </p>
+      ) : null}
       <p className="text-texto-2 text-xs font-semibold">
         Lista de demonstração: itens de exemplo, sem dado de escola nem de aluno.
       </p>
@@ -62,12 +73,12 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       <div className="flex-1" />
       <form action={createCartAction}>
         <input type="hidden" name="listId" value={listId.data} />
-        <button
-          type="submit"
+        <SubmitButton
+          pendingLabel="Montando..."
           className="bg-tinta text-papel rounded-botao flex h-14 w-full items-center justify-center text-base font-extrabold"
         >
           Comparar opções
-        </button>
+        </SubmitButton>
       </form>
     </Screen>
   );

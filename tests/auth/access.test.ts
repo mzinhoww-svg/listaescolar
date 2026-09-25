@@ -8,11 +8,14 @@ describe("protectedPrefix", () => {
     expect(protectedPrefix("/escola/turmas")).toBe("/escola");
     expect(protectedPrefix("/papelaria")).toBe("/papelaria");
     expect(protectedPrefix("/admin/importacoes")).toBe("/admin");
+    expect(protectedPrefix("/carrinho/abc/checkout")).toBe("/carrinho");
+    expect(protectedPrefix("/ir-para/a/b/go")).toBe("/ir-para");
   });
   it("não confunde prefixos parecidos nem rotas públicas", () => {
     expect(protectedPrefix("/administrador")).toBeNull();
     expect(protectedPrefix("/contato")).toBeNull();
     expect(protectedPrefix("/escolas")).toBeNull();
+    expect(protectedPrefix("/carrinhos")).toBeNull();
     expect(protectedPrefix("/")).toBeNull();
     expect(protectedPrefix("/entrar")).toBeNull();
   });
@@ -22,6 +25,8 @@ describe("canAccess", () => {
   const matrix: Record<string, Record<UserRole, "allow" | "forbidden">> = {
     "/conta": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/conta/x": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/carrinho/novo": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/ir-para/x/kalunga": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/escola": { parent: "forbidden", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/papelaria/pedidos": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/admin": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
@@ -35,7 +40,7 @@ describe("canAccess", () => {
     }
   }
   it("role nulo em rota protegida -> login", () => {
-    for (const p of ["/conta", "/escola", "/papelaria", "/admin/x"]) {
+    for (const p of ["/conta", "/carrinho/x", "/ir-para/x/y", "/escola", "/papelaria", "/admin/x"]) {
       expect(canAccess(null, p)).toBe("login");
     }
   });

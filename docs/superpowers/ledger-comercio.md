@@ -42,3 +42,13 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orqu
 - Ruling: `/carrinho/novo` só cria o carrinho por Server Action que relê a lista no servidor (`ListReader`); sem `DEMO_RETAILERS` (ou fora da regra fail-closed) não há leitor e a tela diz "listas indisponíveis". O carrinho nasce `is_demo=true` porque o único leitor desta fatia é o de demonstração — custo se errada: baixo (S11 liga o leitor real e define `is_demo`).
 - Ruling: horários dos preços exibidos em America/Cuiaba (piloto MT), formato dd/mm/aaaa, hh:mm — custo se errada: baixo.
 - Nota: `notFound()` e `redirect()` nas páginas retornam HTTP 200 (streaming sob o `app/loading.tsx` raiz) com a tela 404/login e noindex; só o Route Handler `go` devolve 404/307 reais. O 404 de carrinho alheio é visível ao usuário, não ao código de status das páginas.
+
+## S12 · Task 3 · onda de correção da revisão final
+- Ruling: o design (App17) mostra 3 opções (Mais barato, Recomendado, Menos lojas) e o spec pede 4; mantemos as 4 do spec (Mais rápido do design vira "Menos lojas"; "Papelaria local" entra, hoje sempre "indisponível" sem cotação) e o título conta só as opções com preço ("Montamos N opções") — custo se errada: baixo (copy/ordem).
+- Ruling: o estado "desatualizado" (`staleExcluded`) nunca aparece na UI: o SQL de `getPriceSnapshots` já corta a janela de 24 h, então preço velho nem chega ao motor; o campo segue no tipo para quando a janela for ampliada — custo se errada: baixo.
+- Ruling: o card de opção mostra só total, lojas, prazo e estoque (estoque "indisponível" quando a fonte não trouxe `inStock` em todas as linhas); frete, origem, data/hora e selos ficam no detalhe — custo se errada: baixo (`format.ts`).
+- Ruling: "Escolher esta" é Server Action que grava `carts.strategy` e `options_snapshot` numa só atualização (só opção com preço; RLS do dono); o carrinho também grava o retrato ao ser criado; telas usam a estratégia gravada como padrão quando ainda tem preço — custo se errada: baixo.
+- Ruling: falha ao gravar o clique no `go` volta (303) à tela `/ir-para/...?erro=clique` com aviso e nova tentativa, com `console.error`; continua fail-closed (não abre a loja sem registro). Substitui o 500 da Task 3 — custo se errada: baixo.
+- Ruling: `/carrinho` e `/ir-para` viraram prefixos protegidos do proxy (qualquer papel autenticado exceto `system`), substituindo o Ruling anterior de "não protegidos"; páginas usam `requireAccess` (features/auth/guard.ts); `/carrinho/**` é noindex por layout — custo se errada: baixo.
+- Ruling: `LineRow` falha fechado: preço sem origem ou sem data é exibido como "preço indisponível" — custo se errada: baixo.
+

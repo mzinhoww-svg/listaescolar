@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { CartOption } from "@/features/cart/types";
 
 import { DemoBadge, Tag } from "./badges";
+import { SubmitButton } from "./SubmitButton";
 import {
   deliveryText,
   isSelectable,
@@ -10,22 +11,31 @@ import {
   optionHasDemo,
   STRATEGY_LABEL,
   STRATEGY_TAG,
+  stockText,
   storesText,
 } from "./format";
 
-type Props = { option: CartOption; cartId: string; selected: boolean };
+type Props = {
+  option: CartOption;
+  cartId: string;
+  selected: boolean;
+  /** Server Action de "Escolher esta" (grava a estratégia e o retrato das opções). */
+  action: (formData: FormData) => Promise<void>;
+};
 
 /** Cartão de opção (App17). Total só quando há preço com origem; senão "indisponível". */
-export function OptionCard({ option, cartId, selected }: Props) {
+export function OptionCard({ option, cartId, selected, action }: Props) {
   const usable = isSelectable(option);
+  const current = selected && usable;
   const base = `/carrinho/${cartId}`;
   return (
     <li
       data-testid={`option-${option.strategy}`}
-      className={`bg-branco-tonal flex flex-col gap-3 rounded-[24px] p-5 ${selected ? "border-tinta border-2" : "border-2 border-transparent"}`}
+      aria-current={current ? "true" : undefined}
+      className={`bg-branco-tonal flex flex-col gap-3 rounded-[24px] p-5 ${current ? "border-tinta border-2" : "border-2 border-transparent"}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-lg font-extrabold">{STRATEGY_LABEL[option.strategy]}</h3>
+        <h2 className="text-lg font-extrabold">{STRATEGY_LABEL[option.strategy]}</h2>
         {usable ? (
           <Tag tone={option.strategy === "cheapest" ? "green" : "muted"}>
             {STRATEGY_TAG[option.strategy]}
@@ -41,6 +51,7 @@ export function OptionCard({ option, cartId, selected }: Props) {
         <div className="text-texto-3 text-right text-xs leading-[1.4] font-bold">
           <p>{storesText(option)}</p>
           <p>{deliveryText(option)}</p>
+          <p>{usable ? stockText(option) : null}</p>
         </div>
       </div>
       {optionHasDemo(option) ? <DemoBadge /> : null}
@@ -57,12 +68,16 @@ export function OptionCard({ option, cartId, selected }: Props) {
           >
             Ver detalhes
           </Link>
-          <Link
-            href={`${base}/checkout?opcao=${option.strategy}`}
-            className="bg-tinta text-papel rounded-botao flex h-11 flex-1 items-center justify-center text-sm font-extrabold"
-          >
-            Escolher esta
-          </Link>
+          <form action={action} className="flex flex-1">
+            <input type="hidden" name="cartId" value={cartId} />
+            <input type="hidden" name="strategy" value={option.strategy} />
+            <SubmitButton
+              pendingLabel="Salvando..."
+              className="bg-tinta text-papel rounded-botao flex h-11 flex-1 items-center justify-center text-sm font-extrabold"
+            >
+              Escolher esta
+            </SubmitButton>
+          </form>
         </div>
       ) : (
         <p className="text-texto-3 text-xs font-semibold">

@@ -10,13 +10,15 @@ import {
   getCart,
   getPriceSnapshots,
   listActiveRetailers,
+  saveCartChoice,
+  saveOptionsSnapshot,
   type CartItemRow,
   type CartRow,
 } from "./repository";
 import type { RetailerRow } from "./schemas";
 import { SnapshotRetailerProvider } from "./snapshot-provider";
 import { RedirectTargetError } from "./redirect-target";
-import type { CartOption, Quote } from "./types";
+import type { CartOption, CartStrategy, Quote } from "./types";
 import type { ListReader } from "./ports";
 
 export type StoreInfo = {
@@ -145,4 +147,39 @@ export async function loadCartView(
 export function storeName(view: Pick<CartView, "stores">, storeId: string): string {
   if (storeId.startsWith(LOCAL_STORE_PREFIX)) return "Papelaria local";
   return view.stores[storeId]?.name ?? storeId;
+}
+
+/** Recalcula as opções do carrinho do usuário e grava o retrato em `options_snapshot`. */
+export async function snapshotCartOptions(
+  client: SupabaseClient,
+  cartId: string,
+  userId: string,
+  env: ServiceEnv,
+  now: Date = new Date(),
+): Promise<CartView | null> {
+  const view = await loadCartView(client, cartId, userId, env, now);
+  if (!view) return null;
+  await saveOptionsSnapshot(client, cartId, view.options);
+  return view;
+}
+
+export type ChoiceResult = "ok" | "not_found" | "unavailable";
+
+/** "Escolher esta": só opção com preço de fonte; grava `strategy` e o retrato das opções mostradas. */
+export async function chooseCartStrategy(
+  client: SupabaseClient,
+  cartId: string,
+  userId: string,
+  strategy: CartStrategy,
+  env: ServiceEnv,
+  now: Date = new Date(),
+): Promise<ChoiceResult> {
+  const view = await loadCartView(client, cartId, userId, env, now);
+  if (!view) return "not_found";
+  const option = view.options.find((o) => o.strategy === strategy);
+  if (!option || option.status === "unavailable" || option.totalCents === null) {
+    return "unavailable";
+  }
+  await saveCartChoice(client, cartId, strategy, view.options);
+  return "ok";
 }

@@ -19,7 +19,8 @@ export function BoughtToggle({
       onClick={() => writeBought(boughtKey(cartId, slug), !bought)}
       className={`${bought ? "bg-verde-certo text-tinta" : "bg-campo text-texto-2"} rounded-botao flex h-9 w-full items-center justify-center text-[13px] font-extrabold`}
     >
-      {bought ? `Comprado em ${name} (desfazer)` : "Já comprei nesta loja"}
+      {bought ? <span aria-hidden="true">✓ </span> : null}
+      Já comprei em {name}
     </button>
   );
 }

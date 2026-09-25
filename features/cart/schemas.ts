@@ -47,3 +47,8 @@ export const retailerRowSchema = z.object({
   isActive: z.boolean(),
 });
 export type RetailerRow = z.infer<typeof retailerRowSchema>;
+
+export const chooseOptionSchema = z.object({
+  cartId: z.uuid(),
+  strategy: z.enum(CART_STRATEGIES),
+});

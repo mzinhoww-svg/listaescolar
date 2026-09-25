@@ -236,6 +236,20 @@ export async function saveOptionsSnapshot(
   if (error) fail("salvar opções", error);
 }
 
+/** Escolha do usuário: estratégia e o retrato das opções mostradas, na mesma atualização (RLS: só o dono). */
+export async function saveCartChoice(
+  client: SupabaseClient,
+  cartId: string,
+  strategy: CartStrategy,
+  options: CartOption[],
+): Promise<void> {
+  const { error } = await client
+    .from("carts")
+    .update({ strategy, options_snapshot: JSON.parse(JSON.stringify(options)) })
+    .eq("id", cartId);
+  if (error) fail("salvar escolha", error);
+}
+
 export type ClickInput = {
   cartId: string;
   retailerId: string;

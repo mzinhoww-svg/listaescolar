@@ -3,67 +3,66 @@ import { describe, expect, it } from "vitest";
 
 import { OptionCard } from "@/components/cart/OptionCard";
 import { OptionDetail } from "@/components/cart/OptionDetail";
-import { StoreCard } from "@/components/cart/StoreCard";
-import { deliveryText, formatCheckedAt } from "@/components/cart/format";
-import type { StoreInfo } from "@/features/cart/service";
-import type { CartOption, OptionLine } from "@/features/cart/types";
+import { deliveryText, formatCheckedAt, stockText } from "@/components/cart/format";
 
-// Fixtures de teste: valores fictícios.
-const CHECKED = new Date("2026-09-24T12:30:00.000Z");
-const CART = "11111111-1111-4111-8111-111111111111";
+import { CART, CHECKED, missing, option, priced, stores } from "./fixtures";
 
-const priced = (over: Partial<OptionLine> = {}): OptionLine => ({
-  itemKey: "caderno",
-  name: "Caderno",
-  quantity: 2,
-  status: "priced",
-  storeId: "amazon",
-  unitPriceCents: 1500,
-  lineTotalCents: 3000,
-  source: "manual_admin",
-  checkedAt: CHECKED,
-  url: "https://www.amazon.com.br/produto-secreto",
-  ...over,
-});
-const missing: OptionLine = {
-  itemKey: "cola",
-  name: "Cola",
-  quantity: 1,
-  status: "unavailable",
-  storeId: null,
-  unitPriceCents: null,
-  lineTotalCents: null,
-  source: null,
-  checkedAt: null,
-};
-const option = (over: Partial<CartOption> = {}): CartOption => ({
-  strategy: "cheapest",
-  status: "available",
-  totalCents: 3000,
-  lines: [priced()],
-  stores: ["amazon"],
-  missingItems: [],
-  staleExcluded: [],
-  ...over,
-});
-const stores: Record<string, StoreInfo> = {
-  amazon: { id: "amazon", name: "Amazon", initials: "A", affiliateApplied: false },
-};
+const noop = async (): Promise<void> => {};
 
 describe("OptionCard", () => {
+  it("'Escolher esta' é um botão de formulário (persiste a escolha) com strategy e cartId", () => {
+    const { container } = render(
+      <ul>
+        <OptionCard option={option()} cartId={CART} selected action={noop} />
+      </ul>,
+    );
+    expect(screen.getByRole("button", { name: "Escolher esta" })).toBeInTheDocument();
+    expect(container.querySelector('input[name="strategy"]')).toHaveValue("cheapest");
+    expect(container.querySelector('input[name="cartId"]')).toHaveValue(CART);
+  });
+
+  it("opção indisponível nunca aparece como selecionada, mesmo se pedida", () => {
+    const o = option({ status: "unavailable", totalCents: null, lines: [missing], stores: [] });
+    render(
+      <ul>
+        <OptionCard option={o} cartId={CART} selected action={noop} />
+      </ul>,
+    );
+    expect(screen.getByTestId("option-cheapest")).not.toHaveAttribute("aria-current");
+    expect(screen.queryByRole("button", { name: "Escolher esta" })).not.toBeInTheDocument();
+  });
+
+  it("selecionada marca aria-current; título da opção é h2 (sem pular nível)", () => {
+    render(
+      <ul>
+        <OptionCard option={option()} cartId={CART} selected action={noop} />
+      </ul>,
+    );
+    expect(screen.getByTestId("option-cheapest")).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("heading", { level: 2, name: "Mais barato" })).toBeInTheDocument();
+  });
+
+  it("estoque: 'indisponível' quando a fonte não trouxe; só afirma com todas as linhas confirmadas", () => {
+    expect(stockText(option())).toBe("estoque indisponível");
+    expect(stockText(option({ lines: [priced({ inStock: true })] }))).toBe("em estoque");
+    expect(
+      stockText(option({ lines: [priced({ inStock: true }), priced({ itemKey: "b" })] })),
+    ).toBe("estoque indisponível");
+    expect(stockText(option({ lines: [priced({ inStock: false })] }))).toBe(
+      "sem estoque em algum item",
+    );
+  });
+
   it("mostra total, lojas e 'prazo indisponível' sem dado de prazo", () => {
     render(
       <ul>
-        <OptionCard option={option()} cartId={CART} selected />
+        <OptionCard option={option()} cartId={CART} selected action={noop} />
       </ul>,
     );
     expect(screen.getByText("R$ 30,00")).toBeInTheDocument();
     expect(screen.getByText("1 loja")).toBeInTheDocument();
     expect(screen.getByText("prazo indisponível")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Escolher esta" })).toHaveAttribute(
-      "href",
-      `/carrinho/${CART}/checkout?opcao=cheapest`,
-    );
+    expect(screen.getByRole("button", { name: "Escolher esta" })).toBeInTheDocument();
     expect(screen.queryByText("Demonstração")).not.toBeInTheDocument();
   });
 
@@ -74,6 +73,7 @@ describe("OptionCard", () => {
           option={option({ lines: [priced({ isDemo: true, source: "demo" })] })}
           cartId={CART}
           selected={false}
+          action={noop}
         />
       </ul>,
     );
@@ -90,7 +90,7 @@ describe("OptionCard", () => {
     });
     const { container } = render(
       <ul>
-        <OptionCard option={o} cartId={CART} selected={false} />
+        <OptionCard option={o} cartId={CART} selected={false} action={noop} />
       </ul>,
     );
     expect(screen.getByText("indisponível")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("OptionCard", () => {
     });
     render(
       <ul>
-        <OptionCard option={o} cartId={CART} selected={false} />
+        <OptionCard option={o} cartId={CART} selected={false} action={noop} />
       </ul>,
     );
     expect(screen.getByText("Sem cotação da papelaria local.")).toBeInTheDocument();
@@ -164,44 +164,5 @@ describe("OptionDetail", () => {
   it("sem frete da fonte: 'Frete: indisponível'", () => {
     render(<OptionDetail option={option()} stores={stores} />);
     expect(screen.getByText("Frete: indisponível")).toBeInTheDocument();
-  });
-});
-
-describe("StoreCard", () => {
-  const info = stores.amazon!;
-  it("botão aponta para a rota /ir-para (âncora simples) e nunca para a loja", () => {
-    render(
-      <ul>
-        <StoreCard
-          cartId={CART}
-          info={info}
-          lines={[priced()]}
-          itemIdFor={() => "abc"}
-          opened={false}
-          primary
-        />
-      </ul>,
-    );
-    const a = screen.getByRole("link", { name: "Abrir em Amazon" });
-    expect(a).toHaveAttribute("href", `/ir-para/${CART}/amazon?item=abc`);
-    expect(screen.getByText("Falta abrir")).toBeInTheDocument();
-    expect(document.body.innerHTML).not.toContain("produto-secreto");
-  });
-
-  it("aberto e selo de afiliado", () => {
-    render(
-      <ul>
-        <StoreCard
-          cartId={CART}
-          info={{ ...info, affiliateApplied: true }}
-          lines={[priced()]}
-          itemIdFor={() => undefined}
-          opened
-          primary={false}
-        />
-      </ul>,
-    );
-    expect(screen.getByText("Aberto")).toBeInTheDocument();
-    expect(screen.getByText("link afiliado")).toBeInTheDocument();
   });
 });

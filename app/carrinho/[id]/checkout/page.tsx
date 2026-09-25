@@ -25,7 +25,7 @@ export default async function CheckoutPage({
   const sp = await searchParams;
   const wanted = parseStrategy(sp.opcao);
   const view = await requireCartView(id, `/carrinho/${id}/checkout`);
-  const option = chooseOption(view.options, wanted);
+  const option = chooseOption(view.options, wanted, view.cart.strategy);
   const back = `/carrinho/${id}`;
 
   if (!isSelectable(option)) {
@@ -63,6 +63,7 @@ export default async function CheckoutPage({
   return (
     <Screen>
       <BackHeader href={back} title="Comprar por loja" />
+      <h1 className="sr-only">Comprar por loja</h1>
       <section className="bg-tinta text-papel flex flex-col gap-2.5 rounded-[22px] p-[18px]">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-extrabold">{STRATEGY_LABEL[option.strategy]}</p>
@@ -73,6 +74,8 @@ export default async function CheckoutPage({
         <div
           className="h-2 rounded bg-[#1F2E45]"
           role="progressbar"
+          aria-label="Lojas abertas"
+          aria-valuetext={`${opened} de ${remote.length} lojas abertas`}
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}

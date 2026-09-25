@@ -15,8 +15,24 @@ function nameOf(stores: Record<string, StoreInfo>, id: string): string {
 }
 
 /** Uma linha: preço com origem e data/hora, ou "preço indisponível" sem número. Sem link de produto. */
-export function LineRow({ line }: { line: OptionLine }) {
-  if (line.status !== "priced" || line.unitPriceCents === null || line.lineTotalCents === null) {
+export function LineRow({
+  line,
+  searchHref,
+  storeLabel = "a loja",
+}: {
+  line: OptionLine;
+  searchHref?: string;
+  storeLabel?: string;
+}) {
+  // Fail-closed: número só com origem e data da fonte; sem elas, é como se não houvesse preço.
+  const { unitPriceCents, lineTotalCents, source, checkedAt } = line;
+  if (
+    line.status !== "priced" ||
+    unitPriceCents === null ||
+    lineTotalCents === null ||
+    !source ||
+    !checkedAt
+  ) {
     return (
       <li className="flex items-start justify-between gap-3 py-2">
         <p className="text-sm font-semibold">
@@ -33,11 +49,21 @@ export function LineRow({ line }: { line: OptionLine }) {
           {line.name} <span className="text-texto-3">× {line.quantity}</span>
         </p>
         <p className="text-texto-3 text-[11px] leading-[1.4] font-medium">
-          {formatBRL(line.unitPriceCents)} cada · origem: {sourceLabel(line.source ?? "")} ·{" "}
-          {line.checkedAt ? formatCheckedAt(line.checkedAt) : ""}
+          {formatBRL(unitPriceCents)} cada · origem: {sourceLabel(source)} ·{" "}
+          {formatCheckedAt(checkedAt)}
         </p>
+        {searchHref ? (
+          // Âncora simples: leva à tela /ir-para, que confirma antes de o clique ser registrado.
+          <a
+            href={searchHref}
+            aria-label={`Buscar ${line.name} em ${storeLabel}`}
+            className="text-verde-fundo mt-1 inline-block text-xs font-extrabold underline"
+          >
+            Buscar
+          </a>
+        ) : null}
       </div>
-      <p className="text-sm font-extrabold whitespace-nowrap">{formatBRL(line.lineTotalCents)}</p>
+      <p className="text-sm font-extrabold whitespace-nowrap">{formatBRL(lineTotalCents)}</p>
     </li>
   );
 }

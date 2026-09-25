@@ -65,10 +65,18 @@ export async function GET(
       affiliateApplied: target.affiliateApplied,
       targetUrl: target.url,
     });
-  } catch {
-    return new Response("Não foi possível registrar o clique. Tente de novo.", {
-      status: 500,
-      headers: NO_STORE,
+  } catch (error) {
+    // Sem registro não há atribuição: não vai à loja. Volta à tela de confirmação com aviso e nova tentativa.
+    console.error(
+      "go: falha ao registrar clique",
+      error instanceof Error ? error.message : "erro desconhecido",
+    );
+    return new Response(null, {
+      status: 303,
+      headers: {
+        ...NO_STORE,
+        Location: `/ir-para/${cartId}/${slug}?item=${chosen.id}&erro=clique`,
+      },
     });
   }
 

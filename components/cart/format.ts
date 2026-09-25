@@ -50,6 +50,15 @@ export function deliveryText(option: CartOption): string {
   return `chega em até ${Math.max(...(days as number[]))} dias`;
 }
 
+/** Estoque só quando a fonte o trouxe em todas as linhas com preço; senão indisponível. */
+export function stockText(option: CartOption): string {
+  const priced = pricedLines(option);
+  if (priced.length === 0 || priced.some((l) => l.inStock === undefined)) {
+    return "estoque indisponível";
+  }
+  return priced.every((l) => l.inStock === true) ? "em estoque" : "sem estoque em algum item";
+}
+
 export function isSelectable(option: CartOption): boolean {
   return option.status !== "unavailable" && option.totalCents !== null;
 }

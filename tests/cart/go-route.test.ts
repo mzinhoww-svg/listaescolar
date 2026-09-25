@@ -164,11 +164,16 @@ describe("GET /ir-para/[cartId]/[retailer]/go", () => {
     expect(recordClick).toHaveBeenCalledTimes(2);
   });
 
-  it("falha ao registrar o clique: 500 e sem Location", async () => {
+  it("falha ao registrar o clique: 303 para a tela com ?erro=clique, sem ir à loja, e loga", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     recordClick.mockRejectedValue(new Error("boom"));
-    const res = await call();
-    expect(res.status).toBe(500);
-    expect(res.headers.get("Location")).toBeNull();
+    const res = await call("amazon", `?item=${ITEM2}`);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe(`/ir-para/${CART}/amazon?item=${ITEM2}&erro=clique`);
+    expect(res.headers.get("Location")).not.toContain("amazon.com.br");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it("template inseguro no cadastro: 404 sem clique", async () => {

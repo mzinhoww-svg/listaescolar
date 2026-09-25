@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Client } from "pg";
 import { attempt, cleanupUsers, IDS, seedUsers, withClaims, withSuperuser } from "./helpers";
 
-const OWN = `${IDS.parent}/sub-1/lista.pdf`;
-const OTHER = `${IDS.school_member}/sub-2/lista.pdf`;
+const S1 = "40000000-0000-4000-8000-000000000001";
+const S2 = "40000000-0000-4000-8000-000000000002";
+const OWN = `${IDS.parent}/${S1}/lista.pdf`;
+const OTHER = `${IDS.school_member}/${S2}/lista.pdf`;
 const put = (name: string) => `insert into storage.objects (bucket_id, name, owner_id) values ('list-uploads', '${name}', '${IDS.parent}')`;
 
 // storage.protect_delete bloqueia DELETE direto; o flag abre a exceção só nesta transação de limpeza.
@@ -40,32 +42,54 @@ describe("bucket list-uploads e storage.objects", () => {
     });
   });
 
-  it("dono envia e lê na própria pasta", async () => {
+  it("dono lê a própria pasta e não envia (upload é do servidor, com service_role)", async () => {
     await withClaims("parent", async (c) => {
-      const ins = await attempt(c, put(`${IDS.parent}/sub-9/foto.jpg`));
-      expect(ins.error).toBeNull();
+      const ins = await attempt(c, put(`${IDS.parent}/${S1}/foto.jpg`));
+      expect(ins.error).not.toBeNull();
       const sel = await c.query("select name from storage.objects where bucket_id = 'list-uploads' order by name");
       expect(sel.rows.map((r) => r.name)).toContain(OWN);
       expect(sel.rows.map((r) => r.name)).not.toContain(OTHER);
     });
   });
 
-  it("outro usuário não envia na pasta alheia nem lê", async () => {
+  it("service_role envia; authenticated (outro usuário, admin, stationery_member) não", async () => {
+    await withClaims("system", async (c) => {
+      expect((await attempt(c, put(`${IDS.parent}/${S1}/foto.jpg`))).error).toBeNull();
+    });
+    for (const who of ["school_member", "admin", "stationery_member"] as const) {
+      await withClaims(who, async (c) => {
+        expect((await attempt(c, put(`${IDS[who]}/${S1}/x.pdf`))).error, who).not.toBeNull();
+      });
+    }
+  });
+
+  it("outro usuário não lê a pasta alheia", async () => {
     await withClaims("school_member", async (c) => {
-      const ins = await attempt(c, put(OWN.replace("sub-1", "sub-8")));
-      expect(ins.error).not.toBeNull();
       const sel = await c.query("select name from storage.objects where bucket_id = 'list-uploads'");
       expect(sel.rows.map((r) => r.name)).toEqual([OTHER]);
     });
   });
 
-  it("caminho com traversal ou fora da pasta do usuário é recusado", async () => {
-    await withClaims("parent", async (c) => {
-      for (const name of [`../${IDS.school_member}/x.pdf`, `x/${IDS.parent}/a.pdf`, "a.pdf"]) {
-        const r = await attempt(c, put(name));
-        expect(r.error, name).not.toBeNull();
-      }
+  it("leitura rejeita '..' no caminho e exige UUID no 2º segmento", async () => {
+    const bad = [`${IDS.parent}/../${IDS.school_member}/x.pdf`, `${IDS.parent}/${S1}/../${S2}/x.pdf`, `${IDS.parent}/sub-1/x.pdf`, `${IDS.parent}/x.pdf`];
+    await withSuperuser(async (c) => {
+      for (const n of bad) await c.query("insert into storage.objects (bucket_id, name) values ('list-uploads', $1)", [n]);
     });
+    try {
+      for (const who of ["parent", "admin"] as const) {
+        await withClaims(who, async (c) => {
+          const sel = await c.query("select name from storage.objects where bucket_id = 'list-uploads'");
+          for (const n of bad) expect(sel.rows.map((r) => r.name), `${who}:${n}`).not.toContain(n);
+        });
+      }
+    } finally {
+      await withSuperuser(async (c) => {
+        await c.query("begin");
+        await c.query("select set_config('storage.allow_delete_query', 'true', true)");
+        await c.query("delete from storage.objects where bucket_id = 'list-uploads' and name = any($1)", [bad]);
+        await c.query("commit");
+      });
+    }
   });
 
   it("anon não envia nem lê", async () => {
@@ -105,7 +129,7 @@ describe("bucket list-uploads e storage.objects", () => {
         `select polname, array(select rolname::text from pg_roles where oid = any(polroles)) roles
            from pg_policy where polrelid = 'storage.objects'::regclass and polname like 'list_uploads%'`,
       );
-      expect(r.rowCount).toBeGreaterThanOrEqual(2);
+      expect(r.rowCount).toBeGreaterThanOrEqual(1);
       for (const p of r.rows) expect(p.roles).toEqual(["authenticated"]);
     });
   });

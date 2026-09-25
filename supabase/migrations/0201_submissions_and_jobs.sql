@@ -106,9 +106,10 @@ alter table public.list_submissions enable always trigger list_submissions_audit
 -- Grants e RLS
 -- ---------------------------------------------------------------------------
 revoke all on public.consents, public.list_submissions, public.jobs, public.ocr_jobs from anon, authenticated, service_role;
-grant select, insert on public.consents to authenticated;
-grant update (revoked_at) on public.consents to authenticated; -- o dono só revoga
-grant select, insert on public.list_submissions to authenticated;
+-- Menor privilégio: authenticated só LÊ o que é seu. O envio (consentimento, linha e arquivo) é feito pelo
+-- servidor com service_role; a revogação passa por public.consents_revoke (única via, sem UPDATE direto).
+grant select on public.consents to authenticated;
+grant select on public.list_submissions to authenticated;
 grant select on public.jobs to authenticated;
 grant update (notify_channel, notify_target) on public.jobs to authenticated;
 grant select on public.ocr_jobs to authenticated;
@@ -123,33 +124,65 @@ alter table public.ocr_jobs enable row level security;
 create policy consents_select_own_or_admin on public.consents
   for select to authenticated
   using (profile_id = (select auth.uid()) or (select public.auth_role()) in ('admin', 'system'));
--- consents: só o próprio usuário (com papel) registra o próprio consentimento.
-create policy consents_insert_own on public.consents
-  for insert to authenticated
-  with check (profile_id = (select auth.uid()) and (select public.auth_role()) is not null);
--- consents: dono revoga o próprio (grant de coluna limita a revoked_at).
-create policy consents_update_own on public.consents
-  for update to authenticated
-  using (profile_id = (select auth.uid())) with check (profile_id = (select auth.uid()));
-
 -- list_submissions: dono lê os próprios; admin/system leem todos.
 create policy list_submissions_select_own_or_admin on public.list_submissions
   for select to authenticated
   using (submitted_by = (select auth.uid()) or (select public.auth_role()) in ('admin', 'system'));
--- list_submissions: parent/school_member/admin criam em nome próprio, sempre como 'submitted', com consentimento
--- próprio, 'list_upload' e não revogado; origem 'school' só para school_member/admin.
-create policy list_submissions_insert_own on public.list_submissions
-  for insert to authenticated
-  with check (
-    submitted_by = (select auth.uid())
-    and (select public.auth_role()) in ('parent', 'school_member', 'admin')
-    and (source = 'parent' or (select public.auth_role()) in ('school_member', 'admin'))
-    and status = 'submitted'
-    and exists (
-      select 1 from public.consents c
-      where c.id = consent_id and c.profile_id = submitted_by and c.purpose = 'list_upload' and c.revoked_at is null
-    )
-  );
+-- Regras de criação do envio (antes eram políticas de INSERT do usuário; agora valem também para o service_role,
+-- que ignora RLS): dono com papel de envio, origem 'school' só para school_member/admin, status inicial 'submitted',
+-- consentimento próprio, 'list_upload' e não revogado.
+create function public.list_submissions_check_insert() returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  owner_role public.user_role;
+begin
+  select role into owner_role from public.profiles where id = new.submitted_by;
+  if owner_role is null or owner_role not in ('parent', 'school_member', 'admin') then
+    raise exception 'papel sem permissão de envio' using errcode = '42501';
+  end if;
+  if new.source = 'school' and owner_role not in ('school_member', 'admin') then
+    raise exception 'origem school só para school_member/admin' using errcode = '42501';
+  end if;
+  if new.status <> 'submitted' then
+    raise exception 'envio nasce como submitted' using errcode = '23514';
+  end if;
+  if not exists (
+    select 1 from public.consents c
+     where c.id = new.consent_id and c.profile_id = new.submitted_by
+       and c.purpose = 'list_upload' and c.revoked_at is null
+  ) then
+    raise exception 'consentimento ausente, alheio ou revogado' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+create trigger list_submissions_check_insert before insert on public.list_submissions
+  for each row execute function public.list_submissions_check_insert();
+revoke execute on function public.list_submissions_check_insert() from public, anon, authenticated, service_role;
+
+-- Consentimento é imutável, exceto a revogação (revoked_at nulo -> data, uma única vez).
+create function public.consents_guard_update() returns trigger
+language plpgsql
+as $$
+begin
+  if new.id is distinct from old.id
+     or new.profile_id is distinct from old.profile_id
+     or new.purpose is distinct from old.purpose
+     or new.text_version is distinct from old.text_version
+     or new.granted_at is distinct from old.granted_at then
+    raise exception 'consentimento é imutável' using errcode = '42501';
+  end if;
+  if old.revoked_at is not null and new.revoked_at is distinct from old.revoked_at then
+    raise exception 'consentimento revogado não pode ser alterado nem restaurado' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+create trigger consents_guard_update before update on public.consents
+  for each row execute function public.consents_guard_update();
 
 -- jobs: dono do envio lê o job (inclui notify_target, invisível a terceiros); admin/system leem todos.
 create policy jobs_select_owner_or_admin on public.jobs
@@ -191,6 +224,17 @@ alter table pgmq.a_ocr_jobs_dlq enable row level security;
 -- ---------------------------------------------------------------------------
 -- Funções (SECURITY DEFINER, search_path vazio, EXECUTE só service_role)
 -- ---------------------------------------------------------------------------
+-- Revoga o consentimento do dono, uma única vez (idempotente: se já revogado, não altera nada).
+create function public.consents_revoke(p_consent_id uuid, p_profile_id uuid) returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.consents
+     set revoked_at = now()
+   where id = p_consent_id and profile_id = p_profile_id and revoked_at is null;
+$$;
+
 -- Envio ainda não concluído -> estado coerente com o resultado do job. Não mexe em estados adiante.
 create function public.jobs_touch_submission(p_submission_id uuid, p_status public.list_status) returns void
 language sql
@@ -251,32 +295,72 @@ begin
 end;
 $$;
 
--- Um único vencedor mesmo sob concorrência: o UPDATE condicional serializa as chamadas.
-create function public.jobs_claim(p_job_id uuid) returns boolean
+-- Reivindica o job para o worker. Devolve:
+--   'claimed'  transição queued|retrying vencido -> running, ou reclaim de running com lease vencido (attempts+1);
+--   'busy'     running com lease vigente (outro worker está com ele);
+--   'not_due'  queued/retrying com run_after no futuro;
+--   'finished' succeeded, dead ou inexistente (também quando precisava reclamar mas as tentativas acabaram: vira dead).
+-- LEASE de 5 minutos (locked_at): o worker DEVE terminar (ou falhar) abaixo dela; senão outro worker reclama o job.
+-- O SELECT ... FOR UPDATE serializa as chamadas: sob concorrência só uma devolve 'claimed', as demais 'busy'.
+create function public.jobs_claim(p_job_id uuid) returns text
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  got uuid;
+  j public.jobs;
 begin
-  update public.jobs
-     set status = 'running', attempts = attempts + 1, locked_at = now()
-   where id = p_job_id
-     and attempts < max_attempts
-     and (
-       (status in ('queued', 'retrying') and run_after <= now())
-       or (status = 'running' and locked_at < now() - interval '5 minutes') -- worker caiu no meio
-     )
-   returning id into got;
-  if got is not null then
-    return true;
+  select * into j from public.jobs where id = p_job_id for update;
+  if not found or j.status in ('succeeded', 'dead') then
+    return 'finished';
   end if;
-  -- running antigo sem tentativas restantes: esgotou (crash repetido) -> dead.
-  perform public.jobs_mark_dead(id, 'tentativas esgotadas (worker interrompido)')
-     from public.jobs
-    where id = p_job_id and status = 'running' and attempts >= max_attempts and locked_at < now() - interval '5 minutes';
-  return false;
+  if j.status = 'running' then
+    if j.locked_at is not null and j.locked_at >= now() - interval '5 minutes' then
+      return 'busy';
+    end if;
+  elsif j.run_after > now() then
+    return 'not_due';
+  end if;
+  if j.attempts >= j.max_attempts then
+    perform public.jobs_mark_dead(j.id, 'tentativas esgotadas');
+    return 'finished';
+  end if;
+  update public.jobs set status = 'running', attempts = attempts + 1, locked_at = now() where id = j.id;
+  return 'claimed';
+end;
+$$;
+
+-- Rede de segurança do agendador: re-envia à fila jobs cuja mensagem se perdeu (running com lease vencido,
+-- queued/retrying com run_after vencido e sem mensagem em q_ocr_jobs) e marca dead os sem tentativas restantes.
+-- Devolve quantos jobs foram tratados. Idempotente: mensagem já presente não é duplicada.
+-- Lease de 5 min: o worker deve rodar abaixo dela.
+create function public.jobs_requeue_stale() returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r record;
+  n int := 0;
+begin
+  for r in
+    select id, attempts, max_attempts from public.jobs
+     where kind = 'ocr_jobs'
+       and (
+         (status = 'running' and (locked_at is null or locked_at < now() - interval '5 minutes'))
+         or (status in ('queued', 'retrying') and run_after <= now())
+       )
+     for update skip locked
+  loop
+    if r.attempts >= r.max_attempts then
+      perform public.jobs_mark_dead(r.id, 'tentativas esgotadas');
+      n := n + 1;
+    elsif not exists (select 1 from pgmq.q_ocr_jobs m where m.message ->> 'job_id' = r.id::text) then
+      perform pgmq.send('ocr_jobs', jsonb_build_object('job_id', r.id));
+      n := n + 1;
+    end if;
+  end loop;
+  return n;
 end;
 $$;
 
@@ -310,21 +394,22 @@ as $$
 declare
   j public.jobs;
 begin
-  update public.jobs
-     set status = 'retrying', locked_at = null, last_error = left(p_error, 500),
-         run_after = now() + make_interval(secs => greatest(coalesce(p_retry_in_seconds, 0), 0))
-   where id = p_job_id and status = 'running' and attempts < max_attempts
-   returning * into j;
-  if j.id is not null then
+  select * into j from public.jobs where id = p_job_id for update;
+  if not found then
+    return null; -- inexistente
+  end if;
+  if j.status <> 'running' then
+    return j.status; -- no-op: já finalizado ou não reivindicado
+  end if;
+  if j.attempts < j.max_attempts then
+    update public.jobs
+       set status = 'retrying', locked_at = null, last_error = left(p_error, 500),
+           run_after = now() + make_interval(secs => greatest(coalesce(p_retry_in_seconds, 0), 0))
+     where id = j.id;
     return 'retrying';
   end if;
-  update public.jobs set last_error = left(p_error, 500)
-   where id = p_job_id and status = 'running' and attempts >= max_attempts;
-  if found then
-    perform public.jobs_mark_dead(p_job_id, p_error);
-    return 'dead';
-  end if;
-  return (select status from public.jobs where id = p_job_id); -- no-op: já finalizado ou inexistente
+  perform public.jobs_mark_dead(j.id, p_error);
+  return 'dead';
 end;
 $$;
 
@@ -366,6 +451,8 @@ revoke execute on function public.jobs_fail(uuid, text, int) from public, anon, 
 revoke execute on function public.jobs_read(int, int) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_ack(bigint) from public, anon, authenticated, service_role;
 revoke execute on function public.jobs_set_vt(bigint, int) from public, anon, authenticated, service_role;
+revoke execute on function public.jobs_requeue_stale() from public, anon, authenticated, service_role;
+revoke execute on function public.consents_revoke(uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.jobs_enqueue(text, jsonb, text, uuid) to service_role;
 grant execute on function public.jobs_claim(uuid) to service_role;
 grant execute on function public.jobs_complete(uuid, jsonb, int) to service_role;
@@ -373,6 +460,8 @@ grant execute on function public.jobs_fail(uuid, text, int) to service_role;
 grant execute on function public.jobs_read(int, int) to service_role;
 grant execute on function public.jobs_ack(bigint) to service_role;
 grant execute on function public.jobs_set_vt(bigint, int) to service_role;
+grant execute on function public.jobs_requeue_stale() to service_role;
+grant execute on function public.consents_revoke(uuid, uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- Storage: bucket privado e políticas em storage.objects (RLS já vem habilitada pelo Supabase)
@@ -385,20 +474,15 @@ values (
 on conflict (id) do update
   set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
--- list-uploads: parent/school_member/admin enviam só para {próprio uid}/{envio}/arquivo (sem traversal).
-create policy list_uploads_insert_own_folder on storage.objects
-  for insert to authenticated
-  with check (
-    bucket_id = 'list-uploads'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-    and cardinality(storage.foldername(name)) >= 2
-    and (select public.auth_role()) in ('parent', 'school_member', 'admin')
-  );
--- list-uploads: dono lê a própria pasta; admin/system leem tudo. Sem update/delete/anon: objetos imutáveis.
+-- list-uploads: sem política de INSERT/UPDATE/DELETE para authenticated nem anon: o upload é feito pelo servidor
+-- com service_role (que ignora RLS) para {uid}/{envio}/arquivo; objetos imutáveis para o usuário.
+-- list-uploads: dono lê a própria pasta; admin/system leem tudo. Só caminhos {uid}/{uuid do envio}/... sem '..'.
 create policy list_uploads_select_own_or_admin on storage.objects
   for select to authenticated
   using (
     bucket_id = 'list-uploads'
+    and name !~ '(^|/)\.\.(/|$)'
+    and (storage.foldername(name))[2] ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
     and (
       (storage.foldername(name))[1] = (select auth.uid())::text
       or (select public.auth_role()) in ('admin', 'system')

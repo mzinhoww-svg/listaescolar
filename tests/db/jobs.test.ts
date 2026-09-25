@@ -11,6 +11,8 @@ const FUNCS = [
   "jobs_read(integer, integer)",
   "jobs_ack(bigint)",
   "jobs_set_vt(bigint, integer)",
+  "jobs_requeue_stale()",
+  "consents_revoke(uuid, uuid)",
 ];
 
 async function sys<T>(fn: (c: Client) => Promise<T>): Promise<T> {
@@ -114,16 +116,17 @@ describe("jobs_* (fila pgmq)", () => {
     return sys(async (c) => (await q(c, "select public.jobs_enqueue('ocr_jobs', '{}'::jsonb, $1, $2) as id", [key, SUB.parent])).rows[0]!.id as string);
   }
 
-  it("jobs_claim: queued -> running, attempts+1; segunda chamada recusa", async () => {
+  const claim = (id: string) => sys(async (c) => (await q(c, "select public.jobs_claim($1) as r", [id])).rows[0]!.r as string);
+  const aged = (s: Client, id: string, sql: string) => s.query(`update public.jobs set ${sql} where id = $1`, [id]);
+
+  it("jobs_claim: queued -> claimed (running, attempts+1); segunda chamada devolve busy", async () => {
     const id = await enqueue();
-    const first = await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [id])).rows[0]!.ok);
-    const second = await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [id])).rows[0]!.ok);
-    expect([first, second]).toEqual([true, false]);
+    expect([await claim(id), await claim(id)]).toEqual(["claimed", "busy"]);
     const row = await withSuperuser(async (c) => (await c.query("select status::text, attempts, locked_at is not null as locked from public.jobs where id = $1", [id])).rows[0]);
     expect(row).toEqual({ status: "running", attempts: 1, locked: true });
   });
 
-  it("jobs_claim: só um vence sob concorrência (10 conexões)", async () => {
+  it("jobs_claim: só um 'claimed' sob concorrência (10 conexões), os demais 'busy'", async () => {
     const id = await enqueue();
     const clients = await Promise.all(
       Array.from({ length: 10 }, async () => {
@@ -134,8 +137,9 @@ describe("jobs_* (fila pgmq)", () => {
       }),
     );
     try {
-      const res = await Promise.all(clients.map(async (c) => (await c.query("select public.jobs_claim($1) as ok", [id])).rows[0]!.ok as boolean));
-      expect(res.filter(Boolean)).toHaveLength(1);
+      const res = await Promise.all(clients.map(async (c) => (await c.query("select public.jobs_claim($1) as r", [id])).rows[0]!.r as string));
+      expect(res.filter((r) => r === "claimed")).toHaveLength(1);
+      expect(res.filter((r) => r === "busy")).toHaveLength(9);
     } finally {
       await Promise.all(clients.map((c) => c.end()));
     }
@@ -143,41 +147,48 @@ describe("jobs_* (fila pgmq)", () => {
     expect(n).toBe(1);
   });
 
-  it("jobs_claim: false para job inexistente, succeeded e dead; running antigo (crash) é retomado", async () => {
-    const [ok, none] = await sys(async (c) => [
-      (await q(c, "select public.jobs_claim($1) as ok", [await withSuperuser(async (s) => insertJob(s, SUB.parent, "done", { status: "succeeded" }))])).rows[0]!.ok,
-      (await q(c, "select public.jobs_claim('99999999-0000-4000-8000-000000000000') as ok")).rows[0]!.ok,
-    ]);
-    expect([ok, none]).toEqual([false, false]);
+  it("jobs_claim: 'finished' para inexistente, succeeded e dead", async () => {
+    const done = await withSuperuser((s) => insertJob(s, SUB.parent, "done", { status: "succeeded" }));
     const dead = await withSuperuser((s) => insertJob(s, SUB.parent, "dead1", { status: "dead", attempts: 5 }));
-    expect(await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [dead])).rows[0]!.ok)).toBe(false);
-    const stale = await withSuperuser(async (s) => {
-      const j = await insertJob(s, SUB.parent, "stale", { status: "running", attempts: 1 });
-      await s.query("update public.jobs set locked_at = now() - interval '1 hour' where id = $1", [j]);
-      return j;
-    });
-    expect(await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [stale])).rows[0]!.ok)).toBe(true);
-    const fresh = await withSuperuser(async (s) => {
-      const j = await insertJob(s, SUB.parent, "fresh", { status: "running", attempts: 1 });
-      await s.query("update public.jobs set locked_at = now() where id = $1", [j]);
-      return j;
-    });
-    expect(await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [fresh])).rows[0]!.ok)).toBe(false);
+    expect(await claim(done)).toBe("finished");
+    expect(await claim(dead)).toBe("finished");
+    expect(await claim("99999999-0000-4000-8000-000000000000")).toBe("finished");
   });
 
-  it("jobs_claim: retrying só depois de run_after", async () => {
+  it("jobs_claim: running com lease vencido é retomado (attempts+1); com lease vigente devolve busy", async () => {
+    const stale = await withSuperuser(async (s) => {
+      const j = await insertJob(s, SUB.parent, "stale", { status: "running", attempts: 1 });
+      await aged(s, j, "locked_at = now() - interval '1 hour'");
+      return j;
+    });
+    expect(await claim(stale)).toBe("claimed");
+    expect(await withSuperuser(async (s) => (await s.query("select attempts from public.jobs where id = $1", [stale])).rows[0]!.attempts)).toBe(2);
+    const fresh = await withSuperuser(async (s) => {
+      const j = await insertJob(s, SUB.parent, "fresh", { status: "running", attempts: 1 });
+      await aged(s, j, "locked_at = now() - interval '4 minutes'");
+      return j;
+    });
+    expect(await claim(fresh)).toBe("busy");
+  });
+
+  it("jobs_claim: retrying/queued com run_after no futuro devolve not_due; vencido devolve claimed", async () => {
     const later = await withSuperuser(async (s) => {
       const j = await insertJob(s, SUB.parent, "later", { status: "retrying", attempts: 1 });
-      await s.query("update public.jobs set run_after = now() + interval '1 hour' where id = $1", [j]);
+      await aged(s, j, "run_after = now() + interval '1 hour'");
       return j;
     });
-    expect(await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [later])).rows[0]!.ok)).toBe(false);
+    const laterQ = await withSuperuser(async (s) => {
+      const j = await insertJob(s, SUB.parent, "laterq", { status: "queued" });
+      await aged(s, j, "run_after = now() + interval '1 hour'");
+      return j;
+    });
+    expect([await claim(later), await claim(laterQ)]).toEqual(["not_due", "not_due"]);
     const due = await withSuperuser(async (s) => {
       const j = await insertJob(s, SUB.parent, "due", { status: "retrying", attempts: 1 });
-      await s.query("update public.jobs set run_after = now() - interval '1 second' where id = $1", [j]);
+      await aged(s, j, "run_after = now() - interval '1 second'");
       return j;
     });
-    expect(await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [due])).rows[0]!.ok)).toBe(true);
+    expect(await claim(due)).toBe("claimed");
   });
 
   it("jobs_complete: succeeded, grava ocr_jobs, submission -> review_needed; repetir não duplica", async () => {
@@ -232,8 +243,7 @@ describe("jobs_* (fila pgmq)", () => {
       expect(r.rows[0]!.locked).toBe(true);
     });
     expect(await queueDepth("ocr_jobs_dlq")).toBe(0);
-    const again = await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [id])).rows[0]!.ok);
-    expect(again).toBe(false); // run_after ainda no futuro
+    expect(await claim(id)).toBe("not_due"); // run_after ainda no futuro
   });
 
   it("jobs_fail esgotando max_attempts: dead, mensagem na DLQ, envio rejected", async () => {
@@ -263,17 +273,72 @@ describe("jobs_* (fila pgmq)", () => {
     });
   });
 
-  it("jobs_claim de running antigo já sem tentativas vira dead (DLQ) em vez de rodar de novo", async () => {
+  it("jobs_claim de running antigo já sem tentativas vira dead (DLQ, envio rejected) e devolve finished", async () => {
     const id = await withSuperuser(async (c) => {
       const j = await insertJob(c, SUB.parent, "stale-max", { status: "running", attempts: 5 });
-      await c.query("update public.jobs set locked_at = now() - interval '1 hour' where id = $1", [j]);
+      await aged(c, j, "locked_at = now() - interval '1 hour'");
       return j;
     });
-    expect(await sys(async (c) => (await q(c, "select public.jobs_claim($1) as ok", [id])).rows[0]!.ok)).toBe(false);
+    expect(await claim(id)).toBe("finished");
     await withSuperuser(async (c) => {
       expect((await c.query("select status::text from public.jobs where id = $1", [id])).rows[0]!.status).toBe("dead");
+      expect((await c.query("select status::text from public.list_submissions where id = $1", [SUB.parent])).rows[0]!.status).toBe("rejected");
     });
     expect(await queueDepth("ocr_jobs_dlq")).toBe(1);
+  });
+
+  it("jobs_claim de queued/retrying vencido sem tentativas restantes vira dead e devolve finished", async () => {
+    const id = await withSuperuser((c) => insertJob(c, SUB.parent, "due-max", { status: "retrying", attempts: 5 }));
+    expect(await claim(id)).toBe("finished");
+    expect(await withSuperuser(async (c) => (await c.query("select status::text from public.jobs where id = $1", [id])).rows[0]!.status)).toBe("dead");
+  });
+
+  const requeue = () => sys(async (c) => (await q(c, "select public.jobs_requeue_stale() as n")).rows[0]!.n as number);
+
+  it("jobs_requeue_stale: reenvia running com lease vencido e queued/retrying vencido sem mensagem; idempotente", async () => {
+    const ids = await withSuperuser(async (s) => {
+      const stale = await insertJob(s, SUB.parent, "rq-stale", { status: "running", attempts: 1 });
+      await aged(s, stale, "locked_at = now() - interval '1 hour'");
+      const due = await insertJob(s, SUB.parent, "rq-due", { status: "retrying", attempts: 1 });
+      await aged(s, due, "run_after = now() - interval '1 minute'");
+      const queued = await insertJob(s, SUB.parent, "rq-queued", { status: "queued" });
+      const fresh = await insertJob(s, SUB.parent, "rq-fresh", { status: "running", attempts: 1 });
+      await aged(s, fresh, "locked_at = now()");
+      const future = await insertJob(s, SUB.parent, "rq-future", { status: "retrying", attempts: 1 });
+      await aged(s, future, "run_after = now() + interval '1 hour'");
+      return { stale, due, queued };
+    });
+    expect(await requeue()).toBe(3);
+    expect(await requeue()).toBe(0); // idempotente: mensagens já presentes
+    const msgs = await withSuperuser(async (c) => (await c.query("select message->>'job_id' as id from pgmq.q_ocr_jobs")).rows.map((r) => r.id).sort());
+    expect(msgs).toEqual([ids.stale, ids.due, ids.queued].sort());
+  });
+
+  it("jobs_requeue_stale: não duplica mensagem de job criado por jobs_enqueue; reenvia após ack", async () => {
+    const id = await enqueue();
+    expect(await requeue()).toBe(0);
+    expect(await queueDepth("ocr_jobs")).toBe(1);
+    const msg = (await sys(async (c) => (await q(c, "select * from public.jobs_read(5, 30)")).rows))[0]!.msg_id as string;
+    await sys((c) => q(c, "select public.jobs_ack($1)", [msg])); // mensagem consumida, job continua queued
+    expect(await requeue()).toBe(1);
+    expect(await queueDepth("ocr_jobs")).toBe(1);
+    expect(id).toBeTruthy();
+  });
+
+  it("jobs_requeue_stale: job sem tentativas restantes vira dead (DLQ, envio rejected) em vez de reenviado", async () => {
+    const id = await withSuperuser(async (c) => {
+      const j = await insertJob(c, SUB.parent, "rq-max", { status: "running", attempts: 5 });
+      await aged(c, j, "locked_at = now() - interval '1 hour'");
+      return j;
+    });
+    expect(await requeue()).toBe(1);
+    expect(await queueDepth("ocr_jobs")).toBe(0);
+    expect(await queueDepth("ocr_jobs_dlq")).toBe(1);
+    await withSuperuser(async (c) => {
+      expect((await c.query("select status::text from public.jobs where id = $1", [id])).rows[0]!.status).toBe("dead");
+      expect((await c.query("select status::text from public.list_submissions where id = $1", [SUB.parent])).rows[0]!.status).toBe("rejected");
+    });
+    expect(await requeue()).toBe(0);
   });
 
   it("jobs_read / jobs_set_vt / jobs_ack: leitura com visibilidade, reentrega e arquivamento", async () => {

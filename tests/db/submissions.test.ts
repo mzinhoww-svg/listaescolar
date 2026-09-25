@@ -137,22 +137,56 @@ describe("S07 RLS: consents, list_submissions, jobs, ocr_jobs", () => {
     });
   });
 
-  it("usuário registra consentimento só para si", async () => {
+  const insConsent = "insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1')";
+
+  it("authenticated não insere em consents, list_submissions; service_role insere (envio é feito pelo servidor)", async () => {
     await withClaims("parent", async (c) => {
-      const ok = await attempt(c, "insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1')", [IDS.parent]);
-      expect(ok.error).toBeNull();
-      const bad = await attempt(c, "insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1')", [IDS.school_member]);
-      expect(bad.error).not.toBeNull();
+      const ins = await attempt(c, insConsent, [IDS.parent]);
+      expect(ins.error).not.toBeNull();
+      const sub = await attempt(c, ...newSub("30000000-0000-4000-8000-0000000000a1", IDS.parent, CONSENT.parent));
+      expect(sub.error).not.toBeNull();
+    });
+    await withClaims("system", async (c) => {
+      expect((await attempt(c, insConsent, [IDS.parent])).error).toBeNull();
+      expect((await attempt(c, ...newSub("30000000-0000-4000-8000-0000000000a2", IDS.parent, CONSENT.parent))).error).toBeNull();
     });
   });
 
-  it("consentimento: dono só revoga (revoked_at); não muda purpose", async () => {
+  it("consentimento: dono não consegue revogar nem alterar direto (sem UPDATE)", async () => {
     await withClaims("parent", async (c) => {
-      const rev = await attempt(c, "update public.consents set revoked_at = now() where id = $1", [CONSENT.parent]);
-      expect(rev.error).toBeNull();
-      expect(rev.rowCount).toBe(1);
-      const bad = await attempt(c, "update public.consents set purpose = 'outro' where id = $1", [CONSENT.parent]);
-      expect(bad.error).not.toBeNull();
+      for (const sql of ["update public.consents set revoked_at = now()", "update public.consents set revoked_at = null", "update public.consents set purpose = 'outro'"]) {
+        expect((await attempt(c, sql)).error, sql).not.toBeNull();
+      }
+    });
+  });
+
+  it("consents_revoke: revoga uma única vez (idempotente) e só para o dono", async () => {
+    await withClaims("system", async (c) => {
+      await c.query("select public.consents_revoke($1, $2)", [CONSENT.parent, IDS.school_member]); // não é o dono
+      const none = await c.query("select revoked_at from public.consents where id = $1", [CONSENT.parent]);
+      expect(none.rows[0]!.revoked_at).toBeNull();
+      await c.query("update public.consents set revoked_at = null where id = $1", [CONSENT.parent]);
+      await c.query("select public.consents_revoke($1, $2)", [CONSENT.parent, IDS.parent]);
+      const first = (await c.query("select revoked_at from public.consents where id = $1", [CONSENT.parent])).rows[0]!.revoked_at as Date;
+      expect(first).not.toBeNull();
+      await c.query("select pg_sleep(0.05)");
+      await c.query("select public.consents_revoke($1, $2)", [CONSENT.parent, IDS.parent]);
+      const second = (await c.query("select revoked_at from public.consents where id = $1", [CONSENT.parent])).rows[0]!.revoked_at as Date;
+      expect(second.getTime()).toBe(first.getTime());
+    });
+  });
+
+  it("consents: trigger impede restaurar revogado e mudar profile_id/purpose/text_version/granted_at (até como service_role/owner)", async () => {
+    await withSuperuser(async (c) => {
+      await c.query("begin");
+      try {
+        await c.query("select public.consents_revoke($1, $2)", [CONSENT.parent, IDS.parent]);
+        for (const set of ["revoked_at = null", "revoked_at = now() + interval '1 day'", "purpose = 'outro'", "text_version = 'v9'", `profile_id = '${IDS.school_member}'`, "granted_at = now() - interval '1 year'"]) {
+          expect((await attempt(c, `update public.consents set ${set} where id = $1`, [CONSENT.parent])).error, set).not.toBeNull();
+        }
+      } finally {
+        await c.query("rollback");
+      }
     });
   });
 
@@ -163,9 +197,9 @@ describe("S07 RLS: consents, list_submissions, jobs, ocr_jobs", () => {
       [id, owner, extra.source, extra.mime, extra.size, consent, extra.status],
     ];
 
-  it("dono cria envio com o próprio consentimento; consentimento alheio, status avançado e dono alheio são recusados", async () => {
+  it("servidor cria envio com o consentimento do dono; consentimento alheio, status avançado e dono alheio são recusados", async () => {
     const id = "30000000-0000-4000-8000-000000000001";
-    await withClaims("parent", async (c) => {
+    await withClaims("system", async (c) => {
       const ok = await attempt(c, ...newSub(id, IDS.parent, CONSENT.parent));
       expect(ok.error).toBeNull();
       const foreignConsent = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000002", IDS.parent, CONSENT.schoolMember));
@@ -177,24 +211,20 @@ describe("S07 RLS: consents, list_submissions, jobs, ocr_jobs", () => {
     });
   });
 
-  it("consentimento revogado não sustenta novo envio", async () => {
-    await withClaims("parent", async (c) => {
-      await c.query("update public.consents set revoked_at = now() where id = $1", [CONSENT.parent]);
+  it("consentimento revogado (via consents_revoke) não sustenta novo envio", async () => {
+    await withClaims("system", async (c) => {
+      await c.query("select public.consents_revoke($1, $2)", [CONSENT.parent, IDS.parent]);
       const r = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000005", IDS.parent, CONSENT.parent));
       expect(r.error).not.toBeNull();
     });
   });
 
   it("source 'school' só para school_member/admin; mime e tamanho fora do limite violam CHECK", async () => {
-    await withClaims("parent", async (c) => {
+    await withClaims("system", async (c) => {
       const r = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000006", IDS.parent, CONSENT.parent, { source: "school", status: "submitted", mime: "application/pdf", size: 1000 }));
       expect(r.error).not.toBeNull();
-    });
-    await withClaims("school_member", async (c) => {
       const ok = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000007", IDS.school_member, CONSENT.schoolMember, { source: "school", status: "submitted", mime: "application/pdf", size: 1000 }));
       expect(ok.error).toBeNull();
-    });
-    await withClaims("system", async (c) => {
       const exe = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000008", IDS.parent, CONSENT.parent, { source: "parent", status: "submitted", mime: "application/x-msdownload", size: 1000 }));
       expect(exe.error).not.toBeNull();
       const big = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000009", IDS.parent, CONSENT.parent, { source: "parent", status: "submitted", mime: "application/pdf", size: 10485761 }));

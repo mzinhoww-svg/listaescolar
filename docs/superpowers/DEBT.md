@@ -67,8 +67,8 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-037 | ledger-comercio S13 onda final | `recordConsent` sem tela; editar item do catálogo pelo nome cria item novo se o nome mudar | baixa | S16 | aberta |
 | D-038 | ledger-comercio S14 T2 / T3 | Rótulo "últimos 7 dias" dos KPIs com janela rolante `WEEK_MS`; revisar o texto | baixa | S18 | aberta |
 | D-039 | ledger-comercio S14 revisão final | `createLeadAction` perde papelaria/bairro no redirect de erro; `/cotacao` aberta a papéis que não criam lead; cartão mobile "valor enviado: indisponível"; item em falta como "fora do subtotal (em falta)"; tabela e cartões duplicados no HTML | baixa | S18 | aberta |
-| D-040 | ledger-comercio S14 revisão final | Pap02 sem a coluna "Estimado" (exigiria consulta agregada de itens × catálogo) | baixa | S21 | aberta |
-| D-041 | ledger-comercio S14 plano | Pap05-EnviarListas adiada (depende do upload da Pipeline e de créditos) | baixa | S21 | aberta |
+| D-040 | ledger-comercio S14 revisão final | Pap02 sem a coluna "Estimado" (exigiria consulta agregada de itens × catálogo) | baixa | S22 (Ruling S21 plano) | aberta |
+| D-041 | ledger-comercio S14 plano | Pap05-EnviarListas adiada (depende do upload da Pipeline e de créditos) | baixa | S23 (Ruling S21 plano) | aberta |
 | D-042 | ledger.md (S02) | `/entrar` mostra o link mágico abaixo dos termos (desvio da App02); reorganizar quando o Google OAuth for ativado | baixa | S18 | aberta |
 | D-043 | ledger-dados S04 T3; ledger-dados S05 T3; ledger-comercio S12 T3 e S13; e2e/S04, S05 | Soft-404: `notFound()`/`redirect()` respondiam HTTP 200 por causa dos `loading.tsx` que forçavam streaming | média | chore | resolvida em chore/soft-404 (PR #17) |
 | D-044 | ledger-comercio S13 T3 | Nome do bairro digitado não era preservado (normalizado para minúsculas) | baixa | S13 | resolvida em S13 T2 rodada 2 (`display_name`) |

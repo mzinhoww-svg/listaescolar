@@ -8,7 +8,7 @@
 
 ## Pesquisa com mães (fora do PLAN, ADR-005)
 
-Fatia isolada fora da numeração S00–S27, autorizada pelo fundador em 25/09/2026 (sessão `claude/vigilant-einstein-75bp5d`, PR #28 reaproveitado). Spec vinculante em `docs/superpowers/specs/2026-09-25-pesquisa-maes-design.md`; decisão de escopo e autorizações em `docs/decisions/ADR-005-pesquisa-maes-fora-do-plan.md`. Plano em `docs/superpowers/plans/2026-09-25-pesquisa-maes.md`. Estado: **implementada, revisada e verificada no preview**; merge squash em `main` pelo PR #28 (autorizado por escrito pelo fundador no ADR-005, condições: CI verde, revisão independente registrada, 7 cenários E2E verdes no preview, nada fora do escopo).
+Fatia isolada fora da numeração S00–S27, autorizada pelo fundador em 25/09/2026 (sessão `claude/vigilant-einstein-75bp5d`, PR #28 reaproveitado). Spec vinculante em `docs/superpowers/specs/2026-09-25-pesquisa-maes-design.md`; decisão de escopo e autorizações em `docs/decisions/ADR-005-pesquisa-maes-fora-do-plan.md`. Plano em `docs/superpowers/plans/2026-09-25-pesquisa-maes.md`. Estado: **no ar em produção** — merge squash `16d76c8` em `main` pelo PR #28 em 2026-09-25 (autorizado por escrito pelo fundador no ADR-005, condições cumpridas: CI verde em `f4fd3e5`, três revisões independentes registradas no ledger, 7 cenários E2E verdes no preview, nada fora do escopo). URL: `https://listaescolare.vercel.app/pesquisa`.
 
 - Entregue: `/pesquisa` (12 telas + boas-vindas + final com lead e compartilhamento), `/pesquisa/resultados` (senha, cartões, funil, por pergunta, por origem, frases, CSV), `/pesquisa/privacidade`, `app/api/pesquisa/{resposta,concluir,lead,login,export}`.
 - Migrations aditivas `0700_pesquisa_maes.sql` e `0701_pesquisa_maes_ajustes.sql` aplicadas no ListaEscolar (staging = único projeto; ver tabela de migrations). Tabelas `survey_*` nunca entram em reset/truncate de nenhuma fatia (ADR-005).
@@ -43,7 +43,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | docs PROGRESS/DEBT e agendamento da refatoração | #18 | 7f68737 | 2026-09-25 | n/a | n/a | n/a | n/a | n/a | n/d | n/d | n/a (só docs) |
 | S27 Site público e páginas de sistema (Comércio) | #19 | 8cbd458 | 2026-09-25 | ✓ | ✓ | 2073 | n/a (sem migration) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 265 verificações, 0 falhas (`e2e/S27.md`) |
 | S09 Motor de aprovação automática (Pipeline) | #20 | b905cce | 2026-09-25 | ✓ | ✓ | 2279 (árvore mesclada) | 1312 (3 skipped) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
-| Pesquisa com mães (ADR-005, fora do PLAN) | #28 | squash (ver PR) | 2026-09-25 | ✓ | ✓ | 2604 | n/a (sem Docker nesta sessão; CI `db` ✓) | ✓ | verify ✓ db ✓ | ✓ (preview público) | 7 cenários no preview da Vercel, 25 capturas mobile + 4 desktop (`e2e/pesquisa-maes.md`); repetição em produção após o merge |
+| Pesquisa com mães (ADR-005, fora do PLAN) | #28 | 16d76c8 | 2026-09-25 | ✓ | ✓ | 2604 | n/a (sem Docker nesta sessão; CI `db` ✓) | ✓ | verify ✓ db ✓ | ✓ (preview público) | 7 cenários no preview da Vercel, 25 capturas mobile + 4 desktop (`e2e/pesquisa-maes.md`); repetição em produção após o merge |
 
 Observação: o check "Vercel" falha em todos os PRs desde o #4 (não só do #8 em diante). A causa apontada pelo orquestrador é a falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto da Vercel (ver pendências humanas).
 

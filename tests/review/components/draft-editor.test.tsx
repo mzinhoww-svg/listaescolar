@@ -5,7 +5,7 @@ const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
 import { IDLE, state, type ReviewActionState } from "@/app/admin/revisao/state";
-import { DraftProvider } from "@/components/review/DraftContext";
+import { DraftProvider, useDraft } from "@/components/review/DraftContext";
 import { ReviewItemsEditor, type ReviewDraft } from "@/components/review/ReviewItemsEditor";
 import type { ReviewItem } from "@/features/review/schemas";
 
@@ -32,6 +32,29 @@ describe("rascunho, validação e avisos do editor", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Recarregar a versão mais recente" }));
     rerender(wrap(3, { ...initial, items: [item({ name: "Do outro admin" }), initial.items[1]!] }, save));
     expect(screen.getByLabelText("Nome do item 1")).toHaveValue("Do outro admin");
+  });
+  it("depois de salvar, a versão nova vira a base: não fica sujo, aprovar habilita e o próximo envio usa a versão nova", async () => {
+    const Probe = () => <button type="button" disabled={useDraft().dirty}>Aprovar e publicar</button>;
+    const save = vi.fn<Act>(async () => state("saved", "Edição salva (versão 3)."));
+    const tree = (v: number, init: ReviewDraft) => (
+      <DraftProvider>
+        <ReviewItemsEditor submissionId="s1" version={v} initial={init} thresholds={TH} readOnly={false} action={save} />
+        <Probe />
+      </DraftProvider>
+    );
+    const edited: ReviewDraft = { ...initial, items: [item({ name: "Editado", origin: "edited" }), initial.items[1]!] };
+    const { rerender } = render(tree(2, initial));
+    fireEvent.change(screen.getByLabelText("Nome do item 1"), { target: { value: "Editado" } });
+    expect(screen.getByRole("button", { name: "Aprovar e publicar" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar edição" }));
+    await screen.findByText("Edição salva (versão 3).");
+    rerender(tree(3, edited));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Aprovar e publicar" })).toBeEnabled());
+    expect(screen.queryByText("Edição não salva")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Nome do item 1"), { target: { value: "Editado de novo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar edição" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(save.mock.calls[1]![1].get("payload"))).expectedVersion).toBe(3);
   });
   it("sem edição não salva, a versão nova entra sozinha", () => {
     const { rerender } = render(wrap(2, initial));

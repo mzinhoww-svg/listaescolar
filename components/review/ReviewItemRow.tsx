@@ -58,7 +58,7 @@ export function ReviewItemRow({ item, index, thresholds, readOnly, onChange, onR
           </select>
         )}
       </td>
-      <td className="px-2 py-2"><ConfidenceBadge band={band} confidence={item.confidence} /></td>
+      <td className="min-w-[13rem] px-2 py-2 whitespace-nowrap"><ConfidenceBadge band={band} confidence={item.confidence} /></td>
       {readOnly ? null : (
         <td className="px-2 py-2">
           <button type="button" aria-label={`Remover item ${n}`} onClick={onRemove} className="text-erro-texto bg-erro-fundo rounded-botao inline-flex min-h-11 min-w-11 items-center justify-center font-extrabold">

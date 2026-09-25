@@ -2,7 +2,7 @@
 # E2E da S10 (revisão humana do admin + revisão da própria lista do pai) com agent-browser, build de produção local da trilha 2.
 # NUNCA chama o OpenRouter: provedor FALSO (FAKE_AI_SCRIPT) e portas de publicação EM MEMÓRIA (FAKE_PUBLICATION_FIXTURE),
 # ambos só com APP_ENV=local. Pré-requisitos: `pnpm db:start && pnpm db:reset`; `node scripts/supa.mjs env > .env.local`
-# (só neste worktree, ignorado pelo git); `pnpm build`. O script sobe/derruba só o app (porta 3002) por PID/porta; o worker
+# (só neste worktree, ignorado pelo git); `pnpm build`. O script sobe/derruba só o app (porta 3002) só pelo PID gravado; o worker
 # não é necessário (as decisões da S09 saem inline). Ver docs/superpowers/e2e/S10.md.
 set -u
 cd "$(dirname "$0")/.."
@@ -61,7 +61,7 @@ start_app() { # fixture ("" = sem porta de publicação)
   echo $! >/tmp/s10-app.pid
   for _ in $(seq 1 30); do curl -s -o /dev/null "$BASE/" && return 0; sleep 1; done
 }
-stop_app() { [ -f /tmp/s10-app.pid ] && kill "$(cat /tmp/s10-app.pid)" 2>/dev/null; sleep 1; local p; p=$(lsof -ti tcp:3002 -sTCP:LISTEN); [ -n "$p" ] && kill "$p" 2>/dev/null; sleep 1; }
+stop_app() { if [ -f /tmp/s10-app.pid ]; then kill "$(cat /tmp/s10-app.pid)" 2>/dev/null; rm -f /tmp/s10-app.pid; fi; sleep 1; }
 cleanup() { stop_app; for s in s p a b o; do ab $s close >/dev/null 2>&1; done; rm -rf "$TMP"; }
 trap cleanup EXIT
 
@@ -159,7 +159,8 @@ expect_text a "Edição não salva" "a: edição não salva marcada"
 eq "$(btn_state a "Aprovar e publicar")" "disabled" "a: aprovar bloqueado com edição não salva"
 btn a "Salvar edição"
 wait_ok a "Edição salva (versão 2)." "a: salvar cria a versão 2"
-ab a open "$BASE/admin/revisao/$A" >/dev/null; wait_text a "Versão 2" 20
+wait_text a "Versão 2" 20   # SEM recarregar a página: a base do editor avança para a versão salva
+lacks "$(ab a get text body 2>/dev/null)" "Edição não salva" "a: depois de salvar, sem recarregar, o editor não fica 'Edição não salva'"
 eq "$(btn_state a "Aprovar e publicar")" "disabled" "a: sem a confirmação do documento original, aprovar segue desabilitado"
 ab a check 'input[name=acknowledged]' >/dev/null
 eq "$(btn_state a "Aprovar e publicar")" "enabled" "a: com a confirmação, 'Aprovar e publicar' habilita"

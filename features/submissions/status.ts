@@ -19,11 +19,11 @@ export function isPipelineAvailable(): boolean {
 
 /**
  * Quem publicou (D-071), pelas linhas de decisão: `publication:published` = automática; `review:published` = humana.
- * Só é chamada depois de a RLS confirmar que o envio é do usuário. Falha = `null` (texto neutro "Lista publicada").
+ * Vale a decisão `published` mais recente (created_at desc). Só é chamada depois de a RLS confirmar que o envio é do usuário. Falha = `null` (texto neutro "Lista publicada").
  */
-async function publishedByOf(id: string): Promise<"auto" | "human" | null> {
+export async function publishedByOf(id: string): Promise<"auto" | "human" | null> {
   try {
-    const { data } = await createAdminClient().from("ai_decisions").select("kind").eq("entity_id", id).eq("decision", "published").limit(1).maybeSingle();
+    const { data } = await createAdminClient().from("ai_decisions").select("kind").eq("entity_id", id).eq("decision", "published").in("kind", ["publication", "review"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
     return data?.kind === "publication" ? "auto" : data?.kind === "review" ? "human" : null;
   } catch {
     return null;

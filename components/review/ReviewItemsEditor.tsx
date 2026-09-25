@@ -37,6 +37,12 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
   const [reload, setReload] = useState(false);
   const [hideStale, setHideStale] = useState(false);
   const [result, formAction, pending] = useActionState(action, IDLE);
+  // Salvou: a próxima versão vinda do servidor (refresh) é a do próprio admin e vira a base, mesmo com o rascunho diferindo da base antiga.
+  const [seen, setSeen] = useState(result);
+  if (result !== seen) {
+    setSeen(result);
+    if (result.kind === "saved") setReload(true);
+  }
   const dirty = JSON.stringify(draft) !== JSON.stringify(base.initial);
   // Nova versão vinda do servidor: só troca o rascunho se ele não tem edição não salva OU se o admin pediu para recarregar.
   if (base.version !== version && (reload || !dirty)) {
@@ -76,11 +82,13 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
       <div className="flex flex-wrap items-end gap-4">
         <label className="flex flex-col gap-1 text-[13px] font-extrabold">
           Série
-          <select disabled={readOnly} className={field} value={draft.grade ?? ""} onChange={(e) => setDraft((d) => ({ ...d, grade: e.target.value === "" ? null : e.target.value }))}>
-            <option value="">Selecione</option>
-            {gradeKnown ? null : <option value={draft.grade ?? ""}>{draft.grade}</option>}
-            {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
+          {readOnly ? <span className="min-h-11 py-2 text-[14px] font-bold">{draft.grade ?? "Não informada"}</span> : (
+            <select className={field} value={draft.grade ?? ""} onChange={(e) => setDraft((d) => ({ ...d, grade: e.target.value === "" ? null : e.target.value }))}>
+              <option value="">Selecione</option>
+              {gradeKnown ? null : <option value={draft.grade ?? ""}>{draft.grade}</option>}
+              {GRADE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-[13px] font-extrabold">
           Ano letivo

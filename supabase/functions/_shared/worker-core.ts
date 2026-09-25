@@ -57,7 +57,8 @@ export type WorkerDeps = {
   pipeline: {
     /** Pipeline de demonstração: o envio fica marcado `is_demo` ao concluir. */
     isDemo?: boolean;
-    extract(input: WorkerInput, opts: { signal: AbortSignal }): Promise<unknown>;
+    /** `submissionId`: `entity_id` das decisões de IA. `budgetMs`: teto desta extração (min(90 s, prazo do tick)). */
+    extract(input: WorkerInput & { submissionId: string }, opts: { signal: AbortSignal; budgetMs: number }): Promise<unknown>;
   };
   /** A saída do pipeline SEMPRE passa por aqui antes de `jobs.complete`; inválida = falha (retry). */
   resultSchema: ResultSchema;
@@ -137,17 +138,18 @@ export function detectMime(
   return null;
 }
 
-async function runWithTimeout(deps: WorkerDeps, input: WorkerInput): Promise<unknown> {
+async function runWithTimeout(deps: WorkerDeps, input: WorkerInput & { submissionId: string }): Promise<unknown> {
   const abort = new AbortController();
   const timer = new AbortController();
+  const budgetMs = deps.timeoutMs ?? WORKER_TIMEOUT_MS;
   const timeout = deps.clock
-    .delay(deps.timeoutMs ?? WORKER_TIMEOUT_MS, timer.signal)
+    .delay(budgetMs, timer.signal)
     .then((): never => {
       abort.abort();
       throw new Error("timeout do pipeline");
     });
   try {
-    return await Promise.race([deps.pipeline.extract(input, { signal: abort.signal }), timeout]);
+    return await Promise.race([deps.pipeline.extract(input, { signal: abort.signal, budgetMs }), timeout]);
   } finally {
     timer.abort();
   }
@@ -185,7 +187,7 @@ export async function processMessage(jobId: string, deps: WorkerDeps): Promise<M
   const started = deps.clock.now();
   let result: unknown;
   try {
-    result = await runWithTimeout(deps, input);
+    result = await runWithTimeout(deps, { ...input, submissionId: job.submissionId });
   } catch (e) {
     return failWith(sanitizeError(e));
   }

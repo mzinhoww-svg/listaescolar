@@ -1,5 +1,10 @@
 import { SYNC_BUDGET_MS, CONSENT_PURPOSE, CONSENT_TEXT_VERSION } from "./constants";
-import { sanitizeFileName, validateUpload, type UploadErrorCode, type UploadFile } from "./file-validation";
+import {
+  sanitizeFileName,
+  validateUpload,
+  type UploadErrorCode,
+  type UploadFile,
+} from "./file-validation";
 import type { SubmitDeps, SubmitResult } from "./ports";
 import { extractionResultSchema, submitMetaSchema } from "./schemas";
 
@@ -26,6 +31,7 @@ export class SubmissionError extends Error {
 type Outcome =
   | { kind: "ok"; result: unknown }
   | { kind: "error" }
+  | { kind: "unconfigured" }
   | { kind: "timeout" };
 
 /**
@@ -57,11 +63,11 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     consent: { purpose: CONSENT_PURPOSE, textVersion: CONSENT_TEXT_VERSION },
   });
 
-  const enqueueAsync = async (): Promise<SubmitResult> => {
+  const enqueueAsync = async (pipelineAvailable = pipeline !== null): Promise<SubmitResult> => {
     try {
       // Atômico no banco: job `queued` + mensagem + envio `processing_async` (o worker nunca é sobrescrito).
       const { jobId } = await queue.enqueue(submissionId);
-      return { status: "processing_async", submissionId, jobId, pipelineAvailable: pipeline !== null };
+      return { status: "processing_async", submissionId, jobId, pipelineAvailable };
     } catch {
       await store.reject(submissionId, "enqueue_failed").catch(() => undefined);
       return { status: "failed", submissionId, reason: "enqueue_failed" };
@@ -73,23 +79,30 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
   const abort = new AbortController();
   const timer = new AbortController();
   const started = clock.now();
+  const budgetMs = deps.budgetMs ?? SYNC_BUDGET_MS;
   const outcome = await Promise.race<Outcome>([
     pipeline
       .extract(
         {
+          submissionId,
           bytes: input.file.bytes,
           mime: check.mime,
           fileName,
           grade: meta.data.grade,
           schoolYear: meta.data.schoolYear,
         },
-        { signal: abort.signal },
+        { signal: abort.signal, budgetMs },
       )
       .then(
         (result): Outcome => ({ kind: "ok", result }),
-        (): Outcome => ({ kind: "error" }),
+        // IA não configurada (settings/modelo/chave ausentes): nada foi lido nem cobrado; segue o caminho assíncrono
+        // com "leitura automática indisponível" em vez de rejeitar o envio.
+        (e: unknown): Outcome =>
+          (e as { code?: unknown } | null)?.code === "ai_not_configured"
+            ? { kind: "unconfigured" }
+            : { kind: "error" },
       ),
-    clock.delay(deps.budgetMs ?? SYNC_BUDGET_MS, timer.signal).then((): Outcome => ({ kind: "timeout" })),
+    clock.delay(budgetMs, timer.signal).then((): Outcome => ({ kind: "timeout" })),
   ]);
   timer.abort();
 
@@ -97,6 +110,7 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     abort.abort(); // cancela o trabalho; se ainda assim resolver, o resultado já é descartado
     return enqueueAsync();
   }
+  if (outcome.kind === "unconfigured") return enqueueAsync(false);
   if (outcome.kind === "error") {
     await store.reject(submissionId, "extraction_failed").catch(() => undefined);
     return { status: "failed", submissionId, reason: "extraction_failed" };

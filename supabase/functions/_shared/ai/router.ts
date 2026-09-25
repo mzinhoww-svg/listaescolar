@@ -2,6 +2,7 @@
 // transitório (Zod inválido, confiança baixa, timeout, erro 5xx/429). Uma decisão por tentativa.
 import type { ZodType } from "zod";
 import { AiError } from "./errors.ts";
+import { type EnvLike, isProductionEnv, readProcessEnv } from "./env.ts";
 import { parseJsonLoose } from "./json.ts";
 import type {
   AiSettings,
@@ -53,12 +54,12 @@ export type RouterDeps = {
   recorder: DecisionRecorder;
   clock: Clock;
   /**
-   * O provedor `fake` só é usado se este flag for `true` E `env.NODE_ENV` não for "production".
+   * O provedor `fake` só é usado se este flag for `true` E o ambiente não for produção (ver env.ts).
    * Default false. Composição de produção NUNCA passa `allowFake` (e NODE_ENV=production recusa mesmo assim).
    */
   allowFake?: boolean;
   /** Só para teste: sobrescreve a leitura de NODE_ENV do processo. */
-  env?: { NODE_ENV?: string };
+  env?: EnvLike;
 };
 
 // Códigos de alerta do SPEC (seção de alertas). Qualquer outro código é descartado antes de gravar.
@@ -72,13 +73,6 @@ export const ALERT_CODES: ReadonlySet<string> = new Set([
   "invalid_school_grade_year",
 ]);
 
-function nodeEnv(): string | undefined {
-  try {
-    return (globalThis as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV;
-  } catch {
-    return undefined;
-  }
-}
 const unit = (n: number) => (Number.isFinite(n) ? Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000 : 0);
 
 function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -112,7 +106,7 @@ async function closed<V>(fn: () => Promise<V>, detail: string): Promise<V> {
 
 export function createRouter(deps: RouterDeps) {
   const { clock } = deps;
-  const fakeAllowed = () => deps.allowFake === true && (deps.env ? deps.env.NODE_ENV : nodeEnv()) !== "production";
+  const fakeAllowed = () => deps.allowFake === true && !isProductionEnv(deps.env ?? readProcessEnv());
 
   /** Resolve o provedor da rota (falha fechada, sem rede). */
   function resolve(settings: AiSettings, route: Route): { provider: LlmProvider; cfg: RouteCfg } {

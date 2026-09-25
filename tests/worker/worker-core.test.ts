@@ -126,6 +126,11 @@ describe("nextDelaySeconds", () => {
 });
 
 describe("processJob", () => {
+  it("entrega ao pipeline o id do envio (entity_id das decisões de IA) e o teto desta extração", async () => {
+    const { deps, extract } = setup();
+    await processJob("j1", { ...deps, timeoutMs: 42_000 });
+    expect(extract).toHaveBeenCalledWith(expect.objectContaining({ submissionId: "sub-j1" }), expect.objectContaining({ budgetMs: 42_000 }));
+  });
   it("sucesso: done, um único efeito", async () => {
     const { deps, db, extract } = setup();
     await expect(processJob("j1", deps)).resolves.toBe("done");

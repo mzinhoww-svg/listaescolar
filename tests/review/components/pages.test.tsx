@@ -11,7 +11,8 @@ vi.mock("@/features/auth/guard", () => ({ requireAccess: (...a: unknown[]) => re
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: () => getSessionActor() }));
 vi.mock("@/features/review/queries", () => ({ getReviewQueue: (...a: unknown[]) => getReviewQueue(...a), getReviewDetail: (...a: unknown[]) => getReviewDetail(...a) }));
 vi.mock("@/app/admin/revisao/loaders", () => ({ ...loaders, buildReviewService: () => service }));
-vi.mock("@/app/admin/revisao/actions", () => ({ saveReviewAction: vi.fn(), approveAndPublishAction: vi.fn(), publishAction: vi.fn(), rejectAction: vi.fn() }));
+vi.mock("@/app/admin/revisao/actions", () => ({ saveReviewAction: vi.fn(), approveAndPublishAction: vi.fn(), publishAction: vi.fn(), rejectAction: vi.fn(), reconcileAction: vi.fn(), assignSchoolAction: vi.fn() }));
+vi.mock("@/app/enviar-lista/school-search-action", () => ({ searchSchoolsAction: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
   usePathname: () => "/",

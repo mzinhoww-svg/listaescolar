@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { UPLOAD_BUCKET } from "./constants";
 import type { NewSubmission, SubmissionStore } from "./ports";
 import type { ExtractionResult } from "./schemas";
+import { SubmissionError } from "./service";
 import { rpcOf } from "./supabase-queue";
 
 /**
@@ -39,6 +40,8 @@ export function createSupabaseStore(client: SupabaseClient): SubmissionStore {
       });
       if (error || data !== submissionId) {
         await client.storage.from(UPLOAD_BUCKET).remove([path]);
+        // D-002: o banco recusa envio de escola sem vínculo confirmado (hint estável); qualquer outro erro é genérico.
+        if ((error as { hint?: unknown } | null)?.hint === "school_not_linked") throw new SubmissionError("school_not_linked");
         throw new Error("create");
       }
       return { submissionId };

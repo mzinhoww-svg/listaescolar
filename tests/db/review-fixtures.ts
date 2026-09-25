@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
-import { attempt, IDS, withSuperuser } from "./helpers";
+import { attempt, ensureSchool, IDS, withSuperuser } from "./helpers";
 
 export const ALERTS = [
   "low_confidence_item",
@@ -48,7 +48,7 @@ export async function seedSubmission(c: Client, o: SeedOpts = {}): Promise<strin
       id,
       owner,
       o.source ?? "school",
-      o.schoolId === undefined ? randomUUID() : o.schoolId,
+      o.schoolId === undefined ? await ensureSchool(c) : o.schoolId === null ? null : await ensureSchool(c, o.schoolId),
       o.grade === undefined ? "4º ano" : o.grade,
       o.year === undefined ? 2027 : o.year,
       `${owner}/${id}/lista.pdf`,

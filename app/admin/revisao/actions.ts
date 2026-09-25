@@ -8,7 +8,7 @@ import { REJECT_REASONS } from "@/features/review/codes";
 import { buildReviewService } from "@/features/review/deps";
 import { ReviewError } from "@/features/review/errors";
 import { blockerPhrase, reasonPhrase } from "@/features/review/phrases";
-import { reviewPayloadSchema, submissionIdSchema } from "@/features/review/schemas";
+import { assignSchoolSchema, reviewPayloadSchema, submissionIdSchema } from "@/features/review/schemas";
 import type { PublishOutcome, ReviewOutcome } from "@/features/review/types";
 
 import { state, type ReviewActionState } from "./state";
@@ -66,7 +66,7 @@ function publicationState(p: PublishOutcome | null): ReviewActionState {
     case "publish_failed":
       return state("failed", `A publicação falhou e o envio voltou à fila. ${reasonPhrase(p.code)}.`);
     case "orphaned":
-      return state("error", "Lista aprovada; publicação bloqueada: existe uma publicação automática não reconciliada. A conciliação é feita na integração (S11).");
+      return state("error", "Lista aprovada; publicação bloqueada: existe uma publicação automática não reconciliada. Use “Conciliar publicação”.");
     case "not_reviewable":
       return state("error", NOT_REVIEWABLE);
   }
@@ -143,6 +143,40 @@ export async function rejectAction(_prev: ReviewActionState, formData: FormData)
     }
     if (r.status === "stale") return state("stale", STALE);
     return state("error", NOT_REVIEWABLE);
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Atribui a escola a um envio sem escola. A escola vem do seletor (id); o `actor_id` vem só da sessão. */
+export async function assignSchoolAction(_prev: ReviewActionState, formData: FormData): Promise<ReviewActionState> {
+  const g = await guard(formData);
+  if (isState(g)) return g;
+  const parsed = assignSchoolSchema.safeParse({ schoolId: formData.get("schoolId"), expectedVersion: versionOf(formData) });
+  if (!parsed.success) return state("error", "Escolha uma escola da lista.");
+  try {
+    const r = await buildReviewService().assignSchool(g.actor, g.id, parsed.data);
+    if (r.status === "school_assigned") {
+      refresh(g.id);
+      return state("assigned", "Escola atribuída ao envio.");
+    }
+    if (r.status === "stale") return state("stale", STALE);
+    return state("error", "Este envio não aceita atribuição de escola (já tem escola ou não está em revisão).");
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** "Conciliar publicação" (D-066): o admin confere e concilia; nada é vinculado sozinho. */
+export async function reconcileAction(_prev: ReviewActionState, formData: FormData): Promise<ReviewActionState> {
+  const g = await guard(formData);
+  if (isState(g)) return g;
+  try {
+    const r = await buildReviewService().reconcile(g.actor, g.id);
+    refresh(g.id);
+    if (r === "reconciled") return state("reconciled", "Publicação conciliada: a versão publicada foi vinculada e o envio está publicado.");
+    if (r === "orphan_not_found") return state("reconciled", "Não encontramos a versão publicada deste envio. A publicação humana está liberada.");
+    return state("error", "Não há publicação pendente de conciliação.");
   } catch (e) {
     return fail(e);
   }

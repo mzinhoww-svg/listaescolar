@@ -7,6 +7,7 @@ vi.mock("@/components/submissions/prepareUpload", async (orig) => {
   const real = await orig<typeof import("@/components/submissions/prepareUpload")>();
   return { ...real, prepareUpload: (f: File) => real.prepareUpload(f, { resize: canvasResize }) };
 });
+vi.mock("@/app/enviar-lista/school-search-action", () => ({ searchSchoolsAction: async () => ({ status: "ok", hits: [] }) }));
 vi.mock("@/app/enviar-lista/actions", () => ({ submitListAction: (p: unknown, f: FormData) => submitListAction(p, f) }));
 
 import { SubmitForm } from "@/app/enviar-lista/SubmitForm";
@@ -149,7 +150,7 @@ describe("SchoolUploadForm (Escola08)", () => {
 
   it("mostra as dicas, envia o schoolId e bloqueia sem consentimento", async () => {
     submitListAction.mockResolvedValue({ status: "idle" });
-    render(<SchoolUploadForm schoolId={SCHOOL} years={[2026, 2027]} defaultYear={2027} />);
+    render(<SchoolUploadForm schools={[{ id: SCHOOL, name: "Escola Modelo", inep: "51000001" }]} initialSchoolId={null} years={[2026, 2027]} defaultYear={2027} />);
     expect(screen.getByText("Para a leitura sair certa")).toBeInTheDocument();
     expect(screen.getByText("Nada é publicado sem a sua revisão.")).toBeInTheDocument();
     fill({ consent: false });

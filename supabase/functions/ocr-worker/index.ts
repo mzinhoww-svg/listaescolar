@@ -97,8 +97,8 @@ Deno.serve(async (req) => {
             budgetMs: 90_000,
           });
 
-  // Decisão de publicação (S09): mesmo motor do app (_shared/publication). As portas em memória só com
-  // FAKE_PUBLICATION_FIXTURE + APP_ENV não produtivo; sem elas todo envio vai a human_review, registrado.
+  // Decisão de publicação (S09): mesmo motor do app (_shared/publication). Portas REAIS (S11, rpc-ports.ts) sempre que há
+  // cliente de serviço; as portas em memória só vencem com FAKE_PUBLICATION_FIXTURE + APP_ENV local|development.
   const clock = {
     now: () => Date.now(),
     delay: (ms: number, signal?: AbortSignal) =>

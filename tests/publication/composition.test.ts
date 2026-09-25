@@ -11,7 +11,7 @@ const FIXTURE = JSON.stringify({
 const rpc = { rpc: vi.fn(async () => ({ data: null, error: null })) };
 const build = (env: PublicationEnv) => createPublicationDeps({ env, rpc, clock: new FakeClock() });
 
-describe("createPublicationDeps: portas em memória só com fixture e ambiente explicitamente não produtivo", () => {
+describe("createPublicationDeps: portas reais sempre; memória só com fixture e ambiente explicitamente não produtivo", () => {
   it("fixture válida + APP_ENV=local: liga as portas em memória", () => {
     const d = build({ APP_ENV: "local", FAKE_PUBLICATION_FIXTURE: FIXTURE });
     expect(d.publisher).toBeInstanceOf(MemoryListPublisher);
@@ -20,10 +20,12 @@ describe("createPublicationDeps: portas em memória só com fixture e ambiente e
   it("APP_ENV=development também liga", () => {
     expect(build({ APP_ENV: "development", FAKE_PUBLICATION_FIXTURE: FIXTURE }).publisher).not.toBeNull();
   });
-  it.each(["preview", "staging"])("APP_ENV=%s NÃO liga (staging é o Supabase real e ai_decisions é append-only)", (APP_ENV) => {
+  it.each(["preview", "staging"])("APP_ENV=%s NÃO liga a memória (staging é o Supabase real e ai_decisions é append-only): portas REAIS", (APP_ENV) => {
     const d = build({ APP_ENV, FAKE_PUBLICATION_FIXTURE: FIXTURE });
-    expect(d.publisher).toBeNull();
-    expect(d.context).toBeNull();
+    expect(d.publisher).not.toBeInstanceOf(MemoryListPublisher);
+    expect(d.context).not.toBeInstanceOf(MemoryPublicationContextReader);
+    expect(d.publisher).not.toBeNull();
+    expect(d.context).not.toBeNull();
   });
   it("duas composições sucessivas com a mesma fixture compartilham o publicador (estado entre requisições)", async () => {
     resetMemoryPublishers();
@@ -42,17 +44,21 @@ describe("createPublicationDeps: portas em memória só com fixture e ambiente e
     expect(build({ APP_ENV: "local", FAKE_PUBLICATION_FIXTURE: FIXTURE.replace("ef-4", "ef-9") }).publisher).not.toBe(a.publisher); // outra fixture, outro publicador
     resetMemoryPublishers();
   });
-  it("sem a fixture: portas nulas", () => {
+  it("sem a fixture: portas REAIS (S11), nunca nulas nem em memória", async () => {
     const d = build({ APP_ENV: "local" });
-    expect(d.publisher).toBeNull();
-    expect(d.context).toBeNull();
+    expect(d.publisher).not.toBeNull();
+    expect(d.context).not.toBeNull();
+    expect(d.publisher).not.toBeInstanceOf(MemoryListPublisher);
+    rpc.rpc.mockClear();
+    await d.context!.load({ schoolId: null, grade: null, schoolYear: null, submittedBy: "00000000-0000-4000-8000-000000000002" }).catch(() => undefined);
+    expect(rpc.rpc).toHaveBeenCalledWith("publication_context", expect.anything()); // a leitura passa pela função SQL
   });
   it("APP_ENV=local com VERCEL_ENV=development liga; ausente liga", () => {
     expect(build({ APP_ENV: "local", VERCEL_ENV: "development", FAKE_PUBLICATION_FIXTURE: FIXTURE }).publisher).not.toBeNull();
   });
-  it("fixture sem APP_ENV explícito: portas nulas", () => {
-    expect(build({ FAKE_PUBLICATION_FIXTURE: FIXTURE }).publisher).toBeNull();
-    expect(build({ APP_ENV: "", FAKE_PUBLICATION_FIXTURE: FIXTURE }).context).toBeNull();
+  it("fixture sem APP_ENV explícito: portas reais (a fixture não vale)", () => {
+    expect(build({ FAKE_PUBLICATION_FIXTURE: FIXTURE }).publisher).not.toBeInstanceOf(MemoryListPublisher);
+    expect(build({ APP_ENV: "", FAKE_PUBLICATION_FIXTURE: FIXTURE }).context).not.toBeInstanceOf(MemoryPublicationContextReader);
   });
   it.each([
     { APP_ENV: "production" },
@@ -60,16 +66,18 @@ describe("createPublicationDeps: portas em memória só com fixture e ambiente e
     { APP_ENV: "local", VERCEL_ENV: "preview" },
     { NODE_ENV: "production" },
     { APP_ENV: "outro" },
-  ])("ambiente produtivo ou desconhecido %j: portas nulas", (env) => {
+  ])("ambiente produtivo ou desconhecido %j: portas reais, nunca a memória e nunca nulas", (env) => {
     const d = build({ ...env, FAKE_PUBLICATION_FIXTURE: FIXTURE });
-    expect(d.publisher).toBeNull();
-    expect(d.context).toBeNull();
+    expect(d.publisher).not.toBeNull();
+    expect(d.context).not.toBeNull();
+    expect(d.publisher).not.toBeInstanceOf(MemoryListPublisher);
+    expect(d.context).not.toBeInstanceOf(MemoryPublicationContextReader);
   });
-  it("fixture inválida: portas nulas", () => {
+  it("fixture inválida: portas reais", () => {
     for (const raw of ["{", JSON.stringify({ schools: 1 }), JSON.stringify({ schools: [], grades: {}, validSchoolYears: [], x: 1 })]) {
       const d = build({ APP_ENV: "local", FAKE_PUBLICATION_FIXTURE: raw });
-      expect(d.publisher).toBeNull();
-      expect(d.context).toBeNull();
+      expect(d.publisher).not.toBeNull();
+      expect(d.publisher).not.toBeInstanceOf(MemoryListPublisher);
     }
   });
   it("sempre entrega store, settings e relógio", () => {

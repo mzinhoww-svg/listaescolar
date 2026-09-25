@@ -6,7 +6,7 @@ import { getCurrentRole, getCurrentUser } from "@/features/auth/queries";
 declare const sessionActorBrand: unique symbol;
 
 /**
- * (Cópia de features/stationeries/actor.ts por ADR-004; a S11 unifica.) Quem está agindo, vindo SÓ da sessão validada no servidor (`getCurrentUser`) e do papel em `profiles`
+ * Fonte única do SessionActor (D-046; features/stationeries/actor.ts só reexporta). Quem está agindo, vindo SÓ da sessão validada no servidor (`getCurrentUser`) e do papel em `profiles`
  * (`getCurrentRole`). O tipo é de marca: nenhum objeto comum (nem input de formulário) serve como `SessionActor`,
  * e os métodos do repositório também conferem em tempo de execução que o objeto foi criado por `getSessionActor`.
  */

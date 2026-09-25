@@ -19,7 +19,7 @@ const initial: ReviewDraft = { grade: "4º ano", schoolYear: 2027, items: [item(
 const TH = { confidenceThreshold: 0.8, itemConfidenceThreshold: 0.6 };
 type Act = (prev: ReviewActionState, fd: FormData) => Promise<ReviewActionState>;
 
-function Workbench({ save, blockers = [], status = "human_review", actions, canPublish = false, orphaned = false, available = true, demo = false }: { save?: Act; blockers?: never[] | string[] | null; status?: string; canPublish?: boolean; orphaned?: boolean; available?: boolean; demo?: boolean; actions?: Partial<Record<"approveAndPublish" | "reject" | "publish", Act>> }) {
+function Workbench({ save, blockers = [], status = "human_review", actions, canPublish = false, orphaned = false, available = true, demo = false }: { save?: Act; blockers?: never[] | string[] | null; status?: string; canPublish?: boolean; orphaned?: boolean; available?: boolean; demo?: boolean; actions?: Partial<Record<"approveAndPublish" | "reject" | "publish" | "reconcile", Act>> }) {
   const noop: Act = async () => IDLE;
   return (
     <DraftProvider>
@@ -33,7 +33,7 @@ function Workbench({ save, blockers = [], status = "human_review", actions, canP
         orphaned={orphaned}
         publicationAvailable={available}
         demoPublication={demo}
-        actions={{ approveAndPublish: actions?.approveAndPublish ?? noop, reject: actions?.reject ?? noop, publish: actions?.publish ?? noop }}
+        actions={{ approveAndPublish: actions?.approveAndPublish ?? noop, reject: actions?.reject ?? noop, publish: actions?.publish ?? noop, reconcile: actions?.reconcile ?? noop }}
       />
     </DraftProvider>
   );
@@ -121,6 +121,17 @@ describe("DecisionPanel", () => {
   it("publish_orphaned desabilita aprovar", () => {
     render(<Workbench orphaned />);
     expect(screen.getByRole("button", { name: "Aprovar e publicar" })).toBeDisabled();
+  });
+  it("órfão pendente: 'Conciliar publicação' chama a ação e mostra o resultado (S11)", async () => {
+    const reconcile = vi.fn<Act>(async () => state("reconciled", "Publicação conciliada: a versão publicada foi vinculada e o envio está publicado."));
+    render(<Workbench orphaned actions={{ reconcile }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Conciliar publicação" }));
+    await waitFor(() => expect(reconcile).toHaveBeenCalled());
+    expect(await screen.findByText(/Publicação conciliada/)).toHaveAttribute("role", "status");
+  });
+  it("sem órfão pendente não há botão de conciliar", () => {
+    render(<Workbench />);
+    expect(screen.queryByRole("button", { name: "Conciliar publicação" })).toBeNull();
   });
   it("sem porta: após aprovar, a re-renderização com status approved mantém o aviso fixo e 'Publicar' desabilitado", async () => {
     const approve = vi.fn<Act>(async () => state("unavailable", "Lista aprovada. Publicação indisponível neste ambiente até a integração."));

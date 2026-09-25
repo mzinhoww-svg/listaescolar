@@ -128,3 +128,38 @@ describe("createReviewService: approve", () => {
     expect(await noPorts.blockers(admin, SUB, false)).toEqual([]);
   });
 });
+
+describe("createReviewService: escola atribuída e conciliação (S11)", () => {
+  const SCHOOL_ID = "50000000-0000-4000-8000-0000000000c1";
+  it("só admin, antes de qualquer chamada ao store; ator objeto forjado também é recusado", async () => {
+    const f = fakeStore();
+    const svc = createReviewService({ store: f.store, publication: memoryPublication().deps });
+    const parent = await actorOf("parent", PARENT_ID);
+    const forged = { userId: ADMIN_ID, role: "admin" } as unknown as SessionActor;
+    for (const actor of [parent, forged]) {
+      await expect(svc.assignSchool(actor, SUB, { schoolId: SCHOOL_ID, expectedVersion: 1 })).rejects.toMatchObject({ code: "forbidden" });
+      await expect(svc.reconcile(actor, SUB)).rejects.toMatchObject({ code: "forbidden" });
+    }
+    expect(f.calls).toEqual([]);
+  });
+
+  it("assignSchool: ator da sessão, escola e versão validadas (Zod); actorId no payload é recusado", async () => {
+    const f = fakeStore();
+    const svc = createReviewService({ store: f.store, publication: memoryPublication().deps });
+    const admin = await actorOf("admin", ADMIN_ID);
+    expect(await svc.assignSchool(admin, SUB, { schoolId: SCHOOL_ID, expectedVersion: 3 })).toEqual({ status: "school_assigned" });
+    expect(f.calls[0]).toMatchObject({ name: "assignSchool", args: [SUB, ADMIN_ID, 3, SCHOOL_ID] });
+    await expect(svc.assignSchool(admin, SUB, { schoolId: "nao-uuid", expectedVersion: 3 })).rejects.toMatchObject({ code: "invalid_input" });
+    await expect(svc.assignSchool(admin, SUB, { schoolId: SCHOOL_ID, expectedVersion: 3, actorId: PARENT_ID })).rejects.toMatchObject({ code: "invalid_input" });
+    expect(f.names()).toEqual(["assignSchool"]);
+  });
+
+  it("reconcile: repassa o resultado do store com o ator da sessão", async () => {
+    const f = fakeStore();
+    const svc = createReviewService({ store: f.store, publication: memoryPublication().deps });
+    const admin = await actorOf("admin", ADMIN_ID);
+    expect(await svc.reconcile(admin, SUB)).toBe("reconciled");
+    expect(f.calls[0]).toMatchObject({ name: "reconcileOrphan", args: [SUB, ADMIN_ID] });
+    await expect(svc.reconcile(admin, "x")).rejects.toMatchObject({ code: "invalid_input" });
+  });
+});

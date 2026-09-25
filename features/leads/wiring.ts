@@ -5,8 +5,8 @@ import { readServiceEnv } from "@/features/cart/service";
 import { getSiteOrigin } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { createDemoLeadListContextReader } from "./demo-context-reader";
-import { NoopLeadNotifier } from "./notifier";
+import { composeLeadContextReader } from "@/features/integration/compose";
+import { KickLeadNotifier } from "./notifier";
 import type { LeadCartReader, LeadListContextReader } from "./ports";
 import { createLeadStore } from "./repository";
 import { LeadService } from "./service";
@@ -28,18 +28,18 @@ export function createCartReader(): LeadCartReader {
   };
 }
 
-/** Leitor de contexto da lista (só demonstração até a S11). `null` com a flag desligada: nada de lista inventada. */
-export function createContextReader(): LeadListContextReader | null {
-  return createDemoLeadListContextReader(readServiceEnv());
+/** Leitor de contexto da lista: banco real (oficial e cópia do próprio pai) e, atrás da regra fail-closed da S12, a demonstração. */
+export function createContextReader(): LeadListContextReader {
+  return composeLeadContextReader(createAdminClient(), readServiceEnv());
 }
 
-/** Composição do serviço de leads. O leitor de contexto real (listas) é da S11; hoje só o de demonstração. */
+/** Composição do serviço de leads (leitor de contexto real desde a S11). */
 export function getLeadService(): LeadService {
   return new LeadService({
     store: createLeadStore(createAdminClient()),
     carts: createCartReader(),
     contexts: createContextReader(),
-    notifier: new NoopLeadNotifier(),
+    notifier: new KickLeadNotifier(),
     now: () => new Date(),
     siteOrigin: () => getSiteOrigin(),
   });

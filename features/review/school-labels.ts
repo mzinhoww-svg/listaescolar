@@ -21,11 +21,14 @@ export class MemorySchoolLabelReader implements SchoolLabelReader {
   }
 }
 
-/** `null` = porta não ligada (produção, preview e staging até a S11): a tela mostra "Escola não identificada neste ambiente". */
-export function createSchoolLabelReader(env: PublicationEnv): SchoolLabelReader | null {
-  if (!publicationPortsAllowed(env)) return null;
+/**
+ * Em memória só com a fixture da S09 (local/dev); senão o leitor REAL (`real`, criado pela composição server-only da S11).
+ * `null` = nem fixture nem leitor real: a tela mostra "Escola não identificada neste ambiente".
+ */
+export function createSchoolLabelReader(env: PublicationEnv, real: SchoolLabelReader | null = null): SchoolLabelReader | null {
+  if (!publicationPortsAllowed(env)) return real;
   const fixture = parsePublicationFixture(env.FAKE_PUBLICATION_FIXTURE);
-  if (!fixture) return null;
+  if (!fixture) return real;
   const byId = new Map<string, SchoolLabel>();
   for (const s of fixture.schools) if (s.label) byId.set(s.id, s.label);
   return new MemorySchoolLabelReader(byId);

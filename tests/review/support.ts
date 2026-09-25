@@ -50,6 +50,8 @@ export function fakeStore(over: { ctx?: Partial<ReviewContext> | null; fail?: "f
     releasePublish: rec("releasePublish", undefined),
     completePublish: rec("completePublish", over.complete ?? "completed"),
     failPublish: rec("failPublish", over.fail ?? ("failed" as const)),
+    assignSchool: rec("assignSchool", "assigned" as const),
+    reconcileOrphan: rec("reconcileOrphan", "reconciled" as const),
   } as ReviewStore;
   return { store, calls, names: () => calls.map((c) => c.name) };
 }

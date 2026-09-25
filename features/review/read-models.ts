@@ -100,7 +100,7 @@ export async function listQueue(repo: ReviewRepository, tab: QueueTab): Promise<
   return kept.map((s) => {
     const rows = of(s.id);
     const verdict = rows.find((d) => d.kind === "publication" && d.decision === "human_review");
-    const lastHuman = rows.filter((d) => d.kind === "review" && d.decision !== "edited").at(-1);
+    const lastHuman = rows.filter((d) => d.kind === "review" && d.decision !== "edited" && d.decision !== "reconciled").at(-1);
     const failure = tab === "pending" && lastHuman?.decision === "publish_failed" ? lastHuman.reasons : [];
     return {
       id: s.id,
@@ -115,6 +115,12 @@ export async function listQueue(repo: ReviewRepository, tab: QueueTab): Promise<
       state: tab === "approved" ? (s.status === "published" ? "published" : "awaiting_publication") : null,
     };
   });
+}
+
+/** Órfão pendente = `publish_orphaned` mais novo que a última conciliação (mesma regra de `publication_orphan_pending`). */
+export function hasPendingOrphan(decisions: readonly { decision: string }[]): boolean {
+  const lastOrphan = decisions.map((d) => d.decision).lastIndexOf("publish_orphaned");
+  return lastOrphan >= 0 && lastOrphan > decisions.map((d) => d.decision).lastIndexOf("reconciled");
 }
 
 export async function getDetail(repo: ReviewRepository, id: string): Promise<ReviewDetail | null> {
@@ -141,7 +147,7 @@ export async function getDetail(repo: ReviewRepository, id: string): Promise<Rev
     extraction: r ? { overallConfidence: r.overallConfidence, alerts: [...new Set([...(r.alerts ?? []), ...itemAlerts])], criticalAlerts: r.criticalAlerts ?? [], itemCount: r.items.length } : null,
     decisions: decisions.map((d) => ({ kind: d.kind, decision: d.decision, reasons: d.reasons, actorId: d.actor_id, createdAt: d.created_at })),
     publishedBy: published ? (published.kind === "publication" ? "auto" : "human") : null,
-    hasOrphan: decisions.some((d) => d.decision === "publish_orphaned"),
+    hasOrphan: hasPendingOrphan(decisions),
   };
 }
 

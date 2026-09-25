@@ -5,7 +5,12 @@ import { ItemsTable } from "@/components/lists/ItemsTable";
 import { ListHeader } from "@/components/lists/ListHeader";
 import { UnpublishedState } from "@/components/lists/UnpublishedState";
 import { VersionHistory } from "@/components/lists/VersionHistory";
+import { WatchButton } from "@/components/notifications/WatchButton";
 import { ShareListCard } from "@/components/share/ShareListCard";
+import { getSessionActor } from "@/features/auth/actor";
+import { unwatchListAction, watchListAction } from "@/app/conta/notificacoes/actions";
+import { channelAvailability } from "@/features/notifications/preferences";
+import { isWatching } from "@/features/notifications/queries";
 import { defaultAcademicYear, findGrade, parseGradeSelection } from "@/features/grades/catalog";
 import { getPublishedList, listVersionHistory } from "@/features/lists/queries";
 import { loadSchool } from "@/features/schools/search/load-school";
@@ -57,6 +62,9 @@ export default async function ListPage({ params, searchParams }: Props) {
   const history = list ? await listVersionHistory(inep, grade.slug, year, { listId: list.id }) : [];
   const version = list?.version;
   const shareOrigin = version ? siteBase() : null;
+  // App24: sem lista publicada, oferece "Me avise" (com login; sem login, leva ao /entrar?next=)
+  const actor = version ? null : await getSessionActor().catch(() => null);
+  const watching = actor ? await isWatching(actor, { inep: school.inep, gradeSlug: grade.slug, year }).catch(() => false) : false;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -84,7 +92,24 @@ export default async function ListPage({ params, searchParams }: Props) {
             {shareOrigin ? <ShareListCard inep={school.inep} gradeSlug={grade.slug} origin={shareOrigin} /> : null}
           </>
         ) : (
-          <UnpublishedState inep={school.inep} gradeLabel={grade.label} year={year} />
+          <UnpublishedState
+            inep={school.inep}
+            gradeLabel={grade.label}
+            year={year}
+            notify={
+              <WatchButton
+                inep={school.inep}
+                gradeSlug={grade.slug}
+                year={year}
+                loggedIn={actor !== null}
+                watching={watching}
+                nextPath={`/escolas/${school.inep}/${grade.slug}?ano=${year}`}
+                watch={watchListAction}
+                unwatch={unwatchListAction}
+                pushAvailable={channelAvailability(process.env).web_push}
+              />
+            }
+          />
         )}
       </main>
     </div>

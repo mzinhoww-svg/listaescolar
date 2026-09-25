@@ -125,6 +125,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-074 | Ruling de previews públicos (ledger.md) | Previews da Vercel públicos com o Supabase de staging (dados demo): reativar a Vercel Authentication (ou equivalente) ANTES de qualquer dado real; hoje só `X-Robots-Tag: noindex` os protege da indexação | alta | S20 (checklist de go-live; humano reativa) | aberta |
 | D-075 | Ruling de indexamento (ledger.md) | O deploy "de produção" da Vercel (`main`) aponta para o staging e seria indexável: passou a exigir `SITE_INDEXING=1` (além de `VERCEL_ENV=production`) para robots, sitemap e remoção do `X-Robots-Tag`; o humano liga `SITE_INDEXING=1` só no go-live | alta | S20 (checklist de go-live) | aberta |
 | D-076 | verificação de 2026-09-25 (env da Vercel) | Chaves `ASAAS_*` existem no projeto Vercel (PSP Asaas escolhido) e em `.env.local`, mas a S21 proíbe dinheiro real e credencial no código: usar só sandbox/fake até o go-live e revisar o adapter Pix (planejado genérico BACEN) contra a API do Asaas | média | S21/S23 | aberta |
+| D-077 | E2E de 2026-09-25 (staging, `listaescolare.vercel.app`) | Leitura por IA falha no staging com `http_401` do OpenRouter na `ocr-worker` (chave ausente/inválida nos secrets da função) e um `provider_timeout` de ~9 s na primeira decisão (provável leitura inline do app na Vercel); o teste de ponta a ponta não chegou aos itens lidos. Login por link mágico e envio de lista passaram (o link gerado por `admin.generateLink` precisa de `type=email` no `verifyOtp`, como nos templates; `type=magiclink` cai em `?erro=codigo`, sem ser bug do produto). Dados de teste no staging: usuário `e2e+worker@listacerta.invalid` e um envio `rejected` | alta | Humano (secret `OPENROUTER_KEY`) → orquestrador | aberta (ver PROGRESS > Aguardando humano) |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -132,7 +133,7 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 11 | 2 | 13 |
+| alta | 12 | 2 | 14 |
 | média | 27 | 4 | 31 |
 | baixa | 30 | 1 | 31 |
-| **Total** | **68** | **7** | **75** |
+| **Total** | **69** | **7** | **76** |

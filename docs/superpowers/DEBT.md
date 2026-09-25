@@ -1,6 +1,6 @@
 # DEBT · dívida técnica consolidada
 
-Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dados.md`, `ledger-pipeline.md`, `ledger-comercio.md`, nos planos (`plans/`) e nos relatórios E2E (`e2e/`). Levantamento feito em 2026-09-25 sobre `main` em `06f988a`. Dívida das branches abertas (S09, S27) entra quando elas forem mescladas.
+Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dados.md`, `ledger-pipeline.md`, `ledger-comercio.md`, nos planos (`plans/`) e nos relatórios E2E (`e2e/`). Levantamento feito em 2026-09-25; atualizado sobre `main` em `b905cce` (S09 e S27 mescladas). Dívida de branches abertas (S10) entra quando forem mescladas.
 
 **Regras**
 - Um item por problema. Quando o mesmo problema aparece em mais de um ledger, a coluna "Origem" lista todas as fontes.
@@ -97,7 +97,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 
 ## Arquivos grandes (limite de 250 linhas)
 
-A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2026-09-25 (`find app components features lib supabase/functions scripts -name '*.ts' -o -name '*.tsx' | xargs wc -l`, sem testes): **nenhum `.tsx` passa de 250 linhas**, então a regra não é violada. Os arquivos abaixo são módulos (repositórios, motores, núcleo de IA) e entram como recomendação com o mesmo limiar de 250.
+A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2026-09-25, reconferida com `wc -l` sobre `b905cce` (contagens iguais; varredura com `find app components features lib supabase/functions scripts -name '*.ts' -o -name '*.tsx' | xargs wc -l`, sem testes): **nenhum `.tsx` passa de 250 linhas**, então a regra não é violada. Os arquivos abaixo são módulos (repositórios, motores, núcleo de IA) e entram como recomendação com o mesmo limiar de 250.
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
@@ -121,12 +121,15 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-069 | ledger-pipeline S09 (pendência) | Índice `ai_decisions_publication_once` limita a um `published`/`publish_failed` por envio; republicação após `publish_failed` + aprovação humana exige outro `kind`/`decision` | média | S10 / S11 | aberta |
 | D-070 | ledger-pipeline S09 | `PortError` tipado (`transient`) obrigatório na porta real; versão real idempotente por `list_versions.submission_id`, perfil `system` e ajuste na 0600 (`p_actor_id` obrigatório) | alta | S11 | aberta |
 | D-071 | ledger-pipeline S09; OBRIGAÇÃO da S10 | `ReviewSummary` mostra "Publicada automaticamente" para qualquer status `published`; deve vir da linha `publication:published` automática (`actor_id` nulo), não só do status (aprovação humana também vira `published`) | alta | S10 | aberta |
+| D-072 | PR #20 (CI); ledger-comercio S27 (assets/fonts) | `pnpm build` do CI depende de `next/font/google` (busca Plus Jakarta Sans no Google Fonts): falhou uma vez ao obter a fonte do Google Fonts no build no PR #20 (rerun passou). Hospedar a fonte localmente (a S27 já commitou `assets/fonts` para a OG image) | média | S19 / S18 | aberta |
+
+Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 10 | 0 | 10 |
-| média | 21 | 4 | 25 |
-| baixa | 28 | 1 | 29 |
-| **Total** | **59** | **5** | **64** |
+| alta | 12 | 0 | 12 |
+| média | 25 | 4 | 29 |
+| baixa | 30 | 1 | 31 |
+| **Total** | **67** | **5** | **72** |

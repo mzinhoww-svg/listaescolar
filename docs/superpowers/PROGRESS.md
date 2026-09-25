@@ -1,10 +1,10 @@
 # PROGRESS
 
-**Atualizado em:** 2026-09-25, a partir de `git log origin/main` (HEAD `06f988a`), `gh pr list --state merged`, ledgers e relatórios `docs/superpowers/e2e/*.md`.
+**Atualizado em:** 2026-09-25, a partir de `git log origin/main` (HEAD `b905cce`), `gh pr list --state merged`, ledgers e relatórios `docs/superpowers/e2e/*.md`.
 
 **Regra de manutenção:** atualizar este arquivo a cada merge (em PR `docs/` próprio ou junto do PR da fatia). Contagens só com fonte (PR ou relatório); sem fonte, `n/d`. Dívida técnica fica em `docs/superpowers/DEBT.md`, não aqui.
 
-**Em andamento:** S09 em revisão (PR #20 a mesclar) e S27 (fora de trilha, depois da Comércio). Próxima a iniciar: S10.
+**Em andamento:** S10 (Pipeline; branch `slice/S10-revisao`, plano pronto, Task 1 em implementação no worktree T2). Depois: S11.
 
 ## Concluídas (merge squash em `main`)
 
@@ -29,13 +29,15 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S14 Leads e WhatsApp (Comércio) | #15 | 639b93e | 2026-09-25 | ✓ | ✓ | 1632 | 949 | ✓ | verify ✓ db ✓ | ✗ | build local, 80 verificações, 0 falhas (`e2e/S14.md`) |
 | S06 Reivindicação (Dados) | #16 | 789a8de | 2026-09-25 | ✓ | ✓ | 1869 | 1057 | ✓ | verify ✓ db ✓ | ✗ | build local, fase 1: 58 asserções; fase 2: 21; 0 falhas (`e2e/S06.md`) |
 | chore soft-404 | #17 | 06f988a | 2026-09-25 | ✓ | ✓ | 1869 | n/a (sem banco) | ✓ | verify ✓ db ✓ | ✗ | curl: 404/307 reais (`e2e/soft-404.md`, `scripts/e2e-soft-404.sh`) |
-| S09 Motor de aprovação automática (Pipeline) | #20 (a mesclar) | n/d | 2026-09-25 | ✓ | ✓ | 1834 | 1104 (3 skipped) | ✓ | n/d | ✗ | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
+| docs PROGRESS/DEBT e agendamento da refatoração | #18 | 7f68737 | 2026-09-25 | n/a | n/a | n/a | n/a | n/a | n/d | n/d | n/a (só docs) |
+| S27 Site público e páginas de sistema (Comércio) | #19 | 8cbd458 | 2026-09-25 | ✓ | ✓ | 2073 | n/a (sem migration) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 265 verificações, 0 falhas (`e2e/S27.md`) |
+| S09 Motor de aprovação automática (Pipeline) | #20 | b905cce | 2026-09-25 | ✓ | ✓ | 2279 (árvore mesclada) | 1312 (3 skipped) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
 
 Observação: o check "Vercel" falha em todos os PRs desde o #4 (não só do #8 em diante). A causa apontada pelo orquestrador é a falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto da Vercel (ver pendências humanas).
 
 ## Migrations
 
-Aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+12 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -50,9 +52,9 @@ Aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O 
 | 0301_cart_retailers_affiliates.sql | S12 | cart_retailers_affiliates | 20260925041851 |
 | 0302_stationeries.sql | S13 | stationeries | 20260925060339 |
 | 0303_leads.sql | S14 | leads | 20260925131816 |
-| 0203_publication_decisions.sql | S09 | publication_decisions | n/d (aplicada no staging após o merge, pelo orquestrador) |
+| 0203_publication_decisions.sql | S09 | publication_decisions | 20260925161635 (aplicada em uma única chamada transacional, com conferências antes e depois) |
 
-Pendente de staging: nenhuma; a `0203_publication_decisions.sql` (S09) é aplicada no staging após o merge (orquestrador).
+Pendente de staging: nenhuma.
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -60,17 +62,17 @@ Produção: nenhuma migration (o projeto não existe).
 
 | Trilha | Fatias | Estado |
 |---|---|---|
-| Dados | S03, S04, S05, S06 | **Completa** |
-| Pipeline | S07, S08, S09, S10 | S07 e S08 completas. **S09 em revisão / PR aberto** (#20, branch `slice/S09-aprovacao`). S10 não iniciada |
-| Comércio | S12, S13, S14 | **Completa**. Depois dela, **S27 em andamento** (branch `slice/S27-site-publico`; Tasks 1 e 2 revisadas, Task 3 (E2E) em curso) |
+| Dados | S03, S04, S05, S06 | **Completa** (S03–S06) |
+| Pipeline | S07, S08, S09, S10 | S07, S08 e S09 completas. **S10 em andamento** (branch `slice/S10-revisao`, plano pronto, Task 1 em implementação no worktree T2). Publicação automática DESLIGADA e sem portas reais até a S11 |
+| Comércio | S12, S13, S14, S27 | **Completa** (S12–S14 e S27) |
 
 ## Próximos passos (ordem do PLAN)
 
-1. S09 (mesclar #20) → S10. A publicação automática fica DESLIGADA até a S11 (`ai_settings.auto_publish_enabled` default false; portas reais e ligar o interruptor por dado só na S11). A S10 deve mostrar "Publicada automaticamente" a partir da linha `publication:published` automática, não só do status (ver D-071).
+1. S10 (em andamento). A publicação automática fica DESLIGADA até a S11 (`ai_settings.auto_publish_enabled` default false; portas reais e ligar o interruptor por dado só na S11). A S10 deve mostrar "Publicada automaticamente" a partir da linha `publication:published` automática, não só do status (ver D-071).
 2. S11: integração das trilhas, com a migration `0600_cross_track_fks` e a ligação das portas (leitor de lista real no carrinho e no lead, cotação local no carrinho, `SessionActor` unificado, provedor de e-mail, Web Push); consolidar os ledgers de trilha em `ledger.md` (ADR-004).
-3. Em paralelo: [S21, S22, S23] e [S24, S25, S26].
-4. S15, S16 (e S27, se ainda aberta).
-5. S17, S18, S19. A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
+3. Em paralelo: [S21, S22, S23] ∥ [S24, S25, S26].
+4. S15, S16.
+5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
 ## Pendências humanas (consolidadas)
@@ -79,7 +81,7 @@ Ambiente e deploy:
 - Vercel: definir `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (e as de servidor do `.env.example`) no projeto `listaescolar`. Sem elas o deploy da Vercel falha em todos os PRs desde o #4.
 - Vercel: o preview está protegido (Deployment Protection). Liberar o acesso do agent-browser (Trusted Sources ou bypass) ou desligar a proteção só nos Previews. Até lá o E2E roda no build local.
 - Vercel: `CRON_SECRET` (16 caracteres ou mais) nos ambientes e aceite do cron diário `/api/cron/leads-expire` no plano da conta (S14).
-- Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (canonical, JSON-LD, links de login e do lead).
+- Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio; canonical, JSON-LD, links de login e do lead, OG, sitemap e QR dependem dele).
 - Supabase (staging): deploy da Edge Function `ocr-worker`, agendamento pg_cron/pg_net com Vault (`supabase/functions/ocr-worker/README.md`) e secrets `WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_CHEAP`, `AI_MODEL_STRONG`, `AI_MODEL_VISION`.
 - Rodar `scripts/ai-smoke.ts` com chave e modelos reais (tem custo; os agentes não rodam).
 - Supabase Auth hospedado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
@@ -94,8 +96,8 @@ Credenciais e contas:
 
 Conteúdo e dados:
 - CSV oficial do INEP (importação na S20, com a contagem real registrada).
-- Textos jurídicos finais: razão social, CNPJ, DPO/contato, prazos de retenção (páginas de termos e privacidade da S27 e S17 usam placeholders).
-- Promessa "Famílias e escolas não pagam" (texto do site público da S27): validar com o modelo de preço antes de publicar.
+- Textos jurídicos finais: razão social, CNPJ, DPO/contato, prazos de retenção (reivindicação, auditoria) (páginas de termos e privacidade da S27 e S17 usam placeholders).
+- Promessa "Famílias e escolas não pagam" (texto do site público da S27): promessa de preço a validar com o modelo de preço antes de publicar.
 
 ## Notas operacionais
 - Ferramentas: Colima + Docker, Supabase CLI e agent-browser instalados. Worktrees em `../listaescolar-wt/` (T1-dados, T3-comercio etc.); cada trilha tem workdir e portas próprios (`scripts/supa.mjs`, arquivo `.track`).

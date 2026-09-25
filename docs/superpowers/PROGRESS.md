@@ -82,11 +82,11 @@ Ambiente e deploy:
 - Vercel: a proteção dos previews foi DESATIVADA pelo humano em 2026-09-25 (previews públicos; `X-Robots-Tag: noindex` em tudo fora da produção). REATIVAR antes de entrar dado real: checklist da S20 (D-074).
 - Vercel: `CRON_SECRET` (16 caracteres ou mais) nos ambientes e aceite do cron diário `/api/cron/leads-expire` no plano da conta (S14).
 - Vercel: `NEXT_PUBLIC_SITE_URL` com o domínio próprio nos ambientes sem `VERCEL_PROJECT_PRODUCTION_URL` (domínio; canonical, JSON-LD, links de login e do lead, OG, sitemap e QR dependem dele).
-- Supabase (staging): deploy da Edge Function `ocr-worker`, agendamento pg_cron/pg_net com Vault (`supabase/functions/ocr-worker/README.md`) e secrets `WORKER_SHARED_SECRET`, `OPENROUTER_KEY`, `AI_MODEL_CHEAP`, `AI_MODEL_STRONG`, `AI_MODEL_VISION`.
+- Supabase (staging): FEITO pelo orquestrador em 2026-09-25: `pg_cron` e `pg_net`, segredos `ocr_worker_url`/`ocr_worker_secret`/`audit_ip_pepper` no Vault e job `ocr-worker-tick` (inativo). FALTA (humano): dar acesso de CLI ao projeto (a CLI local recebe 403) ou definir os secrets da função no painel — `WORKER_SHARED_SECRET` (o valor de `vault.decrypted_secrets` `ocr_worker_secret`), `APP_ENV=staging`, `OPENROUTER_KEY`, `AI_MODEL_CHEAP/STRONG/VISION` — e então o deploy da função (`verify_jwt=false`) e a ativação do job (D-060).
 - Rodar `scripts/ai-smoke.ts` com chave e modelos reais (tem custo; os agentes não rodam).
-- Supabase Auth hospedado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
+- Supabase Auth hospedado: FEITO pelo humano em 2026-09-25 (Site URL, Redirect URLs incl. `https://listaescolare-*.vercel.app/**`, templates `magic_link` e `confirmation`); falta validar o link mágico em outro navegador no preview e SMTP próprio antes de produção (D-063). Referência do que foi configurado: Site URL e Redirect URLs (`/auth/confirm**`, `/auth/callback**`, glob dos previews); templates `magic_link` e `confirmation` com `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email` (modelo em `supabase/templates/`); SMTP próprio. Sem os templates o link mágico só funciona no mesmo navegador.
 - Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
-- Pepper do IP de auditoria (`app.audit_ip_pepper`, de preferência no Vault) no staging e na produção antes da S20; sem ele `ip_hash` fica nulo.
+- Pepper do IP de auditoria: o hospedado NÃO permite definir `app.audit_ip_pepper` no banco (permission denied); o pepper do staging já está no Vault (`audit_ip_pepper`) e a S11 (0601) faz `audit_row_change` lê-lo de lá; na produção, gerar outro (D-059).
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
 
 Credenciais e contas:

@@ -249,7 +249,7 @@
 
 **Aceite (go-live):** `docs/superpowers/DEBT.md` sem itens de severidade alta abertos, ou cada um com Ruling explícito no `docs/superpowers/ledger.md`.
 
-**Checklist de go-live (obrigatório em `docs/GO-LIVE.md`):** reativar a proteção dos previews da Vercel (Vercel Authentication ou equivalente) ANTES de entrar qualquer dado real (D-074): hoje os previews são públicos, apontam para o staging e só têm `X-Robots-Tag: noindex`.
+**Checklist de go-live (obrigatório em `docs/GO-LIVE.md`):** reativar a proteção dos previews da Vercel (Vercel Authentication ou equivalente) ANTES de entrar qualquer dado real (D-074): hoje os previews são públicos, apontam para o staging e só têm `X-Robots-Tag: noindex`. Também: ligar `SITE_INDEXING=1` no ambiente de produção só no go-live (D-075); sem isso o site continua noindex.
 
 ## Ordem de execução (escopo completo, ADR-002 rejeitado)
 1. S00, S01, S02.

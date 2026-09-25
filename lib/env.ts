@@ -41,6 +41,8 @@ const serverSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   MELI_AFFILIATE_ID: z.string().min(1).optional(),
   AMAZON_ASSOCIATE_TAG: z.string().min(1).optional(),
+  /** Autentica o cron de expiração de leads (Bearer). Ausente = o cron responde 503. */
+  CRON_SECRET: z.string().min(16).optional(),
   ...pipelineShape,
 });
 
@@ -59,6 +61,7 @@ export function getServerEnv(): ServerEnv {
       VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
       MELI_AFFILIATE_ID: process.env.MELI_AFFILIATE_ID,
       AMAZON_ASSOCIATE_TAG: process.env.AMAZON_ASSOCIATE_TAG,
+      CRON_SECRET: process.env.CRON_SECRET,
       ...readPipelineFlags(),
     }),
   );

@@ -6,7 +6,7 @@ import { normalizeNeighborhood } from "./neighborhood";
 import type { LocalCatalogCandidate, LocalCatalogSource, LocalLocation } from "./ports";
 
 export const DEFAULT_LOCAL_QUOTE_MAX_AGE_MS = 30 * 24 * 3_600_000; // 30 dias
-const FUTURE_TOLERANCE_MS = 5 * 60_000;
+export const LOCAL_QUOTE_FUTURE_TOLERANCE_MS = 5 * 60_000;
 
 /** A papelaria atende o local? (área cadastrada, ou o bairro/município da própria papelaria.) */
 export function servesLocation(c: LocalCatalogCandidate, loc: LocalLocation): boolean {
@@ -49,7 +49,7 @@ export class CatalogLocalQuoteProvider implements LocalStationeryQuoteProvider {
       if (!servesLocation(c, this.location)) continue;
       if (!Number.isSafeInteger(c.priceCents) || c.priceCents <= 0 || c.priceCents > MAX_PRICE_CENTS) continue;
       const t = c.priceUpdatedAt.getTime();
-      if (!Number.isFinite(t) || now - t > maxAge || t - now > FUTURE_TOLERANCE_MS) continue;
+      if (!Number.isFinite(t) || now - t > maxAge || t - now > LOCAL_QUOTE_FUTURE_TOLERANCE_MS) continue;
       quotes.push({
         stationeryId: c.stationeryId,
         itemKey: c.itemKey,

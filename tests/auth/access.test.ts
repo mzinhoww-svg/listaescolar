@@ -9,6 +9,9 @@ describe("protectedPrefix", () => {
     expect(protectedPrefix("/papelaria")).toBe("/papelaria");
     expect(protectedPrefix("/admin/importacoes")).toBe("/admin");
     expect(protectedPrefix("/carrinho/abc/checkout")).toBe("/carrinho");
+    expect(protectedPrefix("/cotacao")).toBe("/cotacao");
+    expect(protectedPrefix("/cotacao/LC-5TJ1")).toBe("/cotacao");
+    expect(protectedPrefix("/cotacao/nova")).toBe("/cotacao");
     expect(protectedPrefix("/ir-para/a/b/go")).toBe("/ir-para");
   });
   it("não confunde prefixos parecidos nem rotas públicas", () => {
@@ -16,6 +19,8 @@ describe("protectedPrefix", () => {
     expect(protectedPrefix("/contato")).toBeNull();
     expect(protectedPrefix("/escolas")).toBeNull();
     expect(protectedPrefix("/carrinhos")).toBeNull();
+    expect(protectedPrefix("/cotacoes")).toBeNull();
+    expect(protectedPrefix("/cotacaox")).toBeNull();
     expect(protectedPrefix("/")).toBeNull();
     expect(protectedPrefix("/entrar")).toBeNull();
   });
@@ -26,6 +31,9 @@ describe("canAccess", () => {
     "/conta": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/conta/x": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/carrinho/novo": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/cotacao": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/cotacao/nova": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/cotacao/LC-5TJ1": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/ir-para/x/kalunga": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/enviar-lista": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/enviar-lista/abc": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
@@ -42,7 +50,7 @@ describe("canAccess", () => {
     }
   }
   it("role nulo em rota protegida -> login", () => {
-    for (const p of ["/conta", "/carrinho/x", "/ir-para/x/y", "/escola", "/papelaria", "/admin/x"]) {
+    for (const p of ["/conta", "/carrinho/x", "/cotacao", "/cotacao/LC-5TJ1", "/ir-para/x/y", "/escola", "/papelaria", "/admin/x"]) {
       expect(canAccess(null, p)).toBe("login");
     }
   });

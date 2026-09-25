@@ -246,6 +246,152 @@ export async function seedStationery(client: Client, opts: SeedStationery = {}):
     }
     return id;
   } finally {
-    await client.query(`set local role ${prev}`);
+    // Em transação abortada o `set role` falharia e mascararia o erro original.
+    await client.query(`set local role ${prev}`).catch(() => undefined);
   }
+}
+
+export type HintAttempt = Attempt & { hint: string | null };
+
+/** Como `attempt`, mas devolve também o `hint` estável do erro (o repositório mapeia por hint). */
+export async function attemptH(client: Client, sql: string, params: unknown[] = []): Promise<HintAttempt> {
+  await client.query("savepoint attempt_h_sp");
+  try {
+    const res = await client.query(sql, params);
+    await client.query("release savepoint attempt_h_sp");
+    return { error: null, code: null, hint: null, rowCount: res.rowCount ?? 0, rows: res.rows };
+  } catch (e) {
+    await client.query("rollback to savepoint attempt_h_sp");
+    const err = e as { message: string; code?: string; hint?: string };
+    return { error: err.message, code: err.code ?? null, hint: err.hint ?? null, rowCount: 0, rows: [] };
+  }
+}
+
+/** Executa `fn` numa transação superuser com `set local role service_role` e confirma (commit). */
+export async function asServiceCommitted<T>(fn: (client: Client) => Promise<T>): Promise<T> {
+  return withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      await c.query("set local role service_role");
+      const out = await fn(c);
+      await c.query("commit");
+      return out;
+    } catch (e) {
+      await c.query("rollback");
+      throw e;
+    }
+  });
+}
+
+/** Cria um carrinho como superuser (sai do papel de teste e volta). Devolve o id. */
+export async function seedCart(client: Client, ownerId: string, isDemo = true): Promise<string> {
+  const prev = (await client.query("select current_user as u")).rows[0].u as string;
+  await client.query("reset role");
+  try {
+    const r = await client.query("insert into public.carts (owner_id, is_demo) values ($1, $2) returning id", [ownerId, isDemo]);
+    return r.rows[0].id as string;
+  } finally {
+    // Em transação abortada o `set role` falharia e mascararia o erro original.
+    await client.query(`set local role ${prev}`).catch(() => undefined);
+  }
+}
+
+export type LeadStatus =
+  | "received"
+  | "viewed"
+  | "in_progress"
+  | "quote_sent"
+  | "awaiting_customer"
+  | "converted"
+  | "declined"
+  | "expired"
+  | "cancelled";
+
+export type SeedLead = {
+  stationeryId: string;
+  requesterId?: string | null;
+  status?: LeadStatus;
+  /** intervalo SQL somado a now() (ex.: '-1 day'); padrão '+7 days'. */
+  expiresIn?: string;
+  listId?: string;
+  code?: string;
+  cartId?: string | null;
+  overrides?: Record<string, unknown>;
+};
+
+/**
+ * Insere um lead direto (superuser, sem passar por lead_create): estado, prazo e código arbitrários,
+ * com um item e o evento `created`. Devolve id e código.
+ */
+export async function seedLead(client: Client, opts: SeedLead): Promise<{ id: string; code: string }> {
+  const prev = (await client.query("select current_user as u")).rows[0].u as string;
+  await client.query("reset role");
+  try {
+    const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    const code = opts.code ?? `LC-${Array.from({ length: 5 }, () => alphabet[randomInt(0, alphabet.length)]).join("")}`;
+    const muni = await client.query("select id from public.municipalities order by ibge_code limit 1");
+    const row: Record<string, unknown> = {
+      code,
+      requester_id: opts.requesterId === undefined ? IDS.parent : opts.requesterId,
+      cart_id: opts.cartId ?? null,
+      list_id: opts.listId ?? crypto.randomUUID(),
+      stationery_id: opts.stationeryId,
+      status: opts.status ?? "received",
+      school_name: "Escola Demonstração",
+      grade_label: "5º ano",
+      school_year: 2027,
+      municipality_id: muni.rows[0].id,
+      neighborhood: "centro",
+      item_count: 1,
+      consent_text_version: "v1",
+      consented_at: new Date().toISOString(),
+      idempotency_key: crypto.randomUUID(),
+      is_demo: true,
+      ...opts.overrides,
+    };
+    const cols = [...Object.keys(row), "expires_at"];
+    const vals = [...Object.values(row)];
+    const res = await client.query(
+      `insert into public.leads (${cols.join(",")}) values (${cols.map((_, i) => (i < vals.length ? `$${i + 1}` : `now() + $${i + 1}::interval`)).join(",")}) returning id`,
+      [...vals, opts.expiresIn ?? "+7 days"],
+    );
+    const id = res.rows[0].id as string;
+    await client.query(
+      "insert into public.lead_items (lead_id, position, name, item_key, quantity) values ($1, 1, 'Caderno 96 folhas', 'caderno 96 folhas', 2)",
+      [id],
+    );
+    await client.query(
+      "insert into public.lead_events (lead_id, event_type, to_status, actor_role, item_count) values ($1, 'created', 'received', 'parent', 1)",
+      [id],
+    );
+    return { id, code };
+  } finally {
+    // Em transação abortada o `set role` falharia e mascararia o erro original.
+    await client.query(`set local role ${prev}`).catch(() => undefined);
+  }
+}
+
+/** Remove leads (e filhos, consents ligados, carrinhos) de testes que confirmaram dados. Eventos são imutáveis: usa replica. */
+export async function purgeLeads(opts: { leadIds?: readonly string[]; requesterIds?: readonly string[]; cartIds?: readonly string[] }): Promise<void> {
+  await withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      await c.query("set local session_replication_role = replica");
+      const ids = (
+        await c.query(
+          "select id from public.leads where id = any($1::uuid[]) or requester_id = any($2::uuid[])",
+          [opts.leadIds ?? [], opts.requesterIds ?? []],
+        )
+      ).rows.map((r) => r.id as string);
+      await c.query("delete from public.lead_events where lead_id = any($1::uuid[])", [ids]);
+      await c.query("delete from public.lead_items where lead_id = any($1::uuid[])", [ids]);
+      await c.query("delete from public.consents where id in (select consent_id from public.leads where id = any($1::uuid[]))", [ids]);
+      await c.query("delete from public.leads where id = any($1::uuid[])", [ids]);
+      if (opts.cartIds?.length) await c.query("delete from public.carts where id = any($1::uuid[])", [opts.cartIds]);
+      await c.query("commit");
+    } catch (e) {
+      await c.query("rollback");
+      throw e;
+    }
+  });
 }

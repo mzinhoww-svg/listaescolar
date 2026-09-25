@@ -86,6 +86,14 @@ export function OptionCard({ option, cartId, selected, action }: Props) {
             : "Sem preço de fonte identificada para esta opção."}
         </p>
       )}
+      {option.strategy === "local_stationery" ? (
+        <Link
+          href={`/cotacao/nova?carrinho=${cartId}`}
+          className="text-verde-fundo text-center text-sm font-extrabold underline"
+        >
+          Pedir cotação a papelarias
+        </Link>
+      ) : null}
     </li>
   );
 }

@@ -1,6 +1,8 @@
 import type { ExtractionResult } from "./schemas";
 
 export type ExtractionInput = {
+  /** Envio ao qual a leitura pertence: `entity_id` de toda decisão de IA (o pipeline real exige). */
+  submissionId?: string;
   bytes: Uint8Array;
   mime: string;
   fileName: string;
@@ -12,7 +14,11 @@ export type ExtractionInput = {
 export interface ExtractionPipeline {
   /** Demonstração: os envios ficam marcados `is_demo`. */
   readonly isDemo?: boolean;
-  extract(input: ExtractionInput, opts: { signal: AbortSignal }): Promise<ExtractionResult>;
+  /** `budgetMs`: tempo total disponível (a Server Action usa 10 s; o worker, o prazo restante do tick). */
+  extract(
+    input: ExtractionInput,
+    opts: { signal: AbortSignal; budgetMs?: number },
+  ): Promise<ExtractionResult>;
 }
 
 export interface Clock {
@@ -47,7 +53,11 @@ export interface SubmissionStore {
    * Resultado dentro do orçamento, UMA operação atômica: job `succeeded` + ocr_jobs + envio `review_needed`.
    * Lança se o job não estiver mais `running` (nada é gravado).
    */
-  recordSyncResult(submissionId: string, result: ExtractionResult, durationMs: number): Promise<void>;
+  recordSyncResult(
+    submissionId: string,
+    result: ExtractionResult,
+    durationMs: number,
+  ): Promise<void>;
 }
 
 export interface JobQueue {

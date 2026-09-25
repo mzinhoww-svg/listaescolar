@@ -1,5 +1,11 @@
+import { PIPELINE_ABORT_MARGIN_MS } from "../../supabase/functions/_shared/worker-core";
 import { SYNC_BUDGET_MS, CONSENT_PURPOSE, CONSENT_TEXT_VERSION } from "./constants";
-import { sanitizeFileName, validateUpload, type UploadErrorCode, type UploadFile } from "./file-validation";
+import {
+  sanitizeFileName,
+  validateUpload,
+  type UploadErrorCode,
+  type UploadFile,
+} from "./file-validation";
 import type { SubmitDeps, SubmitResult } from "./ports";
 import { extractionResultSchema, submitMetaSchema } from "./schemas";
 
@@ -26,7 +32,15 @@ export class SubmissionError extends Error {
 type Outcome =
   | { kind: "ok"; result: unknown }
   | { kind: "error" }
+  | { kind: "infra"; pipelineAvailable: boolean }
   | { kind: "timeout" };
+
+function classifyFailure(e: unknown): Outcome {
+  const x = e as { name?: unknown; code?: unknown; transient?: unknown } | null;
+  if (!x || x.name !== "AiError") return { kind: "error" };
+  if (x.code === "invalid_output" || x.code === "low_confidence") return { kind: "error" }; // conteúdo
+  return { kind: "infra", pipelineAvailable: x.transient === true };
+}
 
 /**
  * Envio com orçamento de tempo. Ordem: consentimento e arquivo validados ANTES de gravar; grava (status
@@ -57,11 +71,11 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     consent: { purpose: CONSENT_PURPOSE, textVersion: CONSENT_TEXT_VERSION },
   });
 
-  const enqueueAsync = async (): Promise<SubmitResult> => {
+  const enqueueAsync = async (pipelineAvailable = pipeline !== null): Promise<SubmitResult> => {
     try {
       // Atômico no banco: job `queued` + mensagem + envio `processing_async` (o worker nunca é sobrescrito).
       const { jobId } = await queue.enqueue(submissionId);
-      return { status: "processing_async", submissionId, jobId, pipelineAvailable: pipeline !== null };
+      return { status: "processing_async", submissionId, jobId, pipelineAvailable };
     } catch {
       await store.reject(submissionId, "enqueue_failed").catch(() => undefined);
       return { status: "failed", submissionId, reason: "enqueue_failed" };
@@ -73,23 +87,28 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
   const abort = new AbortController();
   const timer = new AbortController();
   const started = clock.now();
+  const budgetMs = deps.budgetMs ?? SYNC_BUDGET_MS;
   const outcome = await Promise.race<Outcome>([
     pipeline
       .extract(
         {
+          submissionId,
           bytes: input.file.bytes,
           mime: check.mime,
           fileName,
           grade: meta.data.grade,
           schoolYear: meta.data.schoolYear,
         },
-        { signal: abort.signal },
+        { signal: abort.signal, budgetMs: Math.max(1, budgetMs - PIPELINE_ABORT_MARGIN_MS) },
       )
       .then(
         (result): Outcome => ({ kind: "ok", result }),
-        (): Outcome => ({ kind: "error" }),
+        // Falha de infraestrutura/configuração da IA (settings/modelo/chave, 4xx/429/5xx, timeout, gravação da decisão)
+        // não é culpa do arquivo: o envio segue o caminho assíncrono. Só erro de conteúdo (saída inválida da IA) e
+        // exceção que não é da IA rejeitam. `pipelineAvailable` é falso quando a falha é permanente (config).
+        (e: unknown): Outcome => classifyFailure(e),
       ),
-    clock.delay(deps.budgetMs ?? SYNC_BUDGET_MS, timer.signal).then((): Outcome => ({ kind: "timeout" })),
+    clock.delay(budgetMs, timer.signal).then((): Outcome => ({ kind: "timeout" })),
   ]);
   timer.abort();
 
@@ -97,6 +116,7 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     abort.abort(); // cancela o trabalho; se ainda assim resolver, o resultado já é descartado
     return enqueueAsync();
   }
+  if (outcome.kind === "infra") return enqueueAsync(outcome.pipelineAvailable);
   if (outcome.kind === "error") {
     await store.reject(submissionId, "extraction_failed").catch(() => undefined);
     return { status: "failed", submissionId, reason: "extraction_failed" };

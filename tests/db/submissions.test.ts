@@ -227,7 +227,7 @@ describe("S07 RLS: consents, list_submissions, jobs, ocr_jobs", () => {
       expect(ok.error).toBeNull();
       const exe = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000008", IDS.parent, CONSENT.parent, { source: "parent", status: "submitted", mime: "application/x-msdownload", size: 1000 }));
       expect(exe.error).not.toBeNull();
-      const big = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000009", IDS.parent, CONSENT.parent, { source: "parent", status: "submitted", mime: "application/pdf", size: 10485761 }));
+      const big = await attempt(c, ...newSub("30000000-0000-4000-8000-000000000009", IDS.parent, CONSENT.parent, { source: "parent", status: "submitted", mime: "application/pdf", size: 4000001 }));
       expect(big.error).not.toBeNull();
       const zero = await attempt(c, ...newSub("30000000-0000-4000-8000-00000000000a", IDS.parent, CONSENT.parent, { source: "parent", status: "submitted", mime: "application/pdf", size: 0 }));
       expect(zero.error).not.toBeNull();
@@ -290,6 +290,7 @@ describe("S07 RLS: consents, list_submissions, jobs, ocr_jobs", () => {
         [true, "whatsapp", "+5565999998888"],
         [false, "email", "sem-arroba"],
         [false, "whatsapp", "65999998888"],
+        [false, "whatsapp", "+0655599990"],
         [false, "email", "a b@x.com"],
       ] as const) {
         await c.query("begin");

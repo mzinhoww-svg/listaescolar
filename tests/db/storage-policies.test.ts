@@ -29,13 +29,13 @@ describe("bucket list-uploads e storage.objects", () => {
     await cleanupUsers();
   });
 
-  it("bucket privado, 10 MiB, tipos permitidos", async () => {
+  it("bucket privado, 4 MB, tipos permitidos", async () => {
     await withSuperuser(async (c) => {
       const r = await c.query<{ public: boolean; file_size_limit: string; allowed_mime_types: string[] }>(
         "select public, file_size_limit::text, allowed_mime_types from storage.buckets where id = 'list-uploads'",
       );
       expect(r.rows[0]?.public).toBe(false);
-      expect(r.rows[0]?.file_size_limit).toBe("10485760");
+      expect(r.rows[0]?.file_size_limit).toBe("4000000");
       expect([...(r.rows[0]?.allowed_mime_types ?? [])].sort()).toEqual(
         ["application/pdf", "image/heic", "image/jpeg", "image/png", "image/webp"],
       );

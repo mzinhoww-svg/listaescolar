@@ -4,6 +4,8 @@ import {
   COMPRESS_MAX_SIDE_PX,
   COMPRESS_QUALITY,
   COMPRESS_THRESHOLD_BYTES,
+  decodeBitmap,
+  drawOnWhite,
   prepareUpload,
   scaledSize,
 } from "@/components/submissions/prepareUpload";
@@ -82,5 +84,42 @@ describe("prepareUpload", () => {
   it("outros tipos acima de 4 MB: file_too_large", async () => {
     const r = await prepareUpload(fakeFile("a.bin", "application/octet-stream", 5_000_000), { resize: vi.fn() });
     expect(r).toEqual({ ok: false, message: ERROR_MESSAGES.file_too_large });
+  });
+});
+
+describe("drawOnWhite", () => {
+  it("pinta o fundo de branco antes de desenhar a imagem", () => {
+    const calls: string[] = [];
+    const ctx = {
+      fillStyle: "" as string,
+      fillRect: (...a: number[]) => calls.push(`fill:${ctx.fillStyle}:${a.join(",")}`),
+      drawImage: (_i: unknown, ...a: number[]) => calls.push(`draw:${a.join(",")}`),
+    };
+    drawOnWhite(ctx, { width: 10, height: 5 }, 10, 5);
+    expect(calls).toEqual(["fill:#ffffff:0,0,10,5", "draw:0,0,10,5"]);
+  });
+});
+
+describe("decodeBitmap", () => {
+  const bmp = { width: 1, height: 1 } as ImageBitmap;
+  it("pede imageOrientation from-image", async () => {
+    const create = vi.fn(async () => bmp);
+    const f = new Blob([new Uint8Array(1)]);
+    expect(await decodeBitmap(f, create)).toBe(bmp);
+    expect(create).toHaveBeenCalledWith(f, { imageOrientation: "from-image" });
+  });
+  it("sem suporte à opção, tenta de novo sem ela", async () => {
+    const create = vi.fn(async (_f: Blob, o?: unknown) => {
+      if (o) throw new TypeError("opção não suportada");
+      return bmp;
+    });
+    expect(await decodeBitmap(new Blob([new Uint8Array(1)]), create)).toBe(bmp);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+  it("se as duas tentativas falham, propaga o erro", async () => {
+    const create = vi.fn(async () => {
+      throw new Error("decode");
+    });
+    await expect(decodeBitmap(new Blob([new Uint8Array(1)]), create)).rejects.toThrow("decode");
   });
 });

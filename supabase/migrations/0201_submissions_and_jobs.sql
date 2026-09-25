@@ -38,7 +38,7 @@ create table public.list_submissions (
   mime_type text not null check (
     mime_type in ('application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic')
   ),
-  size_bytes bigint not null check (size_bytes between 1 and 10485760),
+  size_bytes bigint not null check (size_bytes between 1 and 4000000),
   consent_id uuid not null references public.consents (id),
   status public.list_status not null default 'submitted',
   is_demo boolean not null default false,
@@ -612,7 +612,7 @@ grant execute on function public.consents_revoke(uuid, uuid) to service_role;
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
-  'list-uploads', 'list-uploads', false, 10485760,
+  'list-uploads', 'list-uploads', false, 4000000,
   array['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']
 )
 on conflict (id) do update

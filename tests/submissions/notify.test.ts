@@ -13,8 +13,8 @@ describe("notifyInputSchema", () => {
     expect(notifyInputSchema.safeParse({ submissionId: ID, channel: "email", target: "sem-arroba" }).success).toBe(false);
     expect(notifyInputSchema.safeParse({ submissionId: ID, channel: "email" }).success).toBe(false);
   });
-  it("WhatsApp: só dígitos com DDD", () => {
-    expect(notifyInputSchema.parse({ submissionId: ID, channel: "whatsapp", target: "(65) 99999-0000" }).target).toBe("65999990000");
+  it("WhatsApp: E.164 com +55", () => {
+    expect(notifyInputSchema.parse({ submissionId: ID, channel: "whatsapp", target: "(65) 99999-0000" }).target).toBe("+5565999990000");
     expect(notifyInputSchema.safeParse({ submissionId: ID, channel: "whatsapp", target: "123" }).success).toBe(false);
   });
   it("`none` e submissionId inválido são recusados", () => {

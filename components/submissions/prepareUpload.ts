@@ -17,9 +17,33 @@ export function scaledSize(width: number, height: number, maxSide: number): { wi
 const isPdf = (f: File) => f.type === "application/pdf" || /\.pdf$/i.test(f.name);
 const isImage = (f: File) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name);
 
+type Bitmap = { width: number; height: number };
+type CreateBitmap = (file: Blob, options?: { imageOrientation: "from-image" }) => Promise<ImageBitmap>;
+type DrawCtx = {
+  fillStyle: string | CanvasGradient | CanvasPattern;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  drawImage(image: never, x: number, y: number, w: number, h: number): void;
+};
+
+/** Decodifica respeitando a orientação EXIF; navegadores que não aceitam a opção caem no padrão. */
+export async function decodeBitmap(file: Blob, create: CreateBitmap = (f, o) => createImageBitmap(f, o)): Promise<ImageBitmap> {
+  try {
+    return await create(file, { imageOrientation: "from-image" });
+  } catch {
+    return create(file);
+  }
+}
+
+/** JPEG não tem transparência: pinta o fundo de branco antes da imagem (PNG transparente não vira preto). */
+export function drawOnWhite(ctx: DrawCtx, bitmap: Bitmap, width: number, height: number): void {
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(bitmap as never, 0, 0, width, height);
+}
+
 /** Redução por canvas (JPEG). Lança se o navegador não decodifica a imagem (ex.: HEIC fora do Safari). */
 export const canvasResize: Resize = async (file, maxSidePx, quality) => {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await decodeBitmap(file);
   try {
     const { width, height } = scaledSize(bitmap.width, bitmap.height, maxSidePx);
     const canvas = document.createElement("canvas");
@@ -27,7 +51,7 @@ export const canvasResize: Resize = async (file, maxSidePx, quality) => {
     canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("canvas");
-    ctx.drawImage(bitmap, 0, 0, width, height);
+    drawOnWhite(ctx, bitmap, width, height);
     return await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob"))), "image/jpeg", quality),
     );

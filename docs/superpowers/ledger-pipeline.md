@@ -32,3 +32,7 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`. O orqu
 - Ruling: política de leitura do storage rejeita `..` no path e exige UUID no 2º segmento (`{uid}/{uuid do envio}/...`) — custo se errada: objetos legados fora do padrão ficam ilegíveis ao usuário.
 - Ruling: `jobs_fail` faz uma checagem (FOR UPDATE) e uma atualização; o UPDATE redundante antes de `jobs_mark_dead` foi removido — custo se errada: nenhum.
 - Ruling: `jobs_fail(..., p_permanent boolean default false)`; permanente leva direto a `dead` (DLQ + envio rejected) — arquivo armazenado inválido não deve gastar tentativas; assinatura de 3 args deixa de existir (a migration só existe nesta branch) e a chamada de 3 args continua válida pelo default — custo se errada: baixo.
+
+Ruling: demo-pipeline.ts passa a viver em supabase/functions/_shared e features/submissions/demo-pipeline.ts só o reexporta — o `functions serve` só resolve imports dentro de supabase/functions (falhou com `../../../features/...`) — custo se errada: baixo, mover de volta exigiria duplicar o arquivo.
+Ruling: envio nasce `submitted` e o store o move a `processing` em seguida (trigger list_submissions_check_insert exige `submitted`), com desfazimento completo (linha, objeto, consentimento) em qualquer falha — motivo: contrato da 0201 revisada — custo se errada: uma escrita extra por envio.
+Ruling: teste E2E da Edge Function (tests/submissions/edge-function.e2e.test.ts) fica versionado e é ignorado sem WORKER_URL/WORKER_SHARED_SECRET — motivo: repetível sem depender de Deno no CI — custo se errada: nenhum.

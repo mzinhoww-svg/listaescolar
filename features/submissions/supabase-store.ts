@@ -50,12 +50,14 @@ export function createSupabaseStore(client: SupabaseClient): SubmissionStore {
           mime_type: input.mime,
           size_bytes: input.sizeBytes,
           consent_id: consentId,
-          status: "processing",
-          is_demo: input.isDemo,
+          is_demo: input.isDemo, // status nasce `submitted` (trigger list_submissions_check_insert)
         });
         if (row.error) throw new Error("insert");
+        const moved = await client.from("list_submissions").update({ status: "processing" }).eq("id", submissionId);
+        if (moved.error) throw new Error("insert");
         return { submissionId };
       } catch (e) {
+        await client.from("list_submissions").delete().eq("id", submissionId);
         if (uploaded) await client.storage.from(UPLOAD_BUCKET).remove([path]);
         if (consentId) await client.from("consents").delete().eq("id", consentId);
         throw e;

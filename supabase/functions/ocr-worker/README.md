@@ -9,7 +9,7 @@ Edge Function (Deno) que drena a fila pgmq `ocr_jobs`. Toda a lógica está em `
 3. `jobs_requeue_stale()` (lease vencido, retry devido, mata os sem tentativas) e `jobs_read(5, 120)`.
 4. Por mensagem: `jobs_claim` -> `claimed` processa; `finished` faz ack; `busy` (vt 60 s) e `not_due` (vt até `run_after`) não confirmam.
 5. Sucesso: `jobs_complete` + ack. Falha: `jobs_fail` com backoff 30 s x2 (teto 15 min, jitter até 20%) e `jobs_set_vt`; esgotou -> `dead` + DLQ.
-6. Antes de extrair, revalida os magic bytes do arquivo armazenado; divergência -> falha `invalid_file` (vira `dead` ao esgotar as tentativas; falha imediata exige `p_permanent` em `jobs_fail`).
+6. Antes de extrair, revalida os magic bytes do arquivo armazenado; divergência -> falha `invalid_file` com `p_permanent = true`: o job vai direto a `dead` (DLQ), sem novas tentativas.
 
 Tempo: o teto de uma extração no worker é 90 s (`WORKER_TIMEOUT_MS`), abaixo da lease de `running` do banco (5 min).
 Se a lease vencer com o worker ainda vivo, outro worker poderia reivindicar o job: não aumente o teto acima de 5 min.
@@ -22,6 +22,21 @@ printf 'WORKER_SHARED_SECRET=%s\nDEMO_PIPELINE=1\nDEMO_SLOW_MS=15000\n' "$(opens
 pnpm exec supabase --workdir .track-workdir functions serve ocr-worker --no-verify-jwt --env-file /tmp/ocr-worker.env
 curl -X POST -H "x-worker-secret: <o segredo>" http://127.0.0.1:54521/functions/v1/ocr-worker
 ```
+Importante: a função só enxerga a própria pasta `supabase/functions` (imports `../_shared/*.ts`); por isso `demo-pipeline.ts` vive em `_shared`
+e `features/submissions/demo-pipeline.ts` só o reexporta.
+
+## Validação no Deno (2026-09-24, supabase-edge-runtime 1.74.3 / Deno 2.1.4)
+Com a função servida como acima (`DEMO_SLOW_MS=3000`) e o banco local da trilha:
+```
+WORKER_URL=http://127.0.0.1:54521/functions/v1/ocr-worker WORKER_SHARED_SECRET=<o segredo> \
+  pnpm exec vitest run -c vitest.db.config.ts tests/submissions/edge-function
+```
+Sem essas variáveis o teste é ignorado. Resultado: 3 de 3 verdes.
+- sem segredo: 401;
+- envio lento (pipeline do orçamento nunca responde, 10 s simulados) -> `processing_async` + 1 mensagem; tick real: `{read:1, done:1}`, job `succeeded`, `list_submissions.status = review_needed`, 1 linha em `ocr_jobs`;
+- mensagem duplicada do mesmo job: `{read:1, skipped:1, done:0}`, sem segundo `ocr_jobs`;
+- arquivo `falha.pdf` (falha simulada): `{retry:1}`, job `retrying`, attempts 1;
+- objeto armazenado corrompido: `{dead:1}`, job `dead` com attempts 1 (falha permanente imediata).
 Variáveis: `WORKER_SHARED_SECRET` (mín. 16), `DEMO_PIPELINE`, `ALLOW_DEMO_IN_PRODUCTION`, `DEMO_SLOW_MS`. Nunca commite o arquivo de env.
 
 ## Agendamento (a cada minuto)

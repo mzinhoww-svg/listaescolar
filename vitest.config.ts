@@ -19,6 +19,7 @@ export default defineConfig({
       "tests/db/**",
       "tests/**/repository.test.ts",
       "tests/submissions/store.test.ts",
+      "tests/submissions/edge-function.e2e.test.ts",
       "node_modules/**",
       ".track-workdir/**",
     ],

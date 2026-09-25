@@ -3,7 +3,7 @@
 // Local: `pnpm exec supabase --workdir .track-workdir functions serve ocr-worker --no-verify-jwt --env-file <arquivo>`.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-import { DemoExtractionPipeline } from "../../../features/submissions/demo-pipeline.ts";
+import { DemoExtractionPipeline } from "../_shared/demo-pipeline.ts";
 import {
   createRpcWorkerJobs,
   createRpcWorkerQueue,

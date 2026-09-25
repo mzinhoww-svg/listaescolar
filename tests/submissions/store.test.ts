@@ -10,7 +10,7 @@ import { submitList } from "@/features/submissions/service";
 import { createSupabaseStore } from "@/features/submissions/supabase-store";
 import { createJobQueue, createNodeWorker } from "@/features/submissions/supabase-queue";
 import { handleTick, type WorkerDeps } from "../../supabase/functions/_shared/worker-core";
-import { cleanupUsers, DATABASE_URL, IDS, seedUsers } from "../db/helpers";
+import { attempt, cleanupUsers, DATABASE_URL, IDS, seedUsers, withClaims } from "../db/helpers";
 import { FakeClock } from "../helpers/fake-clock";
 import { pdf } from "../helpers/files";
 
@@ -157,5 +157,68 @@ describe("envio + worker contra o Postgres local", () => {
     ).rejects.toThrow();
     expect(await rows("select 1 from public.consents")).toHaveLength(0);
     expect(await rows("select 1 from public.list_submissions")).toHaveLength(0);
+  });
+
+  const slowSubmit = async () => {
+    const clock = new FakeClock();
+    const slow: ExtractionPipeline = { extract: () => new Promise(() => undefined) };
+    const run = submitList(input(), { pipeline: slow, store: createSupabaseStore(sb), queue: createJobQueue(sb), clock });
+    await expect.poll(() => clock.pending()).toBe(1);
+    clock.advance(10_000);
+    const r = await run;
+    if (r.status !== "processing_async") throw new Error("esperava processing_async");
+    return r;
+  };
+
+  it("arquivo armazenado inválido: falha permanente, job vai direto a dead", async () => {
+    const r = await slowSubmit();
+    const path = (await rows("select storage_path from public.list_submissions"))[0].storage_path as string;
+    const up = await sb.storage.from("list-uploads").upload(path, new Uint8Array([1, 2, 3, 4, 5, 6]), { upsert: true, contentType: "application/pdf" });
+    expect(up.error).toBeNull();
+    const { deps, queue } = workerDeps(async () => RESULT);
+    const s = await handleTick(queue, deps);
+    expect(s).toMatchObject({ read: 1, dead: 1, retry: 0 });
+    const job = (await rows("select status, attempts from public.jobs where id = $1", [r.jobId]))[0];
+    expect(job.status).toBe("dead");
+    expect(job.attempts).toBe(1);
+  });
+
+  it("requeue no tick: job vencido sem mensagem volta à fila e é processado", async () => {
+    const r = await slowSubmit();
+    await pg.query("select pgmq.purge_queue('ocr_jobs')"); // mensagem perdida
+    const { deps, queue } = workerDeps(async () => RESULT);
+    const s = await handleTick(queue, deps);
+    expect(s).toMatchObject({ read: 1, done: 1 });
+    expect((await rows("select status from public.jobs where id = $1", [r.jobId]))[0].status).toBe("succeeded");
+  });
+
+  it("consentimento revogado não sustenta novo envio", async () => {
+    const consent = (await rows(
+      "insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1') returning id",
+      [IDS.parent],
+    ))[0].id as string;
+    await pg.query("select public.consents_revoke($1, $2)", [consent, IDS.parent]);
+    const id = crypto.randomUUID();
+    await pg.query("begin");
+    const ins = await attempt(
+      pg,
+      "insert into public.list_submissions (id, submitted_by, source, grade, school_year, storage_path, file_name, mime_type, size_bytes, consent_id) values ($1, $2, 'parent', '3º ano', 2027, $3, 'a.pdf', 'application/pdf', 4, $4)",
+      [id, IDS.parent, `${IDS.parent}/${id}/a.pdf`, consent],
+    );
+    await pg.query("rollback");
+    expect(ins.code).toBe("23514");
+  });
+
+  it("authenticated não grava consentimento, envio nem objeto de storage", async () => {
+    await withClaims("parent", async (c) => {
+      const cons = await attempt(c, "insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1')", [IDS.parent]);
+      expect(cons.code).toBe("42501");
+      const sub = await attempt(c, "insert into public.list_submissions (submitted_by, source, grade, school_year, storage_path, file_name, mime_type, size_bytes) values ($1, 'parent', '3º ano', 2027, 'x', 'a.pdf', 'application/pdf', 4)", [IDS.parent]);
+      expect(sub.code).toBe("42501");
+      const obj = await attempt(c, "insert into storage.objects (bucket_id, name, owner_id) values ('list-uploads', $1, $2)", [`${IDS.parent}/${crypto.randomUUID()}/a.pdf`, IDS.parent]);
+      expect(obj.error).not.toBeNull();
+      const rev = await attempt(c, "select public.consents_revoke(gen_random_uuid(), $1)", [IDS.parent]);
+      expect(rev.code).toBe("42501");
+    });
   });
 });

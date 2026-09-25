@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createRpcWorkerJobs,
   detectMime,
   handleTick,
   nextDelaySeconds,
@@ -308,5 +309,22 @@ describe("utilitários", () => {
   it("detectMime", () => {
     expect(detectMime(pdf())).toBe("application/pdf");
     expect(detectMime(new Uint8Array([1, 2, 3]))).toBeNull();
+  });
+});
+
+describe("adaptador RPC de jobs_fail", () => {
+  it("envia p_permanent (padrão false) e devolve o status", async () => {
+    const calls: { fn: string; args?: Record<string, unknown> }[] = [];
+    const jobs = createRpcWorkerJobs(
+      async (fn, args) => {
+        calls.push({ fn, args });
+        return { data: "dead", error: null };
+      },
+      async () => null,
+    );
+    expect(await jobs.fail("j1", "invalid_file", 30, true)).toBe("dead");
+    await jobs.fail("j1", "x", 30);
+    expect(calls[0]?.args).toMatchObject({ p_job_id: "j1", p_permanent: true });
+    expect(calls[1]?.args).toMatchObject({ p_permanent: false });
   });
 });

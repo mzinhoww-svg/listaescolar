@@ -223,14 +223,13 @@ export function createRpcWorkerJobs(rpc: RpcFn, get: WorkerJobs["get"]): WorkerJ
     complete: async (jobId, result, durationMs) => {
       await call(rpc, "jobs_complete", { p_job_id: jobId, p_result: result, p_duration_ms: durationMs });
     },
-    fail: async (jobId, error, retryInSeconds) =>
+    fail: async (jobId, error, retryInSeconds, permanent = false) =>
       String(
         await call(rpc, "jobs_fail", {
           p_job_id: jobId,
           p_error: error,
           p_retry_in_seconds: retryInSeconds,
-          // `permanent` ainda não existe em public.jobs_fail (migration 0201): hoje a falha permanente segue o
-          // retry normal e vira `dead` ao esgotar as tentativas. Quando o parâmetro `p_permanent` existir, envie-o aqui.
+          p_permanent: permanent,
         }),
       ),
     requeueStale: async () => {

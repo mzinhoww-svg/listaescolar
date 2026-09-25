@@ -43,6 +43,10 @@ const serverSchema = z.object({
   AMAZON_ASSOCIATE_TAG: z.string().min(1).optional(),
   /** Autentica o cron de expiração de leads (Bearer). Ausente = o cron responde 503. */
   CRON_SECRET: z.string().min(16).optional(),
+  /** Senha da página de resultados da pesquisa com mães. Só exigida pelas rotas app/api/pesquisa/**. */
+  PESQUISA_RESULTS_PASSWORD: z.string().min(16).optional(),
+  /** Sal do hash de IP (rate limit da pesquisa com mães). Só exigido pelas rotas app/api/pesquisa/**. */
+  IP_HASH_SALT: z.string().min(16).optional(),
   ...pipelineShape,
 });
 
@@ -62,6 +66,8 @@ export function getServerEnv(): ServerEnv {
       MELI_AFFILIATE_ID: process.env.MELI_AFFILIATE_ID,
       AMAZON_ASSOCIATE_TAG: process.env.AMAZON_ASSOCIATE_TAG,
       CRON_SECRET: process.env.CRON_SECRET,
+      PESQUISA_RESULTS_PASSWORD: process.env.PESQUISA_RESULTS_PASSWORD,
+      IP_HASH_SALT: process.env.IP_HASH_SALT,
       ...readPipelineFlags(),
     }),
   );

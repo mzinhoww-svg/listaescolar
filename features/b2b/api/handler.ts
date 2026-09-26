@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { after as nextAfter } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -127,7 +128,18 @@ export async function runApiPipeline(
   if (!pepper) return errorResponse("service_unavailable", requestId, headers);
 
   const header = request.headers.get("x-listacerta-key");
-  const verified = await verifyApiKey(header, { pepper, lookup: deps.lookupKey });
+  let verified: Awaited<ReturnType<typeof verifyApiKey>>;
+  try {
+    // `deps.lookupKey` é uma chamada de rede (RPC); sem timeout, um lookup travado ficaria pendurado até o limite
+    // da função em vez de responder 503 em 8s (Global Constraints). O timeout embrulha a chamada real de dentro
+    // de `verifyApiKey` (não só a função como um todo), então mesmo um lookup que nunca resolve é cortado.
+    const timedLookup = (publicId: string) => withTimeout(deps.lookupKey(publicId), deps.timeoutMs);
+    verified = await withTimeout(verifyApiKey(header, { pepper, lookup: timedLookup }), deps.timeoutMs);
+  } catch (error) {
+    if (error instanceof TimeoutError) return errorResponse("service_unavailable", requestId, headers);
+    console.error("verificar chave b2b", error instanceof Error ? error.name : "erro");
+    return errorResponse("internal_error", requestId, headers);
+  }
   if (!verified.ok) return errorResponse(verified.reason, requestId, headers);
   const { key } = verified;
 
@@ -255,46 +267,65 @@ export async function runApiPipeline(
   return finish(httpResponse, "2xx", result.usage);
 }
 
+/** Lookup real (`b2b_key_lookup`), exportado para os testes de banco montarem um `overrideDeps.lookupKey` que
+ * envolve esta MESMA chamada com um efeito colateral no meio (ex.: revogar a chave entre o lookup e o consumo). */
+export function realLookupKey(admin: SupabaseClient): ApiHandlerDeps["lookupKey"] {
+  return async (publicId) => {
+    const { data, error } = await admin.rpc("b2b_key_lookup", { p_public_id: publicId });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+    return {
+      keyId: row.key_id,
+      partnerId: row.partner_id,
+      environment: row.environment,
+      keyHash: row.key_hash,
+      hashVersion: row.hash_version,
+      scopes: row.scopes ?? [],
+      usable: row.usable,
+      coverageUfs: row.coverage_ufs ?? null,
+    };
+  };
+}
+
+export function realConsumeRate(admin: SupabaseClient): ApiHandlerDeps["consumeRate"] {
+  return async (keyId) => {
+    const { data, error } = await admin.rpc("b2b_rate_consume", { p_key_id: keyId });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      allowed: Boolean(row?.allowed),
+      keyValid: Boolean(row?.key_valid),
+      windowKind: row?.window_kind ?? null,
+      limitValue: row?.limit_value ?? null,
+      remaining: row?.remaining ?? null,
+      resetAt: row?.reset_at ? new Date(row.reset_at) : null,
+    };
+  };
+}
+
+export function realRecordUsage(admin: SupabaseClient): ApiHandlerDeps["recordUsage"] {
+  return (info) => recordUsageRpc(admin, info);
+}
+
+function realPepper(): string | undefined {
+  try {
+    return getServerEnv().B2B_API_KEY_PEPPER;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Pode lançar de forma síncrona (`createAdminClient()` valida `SUPABASE_SECRET_KEY` na hora) — quem chama
+ * (`withApiKey`) precisa envolver isto em `try/catch` para nunca deixar a exceção escapar do Route Handler sem o
+ * envelope padrão. */
 function buildRealDeps(): ApiHandlerDeps {
   const admin = createAdminClient();
   return {
-    pepper: () => {
-      try {
-        return getServerEnv().B2B_API_KEY_PEPPER;
-      } catch {
-        return undefined;
-      }
-    },
-    lookupKey: async (publicId) => {
-      const { data, error } = await admin.rpc("b2b_key_lookup", { p_public_id: publicId });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row) return null;
-      return {
-        keyId: row.key_id,
-        partnerId: row.partner_id,
-        environment: row.environment,
-        keyHash: row.key_hash,
-        hashVersion: row.hash_version,
-        scopes: row.scopes ?? [],
-        usable: row.usable,
-        coverageUfs: row.coverage_ufs ?? null,
-      };
-    },
-    consumeRate: async (keyId) => {
-      const { data, error } = await admin.rpc("b2b_rate_consume", { p_key_id: keyId });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      return {
-        allowed: Boolean(row?.allowed),
-        keyValid: Boolean(row?.key_valid),
-        windowKind: row?.window_kind ?? null,
-        limitValue: row?.limit_value ?? null,
-        remaining: row?.remaining ?? null,
-        resetAt: row?.reset_at ? new Date(row.reset_at) : null,
-      };
-    },
-    recordUsage: (info) => recordUsageRpc(admin, info),
+    pepper: realPepper,
+    lookupKey: realLookupKey(admin),
+    consumeRate: realConsumeRate(admin),
+    recordUsage: realRecordUsage(admin),
     after: (cb) => nextAfter(cb),
     now: () => new Date(),
     requestId: () => randomUUID(),
@@ -315,7 +346,17 @@ export function withApiKey<TParams, TQuery, TBody, TResponse>(
   const genericEntry = entry as unknown as EndpointEntry;
   const genericImpl = impl as unknown as Endpoint["impl"];
   return async (request: Request, ctx: { params: Promise<Record<string, string>> }): Promise<Response> => {
-    const deps: ApiHandlerDeps = { ...buildRealDeps(), ...overrideDeps };
+    let deps: ApiHandlerDeps;
+    try {
+      // `buildRealDeps()` chama `createAdminClient()`, que valida `SUPABASE_SECRET_KEY` de forma síncrona e
+      // lança se estiver ausente/malformada — sem este `try`, a exceção sairia do Route Handler sem o envelope
+      // padrão (sem `no-store`, `nosniff`, `X-Request-Id`), como um 500 genérico do Next.
+      deps = { ...buildRealDeps(), ...overrideDeps };
+    } catch (error) {
+      const requestId = randomUUID();
+      console.error("configurar handler b2b", genericEntry.id, error instanceof Error ? error.name : "erro");
+      return errorResponse("service_unavailable", requestId, baseHeaders(requestId));
+    }
     const paramsValue: unknown = await ctx.params;
     const rawParams = isRecord(paramsValue) ? (paramsValue as Record<string, string>) : {};
     return runApiPipeline(genericEntry, genericImpl, deps, request, rawParams);

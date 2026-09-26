@@ -4,6 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { purgePartners, secret, seedKey, seedPartner, seedPublishedList, TEST_PEPPER, type PublicListSeed } from "./b2b-fixtures";
 import { cleanupCommitted } from "./list-fixtures";
 import { withSuperuser } from "./helpers";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { realLookupKey, withApiKey } from "@/features/b2b/api/handler";
+import { schoolsEndpoint } from "@/features/b2b/api/endpoints/schools";
 
 // Testes de API contra o banco real (S24, Step 3): chama os GET/POST exportados das rotas com `Request` real.
 // Roda em `pnpm test:db` (Supabase local da trilha).
@@ -274,6 +277,33 @@ describe("aceite: chave revogada falha na hora", () => {
 
     const second = await call(R.schoolsGET, "/v1/schools?limit=1", { key: plaintext });
     expect(second.status).toBe(401);
+  });
+
+  it("revogação injetada ENTRE o lookup e o consumo (mesma chave, mesma requisição) -> 401", async () => {
+    const partnerId = await withSuperuser((c) => seedPartner(c, { status: "sandbox", ownerId: null }));
+    partnerIds.push(partnerId);
+    const s = secret();
+    const key = await withSuperuser((c) => seedKey(c, partnerId, { environment: "test", secret: s }));
+    const plaintext = `lc_test_${key.publicId}_${s}`;
+
+    const admin = createAdminClient();
+    const realLookup = realLookupKey(admin);
+    // Faz o lookup REAL (chave ainda ativa nesse instante), revoga por SQL, e só então devolve o resultado do
+    // lookup — simula a corrida "revogação confirmada entre o lookup e o consumo": `b2b_rate_consume` revalida a
+    // chave na mesma transação do consumo (Global Constraints) e por isso ainda pega a revogação, mesmo com um
+    // lookup "desatualizado" (row com usable=true no momento em que foi lido).
+    const injectingLookup = async (publicId: string) => {
+      const row = await realLookup(publicId);
+      await withSuperuser((c) => c.query("update public.b2b_api_keys set status = 'revoked', revoked_at = now() where id = $1", [key.id]));
+      return row;
+    };
+    const handler = withApiKey(schoolsEndpoint.entry, schoolsEndpoint.impl, { lookupKey: injectingLookup });
+
+    const res = await handler(new Request("https://api.listacerta.example/v1/schools?limit=1", { headers: { "x-listacerta-key": plaintext } }), {
+      params: Promise.resolve({}),
+    });
+    expect(res.status).toBe(401);
+    expect((await res.json()).error.code).toBe("invalid_key");
   });
 });
 

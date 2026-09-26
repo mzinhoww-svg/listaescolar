@@ -168,6 +168,31 @@ describe("runApiPipeline", () => {
     expect(res.status).toBe(503);
   });
 
+  it("timeout do lookupKey -> 503 pelo envelope padrão (nunca um 500 sem cabeçalhos)", async () => {
+    const slowLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(() => new Promise((resolve) => setTimeout(() => resolve(null), 500)));
+    const res = await runApiPipeline(entry, okImpl, deps({ lookupKey: slowLookup, timeoutMs: 20 }), request(), {});
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error.code).toBe("service_unavailable");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("X-Request-Id")).toBeTruthy();
+  });
+
+  it("lookupKey que lança (erro de RPC) -> 500 internal_error pelo envelope padrão, nunca a exceção crua", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failingLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => {
+      throw new Error("relation b2b_api_keys não existe (detalhe interno do Postgres)");
+    });
+    const res = await runApiPipeline(entry, okImpl, deps({ lookupKey: failingLookup }), request(), {});
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error.code).toBe("internal_error");
+    expect(JSON.stringify(body)).not.toContain("relation");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    spy.mockRestore();
+  });
+
   it("sucesso: after() chamado com o endpoint e a classe 2xx certos", async () => {
     const res = await runApiPipeline(entry, okImpl, deps(), request(), {});
     expect(res.status).toBe(200);

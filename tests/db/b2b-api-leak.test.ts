@@ -4,14 +4,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { scanForForbidden } from "@/features/b2b/api/scan";
+import { ENDPOINTS } from "@/features/b2b/api/endpoints";
 
 import { purgePartners, secret, seedKey, seedPartner, TEST_PEPPER } from "./b2b-fixtures";
 import { withSuperuser, IDS, seedUsers } from "./helpers";
 import { cleanupCommitted, seedCandidate, seedList, seedSchool, transition, publish } from "./list-fixtures";
 
 // Aceite "nenhuma rota devolve dado pessoal" (S24, Step 4). Semeia o cenário sensível do Global Constraints e
-// varre TODAS as respostas (sucesso, paginação, cada erro alcançável, openapi.json e o catch-all) com
-// `scanForForbidden`. Roda em `pnpm test:db`.
+// varre, PARA CADA ENTRADA DO REGISTRO (`ENDPOINTS`), com `live` e `test`: sucesso (+ paginação até o fim quando
+// paginado), sem chave (401), escopo errado (403, quando o endpoint declara `insufficient_scope`), id/parâmetro
+// inexistente (404, quando declara `not_found`) e parâmetro/corpo inválido (400, quando declara `invalid_request`)
+// — mais os erros específicos de `carts.match` (413/415) e o rate limit (429). Um endpoint NOVO no registro sem
+// fixture aqui faz o teste FALHAR alto (não passa em silêncio): é exatamente o risco "rota fora do registro escapa
+// da varredura" do Review Focus. Roda em `pnpm test:db`.
 
 function localEnv(): { url: string; publishable: string; secret: string } {
   const out = execFileSync("node", ["scripts/supa.mjs", "env"], { encoding: "utf8" });
@@ -34,32 +39,21 @@ beforeAll(() => {
   process.env.B2B_API_KEY_PEPPER = TEST_PEPPER;
 });
 
-async function routes() {
+type RouteHandler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Response | Promise<Response>;
+
+async function routes(): Promise<Record<string, RouteHandler>> {
   return {
-    schoolsGET: (await import("@/app/v1/schools/route")).GET,
-    schoolGET: (await import("@/app/v1/schools/[inep]/route")).GET,
-    schoolListsGET: (await import("@/app/v1/schools/[inep]/lists/route")).GET,
-    listGET: (await import("@/app/v1/lists/[id]/route")).GET,
-    listItemsGET: (await import("@/app/v1/lists/[id]/items/route")).GET,
-    cartsMatchPOST: (await import("@/app/v1/carts/match/route")).POST,
-    openapiGET: (await import("@/app/v1/openapi.json/route")).GET,
-    catchAllGET: (await import("@/app/v1/[...rest]/route")).GET,
+    "schools.list": (await import("@/app/v1/schools/route")).GET,
+    "schools.get": (await import("@/app/v1/schools/[inep]/route")).GET,
+    "schools.lists": (await import("@/app/v1/schools/[inep]/lists/route")).GET,
+    "lists.get": (await import("@/app/v1/lists/[id]/route")).GET,
+    "lists.items": (await import("@/app/v1/lists/[id]/items/route")).GET,
+    "carts.match": (await import("@/app/v1/carts/match/route")).POST,
   };
 }
-type Routes = Awaited<ReturnType<typeof routes>>;
-let R: Routes;
-
-async function call(
-  handler: (req: Request, ctx: { params: Promise<Record<string, string>> }) => Response | Promise<Response>,
-  path: string,
-  opts: { key?: string; method?: string; body?: string; contentType?: string; params?: Record<string, string> } = {},
-): Promise<Response> {
-  const headers = new Headers();
-  if (opts.key !== undefined) headers.set("x-listacerta-key", opts.key);
-  if (opts.body !== undefined) headers.set("content-type", opts.contentType ?? "application/json");
-  const req = new Request(`https://api.listacerta.example${path}`, { method: opts.method ?? "GET", headers, body: opts.body });
-  return handler(req, { params: Promise.resolve(opts.params ?? {}) });
-}
+let HANDLERS: Record<string, RouteHandler>;
+let openapiGET: RouteHandler;
+let catchAllGET: RouteHandler;
 
 const partnerIds: string[] = [];
 const ineps: string[] = [];
@@ -77,6 +71,30 @@ async function record(label: string, res: Response): Promise<void> {
   RESPONSES.push({ label, status: res.status, body, headers: Object.fromEntries(res.headers.entries()) });
 }
 
+// ---------------------------------------------------------------------------
+// Construção genérica de requisições a partir de `entry.path` (placeholders `{param}`) — nenhuma URL escrita à
+// mão por endpoint; só os VALORES (parâmetros/corpo) vêm da fixture.
+// ---------------------------------------------------------------------------
+type CaseSpec = { params?: Record<string, string>; query?: Record<string, string>; body?: unknown; rawBody?: string; contentType?: string };
+
+function requestFor(path: string, method: string, spec: CaseSpec, key: string | undefined): { req: Request; params: Record<string, string> } {
+  let resolvedPath = path;
+  for (const [k, v] of Object.entries(spec.params ?? {})) resolvedPath = resolvedPath.replace(`{${k}}`, encodeURIComponent(v));
+  const qs = spec.query ? new URLSearchParams(spec.query).toString() : "";
+  const url = `https://api.listacerta.example${resolvedPath}${qs ? `?${qs}` : ""}`;
+  const headers = new Headers();
+  if (key !== undefined) headers.set("x-listacerta-key", key);
+  const hasBody = spec.rawBody !== undefined || spec.body !== undefined;
+  if (hasBody) headers.set("content-type", spec.contentType ?? "application/json");
+  const bodyText = spec.rawBody !== undefined ? spec.rawBody : spec.body !== undefined ? JSON.stringify(spec.body) : undefined;
+  return { req: new Request(url, { method, headers, body: bodyText }), params: spec.params ?? {} };
+}
+
+async function callEntry(handler: RouteHandler, path: string, method: string, spec: CaseSpec, key: string | undefined): Promise<Response> {
+  const { req, params } = requestFor(path, method, spec, key);
+  return handler(req, { params: Promise.resolve(params) });
+}
+
 let sensitiveSchoolInep: string;
 let sensitiveListId: string;
 let sensitiveVersion2Id: string;
@@ -86,13 +104,16 @@ let demoListId: string;
 let unpublishedListSchoolInep: string;
 let suspendedSchoolInep: string;
 let disabledMuniSchoolInep: string;
-let partnerKeyPlaintext: string;
-let scopedOutKeyPlaintext: string; // escopo insuficiente (só carts:match) para forçar 403 em schools/lists
-let schoolsOnlyKeyPlaintext: string; // sem carts:match, para forçar 403 em carts.match
+let liveFullKeyPlaintext: string; // ambiente live, os 3 escopos
+let testFullKeyPlaintext: string; // ambiente test, os 3 escopos
+let scopedOutKeyPlaintext: string; // só carts:match — para forçar 403 em schools.*/lists.*
+let schoolsOnlyKeyPlaintext: string; // só schools:read — para forçar 403 em carts.match
 
 beforeAll(async () => {
   await seedUsers();
-  R = await routes();
+  HANDLERS = await routes();
+  openapiGET = (await import("@/app/v1/openapi.json/route")).GET;
+  catchAllGET = (await import("@/app/v1/[...rest]/route")).GET;
 
   // Escola com contato sensível (e-mail, telefone, endereço, CEP) e itens com alerts/confidence internos.
   sensitiveSchoolInep = await withSuperuser(async (c) => {
@@ -103,8 +124,22 @@ beforeAll(async () => {
       [schoolId],
     );
     const listId = await seedList(c, schoolId, "ef-1", 2027);
+    // `seedList` sempre insere `is_demo = true` (fixture genérica); esta lista representa o cenário REAL (chave
+    // `live`), então precisa ser marcada como não-demo explicitamente — sem isto, `b2b_v1_visible_lists` a
+    // esconde da chave `live` (regra: live = escola E lista não-demo) e todo o cenário "sensível" fica invisível
+    // sob `live`, sem nenhum teste notar (bug encontrado ao endurecer a varredura nesta correção).
+    await c.query("update public.school_lists set is_demo = false where id = $1", [listId]);
     sensitiveListId = listId;
-    const v1 = await seedCandidate(c, listId, 2);
+    // NÃO usa `seedCandidate` (nomeia os itens "Caderno 1"/"Caderno 2" — nome genérico reusado por outras listas
+    // legítimas, como a demo, o que geraria falso positivo na varredura). Nomes distintos e únicos aqui.
+    const v1Row = await c.query("select version_id from public.list_create_candidate_version($1, 'admin', null, null)", [listId]);
+    const v1 = v1Row.rows[0].version_id as string;
+    await c.query(
+      `insert into public.list_items (version_id, position, original_name, normalized_name, category, quantity, unit, confidence, alerts) values
+       ($1, 1, 'Caderno Sigiloso V1 A', 'caderno sigiloso v1 a', 'papelaria', 2, 'un', 0.9, '["low_confidence_item"]'::jsonb),
+       ($1, 2, 'Caderno Sigiloso V1 B', 'caderno sigiloso v1 b', 'papelaria', 2, 'un', 0.9, '["low_confidence_item"]'::jsonb)`,
+      [v1],
+    );
     for (const s of ["submitted", "processing", "approved"] as const) await transition(c, listId, s);
     await publish(c, listId, v1);
     supersededVersion1Id = v1;
@@ -127,7 +162,7 @@ beforeAll(async () => {
   });
   ineps.push(sensitiveSchoolInep);
 
-  // Escola demo com sua própria lista publicada.
+  // Escola demo com sua própria lista publicada (usada para exercitar TODOS os endpoints com chave `test`).
   demoSchoolInep = await withSuperuser(async (c) => {
     const schoolId = await seedSchool(c, "5198" + String(Math.floor(Math.random() * 900 + 100)).padStart(4, "0"), true);
     await c.query("update public.schools set is_demo = true where id = $1", [schoolId]);
@@ -218,16 +253,19 @@ beforeAll(async () => {
   FORBIDDEN_VALUES.add("diretoria@escola-sensivel.example.test").add("+5565988887777").add("Rua das Escolas, 123").add("78005999");
   FORBIDDEN_VALUES.add(supersededVersion1Id).add(sensitiveVersion2Id);
   // Itens da v1 (superseded): só a v2 ("Caderno v2") pode aparecer pela API.
-  FORBIDDEN_VALUES.add("Caderno 1").add("Caderno 2");
+  FORBIDDEN_VALUES.add("Caderno Sigiloso V1 A").add("Caderno Sigiloso V1 B");
 
-  // Parceiro real (o que vamos usar nas chamadas) + chaves com escopos diferentes.
+  // Parceiro real (o que vamos usar nas chamadas) + chaves com escopos diferentes, nos dois ambientes.
   const realPartnerId = await withSuperuser((c) =>
     seedPartner(c, { status: "active", ownerId: null, limits: { testMinute: 1000, testDay: 100_000, liveMinute: 1000, liveDay: 100_000 } }),
   );
   partnerIds.push(realPartnerId);
   const s1 = secret();
-  const fullKey = await withSuperuser((c) => seedKey(c, realPartnerId, { environment: "live", secret: s1, scopes: ["schools:read", "lists:read", "carts:match"] }));
-  partnerKeyPlaintext = `lc_live_${fullKey.publicId}_${s1}`;
+  const liveFullKey = await withSuperuser((c) => seedKey(c, realPartnerId, { environment: "live", secret: s1, scopes: ["schools:read", "lists:read", "carts:match"] }));
+  liveFullKeyPlaintext = `lc_live_${liveFullKey.publicId}_${s1}`;
+  const s4 = secret();
+  const testFullKey = await withSuperuser((c) => seedKey(c, realPartnerId, { environment: "test", secret: s4, scopes: ["schools:read", "lists:read", "carts:match"] }));
+  testFullKeyPlaintext = `lc_test_${testFullKey.publicId}_${s4}`;
   const s2 = secret();
   const matchOnlyKey = await withSuperuser((c) => seedKey(c, realPartnerId, { environment: "live", secret: s2, scopes: ["carts:match"] }));
   scopedOutKeyPlaintext = `lc_live_${matchOnlyKey.publicId}_${s2}`;
@@ -243,86 +281,163 @@ afterAll(async () => {
   await withSuperuser((c) => c.query("delete from public.stationeries where trade_name = 'Papelaria Vazamento'"));
 });
 
-describe("varredura de vazamento: coleta todas as respostas alcançáveis", () => {
-  it("coleta sucesso, paginação e cada erro de cada endpoint (live e test), openapi.json e catch-all", async () => {
-    const live = partnerKeyPlaintext;
+// ---------------------------------------------------------------------------
+// Fixture por endpoint (chave: `entry.id`). Um endpoint do registro sem entrada aqui faz o teste lançar (ver loop
+// principal) — nenhum endpoint escapa da varredura em silêncio.
+// ---------------------------------------------------------------------------
+type EndpointFixture = {
+  success: (env: "live" | "test") => CaseSpec;
+  notFound?: () => CaseSpec;
+  invalidRequest?: () => CaseSpec;
+  tooLarge?: () => CaseSpec;
+  wrongMediaType?: () => CaseSpec;
+  paginated?: boolean;
+};
 
-    await record("schools.list live", await call(R.schoolsGET, "/v1/schools?limit=100", { key: live }));
-    await record("schools.list unknown-query", await call(R.schoolsGET, "/v1/schools?nope=1", { key: live }));
-    await record("schools.list no-key", await call(R.schoolsGET, "/v1/schools", {}));
-    await record("schools.list wrong-scope", await call(R.schoolsGET, "/v1/schools", { key: scopedOutKeyPlaintext }));
+function fixtures(): Record<string, EndpointFixture> {
+  return {
+    "schools.list": {
+      success: () => ({ query: { limit: "100" } }),
+      invalidRequest: () => ({ query: { limit: "100", nope: "1" } }),
+      paginated: true,
+    },
+    "schools.get": {
+      success: (env) => ({ params: { inep: env === "live" ? sensitiveSchoolInep : demoSchoolInep } }),
+      notFound: () => ({ params: { inep: "00000000" } }),
+      invalidRequest: () => ({ params: { inep: "abc" } }),
+    },
+    "schools.lists": {
+      success: (env) => ({ params: { inep: env === "live" ? sensitiveSchoolInep : demoSchoolInep } }),
+      notFound: () => ({ params: { inep: "00000000" } }),
+      invalidRequest: () => ({ params: { inep: sensitiveSchoolInep }, query: { nope: "1" } }),
+      paginated: true,
+    },
+    "lists.get": {
+      success: (env) => ({ params: { id: env === "live" ? sensitiveListId : demoListId } }),
+      notFound: () => ({ params: { id: randomUUID() } }),
+      invalidRequest: () => ({ params: { id: "nao-e-uuid" } }),
+    },
+    "lists.items": {
+      success: (env) => ({ params: { id: env === "live" ? sensitiveListId : demoListId } }),
+      notFound: () => ({ params: { id: randomUUID() } }),
+      invalidRequest: () => ({ params: { id: sensitiveListId }, query: { nope: "1" } }),
+      paginated: true,
+    },
+    "carts.match": {
+      success: (env) => ({ body: { list_id: env === "live" ? sensitiveListId : demoListId, skus: [{ sku: "SKU-X", name: "Produto Qualquer" }] } }),
+      notFound: () => ({ body: { list_id: randomUUID(), skus: [{ sku: "X", name: "Y" }] } }),
+      invalidRequest: () => ({ body: { list_id: sensitiveListId } }), // falta "skus" -> 400
+      tooLarge: () => ({ body: { list_id: sensitiveListId, skus: Array.from({ length: 5000 }, (_, i) => ({ sku: `S${i}`, name: "x".repeat(190) })) } }),
+      wrongMediaType: () => ({ rawBody: "list_id=1", contentType: "text/plain" }),
+    },
+  };
+}
 
-    await record("schools.get sensitive", await call(R.schoolGET, `/v1/schools/${sensitiveSchoolInep}`, { key: live, params: { inep: sensitiveSchoolInep } }));
-    await record("schools.get suspended-404", await call(R.schoolGET, `/v1/schools/${suspendedSchoolInep}`, { key: live, params: { inep: suspendedSchoolInep } }));
-    await record("schools.get disabled-muni-404", await call(R.schoolGET, `/v1/schools/${disabledMuniSchoolInep}`, { key: live, params: { inep: disabledMuniSchoolInep } }));
-    await record("schools.get malformed-400", await call(R.schoolGET, "/v1/schools/abc", { key: live, params: { inep: "abc" } }));
+async function paginateAndRecord(label: string, handler: RouteHandler, path: string, baseSpec: CaseSpec, key: string): Promise<void> {
+  let cursor: string | undefined;
+  for (let i = 0; i < 10; i += 1) {
+    const spec: CaseSpec = { ...baseSpec, query: { ...(baseSpec.query ?? {}), limit: "1", ...(cursor ? { cursor } : {}) } };
+    const res = await callEntry(handler, path, "GET", spec, key);
+    const clone = res.clone();
+    await record(`${label} page ${i}`, res);
+    if (res.status !== 200) break;
+    const json = (await clone.json()) as { next_cursor?: string };
+    cursor = json.next_cursor;
+    if (!cursor) break;
+  }
+}
 
-    await record(
-      "schools.lists sensitive",
-      await call(R.schoolListsGET, `/v1/schools/${sensitiveSchoolInep}/lists`, { key: live, params: { inep: sensitiveSchoolInep } }),
-    );
-    await record(
-      "schools.lists unpublished-empty",
-      await call(R.schoolListsGET, `/v1/schools/${unpublishedListSchoolInep}/lists`, { key: live, params: { inep: unpublishedListSchoolInep } }),
-    );
+describe("varredura de vazamento: registro completo (ENDPOINTS x {live, test} x casos alcançáveis)", () => {
+  it("coleta sucesso (+ paginação), 401, 403, 404, 400 e os erros específicos de cada endpoint do registro", async () => {
+    const fx = fixtures();
 
-    await record("lists.get current-version", await call(R.listGET, `/v1/lists/${sensitiveListId}`, { key: live, params: { id: sensitiveListId } }));
-    // lista demo com chave `live`: 404 (ambiente errado), mesmo a escola/lista existindo de verdade.
-    await record("lists.get demo-list-with-live-key-404", await call(R.listGET, `/v1/lists/${demoListId}`, { key: live, params: { id: demoListId } }));
-    // o id de uma VERSÃO (nunca exposto pela API) não é um id de lista válido: 404, igual a qualquer id inexistente.
-    await record("lists.get version-id-not-a-list", await call(R.listGET, `/v1/lists/${supersededVersion1Id}`, { key: live, params: { id: supersededVersion1Id } }));
-    await record("lists.get random-404", await call(R.listGET, `/v1/lists/${randomUUID()}`, { key: live, params: { id: randomUUID() } }));
+    for (const { entry } of ENDPOINTS) {
+      const fixture = fx[entry.id];
+      if (!fixture) throw new Error(`b2b-api-leak.test.ts: endpoint "${entry.id}" está em ENDPOINTS sem fixture na varredura — adicione um em fixtures() antes de mesclar.`);
+      const handler = HANDLERS[entry.id];
+      if (!handler) throw new Error(`b2b-api-leak.test.ts: sem handler HTTP mapeado para "${entry.id}".`);
 
-    await record(
-      "lists.items current-version",
-      await call(R.listItemsGET, `/v1/lists/${sensitiveListId}/items`, { key: live, params: { id: sensitiveListId } }),
-    );
-    // paginação página a página
-    let cursor: string | undefined;
-    for (let i = 0; i < 5; i += 1) {
-      const qs = new URLSearchParams({ limit: "1", ...(cursor ? { cursor } : {}) });
-      const res = await call(R.listItemsGET, `/v1/lists/${sensitiveListId}/items?${qs}`, { key: live, params: { id: sensitiveListId } });
-      const clone = res.clone();
-      await record(`lists.items page ${i}`, res);
-      const body = await clone.json();
-      cursor = body.next_cursor;
-      if (!cursor) break;
+      for (const env of ["live", "test"] as const) {
+        const key = env === "live" ? liveFullKeyPlaintext : testFullKeyPlaintext;
+        const spec = fixture.success(env);
+        const res = await callEntry(handler, entry.path, entry.method, spec, key);
+        await record(`${entry.id} success ${env}`, res);
+        if (fixture.paginated) await paginateAndRecord(`${entry.id} ${env}`, handler, entry.path, spec, key);
+      }
+
+      // 401: sem chave (nunca toca params/query/body — a mesma "success" serve de veículo).
+      await record(`${entry.id} no-key`, await callEntry(handler, entry.path, entry.method, fixture.success("live"), undefined));
+
+      // 403: escopo insuficiente.
+      if (entry.errors.includes("insufficient_scope")) {
+        const wrongScopeKey = entry.scope === "carts:match" ? schoolsOnlyKeyPlaintext : scopedOutKeyPlaintext;
+        await record(`${entry.id} wrong-scope`, await callEntry(handler, entry.path, entry.method, fixture.success("live"), wrongScopeKey));
+      }
+
+      // 404.
+      if (entry.errors.includes("not_found")) {
+        if (!fixture.notFound) throw new Error(`"${entry.id}" declara not_found nos erros mas a fixture não tem notFound().`);
+        await record(`${entry.id} not-found`, await callEntry(handler, entry.path, entry.method, fixture.notFound(), liveFullKeyPlaintext));
+      }
+
+      // 400.
+      if (entry.errors.includes("invalid_request")) {
+        if (!fixture.invalidRequest) throw new Error(`"${entry.id}" declara invalid_request nos erros mas a fixture não tem invalidRequest().`);
+        await record(`${entry.id} invalid-request`, await callEntry(handler, entry.path, entry.method, fixture.invalidRequest(), liveFullKeyPlaintext));
+      }
+
+      // 413.
+      if (entry.errors.includes("payload_too_large")) {
+        if (!fixture.tooLarge) throw new Error(`"${entry.id}" declara payload_too_large nos erros mas a fixture não tem tooLarge().`);
+        await record(`${entry.id} too-large`, await callEntry(handler, entry.path, entry.method, fixture.tooLarge(), liveFullKeyPlaintext));
+      }
+
+      // 415.
+      if (entry.errors.includes("unsupported_media_type")) {
+        if (!fixture.wrongMediaType) throw new Error(`"${entry.id}" declara unsupported_media_type nos erros mas a fixture não tem wrongMediaType().`);
+        await record(`${entry.id} wrong-media-type`, await callEntry(handler, entry.path, entry.method, fixture.wrongMediaType(), liveFullKeyPlaintext));
+      }
     }
 
-    await record(
-      "carts.match sensitive",
-      await call(R.cartsMatchPOST, "/v1/carts/match", { key: live, method: "POST", body: JSON.stringify({ list_id: sensitiveListId, skus: [{ sku: "X-1", name: "Caderno v2" }] }) }),
-    );
-    await record(
-      "carts.match not-found",
-      await call(R.cartsMatchPOST, "/v1/carts/match", { key: live, method: "POST", body: JSON.stringify({ list_id: randomUUID(), skus: [{ sku: "X-1", name: "Y" }] }) }),
-    );
-    await record(
-      "carts.match too-large",
-      await call(R.cartsMatchPOST, "/v1/carts/match", {
-        key: live,
-        method: "POST",
-        body: JSON.stringify({ list_id: sensitiveListId, skus: Array.from({ length: 5000 }, (_, i) => ({ sku: `S${i}`, name: "x".repeat(190) })) }),
-      }),
-    );
-    await record(
-      "carts.match wrong-scope",
-      await call(R.cartsMatchPOST, "/v1/carts/match", { key: schoolsOnlyKeyPlaintext, method: "POST", body: JSON.stringify({ list_id: sensitiveListId, skus: [{ sku: "X", name: "Y" }] }) }),
-    );
-
-    // 429: parceiro dedicado com limite mínimo, exaure e coleta a resposta.
+    // 429: parceiro dedicado com limite mínimo (o corpo/cabeçalho de 429 não varia por endpoint — a janela é do
+    // balde (parceiro, ambiente), não do endpoint; testar uma vez basta para a varredura de forma/conteúdo).
     const smallPartnerId = await withSuperuser((c) => seedPartner(c, { status: "sandbox", ownerId: null, limits: { testMinute: 1, testDay: 1000 } }));
     partnerIds.push(smallPartnerId);
     const smallSecret = secret();
     const smallKey = await withSuperuser((c) => seedKey(c, smallPartnerId, { environment: "test", secret: smallSecret }));
     const smallPlaintext = `lc_test_${smallKey.publicId}_${smallSecret}`;
-    await record("rate-limit ok", await call(R.schoolsGET, "/v1/schools?limit=1", { key: smallPlaintext }));
-    await record("rate-limit 429", await call(R.schoolsGET, "/v1/schools?limit=1", { key: smallPlaintext }));
+    await record("rate-limit ok", await callEntry(HANDLERS["schools.list"]!, "/v1/schools", "GET", { query: { limit: "1" } }, smallPlaintext));
+    await record("rate-limit 429", await callEntry(HANDLERS["schools.list"]!, "/v1/schools", "GET", { query: { limit: "1" } }, smallPlaintext));
 
-    await record("openapi.json", await call(R.openapiGET, "/v1/openapi.json"));
-    await record("catch-all", await call(R.catchAllGET, "/v1/inexistente"));
+    // Regras de negócio específicas (adicionais ao loop genérico: mesma família de erro — 404 —, mas provando
+    // CADA motivo de invisibilidade, não só "id inexistente").
+    await record(
+      "schools.lists unpublished-empty",
+      await callEntry(HANDLERS["schools.lists"]!, "/v1/schools/{inep}/lists", "GET", { params: { inep: unpublishedListSchoolInep } }, liveFullKeyPlaintext),
+    );
+    await record(
+      "schools.get suspended-404",
+      await callEntry(HANDLERS["schools.get"]!, "/v1/schools/{inep}", "GET", { params: { inep: suspendedSchoolInep } }, liveFullKeyPlaintext),
+    );
+    await record(
+      "schools.get disabled-muni-404",
+      await callEntry(HANDLERS["schools.get"]!, "/v1/schools/{inep}", "GET", { params: { inep: disabledMuniSchoolInep } }, liveFullKeyPlaintext),
+    );
+    await record(
+      "lists.get demo-list-with-live-key-404",
+      await callEntry(HANDLERS["lists.get"]!, "/v1/lists/{id}", "GET", { params: { id: demoListId } }, liveFullKeyPlaintext),
+    );
+    await record(
+      "lists.get version-id-not-a-list-404",
+      await callEntry(HANDLERS["lists.get"]!, "/v1/lists/{id}", "GET", { params: { id: supersededVersion1Id } }, liveFullKeyPlaintext),
+    );
 
-    expect(RESPONSES.length).toBeGreaterThan(15);
+    await record("openapi.json", await callEntry(openapiGET, "/v1/openapi.json", "GET", {}, undefined));
+    await record("catch-all", await callEntry(catchAllGET, "/v1/inexistente", "GET", {}, undefined));
+
+    // Todo endpoint do registro precisa ter gerado ao menos um "success" por ambiente: se um endpoint novo entrar
+    // sem call real (bug na própria varredura), este count não cresce o suficiente.
+    expect(RESPONSES.length).toBeGreaterThanOrEqual(ENDPOINTS.length * 2 + 10);
   });
 
   it("zero achados em toda resposta coletada (corpo e cabeçalhos)", () => {
@@ -337,7 +452,16 @@ describe("varredura de vazamento: coleta todas as respostas alcançáveis", () =
 
   it("os status esperados realmente ocorreram (a varredura não passou por não ter achado erro nenhum)", () => {
     const statuses = new Set(RESPONSES.map((r) => r.status));
-    for (const expected of [200, 400, 401, 403, 404, 413, 429]) expect(statuses.has(expected)).toBe(true);
+    for (const expected of [200, 400, 401, 403, 404, 413, 415, 429]) expect(statuses.has(expected)).toBe(true);
+  });
+
+  it("todo endpoint do registro tem ao menos um success live e um success test coletados", () => {
+    for (const { entry } of ENDPOINTS) {
+      const live = RESPONSES.find((r) => r.label === `${entry.id} success live`);
+      const test = RESPONSES.find((r) => r.label === `${entry.id} success test`);
+      expect(live?.status).toBe(200);
+      expect(test?.status).toBe(200);
+    }
   });
 });
 
@@ -354,4 +478,3 @@ describe("teste de controle: a varredura e o .strict() pegam um campo proibido i
     expect(schema.safeParse(leaked).success).toBe(false);
   });
 });
-

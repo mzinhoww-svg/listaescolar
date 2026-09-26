@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { callAsService, makeCnpj14, seedKey, seedPartner, type PartnerStatus } from "./b2b-fixtures";
+import { ensureProfile } from "./claim-fixtures";
 import { attempt, attemptH, cleanupUsers, IDS, inTx, seedUsers, withClaims, withSuperuser, type Identity } from "./helpers";
 import { switchTo } from "./list-fixtures";
 
@@ -92,6 +93,7 @@ describe("S24 · 0501 schema: parceiros B2B", () => {
 
   it("CNPJ único entre parceiros não recusados (recusado pode cadastrar de novo)", async () => {
     await inTx(async (c) => {
+      await ensureProfile(c, IDS.spare, "parent");
       const cnpj = makeCnpj14();
       await seedPartner(c, { status: "rejected", ownerId: null, overrides: { cnpj } });
       await seedPartner(c, { status: "pending", ownerId: IDS.spare, overrides: { cnpj } });
@@ -125,11 +127,19 @@ describe("S24 · RLS e grants", () => {
     const other = await seedPartner(c, { status: "active", ownerId: IDS.school_member });
     const k = await seedKey(c, mine, { environment: "live" });
     const ko = await seedKey(c, other, { environment: "live" });
-    await c.query("insert into public.b2b_partner_events (partner_id, event_type, actor_id, actor_role, from_status, to_status) values ($1, 'decided', $2, 'admin', 'pending', 'active')", [mine, IDS.admin]);
-    await c.query("insert into public.b2b_partner_events (partner_id, event_type, actor_id, actor_role, from_status, to_status) values ($1, 'decided', $2, 'admin', 'pending', 'active')", [other, IDS.admin]);
-    await c.query("insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count) values ($1, $2, current_date, 'schools.list', '2xx', 3)", [k.id, mine]);
-    await c.query("insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count) values ($1, $2, current_date, 'schools.list', '2xx', 5)", [ko.id, other]);
-    await c.query("insert into public.b2b_rate_windows (partner_id, environment, window_kind, window_start, count) values ($1, 'live', 'minute', now(), 1)", [mine]);
+    // seedPartner/seedKey já restauram o papel de teste ao voltar; estas inserções cruas também precisam sair do
+    // papel restrito (authenticated/anon/system), já que a escrita direta nestas tabelas só é permitida a nenhum papel.
+    const prev = (await c.query("select current_user as u")).rows[0].u as string;
+    await c.query("reset role");
+    try {
+      await c.query("insert into public.b2b_partner_events (partner_id, event_type, actor_id, actor_role, from_status, to_status) values ($1, 'decided', $2, 'admin', 'pending', 'active')", [mine, IDS.admin]);
+      await c.query("insert into public.b2b_partner_events (partner_id, event_type, actor_id, actor_role, from_status, to_status) values ($1, 'decided', $2, 'admin', 'pending', 'active')", [other, IDS.admin]);
+      await c.query("insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count) values ($1, $2, current_date, 'schools.list', '2xx', 3)", [k.id, mine]);
+      await c.query("insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count) values ($1, $2, current_date, 'schools.list', '2xx', 5)", [ko.id, other]);
+      await c.query("insert into public.b2b_rate_windows (partner_id, environment, window_kind, window_start, count) values ($1, 'live', 'minute', now(), 1)", [mine]);
+    } finally {
+      await c.query(`set local role ${prev}`).catch(() => undefined);
+    }
     return { mine, other, k, ko };
   }
 
@@ -216,12 +226,18 @@ describe("S24 · RLS e grants", () => {
       expect(svc.rows[0]?.ok).toBe(true);
       const internal = await c.query<{ ok: boolean }>("select has_function_privilege('service_role', 'public.b2b_partner_events_block_mutation()', 'execute') as ok");
       expect(internal.rows[0]?.ok).toBe(false);
+      // Funções b2b_v1_* que leem tabela (não os montadores *_json, puros/sem SECURITY DEFINER) + as de escrita/lookup.
       const defs = await c.query<{ proname: string; prosecdef: boolean; proconfig: string[] | null }>(
-        `select proname, prosecdef, proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname='public' and proname like 'b2b\\_v1\\_%' or proname in ('b2b_partner_apply','b2b_partner_decide','b2b_key_create','b2b_key_rotate','b2b_key_revoke','b2b_key_lookup','b2b_rate_consume','b2b_usage_record','b2b_prune_rate_windows','b2b_partner_overview')`,
+        `select proname, prosecdef, proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and (
+            (p.proname like 'b2b\\_v1\\_%' and p.proname not like '%\\_json')
+            or p.proname in ('b2b_partner_apply','b2b_partner_decide','b2b_key_create','b2b_key_rotate','b2b_key_revoke','b2b_key_lookup','b2b_rate_consume','b2b_usage_record','b2b_prune_rate_windows','b2b_partner_overview')
+          )`,
       );
+      expect(defs.rows.length).toBeGreaterThanOrEqual(18);
       for (const d of defs.rows) {
         expect(d.prosecdef, d.proname).toBe(true);
-        expect(d.proconfig?.some((x) => x === "search_path="), d.proname).toBe(true);
+        expect(d.proconfig?.some((x) => x.replace(/"/g, "") === "search_path="), d.proname).toBe(true);
       }
     });
   });
@@ -233,7 +249,7 @@ describe("S24 · cadastro (b2b_partner_apply)", () => {
 
   it("nasce pending, com dono, consentimento b2b_api_terms e evento applied na mesma transação", async () => {
     await inTx(async (c) => {
-      const [{ id }] = await apply(c, IDS.parent, APPLY());
+      const [{ id }] = (await apply(c, IDS.parent, APPLY())) as [{ id: string }];
       const p = await c.query("select status, partner_type, coverage_ufs, terms_consent_id, terms_text_version, plan from public.b2b_partners where id = $1", [id]);
       expect(p.rows[0]).toMatchObject({ status: "pending", partner_type: "retailer", coverage_ufs: ["MT"], terms_text_version: "b2b-api-terms-v1", plan: null });
       const consent = await c.query("select profile_id, purpose, text_version from public.consents where id = $1", [p.rows[0].terms_consent_id]);
@@ -253,6 +269,7 @@ describe("S24 · cadastro (b2b_partner_apply)", () => {
       expect(noActor.hint).toBe("forbidden");
       const orphan = await attemptH(c, "select public.b2b_partner_apply($1, $2::jsonb, 'v1')", [IDS.orphan, JSON.stringify(APPLY())]);
       expect(orphan.hint).toBe("forbidden");
+      await ensureProfile(c, IDS.spare, "parent");
       const cnpj = makeCnpj14();
       await apply(c, IDS.parent, APPLY({ cnpj }));
       const dup = await attemptH(c, "select public.b2b_partner_apply($1, $2::jsonb, 'v1')", [IDS.spare, JSON.stringify(APPLY({ cnpj }))]);
@@ -271,7 +288,7 @@ describe("S24 · cadastro (b2b_partner_apply)", () => {
     await inTx(async (c) => {
       const cnpj = makeCnpj14();
       await seedPartner(c, { status: "rejected", ownerId: null, overrides: { cnpj } });
-      const [{ id }] = await apply(c, IDS.parent, APPLY({ cnpj }));
+      const [{ id }] = (await apply(c, IDS.parent, APPLY({ cnpj }))) as [{ id: string }];
       expect(id).toBeTruthy();
     });
   });

@@ -191,12 +191,21 @@ describe("S24 · leitura pública da API (b2b_v1_*)", () => {
       await c.query("update public.school_lists set is_demo = false where id = $1", [draft.listId]);
       await c.query("update public.schools set is_demo = false where id = $1", [draft.schoolId]);
       // cópia de pai com nome de aluno no item
-      const submission = (await c.query(
-        `insert into public.list_submissions (submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type, size_bytes)
-         values ($1, 'parent', $2, '1º ano', 2027, $3, 'l.pdf', 'application/pdf', 100) returning id`,
-        [IDS.parent, real.schoolId, `${IDS.parent}/x/l.pdf`],
+      const consentId = (await c.query(
+        "insert into public.consents (profile_id, purpose, text_version) values ($1, 'list_upload', 'v1') returning id",
+        [IDS.parent],
       )).rows[0]?.id as string;
-      await c.query("insert into public.parent_list_copies (submission_id, owner_id, items) values ($1, $2, $3::jsonb)", [submission, IDS.parent, JSON.stringify([{ name: "Caderno do Aluno Fulaninho", quantity: 1 }])]);
+      const submissionId = crypto.randomUUID();
+      const submission = (await c.query(
+        `insert into public.list_submissions (id, submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type, size_bytes, consent_id)
+         values ($1, $2, 'parent', $3, '1º ano', 2027, $4, 'l.pdf', 'application/pdf', 100, $5) returning id`,
+        [submissionId, IDS.parent, real.schoolId, `${IDS.parent}/${submissionId}/l.pdf`, consentId],
+      )).rows[0]?.id as string;
+      await c.query("insert into public.parent_list_copies (submission_id, owner_id, items) values ($1, $2, $3::jsonb)", [
+        submission,
+        IDS.parent,
+        JSON.stringify([{ name: "Caderno do Aluno Fulaninho", quantity: 1, unit: null, category: null, confidence: null, alerts: [], origin: "extracted" }]),
+      ]);
       const ids = (await schools(c, "live", null)).map((s) => s.inep as string);
       const listIds = (await c.query("select id from public.school_lists where school_id in (select id from public.schools where inep = any($1::text[]))", [ids])).rows.map((r) => r.id as string);
       const visibleLists: string[] = [];

@@ -2,17 +2,18 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Client } from "pg";
 
 import { hashSecret, publicId, secret, seedKey, seedPartner } from "./b2b-fixtures";
+import { ensureProfile } from "./claim-fixtures";
 import { attempt, attemptH, cleanupUsers, IDS, inTx, seedUsers } from "./helpers";
 
 type Created = { id: string };
 
 function create(c: Client, actor: string | null, partner: string, env: string, scopes: string[] = ["schools:read", "lists:read"]) {
   const s = secret();
-  return attemptH(c, "select public.b2b_key_create($1, $2, $3, $4, $5, 1, $6, $7::text[]) as id", [actor, partner, env, publicId(), hashSecret(s), s.slice(-4), scopes]);
+  return attemptH(c, "select public.b2b_key_create($1, $2, $3, $4, $5, 1::smallint, $6, $7::text[]) as id", [actor, partner, env, publicId(), hashSecret(s), s.slice(-4), scopes]);
 }
 function rotate(c: Client, actor: string | null, oldId: string, grace = "7 days") {
   const s = secret();
-  return attemptH(c, "select public.b2b_key_rotate($1, $2, $3, $4, 1, $5, $6::interval) as id", [actor, oldId, publicId(), hashSecret(s), s.slice(-4), grace]);
+  return attemptH(c, "select public.b2b_key_rotate($1, $2, $3, $4, 1::smallint, $5, $6::interval) as id", [actor, oldId, publicId(), hashSecret(s), s.slice(-4), grace]);
 }
 function revoke(c: Client, actor: string | null, role: string, keyId: string, reason: string | null = "teste") {
   return attemptH(c, "select public.b2b_key_revoke($1, $2, $3, $4)", [actor, role, keyId, reason]);
@@ -41,6 +42,7 @@ describe("S24 · chaves (create, rotate, revoke, lookup)", () => {
       const row = await keyRow(c, (ok.rows[0] as Created).id);
       expect(row).toMatchObject({ environment: "test", status: "active", created_by: IDS.parent, expires_at: null, rotated_from_id: null });
       expect((row.scopes as string[]).sort()).toEqual(["carts:match", "lists:read", "schools:read"]);
+      await ensureProfile(c, IDS.spare, "parent");
       const pending = await seedPartner(c, { status: "pending", ownerId: IDS.spare });
       expect((await create(c, IDS.spare, pending, "test")).hint).toBe("environment_not_allowed");
       const brand = await seedPartner(c, { status: "active", type: "brand", ownerId: IDS.school_member });

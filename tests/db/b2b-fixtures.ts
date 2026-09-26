@@ -108,6 +108,7 @@ export async function seedKey(c: Client, partnerId: string, opts: SeedKey = {}):
     const env = opts.environment ?? "test";
     const pid = opts.publicId ?? publicId();
     const sec = opts.secret ?? secret();
+    const status = opts.status ?? "active";
     const row: Record<string, unknown> = {
       partner_id: partnerId,
       environment: env,
@@ -116,8 +117,10 @@ export async function seedKey(c: Client, partnerId: string, opts: SeedKey = {}):
       hash_version: 1,
       last4: sec.slice(-4),
       scopes: opts.scopes ?? ["schools:read", "lists:read", "carts:match"],
-      status: opts.status ?? "active",
+      status,
       created_by: IDS.parent,
+      // status = revoked exige revoked_at (constraint b2b_api_keys_revoked_pair); overrides pode substituir.
+      revoked_at: status === "revoked" ? new Date().toISOString() : null,
       ...opts.overrides,
     };
     const cols = Object.keys(row);

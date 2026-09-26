@@ -273,8 +273,8 @@ begin
      for update
   loop
     update public.b2b_api_keys set status = 'revoked', revoked_at = now(), revoked_by = p_actor_id, revoke_reason = p_reason where id = k.id;
-    insert into public.b2b_partner_events (partner_id, event_type, actor_id, actor_role, reason, payload)
-    values (p_partner_id, 'key_revoked', p_actor_id, p_actor_role, p_reason, jsonb_build_object('key_id', k.id, 'environment', k.environment, 'public_id', k.public_id));
+    -- sem evento próprio aqui: é efeito colateral de uma decisão do admin (b2b_partner_decide), que já grava seu
+    -- próprio evento 'decided'; a revogação da chave em si fica registrada em b2b_api_keys/audit_log.
     v_n := v_n + 1;
   end loop;
   return v_n;
@@ -575,6 +575,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_partner uuid;
   v_env public.b2b_key_environment;
@@ -673,11 +674,15 @@ $$;
 -- lista published com versão atual published, escola não suspensa, município habilitado, cobertura por UF,
 -- ambiente: live = escola e lista não demo; test = escola ou lista demo. Só colunas da whitelist.
 -- ---------------------------------------------------------------------------
-create function public.b2b_v1_visible_lists(p_environment text, p_coverage_ufs text[], p_list_id uuid, p_school_inep text, p_year integer)
-returns table (
+-- Tipos compostos nomeados (necessários para as funções b2b_v1_*_json reusarem o tipo de linha; um "returns table"
+-- não registra um tipo nomeável, diferente de uma tabela real como public.list_items).
+create type public.b2b_visible_list_row as (
   list_id uuid, school_id uuid, school_inep text, grade_slug text, grade_name text, grade_stage text, grade_sort integer,
   school_year integer, version_number integer, version_id uuid, published_at timestamptz, item_count integer, is_demo boolean
-)
+);
+
+create function public.b2b_v1_visible_lists(p_environment text, p_coverage_ufs text[], p_list_id uuid, p_school_inep text, p_year integer)
+returns setof public.b2b_visible_list_row
 language sql
 stable
 security definer
@@ -704,14 +709,16 @@ as $$
          end;
 $$;
 
+create type public.b2b_school_row as (
+  school_id uuid, inep text, name text, normalized_name text, network text, neighborhood text, ibge_code text, muni_name text, uf text,
+  verified boolean, is_demo boolean, published_lists_count integer
+);
+
 create function public.b2b_v1_school_base(
   p_environment text, p_coverage_ufs text[], p_inep text, p_city text, p_uf text, p_q text, p_has_lists boolean,
   p_after_name text, p_after_inep text, p_limit integer
 )
-returns table (
-  school_id uuid, inep text, name text, normalized_name text, network text, neighborhood text, ibge_code text, muni_name text, uf text,
-  verified boolean, is_demo boolean, published_lists_count integer
-)
+returns setof public.b2b_school_row
 language plpgsql
 stable
 security definer
@@ -758,7 +765,7 @@ begin
 end;
 $$;
 
-create function public.b2b_v1_school_json(r public.b2b_v1_school_base) returns jsonb
+create function public.b2b_v1_school_json(r public.b2b_school_row) returns jsonb
 language sql
 immutable
 set search_path = ''
@@ -789,7 +796,7 @@ as $$
   select public.b2b_v1_school_json(b) from public.b2b_v1_school_base(p_environment, p_coverage_ufs, p_inep, null, null, null, null, null, null, 1) b;
 $$;
 
-create function public.b2b_v1_list_json(r public.b2b_v1_visible_lists) returns jsonb
+create function public.b2b_v1_list_json(r public.b2b_visible_list_row) returns jsonb
 language sql
 immutable
 set search_path = ''
@@ -1031,8 +1038,8 @@ revoke execute on function public.b2b_keys_revoke_internal(uuid, public.b2b_key_
 revoke execute on function public.b2b_key_usable_count(uuid, public.b2b_key_environment) from public, anon, authenticated, service_role;
 revoke execute on function public.b2b_v1_visible_lists(text, text[], uuid, text, integer) from public, anon, authenticated, service_role;
 revoke execute on function public.b2b_v1_school_base(text, text[], text, text, text, text, boolean, text, text, integer) from public, anon, authenticated, service_role;
-revoke execute on function public.b2b_v1_school_json(public.b2b_v1_school_base) from public, anon, authenticated, service_role;
-revoke execute on function public.b2b_v1_list_json(public.b2b_v1_visible_lists) from public, anon, authenticated, service_role;
+revoke execute on function public.b2b_v1_school_json(public.b2b_school_row) from public, anon, authenticated, service_role;
+revoke execute on function public.b2b_v1_list_json(public.b2b_visible_list_row) from public, anon, authenticated, service_role;
 revoke execute on function public.b2b_v1_item_json(public.list_items) from public, anon, authenticated, service_role;
 
 revoke execute on function public.b2b_partner_apply(uuid, jsonb, text) from public, anon, authenticated, service_role;

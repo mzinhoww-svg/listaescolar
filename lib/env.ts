@@ -55,6 +55,10 @@ const serverSchema = z.object({
   PIX_RECEIVER_KEY: z.string().min(1).optional(),
   PIX_WEBHOOK_TOKEN: z.string().min(16).optional(),
   PIX_CHARGE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
+  /** Senha da página de resultados da pesquisa com mães. Só exigida pelas rotas app/api/pesquisa/**. */
+  PESQUISA_RESULTS_PASSWORD: z.string().min(16).optional(),
+  /** Sal do hash de IP (rate limit da pesquisa com mães). Só exigido pelas rotas app/api/pesquisa/**. */
+  IP_HASH_SALT: z.string().min(16).optional(),
   ...pipelineShape,
 });
 
@@ -84,6 +88,8 @@ export function getServerEnv(): ServerEnv {
       PIX_RECEIVER_KEY: process.env.PIX_RECEIVER_KEY,
       PIX_WEBHOOK_TOKEN: process.env.PIX_WEBHOOK_TOKEN,
       PIX_CHARGE_TTL_SECONDS: process.env.PIX_CHARGE_TTL_SECONDS,
+      PESQUISA_RESULTS_PASSWORD: process.env.PESQUISA_RESULTS_PASSWORD,
+      IP_HASH_SALT: process.env.IP_HASH_SALT,
       ...readPipelineFlags(),
     }),
   );

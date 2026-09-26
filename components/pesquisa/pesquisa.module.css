@@ -1,0 +1,47 @@
+@keyframes pesquisa-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pesquisa-pulso {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pesquisa-entrar-suave {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.entrar {
+  animation: pesquisa-entrar 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.pulso {
+  animation: pesquisa-pulso 1.4s ease-in-out infinite;
+}
+
+/* Movimento reduzido: sem deslocamento, mas a troca de tela continua legível (só fade). */
+@media (prefers-reduced-motion: reduce) {
+  .entrar {
+    animation: pesquisa-entrar-suave 160ms ease-out both;
+  }
+  .pulso {
+    animation: none;
+  }
+}

@@ -446,10 +446,10 @@ Contexto: Task 1 (migration `0401_billing.sql`) já mesclada nesta branch (commi
   `getSessionActor()` real.
 
 ## S21 · Dívida
-- D-078 (baixa, `docs/superpowers/DEBT.md`): scanner AST de "nenhum literal numérico fora de `limits.ts`" em
+- D-097 (baixa, `docs/superpowers/DEBT.md`): scanner AST de "nenhum literal numérico fora de `limits.ts`" em
   `features/billing/**` não existe (Ruling da Task 2); hoje a garantia é revisão manual. Considerar na S22/S23 se a
   área crescer.
-- D-079 (baixa, `docs/superpowers/DEBT.md`): E2E não cobriu a compra do passe pela UI, o estado "Pix indisponível"
+- D-098 (baixa, `docs/superpowers/DEBT.md`): E2E não cobriu a compra do passe pela UI, o estado "Pix indisponível"
   para carteira real, nem a temporada nov–mar (formulário usou os meses padrão); tudo coberto por teste
   automatizado, falta só o clique.
 - D-076 (média, já existia, anotada nesta fatia): o adapter Pix ficou genérico BACEN v2 como o plano pedia; ainda

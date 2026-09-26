@@ -17,6 +17,10 @@ export const LEAD_ERROR_CODES = [
   "list_unavailable",
   "whatsapp_unavailable",
   "database",
+  // S21 (cobrança): o gatilho de débito na entrega recusa o lead sem passe/grátis/saldo (billing_required) ou sem
+  // plano ativo (billing_unavailable). O pai nunca vê motivo de cobrança — mesma mensagem neutra das duas.
+  "billing_required",
+  "billing_unavailable",
 ] as const;
 export type LeadErrorCode = (typeof LEAD_ERROR_CODES)[number];
 

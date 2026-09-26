@@ -379,7 +379,7 @@ describe("ciclo do lead pelo repositório", () => {
       }
       await c.query("insert into public.stationery_areas (stationery_id, municipality_id, neighborhood, display_name) values ($1, $2, 'jardim novo', 'Jardim Novo')", [far, municipalityId]);
     });
-    const found = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: ["caderno 96 folhas", "lapis hb"] });
+    const found = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: ["caderno 96 folhas", "lapis hb"], itemCount: 2 });
     const ids = found.map((o) => o.id);
     expect(ids).toContain(inArea);
     expect(ids).not.toContain(far);
@@ -395,8 +395,31 @@ describe("ciclo do lead pelo repositório", () => {
       new Date(),
     );
     expect(estimate).toMatchObject({ status: "partial", subtotalCents: 3000, pricedCount: 1, totalCount: 2, source: "informed_by_stationery" });
-    const viaArea = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "Jardim Novo", itemKeys: [] });
+    const viaArea = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "Jardim Novo", itemKeys: [], itemCount: 1 });
     expect(viaArea.map((o) => o.id)).toContain(far);
+  });
+
+  it("S21 · sem plano ativo: some do App21 e lead_create falha com billing_unavailable (mensagem neutra ao pai)", async () => {
+    const owner = await makeUser("ownerBilling", "stationery_member");
+    const stationeryId = await newStationery(owner, { neighborhood: "São José" });
+    const cartId = await newCart(parentId);
+    try {
+      await withSuperuser((c) => c.query("update public.plans set status = 'archived' where status = 'active'"));
+
+      const found = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: [], itemCount: 2 });
+      expect(found.map((o) => o.id)).not.toContain(stationeryId);
+
+      const code = await errorCode(createLead(admin, await actor(parentId), record(cartId, stationeryId)));
+      expect(code).toBe("billing_unavailable");
+      const { errorMessageForCode } = await import("@/features/leads/messages");
+      expect(errorMessageForCode(code)).toBe("Esta papelaria não está recebendo pedidos agora. Escolha outra.");
+      // nenhum lead nasceu (a transação inteira do lead_create foi desfeita pelo gatilho).
+      const { count } = await admin.from("leads").select("id", { count: "exact", head: true }).eq("stationery_id", stationeryId);
+      expect(count).toBe(0);
+    } finally {
+      const { ensureTestBillingPlan } = await import("../db/billing-fixtures");
+      await ensureTestBillingPlan({ force: true });
+    }
   });
 });
 

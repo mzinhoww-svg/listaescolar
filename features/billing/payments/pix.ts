@@ -1,0 +1,110 @@
+import { randomBytes } from "node:crypto";
+
+import { pixCobResponseSchema, type PixConfig } from "../schemas";
+import type { Charge, ChargeInput, ChargeStatus, PaymentProvider } from "../ports";
+import { httpsJsonClient, PixHttpError, type HttpClient } from "./pix-http";
+
+const TXID_ALPHABET_LEN = 32; // dentro de [26, 35], só [a-zA-Z0-9] (aqui hex, subconjunto válido).
+
+function newTxid(): string {
+  return randomBytes(16).toString("hex");
+}
+
+type Token = { accessToken: string; expiresAt: number };
+
+/**
+ * Adapter Pix (API do BACEN v2, `cob`): OAuth2 client credentials + mTLS por `node:https`, `PUT/GET /v2/cob/{txid}`.
+ * Nenhuma credencial fixa no código (tudo vem de `PixConfig`, montado só a partir do ambiente). Nunca loga segredo,
+ * certificado ou BR Code. A confirmação de pagamento SEMPRE reconsulta esta classe (`getCharge`); nunca confia no
+ * corpo do webhook.
+ */
+export class PixPaymentProvider implements PaymentProvider {
+  readonly id = "pix" as const;
+  private token: Token | null = null;
+
+  constructor(
+    private readonly config: PixConfig,
+    private readonly http: HttpClient = httpsJsonClient,
+    private readonly clock: () => Date = () => new Date(),
+  ) {}
+
+  private async accessToken(): Promise<string> {
+    if (this.token && this.token.expiresAt > this.clock().getTime() + 5_000) return this.token.accessToken;
+    const basic = Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64");
+    const res = await this.http(this.config.oauthTokenUrl, {
+      method: "POST",
+      headers: { authorization: `Basic ${basic}`, "content-type": "application/x-www-form-urlencoded" },
+      body: "grant_type=client_credentials",
+      cert: this.config.certPem,
+      key: this.config.keyPem,
+    });
+    if (res.status < 200 || res.status >= 300) throw new PixHttpError("falha ao obter token OAuth2 do PSP", res.status >= 500, res.status);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(res.body);
+    } catch {
+      throw new PixHttpError("resposta inválida do token OAuth2", false);
+    }
+    const p = parsed as { access_token?: unknown; expires_in?: unknown };
+    if (typeof p.access_token !== "string" || typeof p.expires_in !== "number") {
+      throw new PixHttpError("resposta inválida do token OAuth2", false);
+    }
+    this.token = { accessToken: p.access_token, expiresAt: this.clock().getTime() + p.expires_in * 1000 };
+    return this.token.accessToken;
+  }
+
+  private async call(method: "PUT" | "GET", txid: string, body?: unknown): Promise<unknown> {
+    const token = await this.accessToken();
+    const res = await this.http(`${this.config.apiBaseUrl}/v2/cob/${txid}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      cert: this.config.certPem,
+      key: this.config.keyPem,
+    });
+    if (res.status < 200 || res.status >= 300) {
+      throw new PixHttpError(`PSP respondeu ${res.status}`, res.status >= 500 || res.status === 0, res.status);
+    }
+    try {
+      return JSON.parse(res.body);
+    } catch {
+      throw new PixHttpError("resposta inválida do PSP", false);
+    }
+  }
+
+  async createCharge(input: ChargeInput): Promise<Charge> {
+    const txid = newTxid();
+    if (txid.length < 26 || txid.length > 35) throw new Error(`txid fora do padrão: ${TXID_ALPHABET_LEN}`);
+    const raw = await this.call("PUT", txid, {
+      // A validade da cobrança é do AMBIENTE (`PIX_CHARGE_TTL_SECONDS`), não do chamador: técnica, não é preço/prazo de negócio.
+      calendario: { expiracao: this.config.chargeTtlSeconds },
+      valor: { original: (input.amountCents / 100).toFixed(2) },
+      chave: this.config.receiverKey,
+      devedor: { cnpj: input.payer.cnpj, nome: input.payer.name },
+      solicitacaoPagador: input.description.slice(0, 140),
+    });
+    const cob = pixCobResponseSchema.parse(raw);
+    return {
+      chargeId: cob.txid,
+      copyPaste: cob.pixCopiaECola ?? null,
+      expiresAt: new Date(new Date(cob.calendario.criacao).getTime() + cob.calendario.expiracao * 1000),
+    };
+  }
+
+  async getCharge(chargeId: string): Promise<ChargeStatus> {
+    const raw = await this.call("GET", chargeId);
+    const cob = pixCobResponseSchema.parse(raw);
+    if (cob.status === "CONCLUIDA") {
+      return {
+        status: "paid",
+        paidAmountCents: Math.round(Number(cob.valor.original) * 100),
+        paidAt: cob.pix?.[0]?.horario ? new Date(cob.pix[0].horario) : this.clock(),
+      };
+    }
+    if (cob.status === "ATIVA") return { status: "pending", paidAmountCents: null, paidAt: null };
+    if (cob.status === "REMOVIDA_PELO_USUARIO_RECEBEDOR" || cob.status === "REMOVIDA_PELO_PSP") {
+      return { status: "expired", paidAmountCents: null, paidAt: null };
+    }
+    return { status: "unknown", paidAmountCents: null, paidAt: null };
+  }
+}

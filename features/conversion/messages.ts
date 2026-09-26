@@ -1,0 +1,27 @@
+import { CONVERSION_ERROR_CODES, ConversionError, type ConversionErrorCode } from "./errors";
+
+export { CONVERSION_ERROR_CODES };
+
+const BY_CODE: Record<ConversionErrorCode | "desconhecido", string> = {
+  forbidden: "Você não tem acesso a este pedido.",
+  not_found: "Pedido não encontrado.",
+  invalid_input: "Dados inválidos. Revise e tente de novo.",
+  invalid_state: "Esta ação não está disponível agora.",
+  already_disputed: "Este pedido já foi contestado.",
+  dispute_expired: "O prazo de 72 h para contestar este pedido já encerrou.",
+  personal_data_rejected: "Remova dados de contato (telefone, e-mail) do comentário antes de enviar.",
+  database: "Não foi possível concluir agora. Tente de novo.",
+  desconhecido: "Não foi possível concluir agora. Tente de novo.",
+};
+
+/** Mensagem do `?erro=<código>`: só códigos conhecidos viram texto; qualquer outra coisa vira a genérica (nunca eco). */
+export function errorMessageForCode(code: string | undefined): string | null {
+  if (!code) return null;
+  return Object.hasOwn(BY_CODE, code) ? BY_CODE[code as keyof typeof BY_CODE] : BY_CODE.desconhecido;
+}
+
+/** Código para o `?erro=`; erro que não é `ConversionError` (ou `database`) vira `desconhecido`. */
+export function conversionErrorCode(error: unknown): ConversionErrorCode | "desconhecido" {
+  if (error instanceof ConversionError && error.code !== "database") return error.code;
+  return "desconhecido";
+}

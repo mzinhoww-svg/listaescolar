@@ -80,6 +80,11 @@ export class BillingService {
     return this.deps.store.publishPlan(actor, planDraft);
   }
 
+  /** Se há um `PaymentProvider` disponível para este tipo de carteira (Pap06: "Pagamento via Pix indisponível"). */
+  paymentAvailable(isDemo: boolean): boolean {
+    return this.deps.providerFor({ isDemo }) !== null;
+  }
+
   private async resolveProviderOrThrow(stationeryId: string): Promise<{ provider: PaymentProvider; cnpj: string; tradeName: string }> {
     const info = await this.deps.store.getStationeryBillingInfo(stationeryId);
     if (!info) throw new BillingError("papelaria não encontrada", "not_found");

@@ -124,8 +124,10 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-072 | PR #20 (CI); ledger-comercio S27 (assets/fonts) | `pnpm build` do CI depende de `next/font/google` (busca Plus Jakarta Sans no Google Fonts): falhou uma vez ao obter a fonte do Google Fonts no build no PR #20 (rerun passou). Hospedar a fonte localmente (a S27 já commitou `assets/fonts` para a OG image) | média | S19 / S18 | aberta |
 | D-074 | Ruling de previews públicos (ledger.md) | Previews da Vercel públicos com o Supabase de staging (dados demo): reativar a Vercel Authentication (ou equivalente) ANTES de qualquer dado real; hoje só `X-Robots-Tag: noindex` os protege da indexação | alta | S20 (checklist de go-live; humano reativa) | aberta |
 | D-075 | Ruling de indexamento (ledger.md) | O deploy "de produção" da Vercel (`main`) aponta para o staging e seria indexável: passou a exigir `SITE_INDEXING=1` (além de `VERCEL_ENV=production`) para robots, sitemap e remoção do `X-Robots-Tag`; o humano liga `SITE_INDEXING=1` só no go-live | alta | S20 (checklist de go-live) | aberta |
-| D-076 | verificação de 2026-09-25 (env da Vercel) | Chaves `ASAAS_*` existem no projeto Vercel (PSP Asaas escolhido) e em `.env.local`, mas a S21 proíbe dinheiro real e credencial no código: usar só sandbox/fake até o go-live e revisar o adapter Pix (planejado genérico BACEN) contra a API do Asaas | média | S21/S23 | aberta |
+| D-076 | verificação de 2026-09-25 (env da Vercel); ledger-comercio S21 T2 | Chaves `ASAAS_*` existem no projeto Vercel (PSP Asaas escolhido) e em `.env.local`, mas a S21 proíbe dinheiro real e credencial no código: usar só sandbox/fake até o go-live e revisar o adapter Pix (planejado genérico BACEN) contra a API do Asaas. Atualização S21: o adapter (`features/billing/payments/pix.ts`) ficou genérico BACEN v2 (`PUT/GET /v2/cob/{txid}`) como o plano pedia; ainda NÃO foi verificado contra a API real do Asaas (que pode divergir do `cob` puro do BACEN nalguns campos/endpoints) — sem credencial nem conta, não dá para confirmar nesta fatia | média | S21/S23 | aberta |
 | D-077 | E2E de 2026-09-25 (staging, `listaescolare.vercel.app`) | Leitura por IA falha no staging com `http_401` do OpenRouter na `ocr-worker` (chave ausente/inválida nos secrets da função) e um `provider_timeout` de ~9 s na primeira decisão (provável leitura inline do app na Vercel); o teste de ponta a ponta não chegou aos itens lidos. Login por link mágico e envio de lista passaram (o link gerado por `admin.generateLink` precisa de `type=email` no `verifyOtp`, como nos templates; `type=magiclink` cai em `?erro=codigo`, sem ser bug do produto). Dados de teste no staging: usuário `e2e+worker@listacerta.invalid` e um envio `rejected` | alta | Humano (secret `OPENROUTER_KEY`) → orquestrador | aberta (ver PROGRESS > Aguardando humano) |
+| D-078 | ledger-comercio S21 T2 | `features/billing/**`: nenhum scanner automatizado garante "nenhum literal numérico de negócio fora de `limits.ts`" (o `grep` ingênuo teria falsos positivos demais; um AST-aware ficou fora do tempo da fatia). Hoje a garantia é revisão manual; `tests/billing/no-secrets-scan.test.ts` cobre só PEM/`client_secret`/importador do `PixPaymentProvider` | baixa | S22/S23 (se a área crescer) | aberta |
+| D-079 | ledger-comercio S21 T3; e2e/S21.md | E2E da S21 (`scripts/e2e-s21.sh`, 17/17 verde) não clicou a compra do passe pela UI, o estado "Pagamento via Pix indisponível no momento" para carteira real, nem a temporada nov–mar (o formulário usou os meses padrão jan–dez por tempo de sessão); os três já são cobertos por teste automatizado (`tests/billing/service.test.ts`, `tests/billing/components.test.tsx`, `tests/billing/season.test.ts` contra o Postgres real) | baixa | S22/S23 (repetir o roteiro) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -135,5 +137,7 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 |---|---|---|---|
 | alta | 12 | 2 | 14 |
 | média | 27 | 4 | 31 |
-| baixa | 30 | 1 | 31 |
-| **Total** | **69** | **7** | **76** |
+| baixa | 32 | 1 | 33 |
+| **Total** | **71** | **7** | **78** |
+
+Contagem atualizada em 2026-09-26 (S21, Task 3: +D-078, +D-079, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado).

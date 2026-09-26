@@ -403,3 +403,59 @@ Contexto: Task 1 (migration `0401_billing.sql`) já mesclada nesta branch (commi
 - Ruling: varredura estática (`tests/billing/no-secrets-scan.test.ts`) cobre só PEM/`client_secret` literal e "só a fábrica importa `PixPaymentProvider`" — o item do PLAN sobre "nenhum literal numérico além dos limites de validação" em `features/billing/**` NÃO ganhou um scanner automatizado (o `grep` ingênuo teria muitos falsos positivos em índices de array, `.length`, status HTTP etc.; um AST-aware ficaria caro para o tempo desta task). Conferido manualmente: todo valor de negócio (grátis, faixas, pacotes, passe, parcelas, meses) vem de `plans`/filhas via `ActivePlan`; `limits.ts` só tem limites de validação e duas constantes técnicas (`CENTS_PER_BRL`, `DEFAULT_CHARGE_TTL_SECONDS`) — custo se errada: médio (regressão futura sem scanner automatizado; considerar um scanner AST na S22/S23 se a área crescer).
 - Verificação: testes antes da implementação em cada módulo (domínio puro rodou verde de primeira graças à conferência prévia contra o Postgres real via `psql`/`node-postgres` para a semântica de `date + interval 'n months'`, que CLAMPA o dia no mês de destino em vez de rolar para o mês seguinte — replicada em `features/billing/tz.ts#addMonthsClamped`); `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build` verdes. `pnpm test` (unitário): 2802 testes (2695 antes da task + 107 novos). `pnpm test:db`: 65 arquivos, 1535 testes, 3 skipped (2 a mais que a Task 1: os dois novos casos de integração em `tests/leads/repository.test.ts` e `tests/billing/repository.test.ts`).
 - Pendências desta task: telas Pap06/Admin10 e E2E ficam para a Task 3.
+
+## S21 · Task 3 (telas Pap06 e Admin10, integração com Pap01/Pap02/admin, E2E)
+- Ruling: `PackageCards`, `PassCard` e `TermsCheckbox` foram para `components/billing/` (junto de `BalanceCard`,
+  `StatementTable`, `InvoiceList`, `PriceTierTable`, `DemoPayButton`) em vez de `app/papelaria/creditos/` como o
+  plano listava — são componentes puros de apresentação sem estado de rota, mesmo critério já usado para os outros
+  cinco; só `PayInvoice` (específico da página de fatura, usa a ação `payInvoiceAction`) ficou em
+  `app/papelaria/creditos/faturas/[id]/`. Deviation de local, não de comportamento — custo se errada: baixo
+  (mover arquivo).
+- Ruling: `provider` nunca é campo do formulário de compra (Pap06): o servidor decide com `BillingService.providerFor`
+  a partir de `stationeries.is_demo`; `buyPackageInputSchema`/`buyPassInputSchema` (já sem esse campo desde a Task 2)
+  confirmam a decisão de design na Task 3, sem exigir mudança.
+- Ruling: `getSummary`/`getStatement`/`listInvoices` (leitura, service_role) exigem `requireMemberOrAdmin`
+  (Task 2); a leitura de "Cobrança" em `/admin/papelarias/[id]` usa o mesmo caminho com o `actor` ADMIN da sessão
+  (bypassa a checagem de vínculo, como o Ruling de Task 2 já previa) — nenhuma política RLS de admin nova.
+- Ruling: o extrato (`StatementTable`) só mostra o nome da escola em `lead_debit`; `free_lead`/`pass_lead` mostram
+  "Lead grátis · LC-XXXX"/"Lead do passe · LC-XXXX" sem escola — decisão de texto (não do PLAN), mantém a descrição
+  curta e sinaliza a fonte do lead sem inventar relevância da escola nesses casos — custo se errada: baixo (é só
+  copy; o dado da escola está disponível se o produto quiser mostrá-lo também aí).
+- Ruling: `KpiRow` (Pap02) ganhou um 5º cartão "Saldo" opcional (`balanceCents?`); mantém o componente compartilhado
+  em vez de duplicar o grid — custo se errada: baixo.
+- Ruling: E2E rodado com os meses de temporada PADRÃO do formulário (janeiro a dezembro), não nov–mar do PLAN,
+  porque o roteiro não preencheu os seletores de mês (tempo de sessão); a semântica de virada de ano/mês curto já é
+  coberta exaustivamente por `tests/billing/season.test.ts` contra o Postgres real. D-0xx (baixa): repetir o E2E
+  preenchendo nov/mar antes do go-live, se quiser o print com a temporada real do produto.
+- Ruling: E2E não exercitou a compra do PASSE pela UI nem o estado "Pagamento via Pix indisponível no momento" para
+  carteira não-demo (tempo de sessão); ambos cobertos por `tests/billing/service.test.ts` e
+  `tests/billing/components.test.tsx`. D-0xx (baixa): fechar esse trecho do roteiro numa sessão futura.
+- Verificação: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build`
+  verdes. `pnpm test`: 2832 testes (2804 antes da Task 3 + 28 novos: `stationery-components` +2, `admin-actions` +7,
+  `actions` +9, `components` +12 — os demais já contados na Task 2). `pnpm test:db`: 65 arquivos, 1535 testes, 3
+  skipped (mesma contagem da Task 2; a Task 3 não mexeu em SQL). E2E real com `agent-browser` contra o build de
+  produção local (`scripts/e2e-s21.sh`): **17 de 17 verificações passaram** numa execução limpa (`pnpm db:reset` +
+  `scripts/e2e-s14-seed.sql`); relatório e o que ficou de fora em `docs/superpowers/e2e/S21.md`, prints em
+  `docs/superpowers/e2e/screenshots/S21-*.png`.
+- Achado durante o E2E (corrigido nesta task, sem precisar de novo teste automatizado): `getBillingService()` seria
+  chamado com `{ userId, role: "admin" } as never` no rascunho inicial de `app/admin/planos/page.tsx` — um
+  `SessionActor` forjado (não vindo de `getSessionActor()`) teria falhado em runtime na checagem de marca
+  (`isSessionActor`, `features/auth/actor.ts`) com "ator não vem da sessão" assim que alguém abrisse `/admin/planos`.
+  Achado e corrigido ANTES do E2E (leitura de código), não pelo E2E em si — registrado aqui porque é exatamente o
+  tipo de erro que só apareceria em runtime (TypeScript não pega, já que o cast escondia o tipo). Troquei por
+  `getSessionActor()` real.
+
+## S21 · Dívida
+- D-078 (baixa, `docs/superpowers/DEBT.md`): scanner AST de "nenhum literal numérico fora de `limits.ts`" em
+  `features/billing/**` não existe (Ruling da Task 2); hoje a garantia é revisão manual. Considerar na S22/S23 se a
+  área crescer.
+- D-079 (baixa, `docs/superpowers/DEBT.md`): E2E não cobriu a compra do passe pela UI, o estado "Pix indisponível"
+  para carteira real, nem a temporada nov–mar (formulário usou os meses padrão); tudo coberto por teste
+  automatizado, falta só o clique.
+- D-076 (média, já existia, anotada nesta fatia): o adapter Pix ficou genérico BACEN v2 como o plano pedia; ainda
+  não verificado contra a API real do Asaas (PSP escolhido pelo humano) por falta de credencial/conta.
+- Pendências humanas (sem ação possível pelo Claude): PSP Pix (conta, credenciais, certificado mTLS, chave Pix,
+  `PIX_WEBHOOK_TOKEN`, cadastro do webhook no painel do PSP), `PAYMENTS_PIX_ENABLED`/`CRON_SECRET` nos ambientes da
+  Vercel; sem isso, `/papelaria/creditos` mostra "Pagamento via Pix indisponível no momento" e nenhuma cobrança real
+  acontece (Ruling do plano, já registrado em "S21 · Planejamento"). Plano PROVISÓRIO de staging: fica para o
+  orquestrador aplicar depois do merge (mesma nota do plano, seção final).

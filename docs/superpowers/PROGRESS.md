@@ -64,7 +64,7 @@ Produção: nenhuma migration (o projeto não existe).
 |---|---|---|
 | Dados | S03, S04, S05, S06 | **Completa** (S03–S06) |
 | Pipeline | S07, S08, S09, S10 | S07, S08 e S09 completas. **S10 em andamento** (branch `slice/S10-revisao`, plano pronto, Task 1 em implementação no worktree T2). Publicação automática DESLIGADA e sem portas reais até a S11 |
-| Comércio | S12, S13, S14, S27 | **Completa** (S12–S14 e S27) |
+| Comércio | S12, S13, S14, S27 | **Completa** (S12–S14 e S27). **S21 em andamento** (branch `slice/S21-cobranca`, worktree T3: Task 1 (migration `0401_billing.sql`), Task 2 (domínio, `PaymentProvider`, integração com a S14) e Task 3 (Pap06, Admin10, E2E local 17/17 verde) concluídas e com o gate completo verde; branch NÃO mesclada — falta revisão e merge) |
 
 ## Próximos passos (ordem do PLAN)
 

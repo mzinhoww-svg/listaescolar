@@ -63,6 +63,8 @@ export type InvoiceView = {
   status: InvoiceStatus;
   provider: InvoiceProvider;
   isDemo: boolean;
+  /** Txid/id da cobrança ATUAL no PSP (interno; nunca exposto pela grant de coluna a `authenticated`). */
+  providerChargeId: string | null;
   pixCopyPaste: string | null;
   chargeExpiresAt: Date | null;
   paidAt: Date | null;
@@ -102,6 +104,8 @@ export interface BillingStore {
   publishPlan(actor: SessionActor, plan: PlanDraft): Promise<string>;
 
   getSummary(actor: SessionActor, stationeryId: string): Promise<WalletSummary>;
+  /** Leitura passiva de terceiro (admin navegando papelarias): nunca cria a carteira. */
+  getSummaryReadOnly(actor: SessionActor, stationeryId: string): Promise<WalletSummary>;
   listStatement(actor: SessionActor, stationeryId: string, limit?: number): Promise<LedgerEntryView[]>;
   listInvoices(actor: SessionActor, stationeryId: string): Promise<InvoiceView[]>;
   getInvoice(actor: SessionActor, stationeryId: string, invoiceId: string): Promise<InvoiceView | null>;
@@ -136,7 +140,7 @@ export interface BillingStore {
   /** Fatura Pix ABERTA com este `provider_charge_id` (webhook/cron; sem `SessionActor`, chamado pelo sistema). */
   findOpenInvoiceByChargeId(chargeId: string): Promise<{ invoiceId: string; amountCents: number } | null>;
   /** `provider_charge_id` de toda fatura Pix ainda aberta com cobrança anexada (cron diário de reconciliação). */
-  listOpenPixChargeIds(): Promise<string[]>;
+  listOpenPixChargeIds(limit: number): Promise<string[]>;
 }
 
 // ---------------------------------------------------------------------------

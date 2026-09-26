@@ -15,6 +15,8 @@ type Props = {
   isDemo: boolean;
   maxInstallments: number | null;
   now: Date;
+  /** Gerada uma vez pela página (revisão de segurança: duplo clique não cria 2 passes/faturas). */
+  idempotencyKey: string;
 };
 
 /** Só a 1ª letra maiúscula (o rótulo vem de `Intl`, minúsculo): "capitalize" do CSS deixaria "a"/"de" errados. */
@@ -23,7 +25,7 @@ function sentenceCase(text: string): string {
 }
 
 /** Cartão do passe de temporada (Pap06): meses da temporada, leads incluídos, preço cheio ou parcelado. */
-export function PassCard({ plan, pass, season, stationeryId, paymentAvailable, isDemo, maxInstallments, now }: Props) {
+export function PassCard({ plan, pass, season, stationeryId, paymentAvailable, isDemo, maxInstallments, now, idempotencyKey }: Props) {
   const options = Array.from({ length: maxInstallments ?? 0 }, (_, i) => i + 1);
   return (
     <section aria-labelledby="passe" className="rounded-card bg-white p-6">
@@ -36,6 +38,7 @@ export function PassCard({ plan, pass, season, stationeryId, paymentAvailable, i
       ) : (
         <form action={buyPassAction} className="flex flex-col gap-3">
           <input type="hidden" name="stationeryId" value={stationeryId} />
+          <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
           <p className="text-[24px] font-extrabold">{formatBrl(pass.priceCents)}</p>
           <label className="flex flex-col gap-1 text-[13px] font-extrabold">
             Parcelas

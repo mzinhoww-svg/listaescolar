@@ -53,6 +53,17 @@ export class PixPaymentProvider implements PaymentProvider {
     return this.token.accessToken;
   }
 
+  /**
+   * Revisão de segurança: confirma que a resposta é REALMENTE da cobrança pedida (`txid` bate) e da NOSSA chave
+   * recebedora (quando o PSP a devolve) — nunca aceita cegamente o que veio na resposta.
+   */
+  private assertOwnCob(cob: { txid: string; chave?: string }, expectedTxid: string): void {
+    if (cob.txid !== expectedTxid) throw new PixHttpError("resposta do PSP não bate com o txid pedido", false);
+    if (cob.chave !== undefined && cob.chave !== this.config.receiverKey) {
+      throw new PixHttpError("resposta do PSP não bate com a chave recebedora configurada", false);
+    }
+  }
+
   private async call(method: "PUT" | "GET", txid: string, body?: unknown): Promise<unknown> {
     const token = await this.accessToken();
     const res = await this.http(`${this.config.apiBaseUrl}/v2/cob/${txid}`, {
@@ -84,6 +95,7 @@ export class PixPaymentProvider implements PaymentProvider {
       solicitacaoPagador: input.description.slice(0, 140),
     });
     const cob = pixCobResponseSchema.parse(raw);
+    this.assertOwnCob(cob, txid);
     return {
       chargeId: cob.txid,
       copyPaste: cob.pixCopiaECola ?? null,
@@ -94,10 +106,13 @@ export class PixPaymentProvider implements PaymentProvider {
   async getCharge(chargeId: string): Promise<ChargeStatus> {
     const raw = await this.call("GET", chargeId);
     const cob = pixCobResponseSchema.parse(raw);
+    this.assertOwnCob(cob, chargeId);
     if (cob.status === "CONCLUIDA") {
+      // valor EFETIVAMENTE recebido (pix[].valor) tem prioridade sobre o valor nominal da cobrança (valor.original).
+      const receivedValue = cob.pix?.[0]?.valor ?? cob.valor.original;
       return {
         status: "paid",
-        paidAmountCents: Math.round(Number(cob.valor.original) * 100),
+        paidAmountCents: Math.round(Number(receivedValue) * 100),
         paidAt: cob.pix?.[0]?.horario ? new Date(cob.pix[0].horario) : this.clock(),
       };
     }

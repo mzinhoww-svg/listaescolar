@@ -67,14 +67,14 @@ describe("PriceTierTable", () => {
 
 describe("PackageCards", () => {
   it("sem provedor disponível: botões desabilitados e aviso", () => {
-    render(<PackageCards plan={PLAN} packages={PLAN.packages} stationeryId="s1" paymentAvailable={false} isDemo={false} />);
+    render(<PackageCards plan={PLAN} packages={PLAN.packages} stationeryId="s1" paymentAvailable={false} isDemo={false} idempotencyKeys={{ k1: "k1-key", k2: "k2-key" }} />);
     expect(screen.getByText("Pagamento via Pix indisponível no momento.")).toBeInTheDocument();
     for (const btn of screen.getAllByRole("button")) expect(btn).toBeDisabled();
     expect(screen.queryByText(/mais usado/i)).not.toBeInTheDocument();
   });
 
   it("carteira demo: botão diz 'Comprar (demonstração)'", () => {
-    render(<PackageCards plan={PLAN} packages={PLAN.packages} stationeryId="s1" paymentAvailable={true} isDemo={true} />);
+    render(<PackageCards plan={PLAN} packages={PLAN.packages} stationeryId="s1" paymentAvailable={true} isDemo={true} idempotencyKeys={{ k1: "k1-key", k2: "k2-key" }} />);
     expect(screen.getAllByRole("button", { name: "Comprar (demonstração)" })).toHaveLength(2);
   });
 });
@@ -84,7 +84,7 @@ describe("PassCard", () => {
   const season = seasonWindow({ seasonStartMonth: 11, seasonEndMonth: 3 }, now);
 
   it("mostra os meses da temporada e os leads incluídos, sem 'destaque' nem 'relatório semanal'", () => {
-    render(<PassCard plan={PLAN} pass={PLAN.pass!} season={season} stationeryId="s1" paymentAvailable={true} isDemo={false} maxInstallments={3} now={now} />);
+    render(<PassCard plan={PLAN} pass={PLAN.pass!} season={season} stationeryId="s1" paymentAvailable={true} isDemo={false} maxInstallments={3} now={now} idempotencyKey="pass-key" />);
     expect(screen.getByText(/40 leads incluídos/)).toBeInTheDocument();
     expect(screen.queryByText(/destaque/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/relatório semanal/i)).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("PassCard", () => {
   });
 
   it("sem parcelas disponíveis (compra perto do fim da temporada): mensagem, sem formulário", () => {
-    render(<PassCard plan={PLAN} pass={PLAN.pass!} season={season} stationeryId="s1" paymentAvailable={true} isDemo={false} maxInstallments={null} now={now} />);
+    render(<PassCard plan={PLAN} pass={PLAN.pass!} season={season} stationeryId="s1" paymentAvailable={true} isDemo={false} maxInstallments={null} now={now} idempotencyKey="pass-key" />);
     expect(screen.queryByRole("button", { name: "Assinar o passe" })).not.toBeInTheDocument();
     expect(screen.getByText(/não é possível assinar o passe agora/i)).toBeInTheDocument();
   });
@@ -121,6 +121,7 @@ describe("InvoiceList", () => {
     status: "open",
     provider: "demo",
     isDemo: true,
+    providerChargeId: null,
     pixCopyPaste: null,
     chargeExpiresAt: null,
     paidAt: null,

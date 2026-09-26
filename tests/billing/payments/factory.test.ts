@@ -62,4 +62,9 @@ describe("readPixConfig", () => {
     delete rest.PIX_RECEIVER_KEY;
     expect(readPixConfig(rest)).toBeNull();
   });
+
+  it("revisão de segurança: recusa PIX_API_BASE_URL/PIX_OAUTH_TOKEN_URL sem https", () => {
+    expect(readPixConfig({ ...PIX_ENV, PIX_API_BASE_URL: "http://pix.example.invalid" })).toBeNull();
+    expect(readPixConfig({ ...PIX_ENV, PIX_OAUTH_TOKEN_URL: "http://pix.example.invalid/oauth/token" })).toBeNull();
+  });
 });

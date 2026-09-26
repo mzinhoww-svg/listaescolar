@@ -73,10 +73,13 @@ export const buyPassInputSchema = z
 export const payInvoiceInputSchema = z.object({ stationeryId: z.uuid(), invoiceId: z.uuid() }).strict();
 export const simulateDemoPaymentInputSchema = z.object({ stationeryId: z.uuid(), invoiceId: z.uuid() }).strict();
 
+/** Revisão de segurança: só https — mTLS e credenciais nunca saem por um endpoint http (erro de config ou MITM). */
+const httpsUrl = z.url().refine((v) => v.startsWith("https://"), "precisa ser https");
+
 /** Config completa do adapter Pix, só por variável de ambiente (nunca literal no código). */
 export const pixConfigSchema = z.object({
-  apiBaseUrl: z.url(),
-  oauthTokenUrl: z.url(),
+  apiBaseUrl: httpsUrl,
+  oauthTokenUrl: httpsUrl,
   clientId: z.string().min(1),
   clientSecret: z.string().min(1),
   certPem: z.string().min(1),
@@ -93,9 +96,14 @@ export const pixCobResponseSchema = z
     txid: z.string().min(26).max(35),
     status: z.string(),
     valor: z.object({ original: z.string() }),
+    // `chave` (a chave recebedora) confirma que a cobrança é NOSSA: um PSP que devolvesse uma cobrança de outra
+    // chave por engano (ou um MITM) não passaria pela conferência em `getCharge`/`createCharge`.
+    chave: z.string().optional(),
     pixCopiaECola: z.string().optional(),
     calendario: z.object({ criacao: z.string(), expiracao: z.number().int().positive() }),
-    pix: z.array(z.object({ horario: z.string() })).optional(),
+    // `pix[].valor` é o valor EFETIVAMENTE recebido (pode diferir do `valor.original` da cobrança, ex. saque/troco);
+    // usado com prioridade sobre `valor.original` quando presente.
+    pix: z.array(z.object({ horario: z.string(), valor: z.string().optional() })).optional(),
   })
   .passthrough();
 

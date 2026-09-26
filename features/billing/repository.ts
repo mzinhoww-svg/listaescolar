@@ -166,11 +166,7 @@ const summaryJson = z.discriminatedUnion("available", [
   }),
 ]);
 
-export async function getSummary(admin: SupabaseClient, actor: SessionActor, stationeryId: string): Promise<WalletSummary> {
-  await requireMemberOrAdmin(admin, actor, stationeryId);
-  const { data, error } = await admin.rpc("billing_wallet_summary", { p_stationery_id: stationeryId });
-  if (error) fail("ler resumo da carteira", error);
-  const s = summaryJson.parse(data);
+function mapSummary(s: z.infer<typeof summaryJson>): WalletSummary {
   if (!s.available) return { available: false };
   return {
     available: true,
@@ -185,6 +181,25 @@ export async function getSummary(admin: SupabaseClient, actor: SessionActor, sta
     canReceiveMinTier: s.can_receive_min_tier,
     minTierPriceCents: s.min_tier_price_cents,
   };
+}
+
+/** Carteira da PRÓPRIA papelaria (Pap06): cria a carteira se faltar (é a ação explícita da dona olhar o próprio saldo). */
+export async function getSummary(admin: SupabaseClient, actor: SessionActor, stationeryId: string): Promise<WalletSummary> {
+  await requireMemberOrAdmin(admin, actor, stationeryId);
+  const { data, error } = await admin.rpc("billing_wallet_summary", { p_stationery_id: stationeryId });
+  if (error) fail("ler resumo da carteira", error);
+  return mapSummary(summaryJson.parse(data));
+}
+
+/**
+ * Revisão de segurança (S21): leitura PASSIVA de terceiro (admin navegando papelarias) — NUNCA cria a carteira.
+ * Sem carteira, projeta os valores do plano ativo (mesmo formato de `getSummary`, sem gravar nada).
+ */
+export async function getSummaryReadOnly(admin: SupabaseClient, actor: SessionActor, stationeryId: string): Promise<WalletSummary> {
+  await requireMemberOrAdmin(admin, actor, stationeryId);
+  const { data, error } = await admin.rpc("billing_wallet_summary_readonly", { p_stationery_id: stationeryId });
+  if (error) fail("ler resumo da carteira (leitura)", error);
+  return mapSummary(summaryJson.parse(data));
 }
 
 /** `is_demo` da papelaria (dado já público via `stationery_public`): usado para escolher o `PaymentProvider`. */
@@ -272,6 +287,7 @@ const invoiceRow = z.object({
   status: z.enum(["open", "paid", "cancelled"]),
   provider: z.enum(["fake", "demo", "pix"]),
   is_demo: z.boolean(),
+  provider_charge_id: z.string().nullable(),
   pix_copy_paste: z.string().nullable(),
   charge_expires_at: z.string().nullable(),
   paid_at: z.string().nullable(),
@@ -290,6 +306,7 @@ function toInvoiceView(r: z.infer<typeof invoiceRow>): InvoiceView {
     status: r.status,
     provider: r.provider,
     isDemo: r.is_demo,
+    providerChargeId: r.provider_charge_id,
     pixCopyPaste: r.pix_copy_paste,
     chargeExpiresAt: r.charge_expires_at ? new Date(r.charge_expires_at) : null,
     paidAt: r.paid_at ? new Date(r.paid_at) : null,
@@ -299,7 +316,7 @@ function toInvoiceView(r: z.infer<typeof invoiceRow>): InvoiceView {
 }
 
 const INVOICE_COLUMNS =
-  "id, kind, season_pass_id, installment_no, amount_cents, due_date, status, provider, is_demo, pix_copy_paste, charge_expires_at, paid_at, paid_amount_cents, created_at";
+  "id, kind, season_pass_id, installment_no, amount_cents, due_date, status, provider, is_demo, provider_charge_id, pix_copy_paste, charge_expires_at, paid_at, paid_amount_cents, created_at";
 
 export async function listInvoices(admin: SupabaseClient, actor: SessionActor, stationeryId: string): Promise<InvoiceView[]> {
   await requireMemberOrAdmin(admin, actor, stationeryId);
@@ -432,8 +449,16 @@ export async function findOpenInvoiceByChargeId(admin: SupabaseClient, chargeId:
   return { invoiceId: r.id, amountCents: r.amount_cents };
 }
 
-export async function listOpenPixChargeIds(admin: SupabaseClient): Promise<string[]> {
-  const { data, error } = await admin.from("invoices").select("provider_charge_id").eq("provider", "pix").eq("status", "open").not("provider_charge_id", "is", null);
+/** As mais ANTIGAS primeiro (`created_at asc`): um lote que não cabe no orçamento de tempo do cron continua no dia seguinte, sem starvation. */
+export async function listOpenPixChargeIds(admin: SupabaseClient, limit: number): Promise<string[]> {
+  const { data, error } = await admin
+    .from("invoices")
+    .select("provider_charge_id")
+    .eq("provider", "pix")
+    .eq("status", "open")
+    .not("provider_charge_id", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(limit);
   if (error) fail("listar cobranças Pix abertas", error);
   return z.array(z.object({ provider_charge_id: z.string() })).parse(data ?? []).map((r) => r.provider_charge_id);
 }
@@ -462,6 +487,7 @@ export function createBillingStore(admin: SupabaseClient): BillingStore {
     listPlanHistory: (actor) => listPlanHistory(admin, actor),
     publishPlan: (actor, plan) => publishPlan(admin, actor, plan),
     getSummary: (actor, stationeryId) => getSummary(admin, actor, stationeryId),
+    getSummaryReadOnly: (actor, stationeryId) => getSummaryReadOnly(admin, actor, stationeryId),
     listStatement: (actor, stationeryId, limit) => listStatement(admin, actor, stationeryId, limit),
     listInvoices: (actor, stationeryId) => listInvoices(admin, actor, stationeryId),
     getInvoice: (actor, stationeryId, invoiceId) => getInvoice(admin, actor, stationeryId, invoiceId),
@@ -473,6 +499,6 @@ export function createBillingStore(admin: SupabaseClient): BillingStore {
     reverseEntry: (input) => reverseEntry(admin, input),
     getStationeryBillingInfo: (stationeryId) => getStationeryBillingInfo(admin, stationeryId),
     findOpenInvoiceByChargeId: (chargeId) => findOpenInvoiceByChargeId(admin, chargeId),
-    listOpenPixChargeIds: () => listOpenPixChargeIds(admin),
+    listOpenPixChargeIds: (limit) => listOpenPixChargeIds(admin, limit),
   };
 }

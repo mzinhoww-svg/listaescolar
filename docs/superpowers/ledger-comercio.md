@@ -445,6 +445,90 @@ Contexto: Task 1 (migration `0401_billing.sql`) já mesclada nesta branch (commi
   tipo de erro que só apareceria em runtime (TypeScript não pega, já que o cast escondia o tipo). Troquei por
   `getSessionActor()` real.
 
+## S21 · correções da revisão de segurança (Opus)
+Rodada única sobre `6e63de6`. Testes antes (vermelho registrado abaixo por item), gate completo depois de cada
+correção, dois commits (Task 1/SQL num commit por si, o resto junto).
+
+**1) Lead de demonstração debitava carteira real.** Vermelho: `tests/db/billing-lead-delivery.test.ts` (banco real) —
+`leadCreate` com `isDemo: true` numa papelaria `is_demo: false` debitava a faixa normalmente (nenhuma proteção).
+Ruling: **pulei o débito, NÃO recusei o lead** (a alternativa que a revisão também aceitava). Recusar quebrava um
+fluxo já em produção e ~70 testes de OUTRAS fatias (S06/S09/S14): o carrinho de demonstração da S12 (`cart.is_demo`)
+com uma papelaria REAL é um caso normal (`lead_create`/0303 já força `is_demo = stationeries.is_demo OR
+carts.is_demo`, de propósito, para deixar alguém testar o fluxo sem lista real); descobri isso só depois de a
+primeira tentativa (recusar com hint `demo_mismatch`) quebrar a suíte inteira. A versão final:
+`billing_charge_lead_delivery` (0401) compara `new.is_demo` com `stationery_wallets.is_demo`; se o lead é demo e a
+carteira é real, a função só dá `return null` (sem gatilho de exceção, sem lançamento no razão) — o lead nasce
+normal, mas nenhum centavo sai da carteira real. "Registro" é o próprio `leads.is_demo = true` numa papelaria não
+demo (consulta direta, sem coluna nova). O sentido oposto (lead real numa carteira demo) já não ocorre pela mesma
+regra OR — custo se errada: baixo (o pior caso é a papelaria real "doar" um lead de brincadeira, nunca perder
+dinheiro).
+
+**2) Pagamento perdido ao regenerar a cobrança Pix.** Vermelho: `tests/billing/service.test.ts` (`BillingService.
+payInvoice`, 4 casos novos). Ruling: escolhi **reconsultar o PSP antes de decidir regenerar** (a 2ª opção do item,
+sem migração nem tabela de histórico de txids). `payInvoice` agora, quando a fatura já tem `providerChargeId`,
+SEMPRE chama `provider.getCharge(providerChargeId)` primeiro: `paid` (valor batendo) confirma direto e não gera
+cobrança nova; `pending` devolve o BR Code antigo tal como o PSP diz que ainda vale (ignora o relógio local, que
+pode estar errado); só `expired`/`unknown` gera uma cobrança nova. `InvoiceView` ganhou `providerChargeId` (coluna já
+existia no banco, só não estava exposta ao TS) — custo se errada: médio (sem isso, um pagamento feito no intervalo
+entre "vencida localmente" e o clique em "Pagar com Pix" seria perdido de verdade).
+
+**3) Webhook Pix e o sufixo `/pix` do BACEN.** O BACEN entrega a notificação em `{urlCadastrada}/pix`; a rota
+`[token]` (segmento único) nunca bateria com a URL real. Troquei para `app/api/billing/pix/webhook/[...path]/route.ts`
+(catch-all): só o PRIMEIRO segmento é o token, o resto (`/pix` ou qualquer sufixo) é ignorado; a comparação
+continua em tempo constante. Vermelho: `tests/billing/routes.test.ts` (novo caso "aceita o sufixo /pix"). Ruling:
+registrado aqui e em `.env.example` que **a URL do webhook COM o token é, na prática, uma credencial** (aparece em
+logs de acesso, no painel do PSP e em qualquer proxy no caminho) — tratar como segredo, nunca colar em issue/PR/chat;
+gerar com `openssl rand -hex 24` ou equivalente — custo se errada: baixo (é só documentação; o token ainda é
+comparado em tempo constante e sem ele a rota responde 503).
+
+**Menores:**
+- `getCharge`/`createCharge` (Pix) agora conferem `cob.txid === txid pedido` e `cob.chave === receiverKey`
+  (quando o PSP devolve `chave`) antes de aceitar a resposta — nunca confia cegamente numa resposta que "parece"
+  certa. Usa `pix[].valor` (valor EFETIVAMENTE recebido) em vez de `valor.original` (nominal da cobrança) quando o
+  PSP devolve o array `pix`. Testes vermelhos→verdes em `tests/billing/payments/pix.test.ts` (5 casos novos).
+- `pixConfigSchema` (`PIX_API_BASE_URL`, `PIX_OAUTH_TOKEN_URL`) exige `https://` — recusa config com `http://`.
+  Teste em `tests/billing/payments/factory.test.ts`.
+- Ruling documentado (sem código, limite inerente do Postgres): um SUPERUSUÁRIO sempre pode `alter table ...
+  disable trigger` e religar depois — nenhuma trigger, nem `enable always`, resiste a quem tem esse poder; a defesa
+  do desenho é contra `authenticated`/`service_role` via API e contra `session_replication_role = replica`, não
+  contra o dono do banco (mesmo limite de `audit_log`/`ai_decisions`, já aceito nas fatias anteriores). Comentário
+  adicionado no cabeçalho de `0401_billing.sql`.
+- `billing_wallet_summary` NÃO mudou (continua criando a carteira: é a ação explícita da própria papelaria olhando
+  o Pap06). Criei `billing_wallet_summary_readonly` (nova função, mesmo formato, NUNCA chama `billing_ensure_wallet`)
+  para leitura PASSIVA de terceiro; `/admin/papelarias/[id]` (card "Cobrança") passou a usar
+  `BillingService.getSummaryReadOnly` em vez de `getSummary`. Ruling: preferi duas funções a uma só com um parâmetro
+  "criar ou não" — deixa explícito no nome de cada chamada qual é a intenção, sem um booleano solto que alguém possa
+  inverter por engano. Vermelho: `tests/db/billing-lead-delivery.test.ts` (a leitura passiva não cria carteira; a
+  ação da própria papelaria continua criando) — tive que reverter uma primeira tentativa de mudar
+  `billing_wallet_summary` direto, que quebrou dois testes da Task 1 que já cobriam o comportamento antigo de
+  propósito — custo se errada: baixo (o pior caso é o admin criar uma carteira cedo demais, não perder dado).
+- `payInvoiceAction`, `buyPackageAction`, `buyPassAction` e `simulateDemoPaymentAction` agora exigem
+  `actor.role === "stationery_member"` (redirecionam para `/403` senão) — defesa em profundidade: o banco
+  (`billing_check_member`) já recusaria um admin sem vínculo com a papelaria na esmagadora maioria dos casos, isto
+  cobre o caso raro de um perfil admin que também é membro de alguma papelaria. Testes em `tests/billing/
+  actions.test.ts` (4 casos novos, um por ação).
+- Chave de idempotência de `buyPackageAction`/`buyPassAction` deixou de ser gerada dentro da Server Action
+  (`randomUUID()` a cada POST) e passou a vir de um campo oculto gerado UMA VEZ pela página
+  (`app/papelaria/creditos/page.tsx`, `PackageCards`/`PassCard`): um duplo clique reenvia a MESMA chave e
+  `billing_create_package_invoice`/`billing_purchase_season_pass` (já idempotentes por chave desde a Task 1)
+  devolvem o registro já criado em vez de um segundo. Sem isso, cada POST gerava uma chave nova e a idempotência do
+  banco nunca entrava em ação. Teste em `tests/billing/actions.test.ts` ("chave ausente/inválida: erro sem chamar o
+  serviço").
+- `reconcileOpenInvoices` (cron) agora busca só um LOTE (`RECONCILE_BATCH_SIZE = 200`, as faturas mais ANTIGAS
+  primeiro) e para se estourar um ORÇAMENTO de tempo (`RECONCILE_TIME_BUDGET_MS = 20s`), devolvendo `truncated:
+  true`; a próxima execução diária continua de onde parou (nunca reprocessa as mesmas primeiro, já que a busca é
+  sempre pelas mais antigas). Testes em `tests/billing/service.test.ts` (3 casos novos).
+
+Verificação: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build`
+verdes. `pnpm test`: 2957 testes (2938 antes desta rodada + 19 novos, líquido). `pnpm test:db`: 65 arquivos, 1538
+testes, 3 skipped — numa rodada intermediária, dois arquivos SEM RELAÇÃO com billing (`publication-service.test.ts`
+e `claim-tokens.test.ts`, trilhas Pipeline e Dados) falharam por ordenação de evento por timestamp; reexecutados
+isolados (2/3 e depois a suíte inteira de novo) voltaram verdes — mesma classe de flakiness de relógio do
+Docker/Colima já registrada no "Passo 0" desta fatia, não uma regressão desta rodada (nenhum arquivo de outra
+trilha foi tocado). E2E real (`scripts/e2e-s21.sh`) rodado de novo sobre o build corrigido: **17 de 17 verificações
+passaram**, incluindo a compra do pacote com a chave de idempotência agora vinda do campo oculto (sem mudança
+visível ao usuário).
+
 ## S21 · Dívida
 - D-097 (baixa, `docs/superpowers/DEBT.md`): scanner AST de "nenhum literal numérico fora de `limits.ts`" em
   `features/billing/**` não existe (Ruling da Task 2); hoje a garantia é revisão manual. Considerar na S22/S23 se a

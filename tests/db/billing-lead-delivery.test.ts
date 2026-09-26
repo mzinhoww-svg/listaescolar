@@ -7,6 +7,7 @@ import {
   assertLedgerInvariant,
   CHARGING_PLAN,
   confirmInvoice,
+  createPackageInvoice,
   ensureTestBillingPlan,
   leadCreate,
   ledgerOf,
@@ -17,6 +18,17 @@ import {
   topUp,
 } from "./billing-fixtures";
 import { cleanupUsers, IDS, seedCart, seedLead, seedStationery, seedUsers, withClaims } from "./helpers";
+
+/** Recarrega uma carteira REAL (provedor pix, já que fake/demo são só para is_demo). Devolve o valor creditado. */
+async function topUpReal(c: Client, o: { actor: string; stationery: string; pkg: string }): Promise<number> {
+  const inv = await createPackageInvoice(c, { ...o, provider: "pix" });
+  if (inv.error) throw new Error(`fatura: ${inv.error} (${inv.hint})`);
+  const invoiceId = inv.rows[0]!.id as string;
+  const amount = Number((await c.query("select amount_cents from public.invoices where id = $1", [invoiceId])).rows[0].amount_cents);
+  const ok = await confirmInvoice(c, { invoice: invoiceId, provider: "pix", amount });
+  if (ok.error) throw new Error(`confirmar: ${ok.error} (${ok.hint})`);
+  return amount;
+}
 
 async function counts(c: Client): Promise<Record<string, number>> {
   const r = await c.query(
@@ -212,6 +224,74 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
     await withClaims("system", async (c) => {
       const t = (await c.query("select tgname from pg_trigger where tgrelid = 'public.leads'::regclass and not tgisinternal and tgtype & 2 = 0 and tgtype & 4 = 4 order by tgname")).rows.map((r) => r.tgname as string);
       expect(t.indexOf("leads_billing_charge")).toBeLessThan(t.indexOf("notify_lead_created"));
+    });
+  });
+
+  it("revisão de segurança: lead de DEMONSTRAÇÃO não debita carteira REAL (nasce normalmente, sem lançamento)", async () => {
+    await withClaims("system", async (c) => {
+      await publishPlanOk(c, plan({ ...CHARGING_PLAN, free_leads: 0 }));
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: false } });
+      await topUpReal(c, { actor: IDS.stationery_member, stationery: st, pkg: await packageOf(c, await activePlanId(c)) });
+      const cart = await seedCart(c, IDS.parent);
+      const balanceBefore = (await c.query("select coalesce(sum(amount_cents), 0)::int as n from public.credit_ledger e join public.stationery_wallets w on w.id = e.wallet_id where w.stationery_id = $1", [st])).rows[0]!.n as number;
+      const attempt = await leadCreate(c, { cart, stationery: st, itemCount: 2, isDemo: true });
+      expect(attempt.error).toBeNull(); // não quebra o carrinho de demonstração da S12 contra papelaria real
+      expect(attempt.rows[0]!.created).toBe(true);
+      const balanceAfter = (await c.query("select coalesce(sum(amount_cents), 0)::int as n from public.credit_ledger e join public.stationery_wallets w on w.id = e.wallet_id where w.stationery_id = $1", [st])).rows[0]!.n as number;
+      expect(balanceAfter).toBe(balanceBefore); // saldo real intacto: nenhum lançamento saiu por um lead de brincadeira
+      const ledgerRows = await c.query("select count(*)::int as n from public.credit_ledger where lead_id = $1", [attempt.rows[0]!.lead_id]);
+      expect(ledgerRows.rows[0]!.n).toBe(0); // nenhum lançamento associado a este lead
+      // seedLead (inserção direta) também pula o débito pelo mesmo gatilho.
+      const seeded = await seedLead(c, { stationeryId: st, cartId: cart, overrides: { is_demo: true, item_count: 2 } });
+      const seededLedger = await c.query("select count(*)::int as n from public.credit_ledger where lead_id = $1", [seeded.id]);
+      expect(seededLedger.rows[0]!.n).toBe(0);
+      await assertLedgerInvariant(c, st);
+    });
+  });
+
+  it("lead REAL (não-demo) numa carteira REAL debita normalmente (sem falso positivo do pulo de débito demo)", async () => {
+    await withClaims("system", async (c) => {
+      await publishPlanOk(c, plan({ ...CHARGING_PLAN, free_leads: 0 }));
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: false } });
+      await topUpReal(c, { actor: IDS.stationery_member, stationery: st, pkg: await packageOf(c, await activePlanId(c)) });
+      const cart = await seedCart(c, IDS.parent, false);
+      const ok = await leadCreate(c, { cart, stationery: st, itemCount: 2, isDemo: false });
+      expect(ok.error).toBeNull();
+      expect(ok.rows[0]!.created).toBe(true);
+      const rows = await ledgerOf(c, st);
+      expect(rows.at(-1)).toMatchObject({ entry_type: "lead_debit" });
+      await assertLedgerInvariant(c, st);
+    });
+  });
+
+  it("revisão de segurança: billing_wallet_summary_readonly NUNCA cria carteira (leitura passiva do admin); billing_wallet_summary continua criando (ação da própria papelaria)", async () => {
+    await withClaims("system", async (c) => {
+      await publishPlanOk(c, plan({ ...CHARGING_PLAN, free_leads: 3 }));
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: false } });
+      const before = (await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st])).rows[0]!.n as number;
+      expect(before).toBe(0);
+
+      // leitura passiva (admin navegando papelarias): NUNCA cria a carteira, mesmo lida várias vezes.
+      for (let i = 0; i < 3; i++) {
+        const s = (await c.query("select public.billing_wallet_summary_readonly($1::uuid) as s", [st])).rows[0]!.s as {
+          available: boolean;
+          balance_cents: number;
+          free_left: number;
+          active_pass: unknown;
+        };
+        expect(s.available).toBe(true);
+        expect(s.balance_cents).toBe(0);
+        expect(s.free_left).toBe(3); // projeta o plano ativo sem carteira
+        expect(s.active_pass).toBeNull();
+      }
+      const stillNone = (await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st])).rows[0]!.n as number;
+      expect(stillNone).toBe(0);
+
+      // a AÇÃO da própria papelaria (Pap06) continua criando a carteira, como antes desta revisão.
+      const s2 = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0]!.s as { free_left: number };
+      expect(s2.free_left).toBe(3);
+      const after = (await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st])).rows[0]!.n as number;
+      expect(after).toBe(1);
     });
   });
 });

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 
 import { BalanceCard } from "@/components/billing/BalanceCard";
@@ -48,6 +49,10 @@ export default async function CreditosPage({ searchParams }: { searchParams: Pro
   ]);
   const paymentAvailable = billing.paymentAvailable(ctx.stationery.isDemo);
   const season = billing.seasonWindowFor(plan);
+  // Chave de idempotência gerada UMA VEZ por carregamento da página (campo oculto no formulário): um duplo clique
+  // reenvia a MESMA chave, e o banco devolve a fatura já criada em vez de gerar uma segunda (revisão de segurança).
+  const packageIdempotencyKeys = Object.fromEntries(plan.packages.map((p) => [p.id, randomUUID()]));
+  const passIdempotencyKey = randomUUID();
 
   return (
     <>
@@ -70,10 +75,18 @@ export default async function CreditosPage({ searchParams }: { searchParams: Pro
               isDemo={ctx.stationery.isDemo}
               maxInstallments={maxInstallments}
               now={new Date()}
+              idempotencyKey={passIdempotencyKey}
             />
           ) : null}
         </div>
-        <PackageCards plan={plan} packages={plan.packages} stationeryId={ctx.stationery.id} paymentAvailable={paymentAvailable} isDemo={ctx.stationery.isDemo} />
+        <PackageCards
+          plan={plan}
+          packages={plan.packages}
+          stationeryId={ctx.stationery.id}
+          paymentAvailable={paymentAvailable}
+          isDemo={ctx.stationery.isDemo}
+          idempotencyKeys={packageIdempotencyKeys}
+        />
         <section aria-labelledby="extrato" className="rounded-card bg-white p-6">
           <h2 id="extrato" className="mb-4 text-[17px] font-extrabold">Extrato</h2>
           <StatementTable lines={statement.lines} />

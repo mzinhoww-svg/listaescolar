@@ -4,15 +4,15 @@ const reconcileInvoiceByChargeId = vi.fn();
 const reconcileOpenInvoices = vi.fn();
 vi.mock("@/features/billing/wiring", () => ({ getBillingService: () => ({ reconcileInvoiceByChargeId, reconcileOpenInvoices }) }));
 
-import { POST as webhookPOST } from "@/app/api/billing/pix/webhook/[token]/route";
+import { POST as webhookPOST } from "@/app/api/billing/pix/webhook/[...path]/route";
 import { GET as cronGET } from "@/app/api/cron/billing-reconcile/route";
 
 const TOKEN = "0123456789abcdef";
 
-function webhookReq(body: unknown): { req: Request; params: Promise<{ token: string }> } {
+function webhookReq(body: unknown, path: string[] = [TOKEN]): { req: Request; params: Promise<{ path: string[] }> } {
   return {
     req: new Request("https://x.example/api/billing/pix/webhook/x", { method: "POST", body: JSON.stringify(body) }),
-    params: Promise.resolve({ token: TOKEN }),
+    params: Promise.resolve({ path }),
   };
 }
 
@@ -44,7 +44,7 @@ describe("POST /api/billing/pix/webhook/[token]", () => {
     process.env.PAYMENTS_PIX_ENABLED = "1";
     process.env.PIX_WEBHOOK_TOKEN = TOKEN;
     const req = new Request("https://x.example/api/billing/pix/webhook/x", { method: "POST", body: JSON.stringify({ txid: "a".repeat(30) }) });
-    const res = await webhookPOST(req as never, { params: Promise.resolve({ token: "errado-errado-errado" }) });
+    const res = await webhookPOST(req as never, { params: Promise.resolve({ path: ["errado-errado-errado"] }) });
     expect(res.status).toBe(401);
     const body = await res.text();
     expect(body).not.toContain(TOKEN);
@@ -63,11 +63,21 @@ describe("POST /api/billing/pix/webhook/[token]", () => {
     expect(reconcileInvoiceByChargeId).toHaveBeenCalledWith("b".repeat(30));
   });
 
+  it("revisão de segurança: aceita o sufixo /pix que o BACEN acrescenta à URL cadastrada", async () => {
+    process.env.PAYMENTS_PIX_ENABLED = "1";
+    process.env.PIX_WEBHOOK_TOKEN = TOKEN;
+    reconcileInvoiceByChargeId.mockResolvedValue({ invoiceId: "inv-1", confirmed: true });
+    const { req, params } = webhookReq({ txid: "a".repeat(30) }, [TOKEN, "pix"]);
+    const res = await webhookPOST(req as never, { params });
+    expect(res.status).toBe(200);
+    expect(reconcileInvoiceByChargeId).toHaveBeenCalledWith("a".repeat(30));
+  });
+
   it("corpo malformado: ainda responde 200 (idempotente), sem chamar nada", async () => {
     process.env.PAYMENTS_PIX_ENABLED = "1";
     process.env.PIX_WEBHOOK_TOKEN = TOKEN;
     const req = new Request("https://x.example/api/billing/pix/webhook/x", { method: "POST", body: "não é json" });
-    const res = await webhookPOST(req as never, { params: Promise.resolve({ token: TOKEN }) });
+    const res = await webhookPOST(req as never, { params: Promise.resolve({ path: [TOKEN] }) });
     expect(res.status).toBe(200);
     expect(reconcileInvoiceByChargeId).not.toHaveBeenCalled();
   });

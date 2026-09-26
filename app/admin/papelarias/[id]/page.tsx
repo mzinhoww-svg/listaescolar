@@ -27,7 +27,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const actions = adminActions(detail.status);
   const actor = await getSessionActor();
   const billing = getBillingService();
-  const summary = actor ? await billing.getSummary(actor, id) : { available: false as const };
+  const summary = actor ? await billing.getSummaryReadOnly(actor, id) : { available: false as const };
   const statement = actor ? await billing.getStatement(actor, id) : { lines: [] };
   const recentEntries = statement.lines.slice(-10).reverse();
   const dl: [string, string][] = [

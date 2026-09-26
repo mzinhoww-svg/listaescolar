@@ -8,7 +8,12 @@
 -- passe, parcelas, meses da temporada) só em `plans`/filhas, nunca fixos no código (ver features/billing/limits.ts).
 -- Moeda em centavos inteiros (integer). Erros com errcode + hint estáveis: forbidden, not_found, invalid_input,
 -- invalid_plan, billing_required, billing_unavailable, stationery_unavailable, provider_invalid, consent_required,
--- amount_mismatch, invalid_state, installments_unavailable.
+-- amount_mismatch, invalid_state, installments_unavailable. (Lead demo em papelaria real não é erro: o débito é
+-- pulado em silêncio, ver billing_charge_lead_delivery.)
+-- Limite inerente (revisão de segurança, registrado no ledger): um superusuário do Postgres SEMPRE pode
+-- `alter table ... disable trigger` e religar depois — nenhuma trigger, nem `enable always`, resiste a quem tem
+-- esse poder. A defesa aqui é contra `authenticated`/`service_role` via API e contra `session_replication_role =
+-- replica`; superusuário do banco está fora do modelo de ameaça (é o mesmo limite de `audit_log`/`ai_decisions`).
 -- Sem FK para tabelas de outras trilhas alem de leads/stationeries/plans* (já em main, ADR-004 item 7).
 
 -- ---------------------------------------------------------------------------
@@ -754,6 +759,10 @@ begin
     return jsonb_build_object('available', false);
   end if;
 
+  -- cria a carteira (idempotente) se ainda não existir: a PRÓPRIA papelaria olhando o Pap06 é a "ação explícita" que
+  -- trava o snapshot de grátis (não é uma leitura passiva de terceiro). Revisão de segurança (S21): quem só
+  -- ESPIA — o admin navegando papelarias — usa `billing_wallet_summary_readonly` (abaixo), que nunca chama esta
+  -- função e não cria nada; não confundir os dois usos.
   v_wallet_id := public.billing_ensure_wallet(p_stationery_id);
   select * into v_wallet from public.stationery_wallets where id = v_wallet_id;
 
@@ -798,6 +807,89 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- billing_wallet_summary_readonly: revisão de segurança (S21) — mesma forma de `billing_wallet_summary`, mas NUNCA
+-- cria a carteira (sem `billing_ensure_wallet`). Uso: leitura passiva por terceiro (o admin navegando papelarias);
+-- sem carteira, projeta os valores do plano ativo (mesma conta que `billing_eval_source` já faz sem carteira),
+-- `active_pass` continua exato (passe não depende de carteira). Nunca chamada pelo Pap06 da própria papelaria.
+-- ---------------------------------------------------------------------------
+create function public.billing_wallet_summary_readonly(p_stationery_id uuid) returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = ''
+as $$
+declare
+  v_plan public.plans%rowtype;
+  v_wallet public.stationery_wallets%rowtype;
+  v_free_used integer;
+  v_free_left integer;
+  v_min_tier public.plan_price_tiers%rowtype;
+  v_min_ok boolean;
+  v_pass public.season_passes%rowtype;
+  v_pass_used integer;
+  v_active_pass jsonb := 'null'::jsonb;
+begin
+  select * into v_plan from public.plans where status = 'active';
+  if not found then
+    return jsonb_build_object('available', false);
+  end if;
+
+  select * into v_min_tier from public.plan_price_tiers where plan_id = v_plan.id and min_items = 1;
+  select ok into v_min_ok from public.billing_eval_source(p_stationery_id, 1, false);
+
+  select * into v_pass from public.season_passes sp
+   where sp.stationery_id = p_stationery_id and sp.status = 'active'
+     and (now() at time zone 'America/Cuiaba')::date between sp.season_start and sp.season_end
+   order by sp.season_start desc limit 1;
+  if found then
+    select count(*) into v_pass_used from public.credit_ledger e
+     where e.season_pass_id = v_pass.id and e.entry_type = 'pass_lead'
+       and not exists (select 1 from public.credit_ledger r where r.reverses_entry_id = e.id);
+    v_active_pass := jsonb_build_object(
+      'id', v_pass.id, 'included_leads', v_pass.included_leads, 'leads_left', greatest(v_pass.included_leads - v_pass_used, 0),
+      'season_start', v_pass.season_start, 'season_end', v_pass.season_end
+    );
+  end if;
+
+  select * into v_wallet from public.stationery_wallets where stationery_id = p_stationery_id;
+  if not found then
+    return jsonb_build_object(
+      'available', true,
+      'balance_cents', 0,
+      'free_granted', v_plan.free_leads,
+      'free_left', v_plan.free_leads,
+      'free_expires_at', null,
+      'plan', jsonb_build_object('id', v_plan.id, 'version', v_plan.version),
+      'active_pass', v_active_pass,
+      'can_receive_min_tier', coalesce(v_min_ok, false),
+      'min_tier_price_cents', v_min_tier.price_cents
+    );
+  end if;
+
+  select count(*) into v_free_used from public.credit_ledger e
+   where e.wallet_id = v_wallet.id and e.entry_type = 'free_lead'
+     and not exists (select 1 from public.credit_ledger r where r.reverses_entry_id = e.id);
+  if v_wallet.free_leads_expires_at is not null and now() >= v_wallet.free_leads_expires_at then
+    v_free_left := 0;
+  else
+    v_free_left := greatest(v_wallet.free_leads_granted - v_free_used, 0);
+  end if;
+
+  return jsonb_build_object(
+    'available', true,
+    'balance_cents', (select coalesce(sum(amount_cents), 0) from public.credit_ledger where wallet_id = v_wallet.id),
+    'free_granted', v_wallet.free_leads_granted,
+    'free_left', v_free_left,
+    'free_expires_at', v_wallet.free_leads_expires_at,
+    'plan', jsonb_build_object('id', v_plan.id, 'version', v_plan.version),
+    'active_pass', v_active_pass,
+    'can_receive_min_tier', coalesce(v_min_ok, false),
+    'min_tier_price_cents', v_min_tier.price_cents
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- billing_can_receive_lead: dry-run por papelaria (usado pelo App21 para não oferecer quem não pode receber).
 -- ---------------------------------------------------------------------------
 create function public.billing_can_receive_lead(p_stationery_ids uuid[], p_item_count integer)
@@ -825,9 +917,22 @@ set search_path = ''
 as $$
 declare
   v_wallet_id uuid;
+  v_wallet_is_demo boolean;
   v_eval record;
 begin
   v_wallet_id := public.billing_ensure_wallet(new.stationery_id);
+  select is_demo into v_wallet_is_demo from public.stationery_wallets where id = v_wallet_id;
+  -- revisão de segurança (S21): lead de DEMONSTRAÇÃO (carrinho demo, S12) não pode debitar carteira REAL. `lead_create`
+  -- (0303) só garante p_is_demo = stationeries.is_demo OR carts.is_demo — um carrinho demo com papelaria REAL passa
+  -- por lá com is_demo=true de propósito (é assim que a S12 deixa alguém testar o fluxo contra uma papelaria de
+  -- verdade sem uma lista real). RECUSAR o lead aqui quebraria esse fluxo já em produção (e boa parte dos testes de
+  -- outras fatias, que usam is_demo=true como padrão neutro). Em vez disso: PULA o débito silenciosamente — o lead
+  -- nasce normalmente, mas nenhum lançamento sai da carteira real por um pedido de brincadeira. "Registro" é o
+  -- próprio `leads.is_demo = true` numa papelaria não-demo (auditável por consulta direta). O sentido oposto (lead
+  -- real numa carteira demo) não ocorre: papelaria demo força is_demo=true sempre, pela mesma regra OR.
+  if new.is_demo and not v_wallet_is_demo then
+    return null;
+  end if;
   select * into v_eval from public.billing_eval_source(new.stationery_id, new.item_count, true);
   if not v_eval.ok then
     raise exception 'cobrança indisponível para o lead %', new.id using errcode = 'P0001', hint = v_eval.hint;
@@ -1129,6 +1234,8 @@ revoke execute on function public.billing_ensure_wallet(uuid) from public, anon,
 grant execute on function public.billing_ensure_wallet(uuid) to service_role;
 revoke execute on function public.billing_wallet_summary(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.billing_wallet_summary(uuid) to service_role;
+revoke execute on function public.billing_wallet_summary_readonly(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.billing_wallet_summary_readonly(uuid) to service_role;
 revoke execute on function public.billing_can_receive_lead(uuid[], integer) from public, anon, authenticated, service_role;
 grant execute on function public.billing_can_receive_lead(uuid[], integer) to service_role;
 revoke execute on function public.billing_create_package_invoice(uuid, uuid, uuid, text, uuid, text) from public, anon, authenticated, service_role;

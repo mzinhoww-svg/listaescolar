@@ -30,5 +30,14 @@ export const CENTS_PER_BRL = 100;
 /** Validade técnica (não é preço/prazo de negócio) da cobrança fake/demo em memória; o Pix real usa `PIX_CHARGE_TTL_SECONDS`. */
 export const DEFAULT_CHARGE_TTL_SECONDS = 3600;
 
+/**
+ * Revisão de segurança: o cron de reconciliação (`/api/cron/billing-reconcile`) processa no máximo um LOTE por
+ * execução e para se estourar o ORÇAMENTO de tempo, devolvendo o que já fez — a próxima execução (diária) continua
+ * de onde parou (a busca é sempre pelas faturas mais antigas primeiro). Evita um cron sem fim com muitas faturas
+ * abertas (custo de execução sem teto e risco de timeout da função).
+ */
+export const RECONCILE_BATCH_SIZE = 200;
+export const RECONCILE_TIME_BUDGET_MS = 20_000;
+
 /** Fuso em que a temporada e os vencimentos são calculados (SQL usa o mesmo nome). */
 export const BILLING_TIMEZONE = "America/Cuiaba";

@@ -3,6 +3,7 @@ import "server-only";
 import type { SessionActor } from "@/features/stationeries/actor";
 
 import { BillingError } from "./errors";
+import { RECONCILE_BATCH_SIZE, RECONCILE_TIME_BUDGET_MS } from "./limits";
 import type {
   ActivePlan,
   BillingStore,
@@ -49,6 +50,11 @@ export class BillingService {
 
   async getSummary(actor: SessionActor, stationeryId: string): Promise<WalletSummary> {
     return this.deps.store.getSummary(actor, stationeryId);
+  }
+
+  /** Leitura passiva de terceiro (o "Cobrança" de /admin/papelarias/[id]): nunca cria a carteira. */
+  async getSummaryReadOnly(actor: SessionActor, stationeryId: string): Promise<WalletSummary> {
+    return this.deps.store.getSummaryReadOnly(actor, stationeryId);
   }
 
   async getStatement(actor: SessionActor, stationeryId: string): Promise<{ lines: StatementLine[]; weeklyAverage: number | null; raw: LedgerEntryView[] }> {
@@ -150,6 +156,12 @@ export class BillingService {
   }
 
   /** "Pagar com Pix" numa fatura já existente (regenera a cobrança se vencida). */
+  /**
+   * Revisão de segurança (S21): antes de decidir gerar (ou regenerar) uma cobrança, SEMPRE reconsulta o PSP sobre a
+   * cobrança ANTERIOR (quando existe) — nunca decide só pela expiração local. Sem isso, um pagamento feito no BR
+   * Code antigo entre a expiração local e o clique em "Pagar com Pix" seria perdido: a fatura ganharia uma cobrança
+   * NOVA e ninguém jamais reconsultaria a antiga para confirmar o pagamento que já aconteceu.
+   */
   async payInvoice(actor: SessionActor, raw: unknown): Promise<{ pixCopyPaste: string | null; chargeExpiresAt: Date | null }> {
     const parsed = payInvoiceInputSchema.safeParse(raw);
     if (!parsed.success) throw new BillingError("dados inválidos", "invalid_input");
@@ -157,11 +169,29 @@ export class BillingService {
     const invoice = await this.deps.store.getInvoice(actor, input.stationeryId, input.invoiceId);
     if (!invoice) throw new BillingError("fatura não encontrada", "not_found");
     if (invoice.status !== "open") throw new BillingError("fatura não está aberta", "invalid_state");
-    if (invoice.pixCopyPaste && invoice.chargeExpiresAt && invoice.chargeExpiresAt.getTime() > this.deps.now().getTime()) {
-      return { pixCopyPaste: invoice.pixCopyPaste, chargeExpiresAt: invoice.chargeExpiresAt };
-    }
     const { provider, cnpj, tradeName } = await this.resolveProviderOrThrow(input.stationeryId);
     if (provider.id !== invoice.provider) throw new BillingError("provedor não bate com a fatura", "provider_invalid");
+
+    if (invoice.providerChargeId) {
+      const status = await provider.getCharge(invoice.providerChargeId);
+      if (status.status === "paid" && status.paidAmountCents !== null) {
+        if (status.paidAmountCents === invoice.amountCents) {
+          await this.deps.store.confirmInvoicePayment({
+            invoiceId: invoice.id,
+            provider: provider.id,
+            providerRef: invoice.providerChargeId,
+            amountCents: status.paidAmountCents,
+            paidAt: status.paidAt ?? this.deps.now(),
+          });
+        }
+        return { pixCopyPaste: null, chargeExpiresAt: null };
+      }
+      if (status.status === "pending" && invoice.pixCopyPaste) {
+        // o PSP (não o relógio local) diz que a cobrança anterior ainda vale: devolve ela, sem regenerar.
+        return { pixCopyPaste: invoice.pixCopyPaste, chargeExpiresAt: invoice.chargeExpiresAt };
+      }
+      // 'expired' ou 'unknown': a cobrança anterior não serve mais, mas já foi reconsultada (nada de dinheiro perdido).
+    }
     return this.attachPixChargeIfNeeded(provider, invoice.id, invoice.amountCents, "Fatura ListaCerta", { cnpj, name: tradeName });
   }
 
@@ -205,11 +235,23 @@ export class BillingService {
     return this.deps.store.findOpenInvoiceByChargeId(chargeId);
   }
 
-  /** Cron diário: reconsulta toda fatura Pix aberta com cobrança anexada. */
-  async reconcileOpenInvoices(): Promise<{ checked: number; confirmed: number }> {
-    const chargeIds = await this.deps.store.listOpenPixChargeIds();
+  /**
+   * Cron diário: reconsulta fatura Pix aberta com cobrança anexada. Revisão de segurança: lote limitado
+   * (`RECONCILE_BATCH_SIZE`, as mais antigas primeiro) e orçamento de tempo (`RECONCILE_TIME_BUDGET_MS`) — estourou o
+   * orçamento, para e devolve `truncated: true`; a próxima execução (diária) continua dali, sem cron sem fim.
+   */
+  async reconcileOpenInvoices(): Promise<{ checked: number; confirmed: number; truncated: boolean }> {
+    const chargeIds = await this.deps.store.listOpenPixChargeIds(RECONCILE_BATCH_SIZE);
+    const start = this.deps.now().getTime();
     let confirmed = 0;
+    let checked = 0;
+    let truncated = false;
     for (const chargeId of chargeIds) {
+      if (this.deps.now().getTime() - start > RECONCILE_TIME_BUDGET_MS) {
+        truncated = true;
+        break;
+      }
+      checked++;
       try {
         const r = await this.reconcileInvoiceByChargeId(chargeId);
         if (r?.confirmed) confirmed++;
@@ -217,7 +259,7 @@ export class BillingService {
         console.error("reconciliar fatura Pix", error instanceof Error ? error.name : "erro");
       }
     }
-    return { checked: chargeIds.length, confirmed };
+    return { checked, confirmed, truncated };
   }
 
   /** Estorno (usado pela S22, contestação aceita). */

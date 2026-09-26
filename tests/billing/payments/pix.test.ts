@@ -29,6 +29,7 @@ function cobResponse(over: Record<string, unknown> = {}) {
       txid: "a".repeat(32),
       status: "ATIVA",
       valor: { original: "10.00" },
+      chave: CONFIG.receiverKey,
       pixCopiaECola: "00020126copiaecola",
       calendario: { criacao: "2026-06-10T12:00:00Z", expiracao: 3600 },
       ...over,
@@ -36,18 +37,26 @@ function cobResponse(over: Record<string, unknown> = {}) {
   };
 }
 
+/** O PSP de verdade ecoa o `txid` pedido; o fake precisa fazer o mesmo (o provider agora confere isso). */
+function txidFromUrl(url: string): string {
+  return url.split("/").pop()!;
+}
+
+function respond(url: string, over: Record<string, unknown> = {}) {
+  return url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse({ txid: txidFromUrl(url), ...over });
+}
+
 describe("PixPaymentProvider · createCharge", () => {
   it("faz OAuth2 com mTLS e PUT /v2/cob/{txid} com o corpo esperado (valor em reais, 2 casas, a partir de centavos)", async () => {
     const calls: { url: string; init: HttpRequestInit }[] = [];
     const http: HttpClient = vi.fn(async (url, init) => {
       calls.push({ url, init });
-      if (url === CONFIG.oauthTokenUrl) return tokenResponse();
-      return cobResponse();
+      return respond(url);
     });
     const provider = new PixPaymentProvider(CONFIG, http);
     const charge = await provider.createCharge({ invoiceId: "inv-1", amountCents: 12345, description: "Pacote", expiresInSeconds: 900, payer: PAYER });
 
-    expect(charge.chargeId).toBe("a".repeat(32));
+    expect(charge.chargeId).toMatch(/^[a-zA-Z0-9]{26,35}$/);
     expect(charge.copyPaste).toBe("00020126copiaecola");
 
     expect(calls[0]!.url).toBe(CONFIG.oauthTokenUrl);
@@ -69,11 +78,8 @@ describe("PixPaymentProvider · createCharge", () => {
   it("reusa o token OAuth2 em chamadas seguintes (não pede de novo antes de expirar)", async () => {
     let tokenCalls = 0;
     const http: HttpClient = vi.fn(async (url) => {
-      if (url === CONFIG.oauthTokenUrl) {
-        tokenCalls++;
-        return tokenResponse();
-      }
-      return cobResponse();
+      if (url === CONFIG.oauthTokenUrl) tokenCalls++;
+      return respond(url);
     });
     const provider = new PixPaymentProvider(CONFIG, http, () => new Date("2026-06-10T12:00:00Z"));
     await provider.createCharge({ invoiceId: "inv-1", amountCents: 100, description: "x", expiresInSeconds: 60, payer: PAYER });
@@ -82,7 +88,7 @@ describe("PixPaymentProvider · createCharge", () => {
   });
 
   it("txid gerado respeita o padrão [a-zA-Z0-9]{26,35}", async () => {
-    const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse()));
+    const http: HttpClient = vi.fn(async (url) => respond(url));
     const provider = new PixPaymentProvider(CONFIG, http);
     const charge = await provider.createCharge({ invoiceId: "inv-1", amountCents: 100, description: "x", expiresInSeconds: 60, payer: PAYER });
     expect(charge.chargeId).toMatch(/^[a-zA-Z0-9]{26,35}$/);
@@ -110,7 +116,7 @@ describe("PixPaymentProvider · createCharge", () => {
 
   it("nunca loga segredo, certificado ou BR Code", async () => {
     const spies = [vi.spyOn(console, "log").mockImplementation(() => {}), vi.spyOn(console, "error").mockImplementation(() => {}), vi.spyOn(console, "warn").mockImplementation(() => {})];
-    const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse()));
+    const http: HttpClient = vi.fn(async (url) => respond(url));
     const provider = new PixPaymentProvider(CONFIG, http);
     await provider.createCharge({ invoiceId: "i", amountCents: 100, description: "x", expiresInSeconds: 60, payer: PAYER });
     for (const spy of spies) {
@@ -128,14 +134,12 @@ describe("PixPaymentProvider · createCharge", () => {
 
 describe("PixPaymentProvider · getCharge", () => {
   const provider = () => {
-    const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse()));
+    const http: HttpClient = vi.fn(async (url) => respond(url));
     return new PixPaymentProvider(CONFIG, http);
   };
 
   it("CONCLUIDA com valor -> paid", async () => {
-    const http: HttpClient = vi.fn(async (url) =>
-      url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse({ status: "CONCLUIDA", pix: [{ horario: "2026-06-10T13:00:00Z" }] }),
-    );
+    const http: HttpClient = vi.fn(async (url) => respond(url, { status: "CONCLUIDA", pix: [{ horario: "2026-06-10T13:00:00Z" }] }));
     const p = new PixPaymentProvider(CONFIG, http);
     const status = await p.getCharge("a".repeat(32));
     expect(status).toEqual({ status: "paid", paidAmountCents: 1000, paidAt: new Date("2026-06-10T13:00:00Z") });
@@ -146,9 +150,36 @@ describe("PixPaymentProvider · getCharge", () => {
   });
 
   it("REMOVIDA_* -> expired", async () => {
-    const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse({ status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" })));
+    const http: HttpClient = vi.fn(async (url) => respond(url, { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" }));
     const p = new PixPaymentProvider(CONFIG, http);
     await expect(p.getCharge("a".repeat(32))).resolves.toEqual({ status: "expired", paidAmountCents: null, paidAt: null });
+  });
+
+  it("revisão de segurança: resposta com txid DIFERENTE do pedido é recusada (nunca aceita cegamente)", async () => {
+    const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse({ txid: "b".repeat(32) })));
+    const p = new PixPaymentProvider(CONFIG, http);
+    await expect(p.getCharge("a".repeat(32))).rejects.toThrow(/não bate com o txid/);
+  });
+
+  it("revisão de segurança: resposta com chave recebedora DIFERENTE da configurada é recusada", async () => {
+    const http: HttpClient = vi.fn(async (url) => respond(url, { chave: "outra-chave-que-nao-e-a-nossa" }));
+    const p = new PixPaymentProvider(CONFIG, http);
+    await expect(p.getCharge("a".repeat(32))).rejects.toThrow(/não bate com a chave recebedora/);
+  });
+
+  it("resposta sem o campo chave (alguns PSPs não devolvem) ainda funciona — só confere quando presente", async () => {
+    const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse({ txid: "a".repeat(32), chave: undefined })));
+    const p = new PixPaymentProvider(CONFIG, http);
+    await expect(p.getCharge("a".repeat(32))).resolves.toEqual({ status: "pending", paidAmountCents: null, paidAt: null });
+  });
+
+  it("revisão de segurança: usa pix[].valor (valor EFETIVAMENTE recebido) em vez de valor.original quando presente", async () => {
+    const http: HttpClient = vi.fn(async (url) =>
+      respond(url, { status: "CONCLUIDA", valor: { original: "10.00" }, pix: [{ horario: "2026-06-10T13:00:00Z", valor: "9.50" }] }),
+    );
+    const p = new PixPaymentProvider(CONFIG, http);
+    const status = await p.getCharge("a".repeat(32));
+    expect(status.paidAmountCents).toBe(950); // não 1000: o valor recebido (troco/saque) prevalece sobre o nominal
   });
 });
 

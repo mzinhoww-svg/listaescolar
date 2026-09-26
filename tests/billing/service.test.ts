@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import { BillingError } from "@/features/billing/errors";
+import { RECONCILE_BATCH_SIZE, RECONCILE_TIME_BUDGET_MS } from "@/features/billing/limits";
 import { FakePaymentProvider } from "@/features/billing/payments/fake";
 import type { ActivePlan, BillingStore, InvoiceView, PaymentProvider, PlanDraft } from "@/features/billing/ports";
 import { BillingService } from "@/features/billing/service";
@@ -31,6 +32,7 @@ function makeStore(over: Partial<BillingStore> = {}): BillingStore {
     listPlanHistory: async () => [PLAN],
     publishPlan: async () => "new-plan-id",
     getSummary: async () => ({ available: false }),
+    getSummaryReadOnly: async () => ({ available: false }),
     listStatement: async () => [],
     listInvoices: async () => [...invoices.values()],
     getInvoice: async (_actor, _stationeryId, invoiceId) => invoices.get(invoiceId) ?? null,
@@ -47,6 +49,7 @@ function makeStore(over: Partial<BillingStore> = {}): BillingStore {
         status: "open",
         provider: input.provider,
         isDemo: input.provider !== "pix",
+        providerChargeId: null,
         pixCopyPaste: null,
         chargeExpiresAt: null,
         paidAt: null,
@@ -69,6 +72,7 @@ function makeStore(over: Partial<BillingStore> = {}): BillingStore {
           status: "open",
           provider: input.provider,
           isDemo: input.provider !== "pix",
+          providerChargeId: null,
           pixCopyPaste: null,
           chargeExpiresAt: null,
           paidAt: null,
@@ -182,6 +186,7 @@ describe("BillingService.simulateDemoPayment", () => {
           status: "open",
           provider: "demo",
           isDemo: true,
+          providerChargeId: null,
           pixCopyPaste: null,
           chargeExpiresAt: null,
           paidAt: null,
@@ -197,6 +202,114 @@ describe("BillingService.simulateDemoPayment", () => {
   it("recusa para carteira real", async () => {
     const service = makeService();
     await expect(service.simulateDemoPayment(MEMBER, { stationeryId: STATIONERY_ID, invoiceId: randomUUID() })).rejects.toMatchObject({ code: "provider_invalid" });
+  });
+});
+
+describe("BillingService.payInvoice", () => {
+  const invoiceId = randomUUID();
+  const oldChargeId = "a".repeat(32);
+
+  function openInvoice(over: Partial<InvoiceView> = {}): InvoiceView {
+    return {
+      id: invoiceId,
+      kind: "credit_package",
+      seasonPassId: null,
+      installmentNo: null,
+      amountCents: 5000,
+      dueDate: "2026-06-10",
+      status: "open",
+      provider: "pix",
+      isDemo: false,
+      providerChargeId: null,
+      pixCopyPaste: null,
+      chargeExpiresAt: null,
+      paidAt: null,
+      paidAmountCents: null,
+      createdAt: new Date(),
+      ...over,
+    };
+  }
+
+  it("revisão de segurança: cobrança anterior já PAGA (reconsultada) — confirma e NUNCA gera uma segunda cobrança", async () => {
+    let createCalls = 0;
+    let confirmed = false;
+    const provider: PaymentProvider = {
+      id: "pix",
+      createCharge: async () => {
+        createCalls++;
+        return { chargeId: "novo", copyPaste: "novo-copia-cola", expiresAt: new Date() };
+      },
+      getCharge: async (id) => (id === oldChargeId ? { status: "paid", paidAmountCents: 5000, paidAt: new Date("2026-06-01T00:00:00Z") } : { status: "unknown", paidAmountCents: null, paidAt: null }),
+    };
+    const service = makeService(
+      {
+        getInvoice: async () => openInvoice({ providerChargeId: oldChargeId, pixCopyPaste: "antigo-copia-cola", chargeExpiresAt: new Date("2020-01-01T00:00:00Z") }),
+        confirmInvoicePayment: async (input) => {
+          confirmed = true;
+          expect(input.providerRef).toBe(oldChargeId);
+          expect(input.amountCents).toBe(5000);
+          return true;
+        },
+      },
+      () => provider,
+    );
+    const result = await service.payInvoice(MEMBER, { stationeryId: STATIONERY_ID, invoiceId });
+    expect(confirmed).toBe(true);
+    expect(createCalls).toBe(0); // nunca gera cobrança nova por cima de um pagamento já confirmado
+    expect(result).toEqual({ pixCopyPaste: null, chargeExpiresAt: null });
+  });
+
+  it("cobrança anterior ainda PENDENTE no PSP: devolve a mesma (nunca regenera), mesmo com o relógio local dizendo vencida", async () => {
+    let createCalls = 0;
+    const provider: PaymentProvider = {
+      id: "pix",
+      createCharge: async () => {
+        createCalls++;
+        return { chargeId: "novo", copyPaste: "novo-copia-cola", expiresAt: new Date() };
+      },
+      getCharge: async () => ({ status: "pending", paidAmountCents: null, paidAt: null }),
+    };
+    const oldExpiry = new Date("2020-01-01T00:00:00Z"); // "vencida" pelo relógio local
+    const service = makeService({ getInvoice: async () => openInvoice({ providerChargeId: oldChargeId, pixCopyPaste: "antigo-copia-cola", chargeExpiresAt: oldExpiry }) }, () => provider);
+    const result = await service.payInvoice(MEMBER, { stationeryId: STATIONERY_ID, invoiceId });
+    expect(createCalls).toBe(0);
+    expect(result).toEqual({ pixCopyPaste: "antigo-copia-cola", chargeExpiresAt: oldExpiry });
+  });
+
+  it("cobrança anterior EXPIRADA no PSP: reconsultada e só então regenerada", async () => {
+    let createCalls = 0;
+    const provider: PaymentProvider = {
+      id: "pix",
+      createCharge: async () => {
+        createCalls++;
+        return { chargeId: "novo", copyPaste: "novo-copia-cola", expiresAt: new Date("2026-07-01T00:00:00Z") };
+      },
+      getCharge: async () => ({ status: "expired", paidAmountCents: null, paidAt: null }),
+    };
+    const service = makeService(
+      { getInvoice: async () => openInvoice({ providerChargeId: oldChargeId, pixCopyPaste: "antigo-copia-cola", chargeExpiresAt: new Date("2020-01-01T00:00:00Z") }), attachCharge: async () => true },
+      () => provider,
+    );
+    const result = await service.payInvoice(MEMBER, { stationeryId: STATIONERY_ID, invoiceId });
+    expect(createCalls).toBe(1);
+    expect(result).toEqual({ pixCopyPaste: "novo-copia-cola", chargeExpiresAt: new Date("2026-07-01T00:00:00Z") });
+  });
+
+  it("sem cobrança anterior: gera a primeira normalmente", async () => {
+    let createCalls = 0;
+    const provider: PaymentProvider = {
+      id: "pix",
+      createCharge: async () => {
+        createCalls++;
+        return { chargeId: "primeira", copyPaste: "primeira-copia-cola", expiresAt: new Date("2026-07-01T00:00:00Z") };
+      },
+      getCharge: vi.fn(),
+    };
+    const service = makeService({ getInvoice: async () => openInvoice(), attachCharge: async () => true }, () => provider);
+    const result = await service.payInvoice(MEMBER, { stationeryId: STATIONERY_ID, invoiceId });
+    expect(createCalls).toBe(1);
+    expect(provider.getCharge).not.toHaveBeenCalled(); // nada para reconsultar
+    expect(result.pixCopyPaste).toBe("primeira-copia-cola");
   });
 });
 
@@ -230,5 +343,46 @@ describe("BillingService.reconcileInvoiceByChargeId", () => {
   it("cobrança desconhecida -> null", async () => {
     const service = makeService({ findOpenInvoiceByChargeId: async () => null });
     await expect(service.reconcileInvoiceByChargeId("nunca")).resolves.toBeNull();
+  });
+});
+
+describe("BillingService.reconcileOpenInvoices", () => {
+  it("pede o lote com o tamanho limitado (RECONCILE_BATCH_SIZE), não a tabela inteira", async () => {
+    let requestedLimit: number | undefined;
+    const service = makeService({
+      listOpenPixChargeIds: async (limit) => {
+        requestedLimit = limit;
+        return [];
+      },
+    });
+    await service.reconcileOpenInvoices();
+    expect(requestedLimit).toBe(RECONCILE_BATCH_SIZE);
+  });
+
+  it("revisão de segurança: para ao estourar o orçamento de tempo e devolve truncated=true (a próxima execução continua)", async () => {
+    // relógio que avança bem além do orçamento a cada leitura: a 2ª fatura nunca chega a ser processada.
+    let now = new Date("2026-06-10T12:00:00Z").getTime();
+    const provider: PaymentProvider = { id: "pix", createCharge: vi.fn(), getCharge: async () => ({ status: "pending", paidAmountCents: null, paidAt: null }) };
+    const service = new BillingService({
+      store: makeStore({
+        listOpenPixChargeIds: async () => ["txid-1", "txid-2", "txid-3"],
+        findOpenInvoiceByChargeId: async (chargeId) => ({ invoiceId: chargeId, amountCents: 100 }),
+      }),
+      providerFor: () => provider,
+      now: () => new Date((now += RECONCILE_TIME_BUDGET_MS)),
+    });
+    const result = await service.reconcileOpenInvoices();
+    expect(result.truncated).toBe(true);
+    expect(result.checked).toBeLessThan(3);
+  });
+
+  it("sem estourar o orçamento: processa tudo e truncated=false", async () => {
+    const provider: PaymentProvider = { id: "pix", createCharge: vi.fn(), getCharge: async () => ({ status: "pending", paidAmountCents: null, paidAt: null }) };
+    const service = makeService(
+      { listOpenPixChargeIds: async () => ["txid-1", "txid-2"], findOpenInvoiceByChargeId: async (chargeId) => ({ invoiceId: chargeId, amountCents: 100 }) },
+      () => provider,
+    );
+    const result = await service.reconcileOpenInvoices();
+    expect(result).toEqual({ checked: 2, confirmed: 0, truncated: false });
   });
 });

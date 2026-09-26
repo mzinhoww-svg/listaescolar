@@ -26,7 +26,15 @@ const LEADS_STEPS = [
   "Você atende como sempre e marca aqui quando vender.",
 ];
 
-export function RegistrationForm({ action, municipalities }: { action: Action; municipalities: Municipality[] }) {
+type Props = {
+  action: Action;
+  municipalities: Municipality[];
+  /** Plano ativo (S21): `null` sem plano publicado — o cartão de leads grátis não aparece sem fonte. */
+  freeLeads: number | null;
+  hasPass: boolean;
+};
+
+export function RegistrationForm({ action, municipalities, freeLeads, hasPass }: Props) {
   const [step, setStep] = useState(0);
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
   const formRef = useRef<HTMLFormElement>(null);
@@ -101,6 +109,12 @@ export function RegistrationForm({ action, municipalities }: { action: Action; m
             </li>
           ))}
         </ol>
+        {freeLeads !== null && freeLeads > 0 ? (
+          <div className="mt-5 border-t border-white/15 pt-4">
+            <p className="text-[14px] font-extrabold">Primeiros {freeLeads} leads grátis</p>
+            <p className="text-[13px] font-semibold text-white/70">Depois, créditos por lead{hasPass ? " ou passe de temporada" : ""}.</p>
+          </div>
+        ) : null}
       </aside>
     </div>
   );

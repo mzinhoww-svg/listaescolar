@@ -6,6 +6,9 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { Notice } from "@/components/stationeries/PanelShell";
 import { formatDateTime } from "@/components/stationeries/StatusPanel";
 import { requireAccess } from "@/features/auth/guard";
+import { formatBrl } from "@/features/billing/money";
+import { getBillingService } from "@/features/billing/wiring";
+import { getSessionActor } from "@/features/stationeries/actor";
 import { formatCnpj } from "@/features/stationeries/cnpj";
 import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
 import { getAdminDetail, listStatusEvents } from "@/features/stationeries/queries";
@@ -22,6 +25,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   if (!detail) notFound();
   const events = await listStatusEvents(id);
   const actions = adminActions(detail.status);
+  const actor = await getSessionActor();
+  const billing = getBillingService();
+  const summary = actor ? await billing.getSummaryReadOnly(actor, id) : { available: false as const };
+  const statement = actor ? await billing.getStatement(actor, id) : { lines: [] };
+  const recentEntries = statement.lines.slice(-10).reverse();
   const dl: [string, string][] = [
     ["Razão social", detail.legalName ?? "indisponível"],
     ["CNPJ", formatCnpj(detail.cnpj)],
@@ -74,6 +82,32 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             </button>
           </form>
         ))}
+      </section>
+      <section aria-labelledby="cobranca" className="mb-6 rounded-card bg-white p-5">
+        <h2 id="cobranca" className="mb-2 text-[16px] font-extrabold">Cobrança</h2>
+        {!summary.available ? (
+          <p className="text-texto-3 text-[14px]">Planos indisponíveis no momento.</p>
+        ) : (
+          <>
+            <p className="text-[14px] font-bold">
+              Saldo: <span className="font-extrabold">{formatBrl(summary.balanceCents)}</span> · Grátis restantes: {summary.freeLeft}
+              {summary.activePass ? ` · Passe ativo: ${summary.activePass.leadsLeft} leads restantes até ${summary.activePass.seasonEnd}` : " · Sem passe ativo"}
+            </p>
+            <p className="text-texto-3 mt-1 text-[13px] font-semibold">Últimos 10 lançamentos:</p>
+            {recentEntries.length === 0 ? (
+              <p className="text-texto-3 text-[14px]">Nenhum lançamento ainda.</p>
+            ) : (
+              <ul className="mt-1 flex flex-col gap-1">
+                {recentEntries.map((l) => (
+                  <li key={l.id} className="text-[13px]">
+                    <span className="font-semibold">{formatDateTime(l.date)}</span> · {l.description} ·{" "}
+                    <span className="font-extrabold">{formatBrl(l.amountCents)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </section>
       <section aria-labelledby="eventos" className="rounded-card bg-white p-5">
         <h2 id="eventos" className="mb-2 text-[16px] font-extrabold">Eventos</h2>

@@ -19,7 +19,7 @@ const fill = (label: string, value: string) => fireEvent.change(screen.getByLabe
 
 describe("RegistrationForm", () => {
   const setup = (action = vi.fn(async (): Promise<RegisterState> => ({ status: "idle" }))) => {
-    render(<RegistrationForm action={action} municipalities={municipalities} />);
+    render(<RegistrationForm action={action} municipalities={municipalities} freeLeads={null} hasPass={false} />);
     return action;
   };
 
@@ -71,6 +71,20 @@ describe("RegistrationForm", () => {
     setup();
     expect(screen.getByText("Como você recebe leads")).toBeInTheDocument();
     expect(screen.queryByText(/grátis/i)).not.toBeInTheDocument();
+  });
+
+  it("S21 · com plano ativo, mostra 'Primeiros [N] leads grátis' (número do plano, não fixo)", () => {
+    const action = vi.fn(async (): Promise<RegisterState> => ({ status: "idle" }));
+    render(<RegistrationForm action={action} municipalities={municipalities} freeLeads={3} hasPass={true} />);
+    expect(screen.getByText("Primeiros 3 leads grátis")).toBeInTheDocument();
+    expect(screen.getByText(/passe de temporada/)).toBeInTheDocument();
+  });
+
+  it("S21 · plano sem passe: não menciona passe de temporada", () => {
+    const action = vi.fn(async (): Promise<RegisterState> => ({ status: "idle" }));
+    render(<RegistrationForm action={action} municipalities={municipalities} freeLeads={3} hasPass={false} />);
+    expect(screen.getByText("Primeiros 3 leads grátis")).toBeInTheDocument();
+    expect(screen.queryByText(/passe de temporada/)).not.toBeInTheDocument();
   });
 });
 

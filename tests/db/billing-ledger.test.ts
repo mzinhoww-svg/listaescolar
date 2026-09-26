@@ -125,7 +125,7 @@ describe("S21 · credit_ledger: sinais, imutabilidade, estorno e invariante", ()
       const rev = await attemptH(c, "select public.billing_reverse_entry($1::uuid, $2::uuid, 'admin', 'contestação aceita') as id", [debitEntry.id, IDS.admin]);
       expect(rev.error).toBeNull();
       const rev2 = await attemptH(c, "select public.billing_reverse_entry($1::uuid, $2::uuid, 'admin', 'de novo') as id", [debitEntry.id, IDS.admin]);
-      expect(rev2.rows[0].id).toBe(rev.rows[0].id);
+      expect(rev2.rows[0]!.id).toBe(rev.rows[0]!.id);
       rows = await ledgerOf(c, st);
       expect(rows.filter((r) => r.entry_type === "reversal")).toHaveLength(1);
       const reversal = rows.find((r) => r.entry_type === "reversal")!;
@@ -148,7 +148,7 @@ describe("S21 · credit_ledger: sinais, imutabilidade, estorno e invariante", ()
       // estornar o grátis devolve a cota: próximo lead volta a ser grátis
       const rf = await attemptH(c, "select public.billing_reverse_entry($1::uuid, null, 'system', 'contestação') as id", [freeEntry.id]);
       expect(rf.error).toBeNull();
-      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0].s as Record<string, unknown>;
+      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0]!.s as Record<string, unknown>;
       expect(s.free_left).toBe(1);
       await seedLead(c, { stationeryId: st, cartId: cart, overrides: { item_count: 2 } });
       rows = await ledgerOf(c, st);
@@ -169,8 +169,10 @@ describe("S21 · credit_ledger: sinais, imutabilidade, estorno e invariante", ()
       const rows = await ledgerOf(c, st);
       await c.query("select public.billing_reverse_entry($1::uuid, null, 'system', 'x')", [rows[2]!.id]);
       await assertLedgerInvariant(c, st);
-      const balance = Number((await c.query("select public.billing_wallet_summary($1::uuid) ->> 'balance_cents' as b", [st])).rows[0].b);
-      expect(balance).toBe(5000 - 500 - 900 - 500 - 900 + 10000 + 900);
+      const balance = Number((await c.query("select public.billing_wallet_summary($1::uuid) ->> 'balance_cents' as b", [st])).rows[0]!.b);
+      // débitos na ordem dos leads (item_count 30,2,30,2 -> tiers 900,500,900,500); rows[2] é o 2º débito (-500):
+      // reembolsa +500, não +900 (a fórmula anterior presumia a ordem errada dos débitos).
+      expect(balance).toBe(5000 - 900 - 500 - 900 - 500 + 10000 + 500);
     });
   });
 

@@ -42,10 +42,10 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       const cart = await seedCart(c, IDS.parent);
       const first = await leadCreate(c, { cart, stationery: st, itemCount: 3 });
       expect(first.error).toBeNull();
-      expect(first.rows[0].created).toBe(true);
+      expect(first.rows[0]!.created).toBe(true);
       let rows = await ledgerOf(c, st);
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ entry_type: "free_lead", amount_cents: 0, lead_id: first.rows[0].lead_id, item_count: 3 });
+      expect(rows[0]).toMatchObject({ entry_type: "free_lead", amount_cents: 0, lead_id: first.rows[0]!.lead_id, item_count: 3 });
       expect(Number(rows[0]!.balance_after_cents)).toBe(0);
 
       const before = await counts(c);
@@ -88,7 +88,7 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       expect(rows.map((r) => Number(r.balance_after_cents))).toEqual([10000, 9500, 8600, 8100]);
       expect(rows[1]!.tier_id).not.toBeNull();
       expect(rows[1]!.tier_id).not.toBe(rows[2]!.tier_id);
-      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0].s as Record<string, unknown>;
+      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0]!.s as Record<string, unknown>;
       expect(s.free_left).toBe(0);
       expect(s.balance_cents).toBe(8100);
       await assertLedgerInvariant(c, st);
@@ -122,7 +122,7 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       const cart = await seedCart(c, IDS.parent);
       const r = await leadCreate(c, { cart, stationery: st, itemCount: 2 });
       expect(r.hint).toBe("billing_unavailable");
-      expect((await c.query("select count(*)::int as n from public.leads where stationery_id = $1", [st])).rows[0].n).toBe(0);
+      expect((await c.query("select count(*)::int as n from public.leads where stationery_id = $1", [st])).rows[0]!.n).toBe(0);
       const can = (await c.query("select * from public.billing_can_receive_lead($1::uuid[], 2)", [[st]])).rows;
       expect(can).toEqual([{ stationery_id: st, can_receive: false }]);
     });
@@ -134,11 +134,13 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
       const yes = (await c.query("select * from public.billing_can_receive_lead($1::uuid[], 2)", [[st]])).rows;
       expect(yes).toEqual([{ stationery_id: st, can_receive: true }]);
-      expect((await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st])).rows[0].n).toBe(0); // não gravou
+      expect((await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st])).rows[0]!.n).toBe(0); // não gravou
       await publishPlanOk(c, plan({ free_leads: 0 }));
-      const st2 = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const st2 = await seedStationery(c, { status: "active", ownerId: IDS.school_member });
+      // sem carteira, a papelaria usa sempre o plano ATIVO (não um snapshot): com o plano trocado para grátis:0,
+      // st também vira false (só ganha snapshot próprio quando a carteira é criada, na 1ª cobrança).
       const no = (await c.query("select * from public.billing_can_receive_lead($1::uuid[], 2)", [[st2, st, randomUUID()]])).rows;
-      expect(no).toEqual(expect.arrayContaining([{ stationery_id: st2, can_receive: false }, { stationery_id: st, can_receive: true }]));
+      expect(no).toEqual(expect.arrayContaining([{ stationery_id: st2, can_receive: false }, { stationery_id: st, can_receive: false }]));
       expect(no).toHaveLength(2); // id desconhecido não aparece
     });
   });
@@ -153,11 +155,11 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       const list = randomUUID();
       const a = await leadCreate(c, { cart, stationery: st, itemCount: 2, key, list });
       const b = await leadCreate(c, { cart, stationery: st, itemCount: 2, key, list });
-      expect(a.rows[0].lead_id).toBe(b.rows[0].lead_id);
-      expect(b.rows[0].created).toBe(false);
+      expect(a.rows[0]!.lead_id).toBe(b.rows[0]!.lead_id);
+      expect(b.rows[0]!.created).toBe(false);
       // mesma (solicitante, papelaria, lista) aberta com outra chave: devolve o existente, sem débito
       const d = await leadCreate(c, { cart, stationery: st, itemCount: 2, list });
-      expect(d.rows[0].created).toBe(false);
+      expect(d.rows[0]!.created).toBe(false);
       let rows = await ledgerOf(c, st);
       expect(rows.map((r) => r.entry_type)).toEqual(["topup", "lead_debit"]);
       const seeded = await seedLead(c, { stationeryId: st, cartId: cart, overrides: { item_count: 30 } });
@@ -165,14 +167,14 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       expect(rows[2]).toMatchObject({ entry_type: "lead_debit", amount_cents: -900, lead_id: seeded.id, item_count: 30 });
       // idempotência por lead: a chave 'lead:<id>' é única
       const dup = await c.query("select count(*)::int as n from public.credit_ledger where lead_id = $1", [seeded.id]);
-      expect(dup.rows[0].n).toBe(1);
+      expect(dup.rows[0]!.n).toBe(1);
       await assertLedgerInvariant(c, st);
     });
   });
 
   it("com passe ativo e cota -> pass_lead de 0 (antes dos grátis); cota esgotada cai para grátis e depois crédito", async () => {
     await withClaims("system", async (c) => {
-      const today = (await c.query("select extract(month from (now() at time zone 'America/Cuiaba'))::int as m")).rows[0].m as number;
+      const today = (await c.query("select extract(month from (now() at time zone 'America/Cuiaba'))::int as m")).rows[0]!.m as number;
       // temporada que contém hoje: começa no mês corrente e termina no seguinte
       const end = (today % 12) + 1;
       await publishPlanOk(c, plan({ ...CHARGING_PLAN, free_leads: 1, season: { start_month: today, end_month: end }, pass: { price_cents: 3000, included_leads: 2, max_installments: 1 } }));
@@ -180,13 +182,13 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       await topUp(c, { actor: IDS.stationery_member, stationery: st, pkg: await packageOf(c, await activePlanId(c)) });
       const pass = await purchasePass(c, { actor: IDS.stationery_member, stationery: st, installments: 1 });
       expect(pass.error).toBeNull();
-      const inv = (await c.query("select id, amount_cents from public.invoices where season_pass_id = $1", [pass.rows[0].id])).rows[0];
+      const inv = (await c.query("select id, amount_cents from public.invoices where season_pass_id = $1", [pass.rows[0]!.id])).rows[0];
       const cart = await seedCart(c, IDS.parent);
       // passe pendente não conta: 1º lead usa o grátis
       await leadCreate(c, { cart, stationery: st, itemCount: 2 });
       const ok = await confirmInvoice(c, { invoice: inv.id, amount: Number(inv.amount_cents) });
-      expect(ok.rows[0].ok).toBe(true);
-      expect((await c.query("select status from public.season_passes where id = $1", [pass.rows[0].id])).rows[0].status).toBe("active");
+      expect(ok.rows[0]!.ok).toBe(true);
+      expect((await c.query("select status from public.season_passes where id = $1", [pass.rows[0]!.id])).rows[0]!.status).toBe("active");
       await leadCreate(c, { cart, stationery: st, itemCount: 2 });
       await leadCreate(c, { cart, stationery: st, itemCount: 2 });
       await leadCreate(c, { cart, stationery: st, itemCount: 2 }); // cota esgotada, grátis já usado -> crédito
@@ -198,9 +200,9 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
         ["pass_lead", 0],
         ["lead_debit", -500],
       ]);
-      expect(rows[2]!.season_pass_id).toBe(pass.rows[0].id);
-      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0].s as { active_pass: { id: string; leads_left: number } | null };
-      expect(s.active_pass?.id).toBe(pass.rows[0].id);
+      expect(rows[2]!.season_pass_id).toBe(pass.rows[0]!.id);
+      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0]!.s as { active_pass: { id: string; leads_left: number } | null };
+      expect(s.active_pass?.id).toBe(pass.rows[0]!.id);
       expect(s.active_pass?.leads_left).toBe(0);
       await assertLedgerInvariant(c, st);
     });

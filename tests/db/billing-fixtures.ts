@@ -50,7 +50,7 @@ export async function publishPlan(c: Client, input: PlanInput, actorId: string =
 export async function publishPlanOk(c: Client, input: PlanInput, actorId: string = IDS.admin): Promise<string> {
   const r = await publishPlan(c, input, actorId);
   if (r.error) throw new Error(`publishPlan: ${r.error} (${r.hint})`);
-  return r.rows[0].id as string;
+  return r.rows[0]!.id as string;
 }
 
 /**
@@ -68,7 +68,7 @@ export async function ensureTestBillingPlan(opts: { force?: boolean } = {}): Pro
       const inserted = await c.query(
         `insert into public.plans (version, status, free_leads, free_leads_validity_days, pass_price_cents, pass_included_leads,
                                    pass_max_installments, season_start_month, season_end_month, published_by)
-         values ((select coalesce(max(version), 0) + 1 from public.plans), 'active', $1, $2, null, null, 1, $3, $4, null)
+         values ((select coalesce(max(version), 0) + 1 from public.plans), 'active', $1, $2, null, null, null, $3, $4, null)
          returning id`,
         [p.free_leads, p.free_leads_validity_days, p.season.start_month, p.season.end_month],
       );
@@ -208,7 +208,7 @@ export async function purchasePass(
 export async function topUp(c: Client, o: { actor: string; stationery: string; pkg: string }): Promise<number> {
   const inv = await createPackageInvoice(c, o);
   if (inv.error) throw new Error(`fatura: ${inv.error} (${inv.hint})`);
-  const invoiceId = inv.rows[0].id as string;
+  const invoiceId = inv.rows[0]!.id as string;
   const amount = Number((await c.query("select amount_cents from public.invoices where id = $1", [invoiceId])).rows[0].amount_cents);
   const ok = await confirmInvoice(c, { invoice: invoiceId, amount });
   if (ok.error) throw new Error(`confirmar: ${ok.error} (${ok.hint})`);

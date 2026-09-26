@@ -205,7 +205,7 @@ describe("S21 · 0401: esquema, privilégios e planos", () => {
     await withClaims("system", async (c) => {
       await publishPlanOk(c, plan());
       await publishPlanOk(c, plan());
-      const all = (await c.query("select count(*)::int as n from public.plans")).rows[0].n;
+      const all = (await c.query("select count(*)::int as n from public.plans")).rows[0]!.n;
       expect(all).toBeGreaterThanOrEqual(2);
       await c.query("set local role authenticated");
       await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: IDS.parent })]);
@@ -239,7 +239,7 @@ describe("S21 · 0401: esquema, privilégios e planos", () => {
       const w = await ensureWallet(c, st);
       expect(w.error).toBeNull();
       const again = await ensureWallet(c, st);
-      expect(again.rows[0].id).toBe(w.rows[0].id);
+      expect(again.rows[0]!.id).toBe(w.rows[0]!.id);
       const row = (await c.query("select free_leads_granted, free_leads_expires_at, is_demo, plan_id, (free_leads_expires_at - now()) as left from public.stationery_wallets where stationery_id = $1", [st])).rows[0];
       expect(row.free_leads_granted).toBe(3);
       expect(row.is_demo).toBe(true);
@@ -278,13 +278,16 @@ describe("S21 · 0401: esquema, privilégios e planos", () => {
     await withClaims("system", async (c) => {
       await publishPlanOk(c, plan({ free_leads: 2, free_leads_validity_days: 10, tiers: [{ min_items: 1, max_items: 5, price_cents: 300 }, { min_items: 6, max_items: null, price_cents: 700 }] }));
       const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
-      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0].s as Record<string, unknown>;
+      const s = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st])).rows[0]!.s as Record<string, unknown>;
       expect(s).toMatchObject({ available: true, balance_cents: 0, free_granted: 2, free_left: 2, active_pass: null, can_receive_min_tier: true, min_tier_price_cents: 300 });
       expect(typeof s.free_expires_at).toBe("string");
       expect((s.plan as { id: string }).id).toBe(await activePlanId(c));
+      // archive: nem service_role escreve direto em plans (testado abaixo); só o dono do banco, temporariamente.
+      await c.query("reset role");
       await c.query("update public.plans set status = 'archived' where status = 'active'");
+      await c.query("set local role service_role");
       const st2 = await seedStationery(c, { status: "active" });
-      const s2 = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st2])).rows[0].s as Record<string, unknown>;
+      const s2 = (await c.query("select public.billing_wallet_summary($1::uuid) as s", [st2])).rows[0]!.s as Record<string, unknown>;
       expect(s2).toMatchObject({ available: false });
     });
   });

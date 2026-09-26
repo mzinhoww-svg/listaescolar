@@ -80,7 +80,7 @@ describe("S21 · concorrência do razão (dados confirmados)", () => {
     expect(outcomes.filter((o) => o === "ok")).toHaveLength(K);
     expect(outcomes.filter((o) => o === "billing_required")).toHaveLength(2 * K);
     await withSuperuser(async (c) => {
-      const n = (await c.query("select count(*)::int as n from public.leads where stationery_id = $1", [st])).rows[0].n;
+      const n = (await c.query("select count(*)::int as n from public.leads where stationery_id = $1", [st])).rows[0]!.n;
       expect(n).toBe(K);
       const rows = await ledgerOf(c, st);
       expect(rows.map((r) => r.entry_type)).toEqual(["topup", ...Array.from({ length: K }, () => "lead_debit")]);
@@ -88,25 +88,27 @@ describe("S21 · concorrência do razão (dados confirmados)", () => {
       expect(rows.every((r) => Number(r.balance_after_cents) >= 0)).toBe(true);
       await assertLedgerInvariant(c, st);
       // nenhum resto de transação desfeita: itens/eventos/notificações só dos K leads
-      const events = (await c.query("select count(*)::int as n from public.lead_events e join public.leads l on l.id = e.lead_id where l.stationery_id = $1 and e.event_type = 'created'", [st])).rows[0].n;
+      const events = (await c.query("select count(*)::int as n from public.lead_events e join public.leads l on l.id = e.lead_id where l.stationery_id = $1 and e.event_type = 'created'", [st])).rows[0]!.n;
       expect(events).toBe(K);
     });
   });
 
   it("(b) mesma fatura confirmada 5x em paralelo -> 1 topup; (c) estorno paralelo -> 1 reversal", async () => {
-    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: true } }));
+    // dono diferente do teste (a): cada `it` desta suíte confirma dados (asServiceCommitted) e só é limpo no afterAll,
+    // e um perfil só pode ser owner de uma papelaria por vez (stationery_members_one_owner_per_profile).
+    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: IDS.school_member, overrides: { is_demo: true } }));
     stationeries.push(st);
     const inv = await asServiceCommitted(async (c) => {
       const pkg = await packageOf(c, await activePlanId(c));
-      const r = await createPackageInvoice(c, { actor: IDS.stationery_member, stationery: st, pkg });
+      const r = await createPackageInvoice(c, { actor: IDS.school_member, stationery: st, pkg });
       if (r.error) throw new Error(r.error);
-      return r.rows[0].id as string;
+      return r.rows[0]!.id as string;
     });
-    const amount = await withSuperuser(async (c) => Number((await c.query("select amount_cents from public.invoices where id = $1", [inv])).rows[0].amount_cents));
+    const amount = await withSuperuser(async (c) => Number((await c.query("select amount_cents from public.invoices where id = $1", [inv])).rows[0]!.amount_cents));
     const confirms = await Promise.allSettled(
       Array.from({ length: 5 }, (_, i) => asServiceCommitted((c) => confirmInvoice(c, { invoice: inv, amount, ref: `par-${i}` }))),
     );
-    const oks = confirms.map((r) => (r.status === "fulfilled" && !r.value.error ? r.value.rows[0].ok : `err:${r.status === "fulfilled" ? r.value.error : String(r.reason)}`));
+    const oks = confirms.map((r) => (r.status === "fulfilled" && !r.value.error ? r.value.rows[0]!.ok : `err:${r.status === "fulfilled" ? r.value.error : String(r.reason)}`));
     expect(oks.filter((o) => o === true)).toHaveLength(1);
     expect(oks.filter((o) => o === false)).toHaveLength(4);
     const debit = await asServiceCommitted(async (c) => {
@@ -120,7 +122,7 @@ describe("S21 · concorrência do razão (dados confirmados)", () => {
     const reversals = await Promise.allSettled(
       Array.from({ length: 5 }, () => asServiceCommitted((c) => c.query("select public.billing_reverse_entry($1::uuid, null, 'system', 'paralelo') as id", [debit]))),
     );
-    const ids = new Set(reversals.map((r) => (r.status === "fulfilled" ? (r.value.rows[0].id as string) : `err:${String(r.reason)}`)));
+    const ids = new Set(reversals.map((r) => (r.status === "fulfilled" ? (r.value.rows[0]!.id as string) : `err:${String(r.reason)}`)));
     expect(ids.size).toBe(1);
     await withSuperuser(async (c) => {
       const rows = await ledgerOf(c, st);
@@ -132,17 +134,17 @@ describe("S21 · concorrência do razão (dados confirmados)", () => {
   });
 
   it("(d) confirmações de faturas diferentes + débitos simultâneos na mesma carteira -> soma exata, sem deadlock", async () => {
-    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: true } }));
+    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: IDS.admin, overrides: { is_demo: true } }));
     stationeries.push(st);
     const invoices = await asServiceCommitted(async (c) => {
       const planId = await activePlanId(c);
       const pkg = await packageOf(c, planId);
-      await topUp(c, { actor: IDS.stationery_member, stationery: st, pkg }); // saldo inicial para os débitos
+      await topUp(c, { actor: IDS.admin, stationery: st, pkg }); // saldo inicial para os débitos
       const out: { id: string; amount: number }[] = [];
       for (let i = 0; i < 3; i++) {
-        const r = await createPackageInvoice(c, { actor: IDS.stationery_member, stationery: st, pkg });
+        const r = await createPackageInvoice(c, { actor: IDS.admin, stationery: st, pkg });
         if (r.error) throw new Error(r.error);
-        out.push({ id: r.rows[0].id as string, amount: K * PRICE });
+        out.push({ id: r.rows[0]!.id as string, amount: K * PRICE });
       }
       return out;
     });
@@ -170,17 +172,17 @@ describe("S21 · concorrência do razão (dados confirmados)", () => {
   it("(e) compra de passe paralela com a mesma chave e com chaves diferentes -> 1 passe", async () => {
     const today = await withSuperuser(cuiabaToday);
     await asServiceCommitted((c) => publishPlanOk(c, plan({ ...CHARGING_PLAN, season: { start_month: today.month, end_month: ((today.month + 2) % 12) + 1 } })));
-    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: true } }));
+    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: IDS.parent, overrides: { is_demo: true } }));
     stationeries.push(st);
     const key = randomUUID();
     const runs = await Promise.allSettled([
-      ...Array.from({ length: 3 }, () => asServiceCommitted((c) => purchasePass(c, { actor: IDS.stationery_member, stationery: st, installments: 2, key }))),
-      ...Array.from({ length: 3 }, () => asServiceCommitted((c) => purchasePass(c, { actor: IDS.stationery_member, stationery: st, installments: 3 }))),
+      ...Array.from({ length: 3 }, () => asServiceCommitted((c) => purchasePass(c, { actor: IDS.parent, stationery: st, installments: 2, key }))),
+      ...Array.from({ length: 3 }, () => asServiceCommitted((c) => purchasePass(c, { actor: IDS.parent, stationery: st, installments: 3 }))),
     ]);
-    const ids = new Set(runs.map((r) => (r.status === "fulfilled" ? (r.value.error ? `err:${r.value.hint}` : (r.value.rows[0].id as string)) : `rej:${String(r.reason)}`)));
+    const ids = new Set(runs.map((r) => (r.status === "fulfilled" ? (r.value.error ? `err:${r.value.hint}` : (r.value.rows[0]!.id as string)) : `rej:${String(r.reason)}`)));
     expect(ids.size).toBe(1);
     await withSuperuser(async (c) => {
-      const n = (await c.query("select count(*)::int as n from public.season_passes where stationery_id = $1", [st])).rows[0].n;
+      const n = (await c.query("select count(*)::int as n from public.season_passes where stationery_id = $1", [st])).rows[0]!.n;
       expect(n).toBe(1);
     });
   });

@@ -419,6 +419,46 @@ export async function purgeLeads(opts: { leadIds?: readonly string[]; requesterI
 }
 
 /**
+ * Remove dados de cobrança (S21) de papelarias de teste que confirmaram (commit). `credit_ledger`/`plans` são
+ * imutáveis por gatilho (`enable always`, disparam mesmo com `session_replication_role = replica`): a limpeza
+ * desativa os gatilhos de imutabilidade, apaga e os reativa com `enable always` (o teste confere `tgenabled = 'A'`
+ * depois). Só de teste; nunca usar fora de `tests/`.
+ */
+export async function purgeBilling(opts: { stationeryIds: readonly string[] }): Promise<void> {
+  if (opts.stationeryIds.length === 0) return;
+  const guarded: [string, string][] = [
+    ["plans", "plans_guard"],
+    ["plan_price_tiers", "plan_price_tiers_no_update_delete"],
+    ["plan_credit_packages", "plan_credit_packages_no_update_delete"],
+    ["stationery_wallets", "stationery_wallets_no_update_delete"],
+    ["credit_ledger", "credit_ledger_no_update_delete"],
+    ["credit_ledger", "credit_ledger_no_truncate"],
+  ];
+  await withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      for (const [table, trigger] of guarded) {
+        await c.query(`alter table public.${table} disable trigger ${trigger}`);
+      }
+      await c.query(
+        `delete from public.credit_ledger e where e.wallet_id in (select id from public.stationery_wallets where stationery_id = any($1::uuid[]))`,
+        [opts.stationeryIds],
+      );
+      await c.query("delete from public.invoices where stationery_id = any($1::uuid[])", [opts.stationeryIds]);
+      await c.query("delete from public.season_passes where stationery_id = any($1::uuid[])", [opts.stationeryIds]);
+      await c.query("delete from public.stationery_wallets where stationery_id = any($1::uuid[])", [opts.stationeryIds]);
+      for (const [table, trigger] of guarded) {
+        await c.query(`alter table public.${table} enable always trigger ${trigger}`);
+      }
+      await c.query("commit");
+    } catch (e) {
+      await c.query("rollback");
+      throw e;
+    }
+  });
+}
+
+/**
  * Garante uma linha em `schools` (S11/0600: list_submissions.school_id agora tem FK). Sem `id`, cria uma escola nova;
  * com `id`, é idempotente. O INEP sai do próprio id (8 dígitos), sem colidir com os seeds dos testes (51999xxx).
  */

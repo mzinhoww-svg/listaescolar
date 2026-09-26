@@ -22,5 +22,8 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     globals: false,
+    // Garante um plano de cobrança (S21) ativo antes de QUALQUER arquivo, independente da ordem alfabética: o
+    // gatilho leads_billing_charge cobre toda inserção em `leads`, inclusive dos testes de outras fatias.
+    globalSetup: ["./tests/db/db-global-setup.ts"],
   },
 });

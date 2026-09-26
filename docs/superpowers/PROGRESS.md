@@ -13,8 +13,8 @@ Fatia isolada fora da numeração S00–S27, autorizada pelo fundador em 25/09/2
 - Entregue: `/pesquisa` (12 telas + boas-vindas + final com lead e compartilhamento), `/pesquisa/resultados` (senha, cartões, funil, por pergunta, por origem, frases, CSV), `/pesquisa/privacidade`, `app/api/pesquisa/{resposta,concluir,lead,login,export}`.
 - Migrations aditivas `0700_pesquisa_maes.sql` e `0701_pesquisa_maes_ajustes.sql` aplicadas no ListaEscolar (staging = único projeto; ver tabela de migrations). Tabelas `survey_*` nunca entram em reset/truncate de nenhuma fatia (ADR-005).
 - Variáveis `PESQUISA_RESULTS_PASSWORD` e `IP_HASH_SALT` cadastradas na Vercel (Production/Preview/Development); valores fora do repositório.
-- Gate: typecheck ✓, lint ✓, `pnpm test` 2604 (106 da pesquisa), build ✓, CI `verify` ✓ `db` ✓, 7 cenários E2E no preview (`docs/superpowers/e2e/pesquisa-maes.md`; 25 capturas 390×844 + 4 de desktop 1280×800 em `docs/superpowers/evidencias/pesquisa/`), revisão independente por subagente em três rodadas (implementação, polimento visual, rodada `/impeccable` + achados) registrada no ledger. Passe de design com `/impeccable` (detector 0 achados) descrito no relatório E2E, seção "Rodada 2".
-- Pós-merge (feito em 2026-09-25, 23:12–23:59 UTC): cenários 1–6 repetidos em produção (26/26 asserções, capturas em `evidencias/pesquisa/prod/`), export CSV conferido por HTTP puro (BOM, 401 sem cookie); 10 linhas `e2e-teste` apagadas (leads em cascata), contagem `e2e-teste` = 0; a 1ª resposta real (origem `grupo-maes-1`, com lead) já estava no banco e não foi tocada. Kit de divulgação em `docs/superpowers/pesquisa-divulgacao.md`. Detalhes na seção "Produção (pós-merge)" de `docs/superpowers/e2e/pesquisa-maes.md`.
+- Gate: typecheck ✓, lint ✓, `pnpm test` 2604 no PR (106 da pesquisa; 2801 na árvore mesclada com a S11), build ✓, CI `verify` ✓ `db` ✓, 7 cenários E2E no preview (`docs/superpowers/e2e/pesquisa-maes.md`; 25 capturas 390×844 + 4 de desktop 1280×800 em `docs/superpowers/evidencias/pesquisa/`), revisão independente por subagente em três rodadas (implementação, polimento visual, rodada `/impeccable` + achados) registrada no ledger. Passe de design com `/impeccable` (detector 0 achados) descrito no relatório E2E, seção "Rodada 2".
+- Pós-merge (feito em 2026-09-25, 23:12–23:59 UTC): cenários 1–6 repetidos em produção (26/26 asserções, capturas em `evidencias/pesquisa/prod/`), export CSV conferido por HTTP puro (BOM, 401 sem cookie); 10 linhas `e2e-teste` apagadas (leads em cascata), contagem `e2e-teste` = 0; a 1ª resposta real já estava no banco e não foi tocada. Kit de divulgação em `docs/superpowers/pesquisa-divulgacao.md`. Detalhes na seção "Produção (pós-merge)" de `docs/superpowers/e2e/pesquisa-maes.md`.
 - Pendência futura (S20, ADR-005): migrar os dados `survey_*` para o projeto de produção quando ele existir; até lá, backup semanal por CSV pela página de resultados.
 
 ## Concluídas (merge squash em `main`)
@@ -43,7 +43,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | docs PROGRESS/DEBT e agendamento da refatoração | #18 | 7f68737 | 2026-09-25 | n/a | n/a | n/a | n/a | n/a | n/d | n/d | n/a (só docs) |
 | S27 Site público e páginas de sistema (Comércio) | #19 | 8cbd458 | 2026-09-25 | ✓ | ✓ | 2073 | n/a (sem migration) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 265 verificações, 0 falhas (`e2e/S27.md`) |
 | S09 Motor de aprovação automática (Pipeline) | #20 | b905cce | 2026-09-25 | ✓ | ✓ | 2279 (árvore mesclada) | 1312 (3 skipped) | ✓ | verify ✓ db ✓ (neste PR) | n/d | build local, 61 verificações, 0 falhas (`e2e/S09.md`) |
-| Pesquisa com mães (ADR-005, fora do PLAN) | #28 | 16d76c8 | 2026-09-25 | ✓ | ✓ | 2604 | n/a (sem Docker nesta sessão; CI `db` ✓) | ✓ | verify ✓ db ✓ | ✓ (preview público) | 7 cenários no preview da Vercel, 25 capturas mobile + 4 desktop (`e2e/pesquisa-maes.md`); repetição em produção após o merge |
+| Pesquisa com mães (ADR-005, fora do PLAN) | #28 | 16d76c8 | 2026-09-25 | ✓ | ✓ | 2604 (2801 na árvore mesclada com S11) | n/a (sem Docker nesta sessão; CI `db` ✓) | ✓ | verify ✓ db ✓ | ✓ (preview público) | 7 cenários no preview da Vercel, 25 capturas mobile + 4 desktop; repetida em produção (cenários 1–6, 26/26, `evidencias/pesquisa/prod/`) (`e2e/pesquisa-maes.md`) |
 
 | chore previews públicos + noindex (D-049, D-058, D-074) | #22 | d735874 | 2026-09-25 | ✓ | ✓ | ✓ | n/a | ✓ | verify ✓ db ✓ | ✓ (primeiro preview READY) | n/a (curl: 200 + X-Robots-Tag noindex) |
 | S10 Revisão humana e revisão do pai (Pipeline) | #23 | 02dfe00 | 2026-09-25 | ✓ | ✓ | 2494 | 1375 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 124 verificações, 0 falhas (`e2e/S10.md`) |
@@ -81,7 +81,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0601_integration.sql | S11 | integration | aplicada em 2026-09-25 (perfil `system` criado; `auth.users` do hospedado conferido antes) |
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
 
-Pendente de staging: nenhuma. As tabelas `survey_*` vêm das migrations 0700/0701 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado pelo humano em 2026-09-25); os advisors apontam RLS sem policy nelas (só service_role) — conferir na revisão de segurança da S19.
+Pendente de staging: nenhuma. As tabelas `survey_*` vêm das migrations 0700/0701 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir na revisão de segurança da S19.
 
 Produção: nenhuma migration (o projeto não existe).
 

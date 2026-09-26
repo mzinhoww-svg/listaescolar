@@ -94,11 +94,26 @@ Produção: nenhuma migration (o projeto não existe).
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
 | Comércio | S12, S13, S14, S27 | **Completa** (S12–S14 e S27) |
 
+## Ponto de retomada (2026-09-26, após reinício da máquina)
+
+A máquina reiniciou e interrompeu os implementadores da S21 e da S24. Estado conferido contra o GitHub antes de retomar:
+
+| Fatia | Worktree | Branch | Último commit no GitHub | Situação |
+|---|---|---|---|---|
+| S21 Cobrança | `T3-comercio` | `slice/S21-cobranca` | `4ec6fae` (Task 1: migration `0401_billing` e testes de banco) | Task 1 no GitHub (gate a reconferir). Task 2 estava pela metade SEM commit (23 arquivos: `features/billing/*`, webhook Pix, cron de conciliação): DESCARTADA do worktree e guardada só na branch local `backup/descartado-reinicio-slice-S21-cobranca` para consulta |
+| S24 Portal B2B | `T2-pipeline` | `slice/S24-portal-b2b` | `fecf5a5` (Task 1: migration `0501` com parceiros, chaves com hash, rate limit e leitura pública) | Task 1 no GitHub (gate a reconferir). Task 2 estava pela metade SEM commit (52 arquivos: `app/v1/*`, `features/b2b/*`): DESCARTADA do worktree e guardada só na branch local `backup/descartado-reinicio-slice-S24-portal-b2b` |
+
+Os WIPs `b449b60` (S21) e `18992ef` (S24) já estavam no GitHub e ficam na história das branches. Nada ficou só nesta máquina além dos dois backups locais (trabalho não verificado, não usado como base).
+
+Ambiente religado: Colima e o Supabase local das trilhas 2 e 3 (`pnpm db:start`).
+
+Retomada: S21 e S24 continuam da **Task 2** de cada plano, com implementadores Sonnet; revisão de segurança com Opus ao fim de cada fatia (cobrança e B2B); depois S22/S23 e S25/S26, na ordem abaixo.
+
 ## Próximos passos (ordem do PLAN)
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21, S22, S23] ∥ [S24, S25, S26].
+3. Em paralelo: [S21 (em andamento: Task 2), S22, S23] ∥ [S24 (em andamento: Task 2), S25, S26].
 4. S15, S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.

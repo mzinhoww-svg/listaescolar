@@ -3,7 +3,7 @@ import { normalizeCnpj } from "@/features/stationeries/cnpj";
 
 import { B2bServiceError } from "./errors";
 import type { GeneratedApiKey, ApiKeyEnvironment } from "./keys/format";
-import type { AdminPartnerRow, ApplyPartnerPayload, PartnerOverview } from "./repository";
+import type { AdminPartnerRow, ApplyPartnerPayload, PartnerEvent, PartnerHeader, PartnerOverview } from "./repository";
 import {
   ApplyPartnerInputSchema,
   CreateKeyInputSchema,
@@ -38,6 +38,8 @@ export type B2bRepository = {
   getPartner: (actor: SessionActor, partnerId: string) => Promise<PartnerOverview | null>;
   decide: (actor: SessionActor, partnerId: string, input: Record<string, unknown> & { to: string }) => Promise<string>;
   adminRevokeKey: (actor: SessionActor, keyId: string, reason?: string) => Promise<void>;
+  partnerHeader: (partnerId: string) => Promise<PartnerHeader | null>;
+  listPartnerEvents: (partnerId: string) => Promise<PartnerEvent[]>;
 };
 
 export type B2bServiceDeps = {
@@ -81,6 +83,13 @@ export class B2bService {
 
   async getMyPartner(actor: SessionActor): Promise<PartnerOverview | null> {
     return this.deps.repo.getMyPartner(actor);
+  }
+
+  /** Dados de cadastro (Empresa, CNPJ, contato...) do parceiro do ator. `null`: sem vínculo. */
+  async getMyPartnerHeader(actor: SessionActor): Promise<PartnerHeader | null> {
+    const partnerId = await this.deps.repo.myPartnerId(actor);
+    if (!partnerId) return null;
+    return this.deps.repo.partnerHeader(partnerId);
   }
 
   /** Cria uma chave nova; devolve o texto claro (`plaintext`) UMA VEZ. Nunca logado. */
@@ -133,6 +142,18 @@ export class B2bService {
   async getPartner(actor: SessionActor, partnerId: string): Promise<PartnerOverview | null> {
     requireAdmin(actor);
     return this.deps.repo.getPartner(actor, partnerId);
+  }
+
+  /** Dados de cadastro do parceiro para o Admin15 (dados do cadastro, sem expor o e-mail do dono). */
+  async getPartnerHeader(actor: SessionActor, partnerId: string): Promise<PartnerHeader | null> {
+    requireAdmin(actor);
+    return this.deps.repo.partnerHeader(partnerId);
+  }
+
+  /** Linha do tempo de eventos (Admin15). */
+  async listPartnerEvents(actor: SessionActor, partnerId: string): Promise<PartnerEvent[]> {
+    requireAdmin(actor);
+    return this.deps.repo.listPartnerEvents(partnerId);
   }
 
   async decidePartner(actor: SessionActor, partnerId: string, raw: unknown): Promise<string> {

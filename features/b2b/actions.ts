@@ -62,7 +62,7 @@ export async function createKeyAction(input: { environment: "test" | "live"; sco
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getB2bService().createKey(actor, input));
-  if (result.ok) revalidatePath("/b2b/chaves");
+  if (result.ok) revalidatePath("/b2b/api");
   return result;
 }
 
@@ -72,7 +72,7 @@ export async function rotateKeyAction(input: { keyId: string; graceDays?: number
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getB2bService().rotateKey(actor, input));
-  if (result.ok) revalidatePath("/b2b/chaves");
+  if (result.ok) revalidatePath("/b2b/api");
   return result;
 }
 
@@ -80,6 +80,6 @@ export async function revokeKeyAction(input: { keyId: string; reason?: string })
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getB2bService().revokeKey(actor, input));
-  if (result.ok) revalidatePath("/b2b/chaves");
+  if (result.ok) revalidatePath("/b2b/api");
   return result;
 }

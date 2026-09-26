@@ -26,6 +26,8 @@ function makeRepo(overrides: Partial<{ [K in keyof B2bRepository]: B2bRepository
     getPartner: vi.fn(async () => null as PartnerOverview | null),
     decide: vi.fn(async () => "active"),
     adminRevokeKey: vi.fn(async () => undefined),
+    partnerHeader: vi.fn(async () => null),
+    listPartnerEvents: vi.fn(async () => []),
     ...overrides,
   };
 }
@@ -160,5 +162,36 @@ describe("B2bService — admin só com role = 'admin'", () => {
   it("adminRevokeKey: não-admin é recusado antes do repositório", async () => {
     await expect(svc.adminRevokeKey(actorOf("parent"), "k1")).rejects.toMatchObject({ code: "forbidden" });
     expect(repo.adminRevokeKey).not.toHaveBeenCalled();
+  });
+
+  it("getPartnerHeader: não-admin é recusado antes do repositório", async () => {
+    await expect(svc.getPartnerHeader(actorOf("parent"), "p1")).rejects.toMatchObject({ code: "forbidden" });
+    expect(repo.partnerHeader).not.toHaveBeenCalled();
+    await svc.getPartnerHeader(actorOf("admin"), "p1");
+    expect(repo.partnerHeader).toHaveBeenCalledWith("p1");
+  });
+
+  it("listPartnerEvents: não-admin é recusado antes do repositório", async () => {
+    await expect(svc.listPartnerEvents(actorOf("parent"), "p1")).rejects.toMatchObject({ code: "forbidden" });
+    expect(repo.listPartnerEvents).not.toHaveBeenCalled();
+    await svc.listPartnerEvents(actorOf("admin"), "p1");
+    expect(repo.listPartnerEvents).toHaveBeenCalledWith("p1");
+  });
+});
+
+describe("B2bService — getMyPartnerHeader", () => {
+  it("sem vínculo (myPartnerId null) devolve null sem chamar partnerHeader", async () => {
+    const repo = makeRepo({ myPartnerId: vi.fn(async () => null) });
+    const svc = new B2bService(makeDeps(repo));
+    expect(await svc.getMyPartnerHeader(actorOf("parent"))).toBeNull();
+    expect(repo.partnerHeader).not.toHaveBeenCalled();
+  });
+
+  it("com vínculo, lê o cabeçalho do próprio parceiro", async () => {
+    const header = { tradeName: "Loja", legalName: "Loja LTDA", cnpj: "1".repeat(14), contactName: "Fulano", partnerType: "retailer", coverageUfs: null, statusReason: null, isDemo: false, createdAt: "2026-01-01" };
+    const repo = makeRepo({ myPartnerId: vi.fn(async () => "p1"), partnerHeader: vi.fn(async () => header) });
+    const svc = new B2bService(makeDeps(repo));
+    expect(await svc.getMyPartnerHeader(actorOf("parent"))).toEqual(header);
+    expect(repo.partnerHeader).toHaveBeenCalledWith("p1");
   });
 });

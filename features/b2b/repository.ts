@@ -192,6 +192,92 @@ export async function getMyPartner(client: SupabaseClient, actor: SessionActor):
 }
 
 // ---------------------------------------------------------------------------
+// Dados de cadastro (B2B00 preview em B2B01/B2B02/Conta e Admin15) — Task 3, Ruling: função aditiva nova (nenhuma
+// existente mudou). `b2b_partner_overview` só traz agregados (sem nome/CNPJ/contato); a tela precisa dos dois.
+// Select direto em `b2b_partners`, sempre por um `partnerId` que quem chama já resolveu por posse ou papel admin.
+// ---------------------------------------------------------------------------
+
+export type PartnerHeader = {
+  tradeName: string;
+  legalName: string;
+  cnpj: string;
+  contactName: string;
+  partnerType: string;
+  coverageUfs: readonly string[] | null;
+  statusReason: string | null;
+  isDemo: boolean;
+  createdAt: string;
+};
+
+const partnerHeaderSchema = z
+  .object({
+    trade_name: z.string(),
+    legal_name: z.string(),
+    cnpj: z.string(),
+    contact_name: z.string(),
+    partner_type: z.string(),
+    coverage_ufs: z.array(z.string()).nullable(),
+    status_reason: z.string().nullable(),
+    is_demo: z.boolean(),
+    created_at: z.string(),
+  })
+  .transform((r) => ({
+    tradeName: r.trade_name,
+    legalName: r.legal_name,
+    cnpj: r.cnpj,
+    contactName: r.contact_name,
+    partnerType: r.partner_type,
+    coverageUfs: r.coverage_ufs,
+    statusReason: r.status_reason,
+    isDemo: r.is_demo,
+    createdAt: r.created_at,
+  }));
+
+export async function partnerHeader(client: SupabaseClient, partnerId: string): Promise<PartnerHeader | null> {
+  const { data, error } = await client
+    .from("b2b_partners")
+    .select("trade_name, legal_name, cnpj, contact_name, partner_type, coverage_ufs, status_reason, is_demo, created_at")
+    .eq("id", partnerId)
+    .maybeSingle();
+  if (error) fail("ler dados do parceiro", error);
+  return data ? partnerHeaderSchema.parse(data) : null;
+}
+
+export type PartnerEvent = {
+  id: string;
+  eventType: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  actorRole: string;
+  reason: string | null;
+  createdAt: string;
+};
+
+const partnerEventSchema = z
+  .object({
+    id: z.uuid(),
+    event_type: z.string(),
+    from_status: z.string().nullable(),
+    to_status: z.string().nullable(),
+    actor_role: z.string(),
+    reason: z.string().nullable(),
+    created_at: z.string(),
+  })
+  .transform((r) => ({ id: r.id, eventType: r.event_type, fromStatus: r.from_status, toStatus: r.to_status, actorRole: r.actor_role, reason: r.reason, createdAt: r.created_at }));
+
+/** Linha do tempo (Admin15). Nunca `actor_id` (id de perfil) — mesma exclusão do `grant` para `authenticated`,
+ * ainda que aqui o cliente seja de serviço. */
+export async function listPartnerEvents(client: SupabaseClient, partnerId: string): Promise<PartnerEvent[]> {
+  const { data, error } = await client
+    .from("b2b_partner_events")
+    .select("id, event_type, from_status, to_status, actor_role, reason, created_at")
+    .eq("partner_id", partnerId)
+    .order("created_at", { ascending: false });
+  if (error) fail("ler linha do tempo do parceiro", error);
+  return z.array(partnerEventSchema).parse(data ?? []);
+}
+
+// ---------------------------------------------------------------------------
 // Chaves (B2B02)
 // ---------------------------------------------------------------------------
 

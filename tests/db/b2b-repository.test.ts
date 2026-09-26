@@ -25,7 +25,9 @@ import {
   decide,
   getMyPartner,
   getPartner,
+  listPartnerEvents,
   listPartners,
+  partnerHeader,
   revokeKey,
   rotateKey,
 } from "@/features/b2b/repository";
@@ -256,6 +258,45 @@ describe("getMyPartner", () => {
 
     const outsider = await makeUser("overview-outsider");
     expect(await getMyPartner(admin, await actorOf(outsider))).toBeNull();
+  });
+});
+
+describe("partnerHeader", () => {
+  it("traz os dados de cadastro (Empresa, CNPJ, contato) por id, sem depender de posse (quem chama já resolveu)", async () => {
+    const owner = await makeUser("header-owner");
+    const partnerId = await withSuperuser((c) => seedPartner(c, { status: "suspended", ownerId: owner }));
+    partnerIds.push(partnerId);
+    const header = await partnerHeader(admin, partnerId);
+    expect(header).toMatchObject({
+      tradeName: "Parceiro Teste",
+      legalName: "Parceiro Teste LTDA",
+      contactName: "Contato Teste",
+      partnerType: "retailer",
+      statusReason: "motivo de teste",
+      isDemo: false,
+    });
+    expect(header?.cnpj).toMatch(/^[0-9A-Z]{14}$/);
+    expect(await partnerHeader(admin, "00000000-0000-4000-8000-000000000099")).toBeNull();
+  });
+});
+
+describe("listPartnerEvents", () => {
+  it("devolve a linha do tempo do parceiro, mais recente primeiro", async () => {
+    const owner = await makeUser("events-owner");
+    const partnerId = await withSuperuser((c) => seedPartner(c, { status: "sandbox", ownerId: owner }));
+    partnerIds.push(partnerId);
+    await withSuperuser((c) =>
+      c.query(
+        `insert into public.b2b_partner_events (partner_id, event_type, from_status, to_status, actor_role, reason) values
+         ($1, 'applied', null, 'pending', 'owner', null),
+         ($1, 'decided', 'pending', 'sandbox', 'admin', null)`,
+        [partnerId],
+      ),
+    );
+    const events = await listPartnerEvents(admin, partnerId);
+    expect(events.map((e) => e.eventType)).toEqual(["decided", "applied"]);
+    expect(events[0]).toMatchObject({ fromStatus: "pending", toStatus: "sandbox", actorRole: "admin" });
+    expect(events.every((e) => !("actorId" in e))).toBe(true);
   });
 });
 

@@ -7,7 +7,8 @@ import { siteBase } from "@/lib/site-base";
 
 export const revalidate = 3600;
 
-const STATIC_PATHS: readonly string[] = [...Object.values(SITE_PAGES).map((p) => p.path), "/escolas"];
+// `/parceiros*` (S24, B2B00/B2B03): páginas públicas informativas, fora de `SITE_PAGES` (que é o site de pais/escolas).
+const STATIC_PATHS: readonly string[] = [...Object.values(SITE_PAGES).map((p) => p.path), "/escolas", "/parceiros", "/parceiros/docs", "/parceiros/termos"];
 
 /** Páginas do site + perfis de escola indexáveis. Nunca listas, papelarias, demo, áreas privadas nem `/l/`. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

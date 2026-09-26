@@ -25,6 +25,8 @@ function realRepository(): B2bRepository {
     getPartner: (actor, partnerId) => repo.getPartner(client, actor, partnerId),
     decide: (actor, partnerId, input) => repo.decide(client, actor, partnerId, input),
     adminRevokeKey: (actor, keyId, reason) => repo.adminRevokeKey(client, actor, keyId, reason),
+    partnerHeader: (partnerId) => repo.partnerHeader(client, partnerId),
+    listPartnerEvents: (partnerId) => repo.listPartnerEvents(client, partnerId),
   };
 }
 

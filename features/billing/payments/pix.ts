@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import { PIX_EXPIRY_MARGIN_MS } from "../limits";
 import { pixCobResponseSchema, type PixConfig } from "../schemas";
 import type { Charge, ChargeInput, ChargeStatus, PaymentProvider } from "../ports";
 import { httpsJsonClient, PixHttpError, type HttpClient } from "./pix-http";
@@ -116,7 +117,18 @@ export class PixPaymentProvider implements PaymentProvider {
         paidAt: cob.pix?.[0]?.horario ? new Date(cob.pix[0].horario) : this.clock(),
       };
     }
-    if (cob.status === "ATIVA") return { status: "pending", paidAmountCents: null, paidAt: null };
+    if (cob.status === "ATIVA") {
+      // Revisão de segurança (BLOQUEANTE): no BACEN v2 a cob IMEDIATA continua "ATIVA" para sempre — expirar não é
+      // um status, é `calendario.criacao + calendario.expiracao` no passado. Sem esta conta, uma cobrança vencida
+      // ficava "pending" pra sempre e `payInvoice` nunca regenerava: fatura impagável por Pix. Margem
+      // (`PIX_EXPIRY_MARGIN_MS`) a favor do pagador: só considera vencida um pouco DEPOIS do prazo (relógios do
+      // nosso servidor e do PSP nunca são idênticos).
+      const deadline = new Date(cob.calendario.criacao).getTime() + cob.calendario.expiracao * 1000;
+      if (this.clock().getTime() > deadline + PIX_EXPIRY_MARGIN_MS) {
+        return { status: "expired", paidAmountCents: null, paidAt: null };
+      }
+      return { status: "pending", paidAmountCents: null, paidAt: null };
+    }
     if (cob.status === "REMOVIDA_PELO_USUARIO_RECEBEDOR" || cob.status === "REMOVIDA_PELO_PSP") {
       return { status: "expired", paidAmountCents: null, paidAt: null };
     }

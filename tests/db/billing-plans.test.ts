@@ -15,7 +15,7 @@ const BILLING_FUNCTIONS = [
   "billing_reverse_entry",
 ];
 const INTERNAL_FUNCTIONS = ["billing_charge_lead_delivery", "billing_append_entry", "billing_season_window", "billing_jwt_sub", "billing_eval_source"];
-const TABLES = ["plans", "plan_price_tiers", "plan_credit_packages", "stationery_wallets", "credit_ledger", "season_passes", "invoices"];
+const TABLES = ["plans", "plan_price_tiers", "plan_credit_packages", "stationery_wallets", "credit_ledger", "season_passes", "invoices", "invoice_charges"];
 
 describe("S21 · 0401: esquema, privilégios e planos", () => {
   beforeAll(async () => {

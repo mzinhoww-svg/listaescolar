@@ -99,11 +99,31 @@ export class BillingService {
     return { provider, cnpj: info.cnpj, tradeName: info.tradeName };
   }
 
-  private async attachPixChargeIfNeeded(provider: PaymentProvider, invoiceId: string, amountCents: number, description: string, payer: { cnpj: string; name: string }): Promise<{ pixCopyPaste: string | null; chargeExpiresAt: Date | null }> {
+  /**
+   * `expectedCurrentChargeId`: a cobrança que o CHAMADOR leu antes de pedir esta nova ao PSP (`null` numa fatura
+   * nova). O repositório faz compare-and-swap: se ninguém trocou a cobrança da fatura no meio tempo, a nossa vira a
+   * oficial; senão, devolve a de quem ganhou a corrida — o retorno é SEMPRE a cobrança realmente vinculada agora,
+   * nunca necessariamente a que acabamos de criar (revisão de segurança: evita mostrar um BR Code que já perdeu).
+   */
+  private async attachPixChargeIfNeeded(
+    provider: PaymentProvider,
+    invoiceId: string,
+    amountCents: number,
+    description: string,
+    payer: { cnpj: string; name: string },
+    expectedCurrentChargeId: string | null,
+  ): Promise<{ pixCopyPaste: string | null; chargeExpiresAt: Date | null }> {
     if (provider.id !== "pix") return { pixCopyPaste: null, chargeExpiresAt: null };
     const charge = await provider.createCharge({ invoiceId, amountCents, description, payer });
-    await this.deps.store.attachCharge({ invoiceId, provider: provider.id, providerChargeId: charge.chargeId, pixCopyPaste: charge.copyPaste, chargeExpiresAt: charge.expiresAt });
-    return { pixCopyPaste: charge.copyPaste, chargeExpiresAt: charge.expiresAt };
+    const attached = await this.deps.store.attachCharge({
+      invoiceId,
+      provider: provider.id,
+      expectedCurrentChargeId,
+      providerChargeId: charge.chargeId,
+      pixCopyPaste: charge.copyPaste,
+      chargeExpiresAt: charge.expiresAt,
+    });
+    return { pixCopyPaste: attached.pixCopyPaste, chargeExpiresAt: attached.chargeExpiresAt };
   }
 
   /** Compra de pacote de crédito. Sem aceite -> `consent_required` sem chamar o repositório (nada é gravado). */
@@ -124,7 +144,7 @@ export class BillingService {
     });
     const invoice = await this.deps.store.getInvoice(actor, input.stationeryId, invoiceId);
     if (!invoice) throw new BillingError("fatura não encontrada", "not_found");
-    const attached = await this.attachPixChargeIfNeeded(provider, invoiceId, invoice.amountCents, "Recarga de créditos ListaCerta", { cnpj, name: tradeName });
+    const attached = await this.attachPixChargeIfNeeded(provider, invoiceId, invoice.amountCents, "Recarga de créditos ListaCerta", { cnpj, name: tradeName }, invoice.providerChargeId);
     return { invoiceId, provider: provider.id, ...attached };
   }
 
@@ -146,7 +166,7 @@ export class BillingService {
     const passInvoices = invoices.filter((i) => i.kind === "season_pass_installment" && i.seasonPassId === passId).sort((a, b) => (a.installmentNo ?? 0) - (b.installmentNo ?? 0));
     const first = passInvoices.find((i) => i.installmentNo === 1);
     if (!first) throw new BillingError("1ª parcela não encontrada", "database");
-    const attached = await this.attachPixChargeIfNeeded(provider, first.id, first.amountCents, "1ª parcela do passe de temporada ListaCerta", { cnpj, name: tradeName });
+    const attached = await this.attachPixChargeIfNeeded(provider, first.id, first.amountCents, "1ª parcela do passe de temporada ListaCerta", { cnpj, name: tradeName }, first.providerChargeId);
     return {
       invoiceId: first.id,
       provider: provider.id,
@@ -190,9 +210,14 @@ export class BillingService {
         // o PSP (não o relógio local) diz que a cobrança anterior ainda vale: devolve ela, sem regenerar.
         return { pixCopyPaste: invoice.pixCopyPaste, chargeExpiresAt: invoice.chargeExpiresAt };
       }
-      // 'expired' ou 'unknown': a cobrança anterior não serve mais, mas já foi reconsultada (nada de dinheiro perdido).
+      if (status.status === "unknown") {
+        // revisão de segurança: status que não reconhecemos NUNCA regenera às cegas (poderia estar paga de um jeito
+        // que a leitura não capturou); melhor falhar visivelmente do que arriscar uma segunda cobrança indevida.
+        throw new BillingError("não foi possível confirmar o status da cobrança no PSP", "payments_unavailable");
+      }
+      // 'expired': a cobrança anterior não serve mais, mas já foi reconsultada (nada de dinheiro perdido) — regenera.
     }
-    return this.attachPixChargeIfNeeded(provider, invoice.id, invoice.amountCents, "Fatura ListaCerta", { cnpj, name: tradeName });
+    return this.attachPixChargeIfNeeded(provider, invoice.id, invoice.amountCents, "Fatura ListaCerta", { cnpj, name: tradeName }, invoice.providerChargeId);
   }
 
   /** "Simular pagamento (demonstração)": confirma direto, sem depender de status de PSP (não há PSP real na demo). */

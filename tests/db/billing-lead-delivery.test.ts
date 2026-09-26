@@ -130,7 +130,11 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
       await c.query("reset role");
       await c.query("update public.plans set status = 'archived' where status = 'active'");
       await c.query("set local role service_role");
-      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      // `overrides: { is_demo: true }` casa com o carrinho demo padrão (`seedCart`): sem isso, o cenário seria
+      // papelaria REAL + lead demo, que a revisão de segurança (item 3) agora intercepta ANTES de checar o plano
+      // (pula o débito em silêncio, sem levantar `billing_unavailable`) — o teste quer isolar "sem plano ativo",
+      // não o descarte de lead demo contra papelaria real (esse é o `billing-lead-delivery` mais abaixo).
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: true } });
       const cart = await seedCart(c, IDS.parent);
       const r = await leadCreate(c, { cart, stationery: st, itemCount: 2 });
       expect(r.hint).toBe("billing_unavailable");

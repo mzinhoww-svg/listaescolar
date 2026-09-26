@@ -39,5 +39,12 @@ export const DEFAULT_CHARGE_TTL_SECONDS = 3600;
 export const RECONCILE_BATCH_SIZE = 200;
 export const RECONCILE_TIME_BUDGET_MS = 20_000;
 
+/**
+ * Revisão de segurança: no BACEN v2 a cob imediata continua `ATIVA` mesmo depois de `calendario.expiracao` vencer —
+ * expirar não é um status, é uma conta (criação + validade). A margem é a favor do pagador (só considera vencida um
+ * pouco DEPOIS do prazo), técnica para absorver diferença de relógio entre o nosso servidor e o PSP.
+ */
+export const PIX_EXPIRY_MARGIN_MS = 5_000;
+
 /** Fuso em que a temporada e os vencimentos são calculados (SQL usa o mesmo nome). */
 export const BILLING_TIMEZONE = "America/Cuiaba";

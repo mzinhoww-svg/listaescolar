@@ -133,9 +133,11 @@ describe("PixPaymentProvider · createCharge", () => {
 });
 
 describe("PixPaymentProvider · getCharge", () => {
-  const provider = () => {
+  // `calendario` padrão do fixture: criacao 12:00, expiracao 3600s -> vence às 13:00. `provider()` usa um relógio
+  // DENTRO da validade por padrão (12:30); os testes de expiração passam um relógio explícito depois do prazo.
+  const provider = (clock: () => Date = () => new Date("2026-06-10T12:30:00Z")) => {
     const http: HttpClient = vi.fn(async (url) => respond(url));
-    return new PixPaymentProvider(CONFIG, http);
+    return new PixPaymentProvider(CONFIG, http, clock);
   };
 
   it("CONCLUIDA com valor -> paid", async () => {
@@ -145,8 +147,19 @@ describe("PixPaymentProvider · getCharge", () => {
     expect(status).toEqual({ status: "paid", paidAmountCents: 1000, paidAt: new Date("2026-06-10T13:00:00Z") });
   });
 
-  it("ATIVA -> pending", async () => {
+  it("ATIVA dentro da validade -> pending", async () => {
     await expect(provider().getCharge("a".repeat(32))).resolves.toEqual({ status: "pending", paidAmountCents: null, paidAt: null });
+  });
+
+  it("revisão de segurança (BLOQUEANTE): ATIVA depois de calendario.criacao + calendario.expiracao -> expired (o BACEN nunca muda o status sozinho)", async () => {
+    // vencimento é às 13:00 (criacao 12:00 + expiracao 3600s); 13:10 é bem depois da margem (PIX_EXPIRY_MARGIN_MS = 5s).
+    const vencida = provider(() => new Date("2026-06-10T13:10:00Z"));
+    await expect(vencida.getCharge("a".repeat(32))).resolves.toEqual({ status: "expired", paidAmountCents: null, paidAt: null });
+  });
+
+  it("ATIVA um instante antes do prazo (dentro da margem) -> ainda pending", async () => {
+    const dentroDaMargem = provider(() => new Date("2026-06-10T13:00:02Z")); // 2s depois do prazo, margem é 5s
+    await expect(dentroDaMargem.getCharge("a".repeat(32))).resolves.toEqual({ status: "pending", paidAmountCents: null, paidAt: null });
   });
 
   it("REMOVIDA_* -> expired", async () => {
@@ -169,7 +182,7 @@ describe("PixPaymentProvider · getCharge", () => {
 
   it("resposta sem o campo chave (alguns PSPs não devolvem) ainda funciona — só confere quando presente", async () => {
     const http: HttpClient = vi.fn(async (url) => (url === CONFIG.oauthTokenUrl ? tokenResponse() : cobResponse({ txid: "a".repeat(32), chave: undefined })));
-    const p = new PixPaymentProvider(CONFIG, http);
+    const p = new PixPaymentProvider(CONFIG, http, () => new Date("2026-06-10T12:30:00Z"));
     await expect(p.getCharge("a".repeat(32))).resolves.toEqual({ status: "pending", paidAmountCents: null, paidAt: null });
   });
 

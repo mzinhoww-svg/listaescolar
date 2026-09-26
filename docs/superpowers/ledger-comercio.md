@@ -529,7 +529,75 @@ trilha foi tocado). E2E real (`scripts/e2e-s21.sh`) rodado de novo sobre o build
 passaram**, incluindo a compra do pacote com a chave de idempotência agora vinda do campo oculto (sem mudança
 visível ao usuário).
 
-## S21 · Dívida
+## S21 · correções do BLOQUEANTE da reverificação (Opus, sobre `c5b3762`)
+Reverificação achou um bloqueante no item 2 (cobrança Pix). Rodada única, testes antes (vermelho registrado por
+item), gate completo (`db:reset` + `typecheck` + `lint` + `test` + `test:db` + `build`) depois.
+
+**1) `ATIVA` do BACEN v2 nunca expirava.** O BACEN mantém `status: "ATIVA"` para sempre; quem expira é
+`calendario.criacao + calendario.expiracao` (prazo CALCULADO, não um status). `getCharge` devolvia `pending` pra
+sempre numa cobrança vencida — fatura impagável por Pix (BR Code morto exibido indefinidamente). Vermelho:
+`tests/billing/payments/pix.test.ts` ("ATIVA depois de calendario.criacao + calendario.expiracao -> expired").
+Corrigido em `features/billing/payments/pix.ts` (`getCharge`): `ATIVA` com `criacao + expiracao` no passado (mais
+`PIX_EXPIRY_MARGIN_MS = 5s` de `features/billing/limits.ts`, contra relógio ligeiramente adiantado do PSP) vira
+`expired` (dispara regeneração no `payInvoice`); dentro da margem continua `pending`. Ruling: margem pequena e fixa
+(5s) — o objetivo é só absorver diferença de relógio, não dar folga real de pagamento (isso já é
+`chargeTtlSeconds`/`DEFAULT_CHARGE_TTL_SECONDS`). Ajustei o teste que fixava o comportamento errado (renomeado para
+descrever o cenário DENTRO da validade) e acrescentei o caso "um instante antes do prazo, dentro da margem".
+
+**2) `billing_attach_charge` sobrescrevia sem histórico nem CAS.** Regenerar a cobrança perdia o txid antigo — se o
+pagador já tinha pago o BR Code velho (ou pagava logo depois de ele ser trocado por corrida), o webhook/cron nunca
+mais achavam essa fatura por aquele txid, e a `payInvoice` concorrente virava duas cobranças vinculadas
+(inconsistente). Vermelho: `tests/db/billing-passes-invoices.test.ts` (CAS + histórico) e
+`tests/db/billing-concurrency.test.ts` (5 `billing_attach_charge` concorrentes na mesma fatura). Corrigido em
+`0401_billing.sql` (editada em place — ainda não aplicada em lugar nenhum além do local, por instrução explícita):
+  - Tabela nova `invoice_charges` (append-only, `unique (provider, provider_charge_id)`, índice por
+    `invoice_id, created_at`, trigger `enable always` bloqueando update/delete — mesmo padrão de `credit_ledger` —,
+    RLS habilitada sem política nenhuma, `select` só para `service_role`): guarda TODO txid já emitido por fatura,
+    vencedor ou não da corrida.
+  - `billing_attach_charge` (6 parâmetros agora: ganhou `p_expected_current_charge_id`) passou a ser
+    compare-and-swap: trava a fatura (`for update`), grava SEMPRE no histórico (`on conflict do nothing`,
+    idempotente), e só troca `invoices.provider_charge_id` se ele ainda for igual ao `expected` que o chamador leu
+    antes de gerar a cobrança no PSP — senão devolve a cobrança REAL atual (nunca a perdedora). Duas `payInvoice`
+    concorrentes geram duas cobranças no PSP (inevitável, ele já foi chamado antes desta função) mas só UMA fica
+    vinculada; a chamada perdedora recebe de volta a da vencedora, nunca mostra ao usuário um BR Code que não é
+    mais o oficial. Ruling: os parâmetros de saída (`returns table`) usam prefixo `out_` (`out_provider_charge_id`
+    etc.) — sem ele o plpgsql recusa a função com "column reference is ambiguous", porque esses nomes de saída
+    colidem com colunas de mesmo nome em `invoices`/`invoice_charges` referenciadas dentro do corpo da função
+    (`variable_conflict` padrão do plpgsql é `error`, não silencioso); `features/billing/repository.ts`
+    (`attachCharge`) e o teste de concorrência ajustados para os novos nomes de coluna.
+  - `findOpenInvoiceByChargeId` (webhook) e `listOpenPixChargeIds` (cron) passaram a resolver/listar por QUALQUER
+    txid histórico da fatura (via `invoice_charges`), não só o atual — confirmam a fatura (idempotente, linha
+    travada) mesmo que o pagamento tenha sido no txid velho.
+  - `payInvoice` (`features/billing/service.ts`): status `unknown` do PSP agora é ERRO
+    (`payments_unavailable`) em vez de regenerar cegamente — nunca cria uma segunda cobrança só porque a consulta ao
+    PSP falhou/expirou.
+  - `tests/db/helpers.ts` (`purgeBilling`): precisou apagar `invoice_charges` antes de `invoices` (FK
+    `on delete restrict`) e desabilitar a trigger de imutabilidade da tabela nova, mesmo padrão das outras guardas.
+
+**3) Lead demo criava a carteira REAL antes de checar `is_demo`.** `billing_charge_lead_delivery` chamava
+`billing_ensure_wallet` (que cria a carteira se não existir) ANTES do check de pular o débito — uma papelaria real
+sem carteira nenhuma ganhava uma carteira (vazia, mas real, com snapshot do plano) só por causa de um lead de
+brincadeira. Corrigido: o check `new.is_demo and not v_stationery_is_demo -> return null` (pula o débito, ver seção
+anterior) agora vem ANTES de `billing_ensure_wallet` — nenhum efeito colateral em papelaria real por lead demo.
+Isto expôs um acoplamento acidental em três testes pré-existentes que combinavam papelaria REAL (padrão
+`is_demo=false`) com carrinho/lead DEMO (padrão `is_demo=true` de `seedCart`/`newCart`/`record()`) sem querer testar
+esse cenário — o teste da corrida OUTRO caminho antigo (a exceção de `billing_ensure_wallet` disparando ANTES do
+check de demo) mascarava a mistura por acidente. Corrigidos para is_demo consistente (isolando "sem plano ativo"
+do "lead demo × papelaria real", que já tem teste próprio): `tests/db/billing-lead-delivery.test.ts` ("sem plano
+ativo..." -> `overrides: { is_demo: true }` na papelaria) e `tests/leads/repository.test.ts` ("S21 · sem plano
+ativo..." -> carrinho e `record(..., { isDemo: false })` não-demo).
+
+**Achado ao escrever o teste de concorrência, sem relação com a revisão:** `tests/db/billing-concurrency.test.ts`
+usava txids FIXOS (`race0xxx...`) — como o teste faz commit de verdade (não usa savepoint/rollback), rodar
+`pnpm test:db` duas vezes sem `db:reset` entre elas colidia com a `unique (provider, provider_charge_id)` deixada
+pela rodada anterior. Troquei por um sufixo aleatório por execução (mesmo padrão de `seedStationery`).
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos verdes.
+`pnpm test`: 2959 testes. `pnpm test:db`: 66 arquivos (1 skipped), 1539 testes. Não repeti o E2E (`scripts/e2e-s21.sh`)
+nesta rodada — nenhuma tela/UI mudou, só SQL e `features/billing/**`; o roteiro usa os providers fake/demo, que não
+exercitam os caminhos Pix corrigidos aqui.
+
+
 - D-097 (baixa, `docs/superpowers/DEBT.md`): scanner AST de "nenhum literal numérico fora de `limits.ts`" em
   `features/billing/**` não existe (Ruling da Task 2); hoje a garantia é revisão manual. Considerar na S22/S23 se a
   área crescer.

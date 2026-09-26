@@ -16,7 +16,7 @@ import {
   publishPlanOk,
   purchasePass,
 } from "./billing-fixtures";
-import { attemptH, cleanupUsers, IDS, seedStationery, seedUsers, withClaims, withSuperuser } from "./helpers";
+import { attempt, attemptH, cleanupUsers, IDS, seedStationery, seedUsers, withClaims, withSuperuser } from "./helpers";
 
 async function window(c: Client, planId: string, at: string) {
   const r = await c.query("select season_start::text as s, season_end::text as e, starts_at, ends_at, in_season from public.billing_season_window($1::uuid, $2::timestamptz)", [planId, at]);
@@ -232,26 +232,46 @@ describe("S21 · temporada, passe, parcelas, faturas e consentimento", () => {
     });
   });
 
-  it("billing_attach_charge grava txid/BR Code/validade só em fatura aberta do mesmo provedor; txid único por provedor", async () => {
+  it("billing_attach_charge grava txid/BR Code/validade só em fatura aberta do mesmo provedor; txid único por provedor; compare-and-swap e histórico (revisão de segurança)", async () => {
     await withClaims("system", async (c) => {
       await publishPlanOk(c, CHARGING_PLAN);
       const pkg = await packageOf(c, await activePlanId(c));
       const real = await seedStationery(c, { status: "active", ownerId: IDS.school_member });
       const inv = (await createPackageInvoice(c, { actor: IDS.school_member, stationery: real, pkg, provider: "pix" })).rows[0]!.id as string;
       const inv2 = (await createPackageInvoice(c, { actor: IDS.school_member, stationery: real, pkg, provider: "pix" })).rows[0]!.id as string;
-      const attach = (id: string, provider: string, txid: string) =>
-        attemptH(c, "select public.billing_attach_charge($1::uuid, $2::text, $3::text, $4::text, now() + interval '1 hour')", [id, provider, txid, "00020126...BRCODE"]);
-      expect((await attach(inv, "fake", "abc")).hint).toBe("provider_invalid");
-      expect((await attach(inv, "pix", "txid0000000000000000000000001")).error).toBeNull();
-      expect((await attach(inv2, "pix", "txid0000000000000000000000001")).code).toBe("23505");
+      const attach = (id: string, provider: string, expected: string | null, txid: string) =>
+        attemptH(c, "select * from public.billing_attach_charge($1::uuid, $2::text, $3::text, $4::text, $5::text, now() + interval '1 hour')", [id, provider, expected, txid, "00020126...BRCODE"]);
+      expect((await attach(inv, "fake", null, "abc")).hint).toBe("provider_invalid");
+      const first = await attach(inv, "pix", null, "txid0000000000000000000000001");
+      expect(first.error).toBeNull();
+      expect(first.rows[0]).toMatchObject({ out_provider_charge_id: "txid0000000000000000000000001", out_pix_copy_paste: "00020126...BRCODE" });
+      // outra fatura não pode roubar o MESMO txid (unicidade global, ainda vale com o histórico).
+      expect((await attach(inv2, "pix", null, "txid0000000000000000000000001")).code).toBe("23505");
       const row = (await c.query("select provider_charge_id, pix_copy_paste, charge_expires_at from public.invoices where id = $1", [inv])).rows[0];
       expect(row.provider_charge_id).toBe("txid0000000000000000000000001");
       expect(row.pix_copy_paste).toBe("00020126...BRCODE");
-      // regenerar (vencida) troca o txid
-      expect((await attach(inv, "pix", "txid0000000000000000000000002")).error).toBeNull();
+
+      // revisão de segurança: compare-and-swap com `expected` ERRADO (alguém trocou no meio tempo) NÃO atualiza a
+      // fatura, mas AINDA grava a tentativa no histórico (`invoice_charges`) e devolve a cobrança REAL (não a perdedora).
+      const lost = await attach(inv, "pix", "expected-errado-nao-e-o-atual", "txid0000000000000000000000999");
+      expect(lost.error).toBeNull();
+      expect(lost.rows[0]).toMatchObject({ out_provider_charge_id: "txid0000000000000000000000001" }); // continua a original
+      const stillOriginal = (await c.query("select provider_charge_id from public.invoices where id = $1", [inv])).rows[0]!.provider_charge_id;
+      expect(stillOriginal).toBe("txid0000000000000000000000001"); // NÃO foi trocada pela perdedora
+
+      // regenerar (vencida) troca o txid — `expected` é o valor ATUAL, não `null`.
+      expect((await attach(inv, "pix", "txid0000000000000000000000001", "txid0000000000000000000000002")).error).toBeNull();
       await confirmInvoice(c, { invoice: inv, amount: 5000, provider: "pix", ref: "txid0000000000000000000000002" });
-      expect((await attach(inv, "pix", "txid0000000000000000000000003")).hint).toBe("invalid_state");
-      expect((await attach(randomUUID(), "pix", "x")).hint).toBe("not_found");
+      expect((await attach(inv, "pix", "txid0000000000000000000000002", "txid0000000000000000000000003")).hint).toBe("invalid_state");
+      expect((await attach(randomUUID(), "pix", null, "x")).hint).toBe("not_found");
+
+      // histórico completo: as 3 tentativas para `inv` (001, 999-perdedora, 002) ficam gravadas, imutáveis.
+      const history = (await c.query("select provider_charge_id from public.invoice_charges where invoice_id = $1 order by created_at", [inv])).rows.map((r) => r.provider_charge_id as string);
+      expect(history).toEqual(["txid0000000000000000000000001", "txid0000000000000000000000999", "txid0000000000000000000000002"]);
+      const upd = await attempt(c, "update public.invoice_charges set provider_charge_id = 'x' where invoice_id = $1", [inv]);
+      expect(upd.code).toBe("42501"); // invoice_charges é imutável, como credit_ledger
+      const del = await attempt(c, "delete from public.invoice_charges where invoice_id = $1", [inv]);
+      expect(del.code).toBe("42501");
     });
   });
 });

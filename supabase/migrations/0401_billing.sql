@@ -125,6 +125,21 @@ create table public.invoices (
 create index invoices_stationery_idx on public.invoices (stationery_id, created_at desc);
 create index invoices_season_pass_idx on public.invoices (season_pass_id);
 
+-- invoice_charges: histórico IMUTÁVEL de toda cobrança (txid) já gerada para uma fatura — a fatura guarda em
+-- `provider_charge_id` só a cobrança ATUAL (a mostrada na tela); esta tabela guarda TODAS, para que um pagamento
+-- feito numa cobrança antiga (regenerada por engano, ou perdida entre duas abas concorrentes) ainda seja encontrado
+-- pelo webhook/cron e creditado — nunca perdido (revisão de segurança, S21).
+create table public.invoice_charges (
+  id uuid primary key default gen_random_uuid(),
+  invoice_id uuid not null references public.invoices (id) on delete restrict,
+  provider text not null check (provider in ('fake', 'demo', 'pix')),
+  provider_charge_id text not null,
+  created_at timestamptz not null default clock_timestamp(),
+  updated_at timestamptz not null default clock_timestamp(), -- nunca muda (guarda de imutabilidade); padrão do CLAUDE.md
+  unique (provider, provider_charge_id)
+);
+create index invoice_charges_invoice_idx on public.invoice_charges (invoice_id, created_at);
+
 create table public.credit_ledger (
   id uuid primary key default gen_random_uuid(),
   wallet_id uuid not null references public.stationery_wallets (id) on delete restrict,
@@ -174,6 +189,8 @@ create trigger plan_credit_packages_no_update_delete before update or delete on 
   for each row execute function public.billing_rows_block_mutation();
 create trigger stationery_wallets_no_update_delete before update or delete on public.stationery_wallets
   for each row execute function public.billing_rows_block_mutation();
+create trigger invoice_charges_no_update_delete before update or delete on public.invoice_charges
+  for each row execute function public.billing_rows_block_mutation();
 
 -- plans: só a transição status active -> archived (nada mais muda), feita por billing_plan_publish; qualquer outra
 -- coisa (inclusive pelo dono do banco) é recusada. DELETE nunca.
@@ -208,6 +225,7 @@ alter table public.plans enable always trigger plans_guard;
 alter table public.plan_price_tiers enable always trigger plan_price_tiers_no_update_delete;
 alter table public.plan_credit_packages enable always trigger plan_credit_packages_no_update_delete;
 alter table public.stationery_wallets enable always trigger stationery_wallets_no_update_delete;
+alter table public.invoice_charges enable always trigger invoice_charges_no_update_delete;
 
 -- credit_ledger: livro-razão imutável. Nem update/delete (linha) nem truncate (comando), nem em session_replication_role
 -- = replica (enable always), nem pelo dono do banco.
@@ -916,12 +934,10 @@ language plpgsql
 set search_path = ''
 as $$
 declare
+  v_stationery_is_demo boolean;
   v_wallet_id uuid;
-  v_wallet_is_demo boolean;
   v_eval record;
 begin
-  v_wallet_id := public.billing_ensure_wallet(new.stationery_id);
-  select is_demo into v_wallet_is_demo from public.stationery_wallets where id = v_wallet_id;
   -- revisão de segurança (S21): lead de DEMONSTRAÇÃO (carrinho demo, S12) não pode debitar carteira REAL. `lead_create`
   -- (0303) só garante p_is_demo = stationeries.is_demo OR carts.is_demo — um carrinho demo com papelaria REAL passa
   -- por lá com is_demo=true de propósito (é assim que a S12 deixa alguém testar o fluxo contra uma papelaria de
@@ -930,9 +946,13 @@ begin
   -- nasce normalmente, mas nenhum lançamento sai da carteira real por um pedido de brincadeira. "Registro" é o
   -- próprio `leads.is_demo = true` numa papelaria não-demo (auditável por consulta direta). O sentido oposto (lead
   -- real numa carteira demo) não ocorre: papelaria demo força is_demo=true sempre, pela mesma regra OR.
-  if new.is_demo and not v_wallet_is_demo then
+  -- Checagem ANTES de `billing_ensure_wallet` (revisão de segurança seguinte): um lead demo não cria a carteira
+  -- REAL só para descobrir que vai pular o débito — a papelaria real não ganha rastro nenhum desse lead de brincadeira.
+  select s.is_demo into v_stationery_is_demo from public.stationeries s where s.id = new.stationery_id;
+  if new.is_demo and not v_stationery_is_demo then
     return null;
   end if;
+  v_wallet_id := public.billing_ensure_wallet(new.stationery_id);
   select * into v_eval from public.billing_eval_source(new.stationery_id, new.item_count, true);
   if not v_eval.ok then
     raise exception 'cobrança indisponível para o lead %', new.id using errcode = 'P0001', hint = v_eval.hint;
@@ -1077,10 +1097,22 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- billing_attach_charge: grava txid/BR Code/validade de uma cobrança Pix numa fatura aberta do mesmo provedor.
+-- Revisão de segurança (S21): (1) toda cobrança gerada entra em `invoice_charges` (histórico IMUTÁVEL, nunca só a
+-- atual) — mesmo a que perder a corrida abaixo, para o webhook/cron ainda encontrarem um pagamento feito nela; (2)
+-- compare-and-swap em `invoices.provider_charge_id` via `p_expected_current_charge_id` (o valor que o CHAMADOR leu
+-- antes de gerar a cobrança no PSP, `null` numa fatura nova): SÓ troca a cobrança MOSTRADA se ninguém trocou no
+-- meio tempo (sob o `for update` desta linha); duas `payInvoice` concorrentes geram duas cobranças no PSP (inevitável,
+-- o PSP já foi chamado antes desta função), mas só UMA fica vinculada à fatura — a função sempre devolve a atual
+-- (a sua, se ganhou; a de quem ganhou, se perdeu), nunca a de quem perdeu, para o chamador nunca mostrar um BR Code
+-- que não é mais o oficial da fatura.
 -- ---------------------------------------------------------------------------
+-- Nomes de saída prefixados com `out_` de propósito: o plpgsql resolve nome ambíguo entre coluna de tabela e
+-- variável (aqui, parâmetro OUT) como ERRO (`variable_conflict` padrão é `error`), e `provider_charge_id` etc. são
+-- colunas de `invoices`/`invoice_charges` referenciadas dentro desta função — sem o prefixo, o UPDATE abaixo falha
+-- com "column reference is ambiguous".
 create function public.billing_attach_charge(
-  p_invoice_id uuid, p_provider text, p_provider_charge_id text, p_pix_copy_paste text, p_charge_expires_at timestamptz
-) returns boolean
+  p_invoice_id uuid, p_provider text, p_expected_current_charge_id text, p_provider_charge_id text, p_pix_copy_paste text, p_charge_expires_at timestamptz
+) returns table (out_provider_charge_id text, out_pix_copy_paste text, out_charge_expires_at timestamptz)
 language plpgsql
 security definer
 set search_path = ''
@@ -1098,10 +1130,27 @@ begin
   if v_invoice.status <> 'open' then
     raise exception 'fatura não está aberta' using errcode = '23514', hint = 'invalid_state';
   end if;
-  update public.invoices
-     set provider_charge_id = p_provider_charge_id, pix_copy_paste = p_pix_copy_paste, charge_expires_at = p_charge_expires_at
-   where id = p_invoice_id;
-  return true;
+
+  -- histórico: SEMPRE grava (ganhando ou não a corrida abaixo); idempotente se o chamador repetir a mesma cobrança.
+  insert into public.invoice_charges (invoice_id, provider, provider_charge_id)
+    values (p_invoice_id, p_provider, p_provider_charge_id)
+    on conflict (provider, provider_charge_id) do nothing;
+
+  -- compare-and-swap: só atualiza a cobrança MOSTRADA se ninguém a trocou desde que o chamador a leu.
+  if v_invoice.provider_charge_id is not distinct from p_expected_current_charge_id then
+    update public.invoices
+       set provider_charge_id = p_provider_charge_id, pix_copy_paste = p_pix_copy_paste, charge_expires_at = p_charge_expires_at
+     where id = p_invoice_id;
+    out_provider_charge_id := p_provider_charge_id;
+    out_pix_copy_paste := p_pix_copy_paste;
+    out_charge_expires_at := p_charge_expires_at;
+  else
+    -- perdeu a corrida: devolve a cobrança que está de fato vinculada agora (não a que acabou de criar no PSP).
+    out_provider_charge_id := v_invoice.provider_charge_id;
+    out_pix_copy_paste := v_invoice.pix_copy_paste;
+    out_charge_expires_at := v_invoice.charge_expires_at;
+  end if;
+  return next;
 end;
 $$;
 
@@ -1242,18 +1291,20 @@ revoke execute on function public.billing_create_package_invoice(uuid, uuid, uui
 grant execute on function public.billing_create_package_invoice(uuid, uuid, uuid, text, uuid, text) to service_role;
 revoke execute on function public.billing_purchase_season_pass(uuid, uuid, integer, text, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.billing_purchase_season_pass(uuid, uuid, integer, text, uuid, text) to service_role;
-revoke execute on function public.billing_attach_charge(uuid, text, text, text, timestamptz) from public, anon, authenticated, service_role;
-grant execute on function public.billing_attach_charge(uuid, text, text, text, timestamptz) to service_role;
+revoke execute on function public.billing_attach_charge(uuid, text, text, text, text, timestamptz) from public, anon, authenticated, service_role;
+grant execute on function public.billing_attach_charge(uuid, text, text, text, text, timestamptz) to service_role;
 revoke execute on function public.billing_confirm_invoice_payment(uuid, text, text, integer, timestamptz) from public, anon, authenticated, service_role;
 grant execute on function public.billing_confirm_invoice_payment(uuid, text, text, integer, timestamptz) to service_role;
 revoke execute on function public.billing_reverse_entry(uuid, uuid, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.billing_reverse_entry(uuid, uuid, text, text) to service_role;
 
 revoke all on public.plans, public.plan_price_tiers, public.plan_credit_packages, public.stationery_wallets,
-  public.credit_ledger, public.season_passes, public.invoices from public, anon, authenticated, service_role;
+  public.credit_ledger, public.season_passes, public.invoices, public.invoice_charges from public, anon, authenticated, service_role;
 
 grant select on public.plans, public.plan_price_tiers, public.plan_credit_packages to authenticated, service_role;
 grant select on public.stationery_wallets to authenticated, service_role;
+-- invoice_charges é histórico interno (txids do PSP): nunca exposto a `authenticated`, só ao service_role (webhook/cron).
+grant select on public.invoice_charges to service_role;
 grant select (id, wallet_id, entry_type, amount_cents, balance_after_cents, lead_id, invoice_id, plan_id, tier_id,
               season_pass_id, reverses_entry_id, item_count, actor_role, reason, created_at, updated_at)
   on public.credit_ledger to authenticated;
@@ -1277,6 +1328,8 @@ alter table public.stationery_wallets enable row level security;
 alter table public.credit_ledger enable row level security;
 alter table public.season_passes enable row level security;
 alter table public.invoices enable row level security;
+alter table public.invoice_charges enable row level security;
+-- sem política para invoice_charges: nem authenticated nem anon leem (default deny); só service_role (bypassa RLS).
 
 -- authenticated (papelaria): só o plano ativo (o histórico de preços é interno).
 create policy plans_select_active on public.plans for select to authenticated using (status = 'active');

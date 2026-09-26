@@ -119,13 +119,19 @@ export interface BillingStore {
     actor: SessionActor,
     input: { stationeryId: string; installments: number; provider: InvoiceProvider; idempotencyKey: string; termsVersion: string },
   ): Promise<string>;
+  /**
+   * Compare-and-swap: só troca a cobrança MOSTRADA se `expectedCurrentChargeId` ainda bater com a atual (o valor que
+   * o chamador leu antes de gerar a cobrança no PSP; `null` numa fatura nova). Sempre devolve a cobrança que está
+   * de fato vinculada à fatura depois da chamada — a sua, se ganhou a corrida; a de quem ganhou, senão.
+   */
   attachCharge(input: {
     invoiceId: string;
     provider: InvoiceProvider;
+    expectedCurrentChargeId: string | null;
     providerChargeId: string;
     pixCopyPaste: string | null;
     chargeExpiresAt: Date | null;
-  }): Promise<boolean>;
+  }): Promise<{ providerChargeId: string; pixCopyPaste: string | null; chargeExpiresAt: Date | null }>;
   confirmInvoicePayment(input: {
     invoiceId: string;
     provider: InvoiceProvider;

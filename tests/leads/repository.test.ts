@@ -402,14 +402,21 @@ describe("ciclo do lead pelo repositório", () => {
   it("S21 · sem plano ativo: some do App21 e lead_create falha com billing_unavailable (mensagem neutra ao pai)", async () => {
     const owner = await makeUser("ownerBilling", "stationery_member");
     const stationeryId = await newStationery(owner, { neighborhood: "São José" });
-    const cartId = await newCart(parentId);
+    // carrinho NÃO demo: `newStationery` cria papelaria REAL (is_demo=false, padrão do banco); um carrinho demo
+    // (padrão de `newCart`) contra papelaria real é o cenário que a revisão de segurança (S21, item 3) pula em
+    // silêncio ANTES de checar o plano — este teste quer isolar "sem plano ativo", não esse outro comportamento
+    // (coberto em tests/db/billing-lead-delivery.test.ts).
+    const cartId = await newCart(parentId, false);
     try {
       await withSuperuser((c) => c.query("update public.plans set status = 'archived' where status = 'active'"));
 
       const found = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: [], itemCount: 2 });
       expect(found.map((o) => o.id)).not.toContain(stationeryId);
 
-      const code = await errorCode(createLead(admin, await actor(parentId), record(cartId, stationeryId)));
+      // isDemo: false — o default do helper `record()` é `true`; sem isso o lead nasceria classificado como
+      // demonstração contra papelaria REAL, cenário que a revisão de segurança (item 3) pula em silêncio (não
+      // levanta `billing_unavailable`), mascarando o que este teste quer isolar: "sem plano ativo".
+      const code = await errorCode(createLead(admin, await actor(parentId), record(cartId, stationeryId, { isDemo: false })));
       expect(code).toBe("billing_unavailable");
       const { errorMessageForCode } = await import("@/features/leads/messages");
       expect(errorMessageForCode(code)).toBe("Esta papelaria não está recebendo pedidos agora. Escolha outra.");

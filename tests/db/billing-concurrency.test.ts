@@ -18,7 +18,7 @@ import {
   purchasePass,
   topUp,
 } from "./billing-fixtures";
-import { asServiceCommitted, cleanupUsers, IDS, purgeBilling, purgeLeads, purgeStationeries, seedCart, seedStationery, seedUsers, withSuperuser } from "./helpers";
+import { asServiceCommitted, attemptH, cleanupUsers, IDS, purgeBilling, purgeLeads, purgeStationeries, seedCart, seedStationery, seedUsers, withSuperuser } from "./helpers";
 
 // Aceite do PLAN: "o saldo é sempre igual à soma do livro-razão, com teste de concorrência". Cada chamada roda numa
 // conexão service_role própria que CONFIRMA (asServiceCommitted), em Promise.allSettled; limpeza por purge* no fim.
@@ -184,6 +184,49 @@ describe("S21 · concorrência do razão (dados confirmados)", () => {
     await withSuperuser(async (c) => {
       const n = (await c.query("select count(*)::int as n from public.season_passes where stationery_id = $1", [st])).rows[0]!.n;
       expect(n).toBe(1);
+    });
+  });
+
+  it("revisão de segurança (BLOQUEANTE): 5 billing_attach_charge concorrentes (mesma fatura, mesmo expected=null) -> só UMA cobrança vinculada, mas as 5 no histórico (invoice_charges)", async () => {
+    // dono novo (não um dos IDS.* fixos, todos já donos de outra papelaria nesta suíte): stationery_members exige
+    // um perfil só dono de uma papelaria por vez.
+    const [owner] = await makeRequesters(1);
+    users.push(owner!.id);
+    carts.push(owner!.cart);
+    const st = await asServiceCommitted((c) => seedStationery(c, { status: "active", ownerId: owner!.id, overrides: { is_demo: false } })); // papelaria REAL: provider pix
+    stationeries.push(st);
+    const inv = await asServiceCommitted(async (c) => {
+      const pkg = await packageOf(c, await activePlanId(c));
+      const r = await createPackageInvoice(c, { actor: owner!.id, stationery: st, pkg, provider: "pix" });
+      if (r.error) throw new Error(`${r.error} ${r.hint}`);
+      return r.rows[0]!.id as string;
+    });
+    const N = 5;
+    // txid aleatório por rodada (mesma lógica de seedStationery): esta cobrança é COMMITADA de verdade (sem
+    // rollback), então um txid fixo colidiria com a "unique (provider, provider_charge_id)" de invoices/invoice_charges
+    // numa rodada seguinte de `pnpm test:db` sem `db:reset` entre elas.
+    const runId = randomUUID().replace(/-/g, "").slice(0, 20);
+    const txids = Array.from({ length: N }, (_, i) => `race${i}${runId}`);
+    const runs = await Promise.allSettled(
+      txids.map((txid) =>
+        asServiceCommitted((c) =>
+          attemptH(c, "select out_provider_charge_id from public.billing_attach_charge($1::uuid, 'pix', null, $2::text, $3::text, now() + interval '1 hour')", [inv, txid, `copia-${txid}`]),
+        ),
+      ),
+    );
+    for (const r of runs) expect(r.status).toBe("fulfilled");
+    const winners = new Set(runs.map((r) => (r.status === "fulfilled" ? (r.value.rows[0]?.out_provider_charge_id as string) : "erro")));
+    // todas as 5 chamadas devolvem a MESMA cobrança vinculada (a vencedora da corrida) — nenhuma mostra a sua própria
+    // cobrança perdedora como se fosse a oficial da fatura.
+    expect(winners.size).toBe(1);
+    await withSuperuser(async (c) => {
+      const current = (await c.query("select provider_charge_id from public.invoices where id = $1", [inv])).rows[0]!.provider_charge_id as string;
+      expect(txids).toContain(current);
+      expect([...winners][0]).toBe(current);
+      const history = (await c.query("select provider_charge_id from public.invoice_charges where invoice_id = $1 order by created_at", [inv])).rows.map((r) => r.provider_charge_id as string);
+      // as 5 cobranças (vencedora e as 4 perdedoras) ficam no histórico — nenhuma se perde.
+      expect(new Set(history)).toEqual(new Set(txids));
+      expect(history).toHaveLength(N);
     });
   });
 });

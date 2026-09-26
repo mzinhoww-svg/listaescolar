@@ -433,6 +433,7 @@ export async function purgeBilling(opts: { stationeryIds: readonly string[] }): 
     ["stationery_wallets", "stationery_wallets_no_update_delete"],
     ["credit_ledger", "credit_ledger_no_update_delete"],
     ["credit_ledger", "credit_ledger_no_truncate"],
+    ["invoice_charges", "invoice_charges_no_update_delete"],
   ];
   await withSuperuser(async (c) => {
     await c.query("begin");
@@ -442,6 +443,11 @@ export async function purgeBilling(opts: { stationeryIds: readonly string[] }): 
       }
       await c.query(
         `delete from public.credit_ledger e where e.wallet_id in (select id from public.stationery_wallets where stationery_id = any($1::uuid[]))`,
+        [opts.stationeryIds],
+      );
+      // invoice_charges referencia invoices (on delete restrict): apagar o histórico antes das faturas.
+      await c.query(
+        `delete from public.invoice_charges ic where ic.invoice_id in (select id from public.invoices where stationery_id = any($1::uuid[]))`,
         [opts.stationeryIds],
       );
       await c.query("delete from public.invoices where stationery_id = any($1::uuid[])", [opts.stationeryIds]);

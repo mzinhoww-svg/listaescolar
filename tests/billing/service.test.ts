@@ -82,7 +82,16 @@ function makeStore(over: Partial<BillingStore> = {}): BillingStore {
       }
       return passId;
     },
-    attachCharge: async () => true,
+    attachCharge: async (input) => {
+      // Simula o compare-and-swap real (0401): só troca se ninguém trocou desde a leitura do chamador.
+      const inv = invoices.get(input.invoiceId);
+      const current = inv?.providerChargeId ?? null;
+      if (current === input.expectedCurrentChargeId) {
+        if (inv) invoices.set(input.invoiceId, { ...inv, providerChargeId: input.providerChargeId, pixCopyPaste: input.pixCopyPaste, chargeExpiresAt: input.chargeExpiresAt });
+        return { providerChargeId: input.providerChargeId, pixCopyPaste: input.pixCopyPaste, chargeExpiresAt: input.chargeExpiresAt };
+      }
+      return { providerChargeId: current!, pixCopyPaste: inv?.pixCopyPaste ?? null, chargeExpiresAt: inv?.chargeExpiresAt ?? null };
+    },
     confirmInvoicePayment: async (input) => {
       const inv = invoices.get(input.invoiceId);
       if (inv) invoices.set(input.invoiceId, { ...inv, status: "paid", paidAt: input.paidAt, paidAmountCents: input.amountCents });
@@ -287,7 +296,10 @@ describe("BillingService.payInvoice", () => {
       getCharge: async () => ({ status: "expired", paidAmountCents: null, paidAt: null }),
     };
     const service = makeService(
-      { getInvoice: async () => openInvoice({ providerChargeId: oldChargeId, pixCopyPaste: "antigo-copia-cola", chargeExpiresAt: new Date("2020-01-01T00:00:00Z") }), attachCharge: async () => true },
+      {
+        getInvoice: async () => openInvoice({ providerChargeId: oldChargeId, pixCopyPaste: "antigo-copia-cola", chargeExpiresAt: new Date("2020-01-01T00:00:00Z") }),
+        attachCharge: async (input) => ({ providerChargeId: input.providerChargeId, pixCopyPaste: input.pixCopyPaste, chargeExpiresAt: input.chargeExpiresAt }),
+      },
       () => provider,
     );
     const result = await service.payInvoice(MEMBER, { stationeryId: STATIONERY_ID, invoiceId });
@@ -305,7 +317,10 @@ describe("BillingService.payInvoice", () => {
       },
       getCharge: vi.fn(),
     };
-    const service = makeService({ getInvoice: async () => openInvoice(), attachCharge: async () => true }, () => provider);
+    const service = makeService(
+      { getInvoice: async () => openInvoice(), attachCharge: async (input) => ({ providerChargeId: input.providerChargeId, pixCopyPaste: input.pixCopyPaste, chargeExpiresAt: input.chargeExpiresAt }) },
+      () => provider,
+    );
     const result = await service.payInvoice(MEMBER, { stationeryId: STATIONERY_ID, invoiceId });
     expect(createCalls).toBe(1);
     expect(provider.getCharge).not.toHaveBeenCalled(); // nada para reconsultar

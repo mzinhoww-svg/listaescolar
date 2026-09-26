@@ -147,6 +147,10 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-096 | advisors do staging (2026-09-25) | `auth_role()`, `rls_auto_enable()` e `stationery_is_active(uuid)` são SECURITY DEFINER executáveis por `anon`/`authenticated` via `/rest/v1/rpc` (advisor WARN); revogar EXECUTE de `anon` onde não for intencional (`rls_auto_enable` não deveria ser chamável por ninguém pela API) | média | S19 (revisão de segurança) | aberta |
 | D-097 | ledger-comercio S21 T2 | `features/billing/**`: nenhum scanner automatizado garante "nenhum literal numérico de negócio fora de `limits.ts`" (o `grep` ingênuo teria falsos positivos demais; um AST-aware ficou fora do tempo da fatia). Hoje a garantia é revisão manual; `tests/billing/no-secrets-scan.test.ts` cobre só PEM/`client_secret`/importador do `PixPaymentProvider` | baixa | S22/S23 (se a área crescer) | aberta |
 | D-098 | ledger-comercio S21 T3; e2e/S21.md | E2E da S21 (`scripts/e2e-s21.sh`, 17/17 verde) não clicou a compra do passe pela UI, o estado "Pagamento via Pix indisponível no momento" para carteira real, nem a temporada nov–mar (o formulário usou os meses padrão jan–dez por tempo de sessão); os três já são cobertos por teste automatizado (`tests/billing/service.test.ts`, `tests/billing/components.test.tsx`, `tests/billing/season.test.ts` contra o Postgres real) | baixa | S22/S23 (repetir o roteiro) | aberta |
+| D-099 | reverificação de segurança S21 (PR #34) | Nenhum teste de banco confirma que lead de demonstração em papelaria real NÃO cria a carteira real (`tests/db/billing-lead-delivery.test.ts` só confere o razão) | baixa | S23 | aberta |
+| D-100 | reverificação de segurança S21 (PR #34) | Duplo clique em "comprar pacote/passe" reaproveita a fatura mas sempre chama `createCharge`, trocando uma cobrança Pix ainda válida: o histórico evita perder pagamento, mas o pagador pode pagar as duas cobranças (precisa de estorno manual) | média | S23 | aberta |
+| D-101 | reverificação de segurança S21 (PR #34) | Pagamento recebido por um txid antigo depois de a fatura já estar paga é ignorado sem alerta (`findOpenInvoiceByChargeId` exige fatura aberta): registrar e alertar o admin para estorno (tela de inadimplência/conciliação da S23) | média | S23 | aberta |
+| D-102 | ledger-comercio S21 | Staging sem plano de cobrança publicado: todo lead para papelaria real cai em `billing_unavailable` até o humano (ou o orquestrador, com Ruling) publicar um plano provisório por `billing_plan_publish`; o adapter Pix ainda não foi validado contra o PSP real (D-076) | alta | Humano (valores do plano e PSP) / S20 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -154,9 +158,9 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 9 | 5 | 14 |
-| média | 34 | 6 | 40 |
-| baixa | 41 | 2 | 43 |
-| **Total** | **84** | **13** | **97** |
+| alta | 10 | 5 | 15 |
+| média | 36 | 6 | 42 |
+| baixa | 42 | 2 | 44 |
+| **Total** | **88** | **13** | **101** |
 
 Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`).

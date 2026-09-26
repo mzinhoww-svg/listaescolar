@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { decideAccess } from "@/features/auth/decide-access";
+import { config } from "@/proxy";
+
+describe("proxy matcher", () => {
+  it("exclui v1/ (API B2B, S24) além de _next/ e brand/", () => {
+    expect(config.matcher).toEqual(["/((?!_next/|brand/|v1/).*)"]);
+  });
+
+  it("o padrão do matcher de fato não casa com /v1/schools nem /v1/openapi.json", () => {
+    const pattern = new RegExp(`^${config.matcher[0]}$`);
+    expect(pattern.test("/v1/schools")).toBe(false);
+    expect(pattern.test("/v1/openapi.json")).toBe(false);
+    expect(pattern.test("/_next/static/x")).toBe(false);
+    expect(pattern.test("/brand/logo.svg")).toBe(false);
+    expect(pattern.test("/admin/parceiros")).toBe(true);
+  });
+});
 
 describe("decideAccess", () => {
   it("rota pública passa mesmo anônimo", () => {

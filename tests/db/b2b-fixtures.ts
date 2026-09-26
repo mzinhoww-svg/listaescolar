@@ -157,7 +157,15 @@ export async function seedPublishedList(
   return { schoolId, listId, versionId, inep };
 }
 
-/** Remove parceiros (e o que depende deles) de testes que confirmaram dados. Eventos são imutáveis: usa replica. */
+/**
+ * Remove parceiros (e o que depende deles) de testes que confirmaram dados. `b2b_partner_events` é imutável
+ * (`enable always`: nem `session_replication_role = replica` passa por cima, de propósito) e tem FK `restrict`
+ * para `b2b_partners` — mesma regra da produção ("parceiro, chaves e eventos ficam" quando a conta do dono é
+ * excluída; ver Global Constraints). Por isso este limpador é best-effort: apaga tudo que pode (uso, janelas,
+ * chaves, membros, consentimento) e só remove a linha do PARCEIRO quando ele não tiver evento nenhum (Ruling
+ * S24 · Task 2, correção de bug herdado da Task 1: a versão anterior tentava `delete` em `b2b_partner_events` e
+ * sempre lançava). Parceiro com evento fica no banco local (descartável, some no próximo `pnpm db:reset`).
+ */
 export async function purgePartners(ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return;
   await withSuperuser(async (c) => {
@@ -166,11 +174,14 @@ export async function purgePartners(ids: readonly string[]): Promise<void> {
       await c.query("set local session_replication_role = replica");
       await c.query("delete from public.b2b_usage_daily where partner_id = any($1::uuid[])", [ids]);
       await c.query("delete from public.b2b_rate_windows where partner_id = any($1::uuid[])", [ids]);
-      await c.query("delete from public.b2b_partner_events where partner_id = any($1::uuid[])", [ids]);
       await c.query("delete from public.b2b_api_keys where partner_id = any($1::uuid[])", [ids]);
       await c.query("delete from public.b2b_partner_members where partner_id = any($1::uuid[])", [ids]);
       await c.query("delete from public.consents where id in (select terms_consent_id from public.b2b_partners where id = any($1::uuid[]))", [ids]);
-      await c.query("delete from public.b2b_partners where id = any($1::uuid[])", [ids]);
+      await c.query(
+        `delete from public.b2b_partners where id = any($1::uuid[])
+           and not exists (select 1 from public.b2b_partner_events e where e.partner_id = b2b_partners.id)`,
+        [ids],
+      );
       await c.query("commit");
     } catch (e) {
       await c.query("rollback");

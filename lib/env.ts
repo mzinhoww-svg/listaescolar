@@ -47,6 +47,9 @@ const serverSchema = z.object({
   PESQUISA_RESULTS_PASSWORD: z.string().min(16).optional(),
   /** Sal do hash de IP (rate limit da pesquisa com mães). Só exigido pelas rotas app/api/pesquisa/**. */
   IP_HASH_SALT: z.string().min(16).optional(),
+  /** Pepper do HMAC das chaves de API B2B (`x-listacerta-key`, S24). Nunca vai ao banco; sem ele a API `/v1`
+   * responde `503 service_unavailable` e o portal mostra "Emissão de chaves indisponível no momento". */
+  B2B_API_KEY_PEPPER: z.string().min(32).optional(),
   ...pipelineShape,
 });
 
@@ -68,6 +71,7 @@ export function getServerEnv(): ServerEnv {
       CRON_SECRET: process.env.CRON_SECRET,
       PESQUISA_RESULTS_PASSWORD: process.env.PESQUISA_RESULTS_PASSWORD,
       IP_HASH_SALT: process.env.IP_HASH_SALT,
+      B2B_API_KEY_PEPPER: process.env.B2B_API_KEY_PEPPER,
       ...readPipelineFlags(),
     }),
   );

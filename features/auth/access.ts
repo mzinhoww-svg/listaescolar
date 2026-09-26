@@ -7,6 +7,7 @@ export type ProtectedPrefix =
   | "/enviar-lista"
   | "/escola"
   | "/papelaria"
+  | "/b2b"
   | "/admin";
 export type AccessDecision = "allow" | "login" | "forbidden";
 
@@ -18,10 +19,13 @@ export const PREFIXES: readonly ProtectedPrefix[] = [
   "/enviar-lista",
   "/escola",
   "/papelaria",
+  "/b2b",
   "/admin",
 ];
 
-/** Papéis permitidos por prefixo. `system` nunca é usuário logado no app. */
+/** Papéis permitidos por prefixo. `system` nunca é usuário logado no app. `/b2b` (portal do parceiro B2B, S24):
+ * acesso real é por linha em `b2b_partner_members` (não por papel), mas os quatro papéis de usuário logado podem
+ * chegar à rota — o layout de `/b2b` redireciona quem não é membro para `/parceiros?cadastro=1`. */
 const ALLOWED: Record<ProtectedPrefix, readonly UserRole[]> = {
   "/conta": ["parent", "school_member", "admin", "stationery_member"],
   "/carrinho": ["parent", "school_member", "admin", "stationery_member"],
@@ -30,6 +34,7 @@ const ALLOWED: Record<ProtectedPrefix, readonly UserRole[]> = {
   "/enviar-lista": ["parent", "school_member", "admin"],
   "/escola": ["school_member", "admin"],
   "/papelaria": ["stationery_member", "admin"],
+  "/b2b": ["parent", "school_member", "stationery_member", "admin"],
   "/admin": ["admin"],
 };
 

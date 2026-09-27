@@ -38,7 +38,10 @@ export function getB2bService(): B2bService {
     pepper: () => {
       try {
         return getServerEnv().B2B_API_KEY_PEPPER;
-      } catch {
+      } catch (error) {
+        // Mesmo motivo de `features/b2b/api/handler.ts::realPepper`: `getServerEnv()` valida todo o
+        // `serverSchema`, não só o pepper; sem log, "emissão indisponível" no portal não dá pista nenhuma.
+        console.error("b2b pepper/env", error instanceof Error ? error.name : "erro");
         return undefined;
       }
     },

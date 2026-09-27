@@ -311,7 +311,11 @@ export function realRecordUsage(admin: SupabaseClient): ApiHandlerDeps["recordUs
 function realPepper(): string | undefined {
   try {
     return getServerEnv().B2B_API_KEY_PEPPER;
-  } catch {
+  } catch (error) {
+    // `getServerEnv()` valida TODO `serverSchema` (não só o pepper); sem log, um 503 aqui não dá pista nenhuma de
+    // qual variável falhou (revisão final do branch S24). Só o nome do erro — nunca a mensagem/stack, que podem
+    // ecoar o valor inválido.
+    console.error("b2b pepper/env", error instanceof Error ? error.name : "erro");
     return undefined;
   }
 }

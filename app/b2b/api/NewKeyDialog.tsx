@@ -70,7 +70,7 @@ export function NewKeyDialog({ partnerType, partnerStatus, usableCountByEnv }: P
       >
         Nova chave
       </button>
-      <dialog ref={ref} onClose={close} className="rounded-[20px] bg-white p-0 backdrop:bg-black/40">
+      <dialog ref={ref} onClose={close} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
         <div className="flex w-[min(92vw,480px)] flex-col gap-4 p-6">
           {result ? (
             <>

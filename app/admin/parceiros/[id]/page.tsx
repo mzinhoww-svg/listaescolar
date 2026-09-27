@@ -117,7 +117,14 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           </section>
           <aside className="flex flex-col gap-3">
             <h2 className="text-[17px] font-extrabold">Decisão</h2>
-            <DecisionForm partnerId={id.data} status={overview.status as B2bPartnerStatus} action={decidePartnerAction} />
+            <DecisionForm
+              partnerId={id.data}
+              status={overview.status as B2bPartnerStatus}
+              action={decidePartnerAction}
+              plan={overview.plan}
+              coverageUfs={overview.coverageUfs}
+              limits={overview.limits}
+            />
           </aside>
         </div>
       )}

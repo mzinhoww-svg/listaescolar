@@ -26,7 +26,7 @@ export function RevokeButton({ keyId }: { keyId: string }) {
       <button type="button" onClick={() => ref.current?.showModal()} className="text-[13px] font-extrabold text-[#8a1c14] underline">
         Revogar
       </button>
-      <dialog ref={ref} onClose={() => setError(null)} className="rounded-[20px] bg-white p-0 backdrop:bg-black/40">
+      <dialog ref={ref} onClose={() => setError(null)} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
         <div className="flex w-[min(92vw,420px)] flex-col gap-4 p-6">
           <h2 className="text-[18px] font-extrabold">Revogar chave</h2>
           <p className="text-texto-2 text-[14px] font-semibold">A chave para de funcionar imediatamente. Esta ação não pode ser desfeita.</p>

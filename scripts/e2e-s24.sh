@@ -215,7 +215,10 @@ echo "== k) admin suspende: as duas chaves 401 na hora; portal somente leitura"
 ab a open "$BASE/admin/parceiros/$PARTNER_ID" >/dev/null; wait_text a "Decisão" 15
 ab a click "input[name=to][value=suspended]" >/dev/null
 ab a fill 'textarea[name=reason]' "Suspensão de teste do roteiro E2E" >/dev/null
-ab a click 'aside button[type=submit]'
+ab a click 'aside button[type=submit]' >/dev/null
+sleep 1
+# suspender revoga chave na hora: exige confirmação (revisão final do branch S24) antes de enviar de fato.
+ab a eval "(() => { const b=[...document.querySelectorAll('dialog[open] button')].find(x=>x.textContent.trim()==='Suspender agora'); b?.click(); return b?'ok':'sem-botao'; })()" >/dev/null
 wait_text a "Decisão registrada." 15
 expect_text a "Suspensa" "parceiro suspenso"
 shot a "$OUT/S24-admin-suspenso.png"

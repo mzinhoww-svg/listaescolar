@@ -41,7 +41,7 @@ export function RotateDialog({ keyId }: { keyId: string }) {
       <button type="button" onClick={() => ref.current?.showModal()} className="text-verde-fundo text-[13px] font-extrabold underline">
         Rotacionar
       </button>
-      <dialog ref={ref} onClose={close} className="rounded-[20px] bg-white p-0 backdrop:bg-black/40">
+      <dialog ref={ref} onClose={close} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
         <div className="flex w-[min(92vw,440px)] flex-col gap-4 p-6">
           {result ? (
             <>

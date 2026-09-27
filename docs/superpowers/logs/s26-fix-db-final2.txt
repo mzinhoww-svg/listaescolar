@@ -1,0 +1,45 @@
+$ vitest run -c vitest.db.config.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T2-pipeline
+
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+(node:15751) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+
+ Test Files  80 passed | 1 skipped (81)
+      Tests  1775 passed | 3 skipped (1778)
+   Start at  08:27:20
+   Duration  105.63s (tests 94%, import 5%, transform 1%)
+

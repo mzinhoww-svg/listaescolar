@@ -1,0 +1,96 @@
+$ vitest run -c vitest.db.config.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T2-pipeline
+
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+(node:14257) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ❯ tests/db/submissions.test.ts (25 tests | 1 failed) 496ms
+   ❯ S07 RLS: consents, list_submissions, jobs, ocr_jobs (17)
+     × consentimento revogado (via consents_revoke) não sustenta novo envio 10ms
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/db/submissions.test.ts > S07 RLS: consents, list_submissions, jobs, ocr_jobs > consentimento revogado (via consents_revoke) não sustenta novo envio
+error: new row for relation "consents" violates check constraint "consents_check"
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/submissions.test.ts:216:7
+    214|   it("consentimento revogado (via consents_revoke) não sustenta novo e…
+    215|     await withClaims("system", async (c) => {
+    216|       await c.query("select public.consents_revoke($1, $2)", [CONSENT.…
+       |       ^
+    217|       const r = await attempt(c, ...newSub("30000000-0000-4000-8000-00…
+    218|       expect(r.error).not.toBeNull();
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/submissions.test.ts:215:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 79 passed | 1 skipped (81)
+      Tests  1 failed | 1774 passed | 3 skipped (1778)
+   Start at  08:25:21
+   Duration  109.20s (tests 94%, import 5%, transform 1%)
+
+[ELIFECYCLE] Command failed with exit code 1.

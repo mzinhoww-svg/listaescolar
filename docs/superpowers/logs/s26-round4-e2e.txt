@@ -1,0 +1,30 @@
+parceiro marca = f7415d9b-9f85-4223-b5ae-08e175f098ad
+PASS  seed: parceiro marca do dono existe
+== a) B2B06 · campanha semeada aparece Ativa, com o aviso de 'Sugestão patrocinada'
+[agent-browser] launched browser
+PASS  B2B06 explica o selo de patrocinado
+PASS  B2B06 lista a campanha semeada
+PASS  campanha semeada aparece Ativa (aprovada no seed)
+== b) B2B07 · criar campanha nova, enviar para aprovação
+PASS  campanha nova gravada no banco (48eb4422-9e35-43a2-b1a3-e8c689f74aac)
+PASS  campanha nova entra pending_review (enviada para aprovação)
+== c) Admin16 · fila de aprovação com aviso de checagem Procon por lista; aprovar
+[agent-browser] launched browser
+PASS  Admin16 lista a campanha pendente
+PASS  Admin16 avisa que o bloqueio Procon é por lista, não nesta tela
+PASS  admin aprova pelo Admin16
+== d) B2B08 · insights: papelaria/ef VISÍVEL (6 escolas, nomeada); uniforme/ef SUPRIMIDO (2 < k mínimo, some por inteiro)
+PASS  insight de papelaria/ef mostra Cuiabá nomeada
+PASS  Cuiabá mostra a contagem real (6 escolas)
+PASS  total exibido é a soma do que aparece, nunca a soma bruta
+PASS  cidade pequena sozinha (2 escolas, abaixo do k mínimo) nunca aparece NOMEADA
+PASS  contagem crua nunca aparece na tela quando suprimida
+PASS  sem cidade visível nem agregado 'outras' (2 < k, sozinha, nem agregada chega a k)
+PASS  avisa que existe dado oculto, sem revelar quanto
+== e) B2B09 · faturamento: uso de API sempre indisponível; campanha com o valor que o parceiro declarou
+PASS  linha de uso de API aparece indisponível (sem preço inventado)
+PASS  linha da campanha aparece no extrato
+PASS  linha da campanha mostra o valor certo (1 clique x bid de R$ 3,00)
+PASS  não existe botão de cobrar (sem cobrança automática)
+
+== resultado: 20 passaram, 0 falharam ==

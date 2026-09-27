@@ -1,0 +1,87 @@
+=== S26 · correções da revisão de segurança — prova do vazamento (vermelho) e da correção (verde) ===
+
+Cenário: k mínimo = 5. Três cidades: A=100 (grande), B=5 (exatamente no limiar k), C=1 (pequena).
+Soma das duas que o desenho ANTERIOR ocultava (B+C) = 6 = k+1 — a fronteira exata apontada na revisão.
+
+=== DESENHO ANTERIOR (941ca25) — S = k+1 = 6 (B=5 + C=1) ===
+{
+  "total": {
+    "count": 106,
+    "suppressed": false
+  },
+  "cells": [
+    {
+      "id": "a-grande",
+      "label": "A (grande)",
+      "count": 100,
+      "suppressed": false
+    },
+    {
+      "id": "b-limite",
+      "label": "B (exatamente k)",
+      "count": null,
+      "suppressed": true
+    },
+    {
+      "id": "c-pequena",
+      "label": "C (pequena)",
+      "count": null,
+      "suppressed": true
+    }
+  ]
+}
+Soma revelada por subtração (total - visíveis nomeadas) = 6
+Como a supressão complementar SÓ escolhe entre células que eram >= k, e a primária é sempre < k,
+um atacante que conhece o algoritmo deduz: complementar >= 5 e primária < 5, soma = 6
+=> única solução inteira: complementar = 5, primária = 1 — AS DUAS reveladas exatamente.
+
+=== DESENHO NOVO — mesmo cenário (B=5, C=1) ===
+{
+  "cities": [
+    {
+      "id": "a-grande",
+      "label": "A (grande)",
+      "count": 100
+    },
+    {
+      "id": "b-limite",
+      "label": "B (exatamente k)",
+      "count": 5
+    }
+  ],
+  "others": null,
+  "partial": true,
+  "total": 105
+}
+B (5) já é >= k sozinha: fica NOMEADA (nunca some por causa de C). C (1) fica INTEIRA oculta
+(sozinha não chega a k=5 nem agregada com mais ninguém pequeno) — nunca aparece nem nomeada nem num total que a revele.
+
+=== Demais itens (vermelho documentado pelo próprio código anterior; testes novos cobrem o comportamento) ===
+
+2) b2b_campaign_record_event (0503, antes): só checava `status = 'approved'`. Uma chamada com uma lista bloqueada
+   por Procon (categoria alvo com item `restrictive_brand_or_spec`) retornava `true` e gravava o evento — o mesmo
+   bloqueio que `b2b_campaign_serve` já aplicava não valia para o registro do evento. Testes novos que provam a
+   correção: tests/db/campaigns.test.ts > "b2b_campaign_record_event revalida a MESMA elegibilidade do serve:
+   recusa em lista bloqueada por Procon" e "...revalida is_demo/ambiente...".
+
+3) dedupe_key era 100% escolhido pelo chamador (`p_dedupe_key text`, só validado por formato hex) — qualquer
+   cliente podia gerar uma chave nova a cada chamada e inflar impressão/clique sem limite algum. Agora
+   features/campaigns/tracking-service.ts deriva a chave por HMAC-SHA256 com segredo do servidor sobre
+   (IP truncado + UA + lista + campanha + dia) e exige um token de impressão assinado para o clique; limite por
+   (IP, lista, campanha) por minuto. Testes novos: tests/campaigns/tracking-service.test.ts (11 casos).
+
+4) CPM acumulava com `ceil(bid_cents/1000)` por impressão — um bid de 1 centavo/mil (0,001 centavo real por
+   impressão) virava 1 centavo POR EVENTO, inflando 1000x o acumulado real. Prova: bid=1, 3 impressões => antes
+   acumularia 3 centavos; agora acumula exatamente 0,003 centavo (numeric(14,3), sem arredondar por evento).
+   Teste novo: tests/db/campaigns.test.ts > "CPM acumula EXATO (sem arredondar por evento)...".
+
+5) b2b_statement_generate somava QUALQUER campanha do parceiro no período, inclusive uma campanha `is_demo=true`
+   (sandbox) — um parceiro `active` com uma campanha sandbox residual veria o gasto dela no extrato REAL. Também
+   somava uso de QUALQUER chave (inclusive `environment='test'`). Teste novo: tests/db/campaigns.test.ts >
+   "extrato filtra is_demo: campanha sandbox nunca entra no extrato de um parceiro ativo; uso de chave test nunca
+   conta".
+
+Todos os testes acima foram escritos para o comportamento NOVO e rodam verdes contra o código corrigido
+(ver docs/superpowers/logs/s26-fix-db-final2.txt: 1775/1778, e s26-fix-unit-final.txt: 3354/3354). A demonstração
+concreta do vazamento de k-anonimato (item 1, o mais crítico) está reproduzida acima rodando literalmente a
+função do commit 941ca25 lado a lado com a função corrigida.

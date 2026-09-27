@@ -1,0 +1,274 @@
+$ vitest run -c vitest.db.config.ts -- tests/db/campaigns.test.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T2-pipeline
+
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+(node:64257) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+ ❯ tests/db/campaigns.test.ts (10 tests | 10 failed) 203ms
+   ❯ S26 · 0503 schema: campanhas B2B (10)
+     × tabelas com id uuid, created_at, updated_at e RLS 12ms
+     × nenhuma função nova é executável por public/anon/authenticated; só service_role quando previsto 6ms
+     × b2b_campaign_events/ledger/statements/statement_line_items são imutáveis (update, delete e truncate bloqueados) 14ms
+     × bloqueio Procon: campanha nunca serve numa lista com item de marca exigida na categoria alvo 13ms
+     × is_demo: parceiro sandbox só serve/mede em lista demo; parceiro ativo só em lista real 14ms
+     × dedupe: o mesmo dedupe_key/tipo/dia não duplica evento nem acúmulo; clique sem impressão prévia é descartado 14ms
+     × orçamento total esgotado pausa a campanha automaticamente e ela para de servir/receber evento 14ms
+     × b2b_insights_raw conta listas distintas publicadas por cidade/série/categoria, separando is_demo 37ms
+     × b2b_statement_generate soma uso de API como 'unavailable' e campanhas como 'priced' (bid do parceiro); duplicar período falha 18ms
+     × RLS: só dono do parceiro e admin leem campanha/eventos/livro-razão/extrato; anon nada 15ms
+Stopped services: [supabase_imgproxy_listacerta-t2 supabase_pg_meta_listacerta-t2 supabase_studio_listacerta-t2 supabase_edge_runtime_listacerta-t2 supabase_analytics_listacerta-t2 supabase_vector_listacerta-t2 supabase_pooler_listacerta-t2]
+A new version of Supabase CLI is available: v2.118.0 (currently installed v2.117.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > tabelas com id uuid, created_at, updated_at e RLS
+AssertionError: b2b_campaigns: expected [] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   "id",
+-   "created_at",
+-   "updated_at",
+- ]
++ []
+
+ ❯ tests/db/campaigns.test.ts:99:26
+     97|         const cols = await c.query("select column_name, column_default…
+     98|         const names = cols.rows.map((r) => r.column_name as string);
+     99|         expect(names, t).toEqual(expect.arrayContaining(["id", "create…
+       |                          ^
+    100|         expect(String(cols.rows.find((r) => r.column_name === "id")?.c…
+    101|         const rls = await c.query("select relrowsecurity from pg_class…
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/campaigns.test.ts:95:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > nenhuma função nova é executável por public/anon/authenticated; só service_role quando previsto
+error: function "public.b2b_campaign_create(uuid, uuid, jsonb)" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/campaigns.test.ts:111:21
+    109|       for (const f of FUNCTIONS) {
+    110|         for (const role of ["public", "anon", "authenticated"]) {
+    111|           const r = await c.query<{ ok: boolean }>("select has_functio…
+       |                     ^
+    112|           expect(r.rows[0]!.ok, `${role} x ${f.sig}`).toBe(false);
+    113|         }
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/campaigns.test.ts:108:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > b2b_campaign_events/ledger/statements/statement_line_items são imutáveis (update, delete e truncate bloqueados)
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:123:26
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:121:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > bloqueio Procon: campanha nunca serve numa lista com item de marca exigida na categoria alvo
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:162:26
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:160:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > is_demo: parceiro sandbox só serve/mede em lista demo; parceiro ativo só em lista real
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:191:31
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:189:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > dedupe: o mesmo dedupe_key/tipo/dia não duplica evento nem acúmulo; clique sem impressão prévia é descartado
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:212:26
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:210:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > orçamento total esgotado pausa a campanha automaticamente e ela para de servir/receber evento
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:237:26
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:234:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > b2b_insights_raw conta listas distintas publicadas por cidade/série/categoria, separando is_demo
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:265:20
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:259:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > b2b_statement_generate soma uso de API como 'unavailable' e campanhas como 'priced' (bid do parceiro); duplicar período falha
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:284:26
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/campaigns.test.ts:276:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  tests/db/campaigns.test.ts > S26 · 0503 schema: campanhas B2B > RLS: só dono do parceiro e admin leem campanha/eventos/livro-razão/extrato; anon nada
+error: current transaction is aborted, commands ignored until end of transaction block
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ callAsService tests/db/b2b-fixtures.ts:203:5
+    201|     return r.rows as T[];
+    202|   } finally {
+    203|     await c.query("reset role");
+       |     ^
+    204|     await c.query(`set local role ${prev}`).catch(() => undefined);
+    205|   }
+ ❯ tests/db/campaigns.test.ts:316:26
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/campaigns.test.ts:314:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed | 79 passed | 1 skipped (81)
+      Tests  10 failed | 1759 passed | 3 skipped (1772)
+   Start at  05:14:45
+   Duration  149.38s (tests 93%, import 7%, transform 1%)
+
+[ELIFECYCLE] Command failed with exit code 1.

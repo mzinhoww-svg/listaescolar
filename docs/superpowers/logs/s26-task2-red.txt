@@ -1,0 +1,102 @@
+$ vitest run -- tests/campaigns
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T2-pipeline
+
+ ❯ tests/campaigns/insights-service.test.ts (11 tests | 1 failed) 19ms
+   ❯ applyKAnonymitySuppression (8)
+     × célula abaixo de min_k fica oculta (count null, suppressed true); igual ou acima fica visível 10ms
+ ❯ tests/campaigns/statement-service.test.ts (8 tests | 1 failed) 8ms
+   ❯ StatementService (4)
+     × generate: admin válido chama o repositório com o payload validado 3ms
+ ❯ tests/campaigns/service.test.ts (6 tests | 1 failed) 15ms
+   ❯ CampaignService.decideCampaign (3)
+     × admin aprova: chama transitionCampaign com 'approved' 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/campaigns/insights-service.test.ts > applyKAnonymitySuppression > célula abaixo de min_k fica oculta (count null, suppressed true); igual ou acima fica visível
+AssertionError: expected { Object (id, label, ...) } to match object { count: 10, suppressed: false }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "count": 10,
+-   "suppressed": false,
++   "count": null,
++   "suppressed": true,
+  }
+
+ ❯ tests/campaigns/insights-service.test.ts:23:20
+     21|     const cuiaba = r.cells.find((c) => c.id === "5103403")!;
+     22|     const sinop = r.cells.find((c) => c.id === "5108402")!;
+     23|     expect(cuiaba).toMatchObject({ count: 10, suppressed: false });
+       |                    ^
+     24|     expect(sinop).toMatchObject({ count: null, suppressed: true });
+     25|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/campaigns/service.test.ts > CampaignService.decideCampaign > admin aprova: chama transitionCampaign com 'approved'
+ZodError: [
+  {
+    "origin": "string",
+    "code": "invalid_format",
+    "format": "uuid",
+    "pattern": "/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/",
+    "path": [
+      "campaignId"
+    ],
+    "message": "Invalid UUID"
+  }
+]
+ ❯ CampaignService.decideCampaign features/campaigns/service.ts:78:66
+     76|   async decideCampaign(actor: SessionActor, rawInput: unknown): Promis…
+     77|     requireAdmin(actor);
+     78|     const input: DecideCampaignInput = DecideCampaignInputSchema.parse…
+       |                                                                  ^
+     79|     await this.deps.repo.transitionCampaign(actor, input.campaignId, i…
+     80|   }
+ ❯ tests/campaigns/service.test.ts:59:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/campaigns/statement-service.test.ts > StatementService > generate: admin válido chama o repositório com o payload validado
+ZodError: [
+  {
+    "origin": "string",
+    "code": "invalid_format",
+    "format": "uuid",
+    "pattern": "/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/",
+    "path": [
+      "partnerId"
+    ],
+    "message": "Invalid UUID"
+  }
+]
+ ❯ StatementService.generate features/campaigns/statement-service.ts:43:72
+     41|   async generate(actor: SessionActor, rawInput: unknown): Promise<{ st…
+     42|     if (actor.role !== "admin") throw new CampaignServiceError("só adm…
+     43|     const input: GenerateStatementInput = GenerateStatementInputSchema…
+       |                                                                        ^
+     44|     return this.repo.generateStatement(actor, input.partnerId, input.p…
+     45|   }
+ ❯ tests/campaigns/statement-service.test.ts:71:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  3 failed | 245 passed (248)
+      Tests  3 failed | 3333 passed (3336)
+   Start at  05:49:00
+   Duration  39.03s (environment 63%, setup 16%, tests 9%, import 6%, transform 5%)
+
+Environment  jsdom was created 248 times · 200.17s total, 63% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[ELIFECYCLE] Test failed. See above for more details.

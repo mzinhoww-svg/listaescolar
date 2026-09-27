@@ -198,7 +198,15 @@ Conteúdo e dados:
 - `pnpm test:db` supõe banco recém-`db:reset` (D-090): rodar depois de um roteiro E2E que semeou dados dá falhas ambientais (dados extras contam em `count(*)`/limites que os testes esperam exatos). Sempre `pnpm db:reset` antes de `pnpm test:db` num gate; se algo falhar só depois de um E2E na mesma sessão, rode `db:reset` de novo antes de julgar a falha como regressão real.
 - Staging: advisor aceito com `auth_role()` executável por anon, `rls_auto_enable()` (função da plataforma) e a view definer `stationery_public` (S13, esperado).
 - Encerrar só o servidor aberto pela própria sessão (`kill "$(lsof -ti tcp:<porta> -sTCP:LISTEN)"`); nunca `pkill`.
-- Subagentes: nunca despachar dois na mesma rodada no mesmo worktree.
+- Subagentes: nunca despachar dois na mesma rodada no mesmo worktree. Achado real na S18: um fork despachado para
+  só pesquisar (triagem de dívidas) continuou implementando e rodando `pnpm db:reset`/`pnpm test:db` no mesmo
+  worktree em paralelo com o orquestrador por vários minutos depois de terminar a resposta — os dois `pnpm
+  test:db` concorrentes (ambos com `maxWorkers: 1`/`fileParallelism: false`, mas competindo pelo MESMO Postgres
+  local) causaram `Connection terminated unexpectedly` e decenas de falhas ambientais em cada um. Antes de rodar
+  `db:reset`/`test:db` depois de qualquer subagente no mesmo worktree, confira `pgrep -f "vitest.mjs run -c
+  vitest.db.config.ts"`/`pgrep -f "pnpm db:reset"` e espere (`until ! pgrep ...; do sleep 5; done`, nunca `sleep`
+  fixo) até não haver nenhum antes de rodar o próprio gate — regressões "aleatórias" que desaparecem numa nova
+  tentativa isolada são sinal disso, não do código.
 
 ## Política de uso (definida pelo humano em 2026-09-25, limite semanal em 79%)
 - Sonnet nos implementadores e nas revisões comuns; Opus só nas revisões de segurança (RLS, cobrança, B2B e dados de menor).

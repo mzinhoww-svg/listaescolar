@@ -13,6 +13,8 @@ describe("protectedPrefix", () => {
     expect(protectedPrefix("/cotacao/LC-5TJ1")).toBe("/cotacao");
     expect(protectedPrefix("/cotacao/nova")).toBe("/cotacao");
     expect(protectedPrefix("/ir-para/a/b/go")).toBe("/ir-para");
+    expect(protectedPrefix("/b2b")).toBe("/b2b");
+    expect(protectedPrefix("/b2b/chaves")).toBe("/b2b");
   });
   it("não confunde prefixos parecidos nem rotas públicas", () => {
     expect(protectedPrefix("/administrador")).toBeNull();
@@ -23,6 +25,11 @@ describe("protectedPrefix", () => {
     expect(protectedPrefix("/cotacaox")).toBeNull();
     expect(protectedPrefix("/")).toBeNull();
     expect(protectedPrefix("/entrar")).toBeNull();
+    // /v1 (API B2B) e /parceiros (marketing público) nunca são protegidos pelo gate de sessão.
+    expect(protectedPrefix("/v1")).toBeNull();
+    expect(protectedPrefix("/v1/schools")).toBeNull();
+    expect(protectedPrefix("/parceiros")).toBeNull();
+    expect(protectedPrefix("/b2bx")).toBeNull();
   });
 });
 
@@ -39,6 +46,8 @@ describe("canAccess", () => {
     "/enviar-lista/abc": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/escola": { parent: "forbidden", school_member: "allow", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/papelaria/pedidos": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/b2b": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
+    "/b2b/chaves": { parent: "allow", school_member: "allow", admin: "allow", stationery_member: "allow", system: "forbidden" },
     "/admin": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
     "/admin/importacoes": { parent: "forbidden", school_member: "forbidden", admin: "allow", stationery_member: "forbidden", system: "forbidden" },
   };
@@ -50,7 +59,7 @@ describe("canAccess", () => {
     }
   }
   it("role nulo em rota protegida -> login", () => {
-    for (const p of ["/conta", "/carrinho/x", "/cotacao", "/cotacao/LC-5TJ1", "/ir-para/x/y", "/escola", "/papelaria", "/admin/x"]) {
+    for (const p of ["/conta", "/carrinho/x", "/cotacao", "/cotacao/LC-5TJ1", "/ir-para/x/y", "/escola", "/papelaria", "/b2b", "/admin/x"]) {
       expect(canAccess(null, p)).toBe("login");
     }
   });

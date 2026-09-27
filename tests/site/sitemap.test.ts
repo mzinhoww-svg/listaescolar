@@ -25,7 +25,7 @@ describe("app/sitemap", () => {
     listMock.mockResolvedValue([{ inep: "51000002", updatedAt: "2026-01-02T00:00:00Z" }]);
     const { default: sitemap } = await import("@/app/sitemap");
     const urls = (await sitemap()).map((e) => e.url);
-    for (const path of ["/", "/como-funciona", "/sobre", "/termos", "/privacidade", "/escolas"]) {
+    for (const path of ["/", "/como-funciona", "/sobre", "/termos", "/privacidade", "/escolas", "/parceiros", "/parceiros/docs", "/parceiros/termos"]) {
       expect(urls).toContain(`https://listacerta.example${path}`);
     }
     expect(urls).toContain("https://listacerta.example/escolas/51000002");
@@ -55,7 +55,7 @@ describe("app/sitemap", () => {
     const { default: sitemap } = await import("@/app/sitemap");
     const urls = (await sitemap()).map((e) => e.url);
     spy.mockRestore();
-    expect(urls).toHaveLength(6);
+    expect(urls).toHaveLength(9);
     expect(urls.some((u) => /\/escolas\/\d/.test(u))).toBe(false);
   });
 });

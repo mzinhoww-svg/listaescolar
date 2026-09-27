@@ -5,7 +5,7 @@ import { generateApiKey } from "@/features/b2b/keys/format";
 import { hashSecret } from "@/features/b2b/keys/hash";
 import { B2bApiError } from "@/features/b2b/errors";
 import type { ApiHandlerDeps, RateConsumeResult } from "@/features/b2b/api/handler";
-import { runApiPipeline } from "@/features/b2b/api/handler";
+import { __resetIpRateLimiterForTests, runApiPipeline } from "@/features/b2b/api/handler";
 import type { EndpointEntry } from "@/features/b2b/api/contract";
 
 const PEPPER = "pepper-de-teste-com-mais-de-32-caracteres-0001";
@@ -72,6 +72,7 @@ beforeEach(() => {
   consumeRate = vi.fn<ApiHandlerDeps["consumeRate"]>(async () => okRate());
   recordUsage = vi.fn<ApiHandlerDeps["recordUsage"]>(async () => undefined);
   afterCallbacks = [];
+  __resetIpRateLimiterForTests();
 });
 
 const okImpl = async () => ({ data: { ok: true } });
@@ -85,7 +86,10 @@ describe("runApiPipeline", () => {
     expect(res.headers.get("WWW-Authenticate")).toBe("ListaCerta-Key");
   });
 
-  it("escopo errado -> 403 sem consumir cota", async () => {
+  it("escopo errado -> 403 e AINDA ASSIM consome a cota da chave (revisão de segurança independente, achado 1a)", async () => {
+    // Antes: `insufficient_scope` não consumia nem era contado em lugar nenhum (um invasor com chave válida mas
+    // escopo errado podia martelar o endpoint de graça). Agora `consumeRate` roda ANTES da checagem de escopo,
+    // na mesma posição que já valia para `rate_limited` — `insufficient_scope` consome cota como qualquer 4xx.
     lookupKey = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => ({
       keyId: KEY_ID,
       partnerId: PARTNER_ID,
@@ -96,11 +100,35 @@ describe("runApiPipeline", () => {
       usable: true,
       coverageUfs: null,
     }));
-    const res = await runApiPipeline(entry, okImpl, deps(), request(), {});
+    const res = await runApiPipeline(entry, okImpl, deps({ lookupKey }), request(), {});
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error.code).toBe("insufficient_scope");
-    expect(consumeRate).not.toHaveBeenCalled();
+    expect(consumeRate).toHaveBeenCalledTimes(1);
+    expect(consumeRate).toHaveBeenCalledWith(KEY_ID, expect.any(AbortSignal));
+  });
+
+  it("escopo errado mas limite já estourado -> 429 (o limite roda antes do escopo, prioridade para quem já martelou)", async () => {
+    lookupKey = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => ({
+      keyId: KEY_ID,
+      partnerId: PARTNER_ID,
+      environment: "test" as const,
+      keyHash: hashSecret(KEY.secret, PEPPER),
+      hashVersion: 1,
+      scopes: ["lists:read"], // sem schools:read
+      usable: true,
+      coverageUfs: null,
+    }));
+    consumeRate = vi.fn<ApiHandlerDeps["consumeRate"]>(async (): Promise<RateConsumeResult> => ({
+      allowed: false,
+      keyValid: true,
+      windowKind: "minute",
+      limitValue: 60,
+      remaining: 0,
+      resetAt: new Date("2026-09-26T12:00:05Z"),
+    }));
+    const res = await runApiPipeline(entry, okImpl, deps({ lookupKey, consumeRate }), request(), {});
+    expect(res.status).toBe(429);
   });
 
   it("consumo negado (allowed: false) -> 429 com Retry-After", async () => {
@@ -243,5 +271,86 @@ describe("runApiPipeline", () => {
       runApiPipeline(entry, okImpl, deps(), request(null), {}),
     ]);
     for (const res of responses) expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  // Revisão de segurança independente, achado 2: sem `content-length`, `request.text()` lia o stream inteiro
+  // antes de qualquer checagem de tamanho. A leitura em stream corta assim que passa do limite, sem esperar o
+  // corpo malicioso terminar.
+  it("corpo grande sem content-length é cortado durante a leitura (413), sem esperar o stream inteiro", async () => {
+    const bodyEntry: EndpointEntry = { ...entry, method: "POST", bodySchema: z.object({}).strict(), maxBodyBytes: 10, errors: [...entry.errors, "payload_too_large"] };
+    let pulls = 0;
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 50) {
+          controller.close(); // válvula de segurança: se a correção falhar, o teste falha por status errado, não trava
+          return;
+        }
+        controller.enqueue(new TextEncoder().encode("x".repeat(20))); // 20 bytes por pull, > maxBodyBytes (10) já na 1ª
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const headers = new Headers();
+    headers.set("x-listacerta-key", KEY.plaintext);
+    headers.set("content-type", "application/json");
+    const req = new Request("https://api.listacerta.example/v1/test", { method: "POST", headers, body: stream, duplex: "half" } as RequestInit & { duplex: "half" });
+    const res = await runApiPipeline(bodyEntry, okImpl, deps(), req, {});
+    expect(res.status).toBe(413);
+    expect(pulls).toBeLessThan(50);
+    expect(cancelled).toBe(true);
+  });
+
+  // Revisão de segurança independente, achado 3: `withTimeout` só corria uma race com `setTimeout`; a consulta
+  // real ao Postgres/PostgREST continuava rodando em segundo plano depois do timeout "vencer". Agora o timeout
+  // aborta de verdade um `AbortSignal` passado para `lookupKey`/`consumeRate`.
+  it("timeout do lookupKey aborta de verdade o AbortSignal passado (não só ignora a resposta depois)", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const slowLookup = vi.fn<ApiHandlerDeps["lookupKey"]>((_publicId: string, signal?: AbortSignal) => {
+      capturedSignal = signal;
+      return new Promise((resolve) => setTimeout(() => resolve(null), 500));
+    });
+    const res = await runApiPipeline(entry, okImpl, deps({ lookupKey: slowLookup, timeoutMs: 20 }), request(), {});
+    expect(res.status).toBe(503);
+    expect(capturedSignal).toBeInstanceOf(AbortSignal);
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it("timeout do consumeRate aborta de verdade o AbortSignal passado", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const slow = vi.fn<ApiHandlerDeps["consumeRate"]>((_keyId: string, signal?: AbortSignal) => {
+      capturedSignal = signal;
+      return new Promise((resolve) => setTimeout(() => resolve(okRate()), 500));
+    });
+    const res = await runApiPipeline(entry, okImpl, deps({ consumeRate: slow, timeoutMs: 20 }), request(), {});
+    expect(res.status).toBe(503);
+    expect(capturedSignal).toBeInstanceOf(AbortSignal);
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  // Revisão de segurança independente, achado 1b: limite por IP em memória (por instância), aplicado ANTES até de
+  // olhar a chave — a 61ª requisição da mesma origem em menos de um minuto é cortada sem consultar o banco.
+  it("limite por IP em memória: 61ª requisição da mesma origem em 1 min -> 429 antes de consultar a chave", async () => {
+    const headers = new Headers();
+    headers.set("x-listacerta-key", KEY.plaintext);
+    headers.set("x-forwarded-for", "203.0.113.7, 10.0.0.1");
+    const reqFromIp = () => new Request("https://api.listacerta.example/v1/test", { headers });
+    let last: Response | undefined;
+    for (let i = 0; i < 61; i += 1) {
+      last = await runApiPipeline(entry, okImpl, deps(), reqFromIp(), {});
+    }
+    expect(last?.status).toBe(429);
+    expect(last?.headers.get("Retry-After")).toBeTruthy();
+    expect(lookupKey).toHaveBeenCalledTimes(60); // a 61ª nem chega a olhar a chave
+  });
+
+  it("sem x-forwarded-for/x-real-ip -> não bloqueia por IP (só loga), segue o pipeline normal", async () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const res = await runApiPipeline(entry, okImpl, deps(), request(), {});
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

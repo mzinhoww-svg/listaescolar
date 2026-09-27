@@ -17,7 +17,7 @@ function realRepository(): B2bRepository {
     applyPartner: (actor, payload, termsVersion) => repo.applyPartner(client, actor, payload, termsVersion),
     myPartnerId: (actor) => repo.myPartnerId(client, actor),
     getMyPartner: (actor) => repo.getMyPartner(client, actor),
-    getKeyEnvironment: (keyId) => repo.getKeyEnvironment(client, keyId),
+    getKeyEnvironment: (actor, keyId) => repo.getKeyEnvironment(client, actor, keyId),
     createKey: (actor, partnerId, input) => repo.createKey(client, actor, partnerId, input),
     rotateKey: (actor, input) => repo.rotateKey(client, actor, input),
     revokeKey: (actor, keyId, reason) => repo.revokeKey(client, actor, keyId, reason),

@@ -1021,12 +1021,24 @@ comment on policy b2b_usage_daily_select_member_or_admin on public.b2b_usage_dai
 -- ---------------------------------------------------------------------------
 revoke all on public.b2b_partners, public.b2b_partner_members, public.b2b_partner_events, public.b2b_api_keys,
   public.b2b_rate_windows, public.b2b_usage_daily from public, anon, authenticated, service_role;
-grant select on public.b2b_partners to authenticated, service_role;
+-- `b2b_partners`: `authenticated` (dono/admin, via RLS) nunca vê `decided_by` (UUID de perfil do admin que
+-- decidiu) — revisão de segurança independente, achado 5. `service_role` (funções/backend) continua com a tabela
+-- inteira.
+grant select (
+  id, trade_name, legal_name, cnpj, contact_name, partner_type, status, plan, coverage_ufs,
+  test_rate_per_minute, test_rate_per_day, live_rate_per_minute, live_rate_per_day, status_reason,
+  terms_consent_id, terms_text_version, decided_at, is_demo, created_at, updated_at
+) on public.b2b_partners to authenticated;
+grant select on public.b2b_partners to service_role;
 grant select on public.b2b_partner_members to authenticated, service_role;
 grant select (id, partner_id, event_type, from_status, to_status, actor_role, reason, payload, created_at, updated_at) on public.b2b_partner_events to authenticated;
 grant select on public.b2b_partner_events to service_role;
+-- `b2b_api_keys`: `authenticated` nunca vê `created_by`/`revoked_by` (UUID de perfil de quem criou/revogou a
+-- chave) além de `key_hash`/`hash_version`, que já ficavam fora (revisão de segurança independente, achado 5).
+grant select (id, partner_id, environment, public_id, last4, scopes, status, expires_at, rotated_from_id, revoked_at, revoke_reason, created_at, updated_at)
+  on public.b2b_api_keys to authenticated;
 grant select (id, partner_id, environment, public_id, last4, scopes, status, expires_at, rotated_from_id, created_by, revoked_at, revoked_by, revoke_reason, created_at, updated_at)
-  on public.b2b_api_keys to authenticated, service_role;
+  on public.b2b_api_keys to service_role;
 grant select on public.b2b_usage_daily to authenticated, service_role;
 
 revoke execute on function public.b2b_partner_events_block_mutation() from public, anon, authenticated, service_role;

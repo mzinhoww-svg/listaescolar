@@ -23,6 +23,7 @@ import {
   adminRevokeKey,
   createKey,
   decide,
+  getKeyEnvironment,
   getMyPartner,
   getPartner,
   listPartnerEvents,
@@ -245,6 +246,25 @@ describe("chaves: createKey / rotateKey / revokeKey", () => {
     const actorA = await actorOf(ownerA);
     await expectCode(revokeKey(admin, actorA, keyB.id, "tentativa alheia"), "not_found");
     await expectCode(rotateKey(admin, actorA, { oldKeyId: keyB.id, publicId: publicId(), keyHash: hashSecret(secret()), hashVersion: 1, last4: "7890" }), "not_found");
+  });
+
+  it("getKeyEnvironment nunca revela o ambiente de uma chave de outro parceiro (revisão de segurança independente, achado 7)", async () => {
+    // Antes: `getKeyEnvironment` lia QUALQUER `keyId` sem checar posse — `rotateKey` (serviço) já revelava, via
+    // essa chamada, que um `keyId` de outro parceiro existe e qual o ambiente dele, antes mesmo de a rotação em
+    // si (que já checa posse) rodar. Mesma resposta (`null`) para chave alheia e chave inexistente.
+    const ownerA = await makeUser("key-env-a");
+    const ownerB = await makeUser("key-env-b");
+    const partnerBId = await withSuperuser((c) => seedPartner(c, { status: "sandbox", ownerId: ownerB }));
+    partnerIds.push(partnerBId);
+    const keyB = await withSuperuser((c) => seedKey(c, partnerBId, { environment: "live" }));
+    const actorA = await actorOf(ownerA);
+    expect(await getKeyEnvironment(admin, actorA, keyB.id)).toBeNull();
+    expect(await getKeyEnvironment(admin, actorA, "00000000-0000-4000-8000-000000000099")).toBeNull();
+
+    const partnerAId = await withSuperuser((c) => seedPartner(c, { status: "sandbox", ownerId: ownerA }));
+    partnerIds.push(partnerAId);
+    const keyA = await withSuperuser((c) => seedKey(c, partnerAId, { environment: "test" }));
+    expect(await getKeyEnvironment(admin, actorA, keyA.id)).toBe("test");
   });
 });
 

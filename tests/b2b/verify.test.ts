@@ -93,4 +93,22 @@ describe("verifyApiKey", () => {
     const result = await verifyApiKey(key.plaintext, { pepper: PEPPER, lookup: async () => row });
     expect(result).toEqual({ ok: false, reason: "invalid_key" });
   });
+
+  it("prefixo de ambiente do cabeçalho não bate com o ambiente da linha -> invalid_key, mesmo com hash certo (revisão de segurança independente, achado 4)", async () => {
+    // Sem escalada de privilégio hoje (o ambiente USADO é sempre o da linha do banco), mas defesa em profundidade:
+    // apresentar um segredo `live` com prefixo `lc_test_` (ou vice-versa) devia falhar, não só "funcionar mesmo assim".
+    const liveKey = generateApiKey("live");
+    const row = rowFor(liveKey.secret, { environment: "live" });
+    const swapped = liveKey.plaintext.replace("lc_live_", "lc_test_");
+    const result = await verifyApiKey(swapped, { pepper: PEPPER, lookup: async () => row });
+    expect(result).toEqual({ ok: false, reason: "invalid_key" });
+  });
+
+  it("o mesmo teste, na outra direção (test apresentado como live)", async () => {
+    const testKey = generateApiKey("test");
+    const row = rowFor(testKey.secret, { environment: "test" });
+    const swapped = testKey.plaintext.replace("lc_test_", "lc_live_");
+    const result = await verifyApiKey(swapped, { pepper: PEPPER, lookup: async () => row });
+    expect(result).toEqual({ ok: false, reason: "invalid_key" });
+  });
 });

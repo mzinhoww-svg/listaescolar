@@ -64,7 +64,12 @@ export async function verifyApiKey(header: string | null | undefined, deps: Veri
   const sameLength = computedBuf.length === targetBuf.length;
   const equal = sameLength && timingSafeEqual(computedBuf, sameLength ? targetBuf : computedBuf);
 
-  if (!row || !equal || !row.usable) return { ok: false, reason: "invalid_key" };
+  // Achado 4 (revisão de segurança independente): o prefixo de ambiente do CABEÇALHO (`lc_test_`/`lc_live_`) nunca
+  // era comparado ao ambiente da LINHA do banco — hoje sem escalada de privilégio real (o ambiente USADO é sempre o
+  // da linha), mas é defesa em profundidade que faltava. Compara DEPOIS do `timingSafeEqual` (já resolvido acima,
+  // incondicionalmente) para não introduzir um atalho de tempo que responda mais rápido só quando o ambiente bate.
+  const environmentMatches = row ? parsed.environment === row.environment : false;
+  if (!row || !equal || !row.usable || !environmentMatches) return { ok: false, reason: "invalid_key" };
   return {
     ok: true,
     key: { keyId: row.keyId, partnerId: row.partnerId, environment: row.environment, scopes: row.scopes, coverageUfs: row.coverageUfs },

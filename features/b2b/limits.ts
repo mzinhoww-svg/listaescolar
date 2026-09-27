@@ -34,7 +34,11 @@ export const LIST_ITEMS_LIMIT = { default: 200, max: 500 };
 /** `q` (busca por nome de escola): 2..80 caracteres. */
 export const SCHOOL_QUERY_LENGTH: Range = { min: 2, max: 80 };
 
-/** Timeout por requisição ao banco (AbortSignal); passado disso, `503 service_unavailable`. */
+/** Timeout por requisição ao banco. Passado disso, o pipeline aborta de VERDADE um `AbortController` (achado 3,
+ * revisão de segurança independente): a chamada real (`realLookupKey`/`realConsumeRate`) encaminha esse
+ * `AbortSignal` para `.abortSignal()` do supabase-js, cancelando a consulta no Postgres/PostgREST — não é mais só
+ * uma race que ignora a resposta tardia enquanto a consulta continua rodando em segundo plano. Responde `503
+ * service_unavailable`. */
 export const API_DB_TIMEOUT_MS = 8_000;
 
 export function inRange(value: number, range: Range): boolean {

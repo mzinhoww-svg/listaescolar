@@ -23,7 +23,7 @@ export type B2bRepository = {
   applyPartner: (actor: SessionActor, payload: ApplyPartnerPayload, termsVersion: string) => Promise<{ partnerId: string }>;
   myPartnerId: (actor: SessionActor) => Promise<string | null>;
   getMyPartner: (actor: SessionActor) => Promise<PartnerOverview | null>;
-  getKeyEnvironment: (keyId: string) => Promise<ApiKeyEnvironment | null>;
+  getKeyEnvironment: (actor: SessionActor, keyId: string) => Promise<ApiKeyEnvironment | null>;
   createKey: (
     actor: SessionActor,
     partnerId: string,
@@ -117,7 +117,7 @@ export class B2bService {
     const pepper = this.deps.pepper();
     if (!pepper) throw new B2bServiceError("emissão de chaves indisponível no momento", "service_unavailable");
 
-    const environment = await this.deps.repo.getKeyEnvironment(keyId);
+    const environment = await this.deps.repo.getKeyEnvironment(actor, keyId);
     if (!environment) throw new B2bServiceError("chave não encontrada", "not_found");
 
     const key = this.deps.generateKey(environment);

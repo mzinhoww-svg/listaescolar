@@ -155,6 +155,15 @@ describe("S24 · RLS e grants", () => {
       expect(keys.rows.map((r) => r.id)).toEqual([f.k.id]);
       const hash = await attempt(c, "select key_hash from public.b2b_api_keys");
       expect(hash.code).toBe("42501");
+      // Revisão de segurança independente, achado 5: `decided_by` (b2b_partners) e `created_by`/`revoked_by`
+      // (b2b_api_keys) são UUID de PERFIL de quem decidiu/criou/revogou — não deveriam ser legíveis por
+      // `authenticated` (dono nem admin via PostgREST direto), só por `service_role` (funções do backend).
+      const decidedBy = await attempt(c, "select decided_by from public.b2b_partners");
+      expect(decidedBy.code).toBe("42501");
+      const createdBy = await attempt(c, "select created_by from public.b2b_api_keys");
+      expect(createdBy.code).toBe("42501");
+      const revokedBy = await attempt(c, "select revoked_by from public.b2b_api_keys");
+      expect(revokedBy.code).toBe("42501");
       const hv = await attempt(c, "select hash_version from public.b2b_api_keys");
       expect(hv.code).toBe("42501");
       const usage = await c.query("select request_count from public.b2b_usage_daily");

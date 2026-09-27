@@ -20,6 +20,9 @@ ab() { local s=$1; shift; AGENT_BROWSER_SESSION="t2s24-$RUN-$s" agent-browser "$
 sql() { docker exec "$DB" psql -U postgres -At -c "$1"; }
 ok() { PASS=$((PASS+1)); echo "PASS  $1"; }
 bad() { FAIL=$((FAIL+1)); echo "FAIL  $1  ($2)"; }
+# Máscara de chave (revisão de segurança independente, achado 6): nunca imprimir o texto claro numa falha de
+# asserção, nem no log do CI/terminal — só o prefixo (ambiente) e os últimos 4 caracteres, como `KeyMask` no app.
+mask_key() { local k=$1; [ -z "$k" ] && { echo "(vazia)"; return; }; local env; env=$(cut -d_ -f2 <<<"$k"); echo "lc_${env}_••••••••••••${k: -4}"; }
 expect_text() { local t; t=$(ab "$1" get text body 2>/dev/null); if grep -qF -- "$2" <<<"$t"; then ok "$3"; else bad "$3" "esperava '$2'; veio: ${t:0:200}"; fi; }
 expect_no_text() { local t; t=$(ab "$1" get text body 2>/dev/null); if grep -qF -- "$2" <<<"$t"; then bad "$3" "não deveria conter '$2'"; else ok "$3"; fi; }
 wait_text() { for _ in $(seq 1 "$3"); do ab "$1" get text body 2>/dev/null | grep -qF -- "$2" && return 0; sleep 1; done; return 1; }
@@ -118,7 +121,7 @@ sleep 1
 clicktext p "Criar chave"
 sleep 1
 TESTKEY=$(read_dialog_key p)
-[[ "$TESTKEY" == lc_test_* ]] && ok "chave test emitida (texto claro capturado uma vez)" || bad "criar chave test" "$TESTKEY"
+[[ "$TESTKEY" == lc_test_* ]] && ok "chave test emitida (texto claro capturado uma vez)" || bad "criar chave test" "$(mask_key "$TESTKEY")"
 shot p "$OUT/S24-b2b-nova-chave.png"
 clicktext p "Já copiei"
 sleep 1
@@ -152,7 +155,7 @@ clicktext p "Produção"
 clicktext p "Criar chave"
 sleep 1
 LIVEKEY=$(read_dialog_key p)
-[[ "$LIVEKEY" == lc_live_* ]] && ok "chave live emitida" || bad "criar chave live" "$LIVEKEY"
+[[ "$LIVEKEY" == lc_live_* ]] && ok "chave live emitida" || bad "criar chave live" "$(mask_key "$LIVEKEY")"
 clicktext p "Já copiei"
 BODY=$(curl -s "$BASE/v1/schools" -H "x-listacerta-key: $LIVEKEY")
 echo "$BODY" | grep -q "\"$REAL_INEP\"" && echo "$BODY" | grep -qv "\"$DEMO_INEP\"" && ok "chave live só lista a escola real" || bad "escopo live" "$BODY"
@@ -181,7 +184,7 @@ sleep 1
 clicktext p "Confirmar rotação"
 sleep 1
 NEWLIVEKEY=$(read_dialog_key p)
-[[ "$NEWLIVEKEY" == lc_live_* && "$NEWLIVEKEY" != "$LIVEKEY" ]] && ok "rotação emitiu chave nova" || bad "rotação" "$NEWLIVEKEY"
+[[ "$NEWLIVEKEY" == lc_live_* && "$NEWLIVEKEY" != "$LIVEKEY" ]] && ok "rotação emitiu chave nova" || bad "rotação" "$(mask_key "$NEWLIVEKEY")"
 clicktext p "Já copiei"
 sleep 65 # janela do minuto vira; evita 429 residual nas checagens de status abaixo
 C_OLD=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/v1/schools" -H "x-listacerta-key: $LIVEKEY")

@@ -283,10 +283,16 @@ export async function listPartnerEvents(client: SupabaseClient, partnerId: strin
 
 export type CreatedKeyRecord = { keyId: string };
 
-/** Ambiente da chave (para o serviço rotular a chave nova rotacionada com o mesmo ambiente da antiga). Não
- * verifica posse: quem decide se a rotação vale é `b2b_key_rotate`, dentro da mesma transação. `null` = não existe. */
-export async function getKeyEnvironment(client: SupabaseClient, keyId: string): Promise<"test" | "live" | null> {
-  const { data, error } = await client.from("b2b_api_keys").select("environment").eq("id", keyId).maybeSingle();
+/** Ambiente da chave (para o serviço rotular a chave nova rotacionada com o mesmo ambiente da antiga). Filtra por
+ * posse (`partner_id` do ATOR, não só o `keyId`) — revisão de segurança independente, achado 7: antes, qualquer
+ * `keyId` de QUALQUER parceiro revelava aqui o ambiente antes mesmo de `b2b_key_rotate` (chamado depois, esse sim já
+ * checava posse) rodar. `null` para chave inexistente OU de outro parceiro — mesma resposta nos dois casos, de
+ * propósito (nunca revela qual dos dois aconteceu). `b2b_key_rotate` já trata `null` como "chave não encontrada". */
+export async function getKeyEnvironment(client: SupabaseClient, actor: SessionActor, keyId: string): Promise<"test" | "live" | null> {
+  requireActor(actor);
+  const partnerId = await myPartnerId(client, actor);
+  if (!partnerId) return null;
+  const { data, error } = await client.from("b2b_api_keys").select("environment").eq("id", keyId).eq("partner_id", partnerId).maybeSingle();
   if (error) fail("ler ambiente da chave", error);
   return data ? z.enum(["test", "live"]).parse((data as { environment: string }).environment) : null;
 }

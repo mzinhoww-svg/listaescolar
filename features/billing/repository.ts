@@ -498,6 +498,8 @@ export async function flagLatePayment(
     p_provider: input.provider,
     p_provider_charge_id: input.providerChargeId,
     p_amount_cents: input.amountCents,
+    // sempre 'system': só o webhook/cron chama esta função (nenhuma sessão de usuário aciona), revisão de segurança.
+    p_actor_role: "system",
   });
   if (error) fail("registrar alerta de pagamento tardio", error);
   return z.uuid().parse(data);

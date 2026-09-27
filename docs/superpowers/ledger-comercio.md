@@ -987,3 +987,116 @@ service.test.ts`). `pnpm test:db`: 70 arquivos (1 skip), 1597 testes, 3 skipped 
 - (média) D-122: comissão apurada em `payout_ledger` não tem instrumento de cobrança da papelaria (nem debita
   `credit_ledger`, nem gera fatura) — só registro para o admin cobrar manualmente fora do sistema. Dona: futura
   fatia (cobrança automática da comissão).
+
+## S23 · correções da revisão de segurança (Opus, rodada única sobre `a51b62b`)
+
+Migration `0403_repasses.sql` EDITADA NO LUGAR (ainda não aplicada em nenhum ambiente além do local desta sessão —
+sem PR, sem apply em staging). Um Ruling por item pedido na revisão. Vermelho antes do fix: para os dois
+BLOQUEANTES, capturado por verificação direta no Postgres local (`has_function_privilege` antes/depois do `revoke`;
+um `insert`+`select` em `audit_log` antes/depois do `audit_row_change('pix_key','beneficiary_name')`) e, em seguida,
+codificado como teste permanente em `tests/db/payouts.test.ts` (describe `"S23 · correções da revisão de segurança
+(Opus, rodada única)"`) — os testes novos falhavam contra o código anterior à correção e passam depois; não há um
+log de terminal separado para esta rodada porque a verificação foi feita consulta a consulta contra o banco real,
+não só lendo o SQL.
+
+**BLOQUEANTE 1 — EXECUTE aberto para anon/authenticated em 8 funções `SECURITY DEFINER` novas.** Causa raiz: no
+Postgres, toda função nova recebe `EXECUTE` para `PUBLIC` por padrão; o padrão já estabelecido nas migrations 0401
+e 0402 (`revoke execute ... from public, anon, authenticated, service_role; grant execute ... to service_role;`
+logo após cada função) não tinha sido replicado nas 8 funções principais da 0403 nem nas 5 funções de gatilho.
+Corrigido função a função (revoke total, grant só a `service_role`; funções de gatilho ficam só com o revoke, sem
+grant, porque só o mecanismo de trigger as chama). `payout_check_admin` ganhou o mesmo cotejo de `sub` do JWT contra
+o ator informado que `billing_check_admin` (0401) já tinha — sem isso, um `stationery_member` autenticado poderia
+chamar a RPC informando o UUID de outro ator. Teste novo varre `has_function_privilege` para anon/authenticated/
+service_role nas 9 funções principais (as 8 + `payout_reverse_entry`, criada nesta mesma rodada) e nas 5 de
+gatilho. Custo se o revoke tivesse ficado incompleto: qualquer usuário autenticado (ou anônimo, se a chave
+publicável vazasse) poderia confirmar vendas, publicar configuração de repasse ou gerar lotes diretamente via RPC,
+contornando toda a UI e as Server Actions.
+
+**BLOQUEANTE 2 — `audit_log` guardando `pix_key` e `beneficiary_name`.** O gatilho `school_payout_settings_audit`
+usava `audit_row_change()` sem excluir nenhuma coluna, gravando a chave Pix e o nome do beneficiário em texto
+simples num log que é append-only e nunca é apagado. Corrigido para `audit_row_change('pix_key',
+'beneficiary_name')`, mesmo padrão já usado em outras tabelas sensíveis (ex.: `pix_copy_paste`,
+`idempotency_key` em 0401). Teste novo insere/atualiza `school_payout_settings` e confirma, por leitura direta do
+JSONB de `audit_log`, que nenhuma das duas chaves aparece em nenhuma linha. Custo se não corrigido: qualquer leitor
+do `audit_log` (hoje só `service_role`/admin via ferramenta de banco, mas o log é pensado para retenção longa e
+possível exportação futura) teria acesso a uma chave Pix de terceiro (escola/APM) que não é nem papelaria nem
+plataforma.
+
+**IMPORTANTE 3 — régua de inadimplência contando recarga de crédito abandonada.** `payout_delinquency_status`
+contava qualquer `invoices` aberta e vencida; uma recarga de crédito pré-paga (`credit_package`) nunca entregue
+(cliente desistiu antes de pagar) não é uma dívida — ninguém deve nada a ninguém nesse caso, ao contrário de uma
+parcela de passe de temporada não paga. Corrigido: a régua agora filtra `kind = 'season_pass_installment' and
+is_demo = false`. Também corrigido, no mesmo function body, o cálculo de "hoje" para `(p_at at time zone
+'America/Cuiaba')::date` (era um `::date` cru, dependente do fuso da sessão — normalmente UTC — o que podia
+classificar errado uma fatura vencida há exatamente N dias perto da virada de meia-noite em Cuiabá). Dois testes
+negativos novos confirmam que uma recarga de crédito vencida e uma parcela de passe de DEMONSTRAÇÃO vencida NUNCA
+entram na régua (`status === "em_dia"` mesmo com centenas de dias de atraso). O roteiro de E2E trocou a fatura de
+teste por uma parcela de passe real e ganhou um controle negativo com uma recarga vencida há 400 dias. Custo se não
+corrigido: uma papelaria com um cliente que desistiu de recarregar crédito ficaria pausada sem dever nada, perdendo
+leads novos sem motivo.
+
+**IMPORTANTE 4 — sinal "Pix pela plataforma" contável só pela própria declaração.** `lead_conversion_signals`
+contava `pix_confirmed` para QUALQUER linha em `sale_payments`, inclusive uma confirmada só pela própria papelaria
+(`confirmed_role = 'stationery_member'`) — o mesmo ator que já contribui o sinal "declarou venda". Isso deixava a
+regra de "2 de 3 sinais" praticamente refém de um único ator mal-intencionado (declarar a venda E confirmar o Pix
+sozinho, sem nenhuma confirmação externa). Corrigido: `pix_confirmed` só conta quando existe uma linha com
+`confirmed_role in ('admin', 'system')`. Teste novo confirma que uma confirmação só da papelaria não move
+`pix_confirmed` para `true`. Custo se não corrigido: uma papelaria poderia inflar sozinha a conversão de um lead
+(e, por consequência, seu histórico de "declarado × confirmado" em Pap07) sem nenhuma verificação externa.
+
+**IMPORTANTE 5 — conluio: repasse por qualquer confirmação que escolhesse uma escola.** Era possível a própria
+papelaria, ao confirmar "Pix pela plataforma", escolher a escola do repasse — um combinado entre papelaria e
+alguém na escola/APM (declarar uma escola fictícia ou usar informação privilegiada) geraria `repasse_due` sem
+nenhuma revisão. Ruling: **repasse só nasce quando quem confirma é `admin` ou `system`** — nunca por confirmação
+direta da papelaria, mesmo que ela informe a escola certa. Implementado na PRÓPRIA função `payout_confirm_sale`
+(defesa na fonte da verdade, não só na UI): a inserção em `payout_ledger` com `entry_type = 'repasse_due'` só
+acontece quando `p_actor_role in ('admin', 'system')`. Isso obrigou a redesenhar a UX: o seletor de escola SAIU do
+formulário de confirmação da papelaria (Pap03/`ConfirmSaleForm`) — mantê-lo lá seria enganoso, já que nunca gera
+repasse — e uma tela NOVA (`ConfirmSalesAdminList`, dentro do Admin13) lista as vendas confirmáveis de TODAS as
+papelarias para o admin revisar e confirmar com a escola correta antes de qualquer repasse existir. Sobre o teto de
+`declared_sale_cents`: já existe e é coerente — `sale_payments.amount_cents` e `leads.declared_sale_cents` têm o
+MESMO `check (... between 1 and 10000000)` (R$ 100.000,00), não precisou de mudança. Teste novo confirma que uma
+papelaria confirmando sozinha (mesmo com escola) produz `repasseCents: 0` e `repasseTarget: null`; um teste
+positivo confirma que a confirmação do admin com escola produz `commission` E `repasse_due` normalmente. Custo se
+não corrigido: um esquema de conluio papelaria+escola desviaria repasse de dinheiro real sem nenhuma revisão
+humana — o pior cenário de todos os achados desta rodada.
+
+**IMPORTANTE 6 — sem função de estorno.** `payout_ledger` é append-only por design (gatilho `payout_ledger_no_truncate`
+com `enable always`), mas não existia nenhum caminho para corrigir um lançamento errado (comissão ou repasse
+lançados por engano, ou depois anulados por uma contestação de venda). Criada `payout_reverse_entry(p_entry_id,
+p_actor_id, p_reason)`: só admin (`payout_check_admin`), busca o lançamento original com `for update`, aceita só
+`entry_type in ('commission', 'repasse_due')`, é idempotente (uma segunda chamada com o mesmo `p_entry_id` devolve
+o MESMO id de estorno em vez de duplicar, checado por `reverses_entry_id = p_entry_id`), e insere uma linha
+compensatória com o valor negativo e o novo `entry_type` (`commission_reversed`/`repasse_reversed` — dois valores
+novos no `check` de `entry_type`). O comentário de cabeçalho da migration (linha ~102, que já citava
+`repasse_reversed`/`commission_reversed` como conceito futuro) foi atualizado para apontar para esta função
+implementada. Teste novo cobre: recusa para não-admin, `not_found` para id inexistente, idempotência na segunda
+chamada, e soma líquida zero em `payout_ledger` (comissão + estorno = 0; repasse + estorno = 0) para os dois tipos.
+Custo se não corrigido: qualquer erro humano de confirmação, ou uma disputa aceita depois do fato, ficaria sem
+correção possível no ledger — só um novo lançamento manual fora do padrão, quebrando a auditabilidade.
+
+**Menores (todos aplicados):**
+- `actor_role` gravado em `payout_ledger` agora vem sempre do papel REAL do ator que confirmou (`p_actor_role`,
+  já validado contra `stationery_member`/`admin`/`system` no corpo da função), nunca um valor fixo — o `check`
+  de `actor_role` foi alargado para aceitar os três valores.
+- `back` recebido de `formData` em `confirmSaleAction` passa por `safeNextPath` (extraída de `features/auth/
+  redirect.ts`, agora com um `fallback` opcional em vez do fixo `/conta`) antes de qualquer `redirect()` —
+  recusa qualquer caminho que não comece com `/` ou que contenha `//` (open redirect).
+- `getSaleForLead` ganhou `requireStationeryAccess` (busca a `stationery_id` do lead primeiro): antes, qualquer
+  ator com acesso a QUALQUER papelaria conseguia ler o `sale_payments` de um lead de OUTRA papelaria pelo id.
+- `payout_confirm_sale` recusa (`stationery_unavailable`) uma papelaria com `status = 'suspended'`, mesmo que o
+  lead e o ator sejam válidos.
+- Pap07 (`getPerformanceSummary`) trocou o `.limit(500)` (que cortava silenciosamente o funil de uma papelaria com
+  mais de 500 leads) por 4 contagens `count: "exact", head: true` em paralelo — sem limite, e sem baixar linha
+  nenhuma para contar.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos
+verdes (3252 testes unitários; 1721 de banco, 3 skipped pré-existentes — as duas rodadas de `db:reset`+`test:db`
+concorrentes que rodaram por engano numa tentativa anterior foram descartadas e refeitas em sequência, uma de cada
+vez, depois de identificado que a colisão de duas suítes de banco simultâneas contra o mesmo Postgres local é que
+causava falhas espúrias em testes sem relação nenhuma com esta fatia). E2E (`scripts/e2e-s23.sh`) refeito do zero
+(`pnpm db:reset` + reseed + `pnpm build` + `PORT=3003 pnpm start` novo): 26/26 (era 25/25 antes da rodada; o
+roteiro ganhou uma etapa extra para confirmar a venda 1 pelo admin, com escola, separada da venda 2 pela própria
+papelaria, sem escola). Achado e corrigido no meio do processo: o próprio roteiro tinha um bug (login redundante
+do admin já autenticado na etapa 3, causando `Element not found: #email`) — não era uma falha da aplicação; trocado
+por uma navegação simples (`ab admin open`), já que a sessão do admin seguia válida desde a etapa 1.

@@ -7,15 +7,16 @@ type Props = {
   declaredSaleCents: number | null;
   sale: SalePaymentView | null;
   back: string;
-  schoolNameHint: string;
-  schools: readonly { id: string; name: string }[];
 };
 
 /**
- * Pap03: registra que esta venda foi paga por Pix rastreado pela plataforma. Puramente declarativo — não cobra nem
- * transfere nada; só gera comissão/repasse no livro-razão do admin (Admin13).
+ * Pap03: a papelaria registra que esta venda foi paga por Pix rastreado pela plataforma. Puramente declarativo —
+ * não cobra nem transfere nada; só gera a COMISSÃO da plataforma no livro-razão (Admin13).
+ * Revisão de segurança (S23): sem seletor de escola aqui de propósito — uma confirmação da própria papelaria NUNCA
+ * cria repasse para escola/APM (mesmo que ela escolhesse uma no formulário, o banco ignoraria), só a comissão dela;
+ * repasse exige a confirmação do ADMIN (Admin13, "Vendas para confirmar"), que valida a escola antes.
  */
-export function ConfirmSaleForm({ leadId, declaredSaleCents, sale, back, schoolNameHint, schools }: Props) {
+export function ConfirmSaleForm({ leadId, declaredSaleCents, sale, back }: Props) {
   if (sale) {
     return (
       <section className="rounded-card bg-white p-5" aria-label="Pix pela plataforma">
@@ -32,18 +33,9 @@ export function ConfirmSaleForm({ leadId, declaredSaleCents, sale, back, schoolN
         Se o pai pagou por um Pix rastreado pela ListaCerta (não pelo seu Pix direto), confirme aqui. Isso não move
         dinheiro nenhum: só registra a venda para a comissão da plataforma.
       </p>
-      <form action={confirmSaleAction} className="flex flex-wrap items-end gap-2">
+      <form action={confirmSaleAction}>
         <input type="hidden" name="leadId" value={leadId} />
         <input type="hidden" name="back" value={back} />
-        <label className="flex flex-col gap-1 text-[12px] font-extrabold uppercase">
-          Escola (opcional, para repasse)
-          <select name="schoolId" defaultValue="" className="bg-campo h-10 rounded-campo px-3 text-[13px] font-bold normal-case">
-            <option value="">Não identificada ({schoolNameHint})</option>
-            {schools.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </label>
         <button type="submit" className="border-tinta text-tinta rounded-botao h-10 border-[1.5px] px-4 text-[13px] font-extrabold">
           Confirmar Pix pela plataforma ({formatBrl(declaredSaleCents)})
         </button>

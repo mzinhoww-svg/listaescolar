@@ -106,13 +106,14 @@ export async function batchMarkExecuted(c: Client, o: { actorId: string; batchId
 
 export async function flagLatePayment(
   c: Client,
-  o: { invoiceId: string; provider?: string; providerChargeId: string; amountCents: number },
+  o: { invoiceId: string; provider?: string; providerChargeId: string; amountCents: number; actorRole?: string },
 ): Promise<HintAttempt> {
-  return attemptH(c, "select public.billing_flag_late_payment($1::uuid, $2::text, $3::text, $4::int) as id", [
+  return attemptH(c, "select public.billing_flag_late_payment($1::uuid, $2::text, $3::text, $4::int, $5::text) as id", [
     o.invoiceId,
     o.provider ?? "fake",
     o.providerChargeId,
     o.amountCents,
+    o.actorRole ?? "system",
   ]);
 }
 

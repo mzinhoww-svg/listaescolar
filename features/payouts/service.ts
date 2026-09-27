@@ -54,6 +54,10 @@ export class PayoutService {
     return this.deps.store.listConfirmableLeadsForStationery(actor, stationeryId);
   }
 
+  async listConfirmableSalesForAdmin(actor: SessionActor) {
+    return this.deps.store.listConfirmableSalesForAdmin(actor);
+  }
+
   async listPendingRepasses(actor: SessionActor): Promise<PendingRepasseView[]> {
     return this.deps.store.listPendingRepasses(actor);
   }

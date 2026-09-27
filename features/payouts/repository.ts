@@ -233,6 +233,14 @@ export async function listRecentSalePayments(admin: SupabaseClient, actor: Sessi
 
 export async function getSaleForLead(admin: SupabaseClient, actor: SessionActor, leadId: string): Promise<SalePaymentView | null> {
   requireActor(actor);
+  // revisão de segurança: confere o vínculo com a papelaria do LEAD (não só o papel do ator) antes de ler
+  // qualquer coisa — sem isso, um stationery_member conseguia ler valor/comissão/repasse de um lead de OUTRA
+  // papelaria só trocando o leadId (mesma classe de vazamento de listConfirmableLeadsForStationery, já corrigida).
+  const { data: leadRow, error: leadErr } = await admin.from("leads").select("stationery_id").eq("id", leadId).maybeSingle();
+  if (leadErr) fail("ler papelaria do lead", leadErr);
+  if (!leadRow) return null;
+  await requireStationeryAccess(admin, actor, z.object({ stationery_id: z.uuid() }).parse(leadRow).stationery_id);
+
   const { data, error } = await admin.from("sale_payments").select("*, leads(code), stationeries(trade_name), schools(name)").eq("lead_id", leadId).maybeSingle();
   if (error) fail("ler venda confirmada do lead", error);
   if (!data) return null;
@@ -285,6 +293,38 @@ export async function listConfirmableLeadsForStationery(
   return leads
     .filter((l) => !done.has(l.id) && l.declared_sale_cents !== null)
     .map((l) => ({ leadId: l.id, leadCode: l.code, amountCents: l.declared_sale_cents as number, schoolNameHint: l.school_name }));
+}
+
+const confirmableAdminRow = confirmableLeadRow.extend({ stationeries: z.object({ trade_name: z.string() }).nullable() });
+
+export async function listConfirmableSalesForAdmin(
+  admin: SupabaseClient,
+  actor: SessionActor,
+): Promise<{ leadId: string; leadCode: string; stationeryName: string; amountCents: number; schoolNameHint: string }[]> {
+  requireAdmin(actor);
+  const { data, error } = await admin
+    .from("leads")
+    .select("id, code, declared_sale_cents, school_name, stationeries(trade_name)")
+    .eq("status", "converted")
+    .not("declared_sale_cents", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) fail("listar vendas confirmáveis", error);
+  const leads = z.array(confirmableAdminRow).parse(data ?? []);
+  if (leads.length === 0) return [];
+  const ids = leads.map((l) => l.id);
+  const { data: already, error: alreadyErr } = await admin.from("sale_payments").select("lead_id").in("lead_id", ids);
+  if (alreadyErr) fail("conferir vendas já confirmadas", alreadyErr);
+  const done = new Set(z.array(z.object({ lead_id: z.uuid() })).parse(already ?? []).map((r) => r.lead_id));
+  return leads
+    .filter((l) => !done.has(l.id) && l.declared_sale_cents !== null)
+    .map((l) => ({
+      leadId: l.id,
+      leadCode: l.code,
+      stationeryName: l.stationeries?.trade_name ?? "Papelaria",
+      amountCents: l.declared_sale_cents as number,
+      schoolNameHint: l.school_name,
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -384,29 +424,38 @@ export async function listDelinquency(admin: SupabaseClient, actor: SessionActor
 // Pap07: desempenho
 // ---------------------------------------------------------------------------
 
-const perfLeadRow = z.object({ id: z.uuid(), status: z.string() });
+const OPENED_STATUSES = ["viewed", "in_progress", "quote_sent", "awaiting_customer", "converted", "declined", "expired", "cancelled"];
+const ATTENDED_STATUSES = ["in_progress", "quote_sent", "awaiting_customer", "converted", "declined"];
+
+/** `count: "exact", head: true` só conta no banco (nunca busca linha nenhuma): sem teto silencioso de 500 (revisão de segurança). */
+async function countLeads(admin: SupabaseClient, stationeryId: string, statuses?: readonly string[]): Promise<number> {
+  let q = admin.from("leads").select("*", { count: "exact", head: true }).eq("stationery_id", stationeryId);
+  if (statuses) q = q.in("status", statuses);
+  const { count, error } = await q;
+  if (error) fail("contar leads para desempenho", error);
+  return count ?? 0;
+}
 
 export async function getPerformanceSummary(admin: SupabaseClient, actor: SessionActor, stationeryId: string): Promise<PerformanceSummary> {
   await requireStationeryAccess(admin, actor, stationeryId);
-  const { data, error } = await admin.from("leads").select("id, status").eq("stationery_id", stationeryId).order("created_at", { ascending: false }).limit(500);
-  if (error) fail("ler leads para desempenho", error);
-  const leads = z.array(perfLeadRow).parse(data ?? []);
-  const OPENED = new Set(["viewed", "in_progress", "quote_sent", "awaiting_customer", "converted", "declined", "expired", "cancelled"]);
-  const ATTENDED = new Set(["in_progress", "quote_sent", "awaiting_customer", "converted", "declined"]);
-  const funnel = {
-    sent: leads.length,
-    opened: leads.filter((l) => OPENED.has(l.status)).length,
-    attended: leads.filter((l) => ATTENDED.has(l.status)).length,
-    sold: leads.filter((l) => l.status === "converted").length,
-  };
+  const [sent, opened, attended, sold] = await Promise.all([
+    countLeads(admin, stationeryId),
+    countLeads(admin, stationeryId, OPENED_STATUSES),
+    countLeads(admin, stationeryId, ATTENDED_STATUSES),
+    countLeads(admin, stationeryId, ["converted"]),
+  ]);
+  const funnel = { sent, opened, attended, sold };
 
   const { data: salesData, error: salesErr } = await admin.from("sale_payments").select("amount_cents").eq("stationery_id", stationeryId).eq("is_demo", false);
   if (salesErr) fail("ler ticket médio", salesErr);
   const amounts = z.array(z.object({ amount_cents: z.number().int() })).parse(salesData ?? []).map((r) => r.amount_cents);
   const ticketAverageCents = amounts.length === 0 ? null : Math.round(amounts.reduce((sum, a) => sum + a, 0) / amounts.length);
 
-  // Declarado × confirmado (regra 2 de 3, S22): só os últimos 100 vendidos, para não sobrecarregar (piloto de 1 cidade).
-  const soldIds = leads.filter((l) => l.status === "converted").slice(0, 100).map((l) => l.id);
+  // Declarado × confirmado (regra 2 de 3, S22): só os últimos 100 vendidos (rótulo explícito na tela), para não
+  // sobrecarregar (piloto de 1 cidade) — busca própria, independente do funil (que agora só conta, não busca linha).
+  const { data: soldData, error: soldErr } = await admin.from("leads").select("id").eq("stationery_id", stationeryId).eq("status", "converted").order("created_at", { ascending: false }).limit(100);
+  if (soldErr) fail("ler vendidos para desempenho", soldErr);
+  const soldIds = z.array(z.object({ id: z.uuid() })).parse(soldData ?? []).map((r) => r.id);
   let confirmedCount = 0;
   if (soldIds.length > 0) {
     const signals = await Promise.all(
@@ -432,6 +481,7 @@ export function createPayoutStore(admin: SupabaseClient): PayoutStore {
     getSaleForLead: (actor, leadId) => getSaleForLead(admin, actor, leadId),
     listRecentSalePayments: (actor, limit) => listRecentSalePayments(admin, actor, limit),
     listConfirmableLeadsForStationery: (actor, stationeryId) => listConfirmableLeadsForStationery(admin, actor, stationeryId),
+    listConfirmableSalesForAdmin: (actor) => listConfirmableSalesForAdmin(admin, actor),
     listPendingRepasses: (actor) => listPendingRepasses(admin, actor),
     listBatches: (actor, limit) => listBatches(admin, actor, limit),
     createBatch: (actor, input) => createBatch(admin, actor, input),

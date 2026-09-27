@@ -118,6 +118,12 @@ describe("hardening da auditoria e dos grants", () => {
         "audit_log_block_mutation()",
         "profiles_guard_role()",
         "set_updated_at()",
+        // S23 (revisão de segurança): faltava revogar EXECUTE destas 5 (bloqueante corrigido em 0403).
+        "payout_settings_guard()",
+        "school_payout_settings_guard()",
+        "payout_batches_guard()",
+        "billing_payment_alerts_guard()",
+        "payout_ledger_no_truncate()",
       ]) {
         for (const role of ["anon", "authenticated", "service_role"]) {
           const r = await c.query<{ ok: boolean }>("select has_function_privilege($1, $2, 'execute') as ok", [

@@ -99,33 +99,39 @@ create index payout_batches_school_idx on public.payout_batches (school_id, crea
 -- `repasse_due`: o que a plataforma deve repassar a escola/APM, saído da comissão.
 -- `repasse_settled`: gerado por `payout_batch_create` (inclusão num lote) — some do "pendente", não é a execução em
 -- si (essa é só `payout_batches.status`).
--- `repasse_reversed`: estorno manual de um `repasse_due` (ex.: venda cancelada depois de confirmada; sem fluxo de
--- UI nesta fatia, função exposta para o admin/`system` via mesmo padrão de `billing_reverse_entry`).
+-- `repasse_reversed`/`commission_reversed`: estorno manual (admin) de um `repasse_due`/`commission` específico —
+-- `payout_reverse_entry` (ver mais abaixo), mesmo padrão idempotente de `billing_reverse_entry` (S21):
+-- `reverses_entry_id` aponta para o lançamento original e uma 2ª chamada devolve o estorno já existente.
 create table public.payout_ledger (
   id uuid primary key default gen_random_uuid(),
-  -- nulo para `repasse_settled`/`repasse_reversed`: são lançamentos de LOTE (uma escola, N vendas), não de uma
-  -- venda específica; ligar a uma venda arbitrária (via `limit 1`) seria enganoso para quem lê o razão por venda.
+  -- nulo só para `repasse_settled` (lançamento de LOTE, uma escola/N vendas — ligar a uma venda arbitrária via
+  -- `limit 1` seria enganoso); todo outro tipo é sempre rastreável a UMA venda.
   sale_payment_id uuid references public.sale_payments (id) on delete restrict,
-  entry_type text not null check (entry_type in ('commission', 'repasse_due', 'repasse_settled', 'repasse_reversed')),
+  entry_type text not null check (entry_type in ('commission', 'repasse_due', 'repasse_settled', 'repasse_reversed', 'commission_reversed')),
   beneficiary_type text not null check (beneficiary_type in ('platform', 'school', 'apm')),
   beneficiary_id uuid, -- school_id quando beneficiary_type in ('school','apm'); nulo para 'platform'
   amount_cents integer not null check (amount_cents <> 0),
   batch_id uuid references public.payout_batches (id) on delete restrict,
+  -- sem FK para o próprio payout_ledger de propósito: uma FK faria qualquer TRUNCATE (0A000) se comportar diferente
+  -- do 42501 do gatilho de imutabilidade (mesma lição da S22, `lead_disputes.reversed_entry_id`).
+  reverses_entry_id uuid,
   actor_id uuid,
-  actor_role text check (actor_role is null or actor_role in ('admin', 'system')),
+  actor_role text check (actor_role is null or actor_role in ('admin', 'system', 'stationery_member')),
   reason text check (reason is null or length(reason) <= 500),
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp(),
   check (
-    (entry_type = 'commission' and beneficiary_type = 'platform' and beneficiary_id is null and amount_cents > 0 and batch_id is null and sale_payment_id is not null)
-    or (entry_type = 'repasse_due' and beneficiary_type in ('school', 'apm') and beneficiary_id is not null and amount_cents > 0 and batch_id is null and sale_payment_id is not null)
-    or (entry_type = 'repasse_settled' and beneficiary_type in ('school', 'apm') and beneficiary_id is not null and amount_cents < 0 and batch_id is not null and sale_payment_id is null)
-    or (entry_type = 'repasse_reversed' and beneficiary_type in ('school', 'apm') and beneficiary_id is not null and amount_cents < 0 and sale_payment_id is null)
+    (entry_type = 'commission' and beneficiary_type = 'platform' and beneficiary_id is null and amount_cents > 0 and batch_id is null and sale_payment_id is not null and reverses_entry_id is null)
+    or (entry_type = 'commission_reversed' and beneficiary_type = 'platform' and beneficiary_id is null and amount_cents < 0 and batch_id is null and sale_payment_id is not null and reverses_entry_id is not null)
+    or (entry_type = 'repasse_due' and beneficiary_type in ('school', 'apm') and beneficiary_id is not null and amount_cents > 0 and batch_id is null and sale_payment_id is not null and reverses_entry_id is null)
+    or (entry_type = 'repasse_settled' and beneficiary_type in ('school', 'apm') and beneficiary_id is not null and amount_cents < 0 and batch_id is not null and sale_payment_id is null and reverses_entry_id is null)
+    or (entry_type = 'repasse_reversed' and beneficiary_type in ('school', 'apm') and beneficiary_id is not null and amount_cents < 0 and sale_payment_id is not null and reverses_entry_id is not null)
   )
 );
 create index payout_ledger_sale_idx on public.payout_ledger (sale_payment_id);
 create index payout_ledger_beneficiary_idx on public.payout_ledger (beneficiary_type, beneficiary_id, created_at);
 create index payout_ledger_batch_idx on public.payout_ledger (batch_id) where batch_id is not null;
+create index payout_ledger_reverses_idx on public.payout_ledger (reverses_entry_id) where reverses_entry_id is not null;
 
 -- billing_payment_alerts (D-101, S21): pagamento recebido por um `provider_charge_id` que já pertence a uma fatura
 -- (S21/0401) que não está mais aberta (já paga, ou cancelada) — hoje isso é ignorado em silêncio pelo webhook/cron.
@@ -271,8 +277,9 @@ create trigger payout_batches_set_updated_at before update on public.payout_batc
 create trigger payout_settings_audit after insert or update on public.payout_settings
   for each row execute function public.audit_row_change();
 alter table public.payout_settings enable always trigger payout_settings_audit;
+-- Bloqueante (revisão de segurança): pix_key/beneficiary_name são dado sensível — nunca no audit_log (imutável).
 create trigger school_payout_settings_audit after insert or update on public.school_payout_settings
-  for each row execute function public.audit_row_change();
+  for each row execute function public.audit_row_change('pix_key', 'beneficiary_name');
 alter table public.school_payout_settings enable always trigger school_payout_settings_audit;
 create trigger payout_batches_audit after insert or update on public.payout_batches
   for each row execute function public.audit_row_change();
@@ -303,9 +310,15 @@ set search_path = ''
 as $$
 declare
   v_role public.user_role;
+  v_sub text := public.payout_jwt_sub();
 begin
   if p_actor_id is null then
     raise exception 'ator ausente' using errcode = '42501', hint = 'forbidden';
+  end if;
+  -- revisão de segurança: confere o `sub` do JWT contra o ator informado (mesmo padrão de billing_check_admin,
+  -- 0401) — sem isso, um chamador com sessão de OUTRO usuário conseguia informar qualquer p_actor_id admin.
+  if v_sub is not null and v_sub is distinct from p_actor_id::text then
+    raise exception 'ator diferente do usuário autenticado' using errcode = '42501', hint = 'forbidden';
   end if;
   select role into v_role from public.profiles where id = p_actor_id;
   if v_role is distinct from 'admin' then
@@ -318,6 +331,10 @@ $$;
 -- payout_delinquency_status: régua de cobrança sobre invoices (S21). Sem config publicada, sempre 'em_dia' (falha
 -- aberto, D-102-like). Não é security definer (mesmo padrão de billing_eval_source): chamada de dentro de funções
 -- já elevadas (billing_can_receive_lead, billing_charge_lead_delivery) ou por payout_admin_delinquency_list abaixo.
+-- Revisão de segurança: só conta PARCELA DO PASSE (`kind = 'season_pass_installment'`) real (`is_demo = false`) —
+-- uma recarga de crédito pré-paga (`credit_package`) abandonada não é uma dívida que deva pausar a papelaria (ela
+-- só perde o crédito que não comprou; nunca ficou "devendo"), e fatura de demonstração nunca deve pausar papelaria
+-- nenhuma. Datas sempre em America/Cuiaba (nunca `::date` cru, que depende do fuso da SESSÃO do banco).
 -- ---------------------------------------------------------------------------
 create function public.payout_delinquency_status(p_stationery_id uuid, p_at timestamptz default now())
 returns table (status text, days_overdue integer, oldest_open_invoice_id uuid, oldest_due_date date)
@@ -330,17 +347,19 @@ declare
   v_block integer;
   v_due date;
   v_invoice_id uuid;
+  v_today date := (p_at at time zone 'America/Cuiaba')::date;
 begin
   select grace_days, block_days into v_grace, v_block from public.payout_settings where payout_settings.status = 'active';
   select i.due_date, i.id into v_due, v_invoice_id from public.invoices i
-   where i.stationery_id = p_stationery_id and i.status = 'open' and i.due_date < p_at::date
+   where i.stationery_id = p_stationery_id and i.status = 'open' and i.kind = 'season_pass_installment'
+     and i.is_demo = false and i.due_date < v_today
    order by i.due_date asc limit 1;
   if v_grace is null or v_due is null then
     status := 'em_dia'; days_overdue := 0; oldest_open_invoice_id := null; oldest_due_date := null;
     return next;
     return;
   end if;
-  days_overdue := (p_at::date - v_due);
+  days_overdue := (v_today - v_due);
   oldest_open_invoice_id := v_invoice_id;
   oldest_due_date := v_due;
   -- fronteira INCLUSIVA: exatamente `grace_days`/`block_days` de atraso ainda conta para o estágio anterior.
@@ -445,9 +464,13 @@ $$;
 -- ---------------------------------------------------------------------------
 -- payout_confirm_sale: registra "esta venda foi paga por Pix rastreado pela plataforma" (declarativo, ver
 -- cabeçalho). Idempotente por lead_id. Gera sempre 1 lançamento `commission`; gera `repasse_due` só se p_school_id
--- vier informado E a escola tiver config ativa com alvo <> 'none'. Lead demo ou papelaria demo: registra o
--- sale_payment (para o funil de demonstração), mas SEM efeito financeiro (nenhum lançamento no razão) — mesmo
--- padrão de billing_charge_lead_delivery (S21) para lead demo em papelaria real.
+-- vier informado, a escola tiver config ativa com alvo <> 'none' E quem confirma for admin/system — revisão de
+-- segurança: uma papelaria (`stationery_member`) sozinha NUNCA cria obrigação de repasse (mesmo escolhendo uma
+-- escola no formulário), só sua própria comissão; sem isso, uma papelaria em conluio com quem controla a "escola"
+-- de destino poderia inflar `declared_sale_cents` e desviar repasse para si. Papelaria `suspended` não confirma
+-- nada. Lead demo ou papelaria demo: registra o sale_payment (para o funil de demonstração), mas SEM efeito
+-- financeiro (nenhum lançamento no razão) — mesmo padrão de billing_charge_lead_delivery (S21) para lead demo em
+-- papelaria real.
 -- ---------------------------------------------------------------------------
 create function public.payout_confirm_sale(p_actor_id uuid, p_actor_role text, p_lead_id uuid, p_school_id uuid default null)
 returns uuid
@@ -464,6 +487,7 @@ declare
   v_school_cfg public.school_payout_settings%rowtype;
   v_repasse_cents integer;
   v_sub text := public.payout_jwt_sub();
+  v_stationery_status public.stationery_status;
 begin
   if p_actor_role is null or p_actor_role not in ('stationery_member', 'admin', 'system') then
     raise exception 'ator inválido' using errcode = '22023', hint = 'invalid_input';
@@ -474,6 +498,14 @@ begin
     end if;
     if v_sub is not null and v_sub is distinct from p_actor_id::text then
       raise exception 'ator diferente do usuário autenticado' using errcode = '42501', hint = 'forbidden';
+    end if;
+  else
+    -- revisão de segurança: 'system' nunca vem com um p_actor_id — isso é código de servidor decidindo por si,
+    -- não uma sessão de usuário; aceitar qualquer uuid aqui (sem checagem nenhuma) deixaria QUALQUER ator passar
+    -- por 'system' sem verificação, só forjando o parâmetro (a função só é chamável por service_role, mas o
+    -- próprio código de servidor precisa da garantia de que 'system' não carrega identidade de ninguém).
+    if p_actor_id is not null then
+      raise exception 'ator system não deve ter id' using errcode = '22023', hint = 'invalid_input';
     end if;
   end if;
 
@@ -491,6 +523,10 @@ begin
     end if;
   elsif p_actor_role = 'admin' then
     perform public.payout_check_admin(p_actor_id);
+  end if;
+  select status into v_stationery_status from public.stationeries where id = l.stationery_id;
+  if v_stationery_status = 'suspended' then
+    raise exception 'papelaria suspensa' using errcode = '23514', hint = 'stationery_unavailable';
   end if;
   if l.status <> 'converted' or l.declared_sale_cents is null then
     raise exception 'lead sem venda declarada' using errcode = '23514', hint = 'invalid_state';
@@ -522,20 +558,65 @@ begin
   v_commission_cents := (l.declared_sale_cents * v_commission_bps) / 10000;
   if v_commission_cents > 0 then
     insert into public.payout_ledger (sale_payment_id, entry_type, beneficiary_type, amount_cents, actor_id, actor_role)
-    values (v_sale_id, 'commission', 'platform', v_commission_cents, p_actor_id, case when p_actor_role = 'system' then 'system' else 'admin' end);
+    values (v_sale_id, 'commission', 'platform', v_commission_cents, p_actor_id, p_actor_role);
   end if;
 
-  if v_school_cfg.id is not null and v_school_cfg.target in ('school', 'apm') then
+  -- revisão de segurança: repasse só quando quem confirma é admin/system (nunca a própria papelaria) — ver
+  -- comentário do cabeçalho da função.
+  if p_actor_role in ('admin', 'system') and v_school_cfg.id is not null and v_school_cfg.target in ('school', 'apm') then
     -- defesa em profundidade: nunca repassa mais do que a própria comissão apurada (mesmo se a config de escola
     -- tiver sido publicada sob uma comissão vigente maior, depois reduzida).
     v_repasse_cents := least((l.declared_sale_cents * v_school_cfg.payout_bps) / 10000, v_commission_cents);
     if v_repasse_cents > 0 then
       insert into public.payout_ledger (sale_payment_id, entry_type, beneficiary_type, beneficiary_id, amount_cents, actor_id, actor_role)
-      values (v_sale_id, 'repasse_due', v_school_cfg.target, p_school_id, v_repasse_cents, p_actor_id, case when p_actor_role = 'system' then 'system' else 'admin' end);
+      values (v_sale_id, 'repasse_due', v_school_cfg.target, p_school_id, v_repasse_cents, p_actor_id, p_actor_role);
     end if;
   end if;
 
   return v_sale_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- payout_reverse_entry: lançamento compensatório de um `commission`/`repasse_due` (venda cancelada depois de
+-- confirmada, ou repasse indevido). Admin only, append-only, idempotente (mesmo padrão de billing_reverse_entry,
+-- S21): uma 2ª chamada com o mesmo `p_entry_id` devolve o estorno já existente, nunca duplica.
+-- ---------------------------------------------------------------------------
+create function public.payout_reverse_entry(p_entry_id uuid, p_actor_id uuid, p_reason text) returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_entry public.payout_ledger%rowtype;
+  v_existing uuid;
+  v_new_type text;
+  v_id uuid;
+begin
+  perform public.payout_check_admin(p_actor_id);
+
+  select * into v_entry from public.payout_ledger where id = p_entry_id for update;
+  if not found then
+    raise exception 'lançamento não encontrado' using errcode = 'P0002', hint = 'not_found';
+  end if;
+  if v_entry.entry_type not in ('commission', 'repasse_due') then
+    raise exception 'lançamento não pode ser estornado' using errcode = '22023', hint = 'invalid_input';
+  end if;
+
+  select id into v_existing from public.payout_ledger where reverses_entry_id = p_entry_id;
+  if found then
+    return v_existing; -- idempotente: já estornado.
+  end if;
+
+  v_new_type := case when v_entry.entry_type = 'commission' then 'commission_reversed' else 'repasse_reversed' end;
+
+  insert into public.payout_ledger (sale_payment_id, entry_type, beneficiary_type, beneficiary_id, amount_cents, actor_id, actor_role, reason, reverses_entry_id)
+  values (
+    v_entry.sale_payment_id, v_new_type, v_entry.beneficiary_type, v_entry.beneficiary_id, -v_entry.amount_cents,
+    p_actor_id, 'admin', nullif(btrim(coalesce(p_reason, '')), ''), p_entry_id
+  )
+  returning id into v_id;
+  return v_id;
 end;
 $$;
 
@@ -605,9 +686,14 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- billing_flag_late_payment / billing_resolve_payment_alert (D-101, S21)
+-- billing_flag_late_payment / billing_resolve_payment_alert (D-101, S21). `billing_flag_late_payment` não tem
+-- ator humano (é o webhook/cron do sistema detectando algo) — em vez de aceitar QUALQUER chamada silenciosamente,
+-- exige que o chamador se autoidentifique como 'system' (`p_actor_role`), mesmo padrão de checagem de papel das
+-- outras funções de escrita desta trilha; EXECUTE continua restrito a service_role (só código de servidor chama).
+-- `billing_resolve_payment_alert` já confere admin via `payout_check_admin` (que agora também confere o `sub` do
+-- JWT, revisão de segurança desta rodada).
 -- ---------------------------------------------------------------------------
-create function public.billing_flag_late_payment(p_invoice_id uuid, p_provider text, p_provider_charge_id text, p_amount_cents integer)
+create function public.billing_flag_late_payment(p_invoice_id uuid, p_provider text, p_provider_charge_id text, p_amount_cents integer, p_actor_role text default 'system')
 returns uuid
 language plpgsql
 security definer
@@ -617,6 +703,9 @@ declare
   v_id uuid;
   v_status text;
 begin
+  if p_actor_role is distinct from 'system' then
+    raise exception 'ator inválido' using errcode = '22023', hint = 'invalid_input';
+  end if;
   select status into v_status from public.invoices where id = p_invoice_id;
   if not found then
     raise exception 'fatura não encontrada' using errcode = 'P0002', hint = 'not_found';
@@ -678,8 +767,12 @@ begin
   parent_confirmed := exists (
     select 1 from public.lead_purchase_confirmations c where c.lead_id = p_lead_id and c.answer = 'bought_here'
   );
-  -- S23: sinal real (public.sale_payments), não mais sempre `false` (D-105).
-  pix_confirmed := exists (select 1 from public.sale_payments sp where sp.lead_id = p_lead_id);
+  -- S23: sinal real (public.sale_payments), não mais sempre `false` (D-105). Revisão de segurança: só conta quando
+  -- CONFIRMADO por admin/system — a declaração da própria papelaria (`confirmed_role = 'stationery_member'`)
+  -- nunca basta sozinha para este sinal, senão a papelaria fabricaria o 3º sinal da regra de 2 de 3 sozinha.
+  pix_confirmed := exists (
+    select 1 from public.sale_payments sp where sp.lead_id = p_lead_id and sp.confirmed_role in ('admin', 'system')
+  );
   signal_count := (case when stationery_confirmed then 1 else 0 end)
                 + (case when parent_confirmed then 1 else 0 end)
                 + (case when pix_confirmed then 1 else 0 end);
@@ -796,20 +889,42 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Grants
 -- ---------------------------------------------------------------------------
+-- Bloqueante (revisão de segurança): toda função nova ganha o `revoke` explícito ANTES do `grant` (mesmo padrão de
+-- 0401/0402) — sem o `revoke`, PUBLIC (logo anon/authenticated) herda EXECUTE por padrão de criação da função no
+-- Postgres; faltou aqui na primeira versão desta migration para 8 funções SECURITY DEFINER e 5 funções de gatilho,
+-- confirmado com `has_function_privilege` no banco local (log do vermelho desta rodada).
 revoke execute on function public.payout_jwt_sub() from public, anon, authenticated, service_role;
 revoke execute on function public.payout_check_admin(uuid) from public, anon, authenticated, service_role;
 -- (não totalmente revogada como payout_jwt_sub/payout_check_admin: é leitura pura, sem dado sensível, usada
 -- diretamente pelo admin/testes, igual ao padrão de billing_wallet_summary_readonly)
-revoke execute on function public.payout_delinquency_status(uuid, timestamptz) from public, anon, authenticated;
+revoke execute on function public.payout_delinquency_status(uuid, timestamptz) from public, anon, authenticated, service_role;
 grant execute on function public.payout_delinquency_status(uuid, timestamptz) to service_role;
 
+-- Funções de gatilho: nunca chamáveis por ninguém via RPC (só o mecanismo de trigger as invoca), mesmo padrão de
+-- billing_rows_block_mutation/billing_plan_guard (0401) e audit_row_change (0001).
+revoke execute on function public.payout_ledger_no_truncate() from public, anon, authenticated, service_role;
+revoke execute on function public.payout_settings_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.school_payout_settings_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.payout_batches_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.billing_payment_alerts_guard() from public, anon, authenticated, service_role;
+
+revoke execute on function public.payout_admin_delinquency_list(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.payout_admin_delinquency_list(uuid) to service_role;
+revoke execute on function public.payout_settings_publish(uuid, integer, integer, integer) from public, anon, authenticated, service_role;
 grant execute on function public.payout_settings_publish(uuid, integer, integer, integer) to service_role;
+revoke execute on function public.payout_school_config_publish(uuid, uuid, text, integer, text, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.payout_school_config_publish(uuid, uuid, text, integer, text, text, text) to service_role;
+revoke execute on function public.payout_confirm_sale(uuid, text, uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.payout_confirm_sale(uuid, text, uuid, uuid) to service_role;
+revoke execute on function public.payout_reverse_entry(uuid, uuid, text) from public, anon, authenticated, service_role;
+grant execute on function public.payout_reverse_entry(uuid, uuid, text) to service_role;
+revoke execute on function public.payout_batch_create(uuid, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.payout_batch_create(uuid, uuid, text) to service_role;
+revoke execute on function public.payout_batch_mark_executed(uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.payout_batch_mark_executed(uuid, uuid) to service_role;
-grant execute on function public.billing_flag_late_payment(uuid, text, text, integer) to service_role;
+revoke execute on function public.billing_flag_late_payment(uuid, text, text, integer, text) from public, anon, authenticated, service_role;
+grant execute on function public.billing_flag_late_payment(uuid, text, text, integer, text) to service_role;
+revoke execute on function public.billing_resolve_payment_alert(uuid, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.billing_resolve_payment_alert(uuid, uuid, text) to service_role;
 
 revoke all on public.payout_settings, public.school_payout_settings, public.sale_payments, public.payout_batches,

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { BatchesTable } from "@/components/payouts/BatchesTable";
 import { CommissionSettingsForm } from "@/components/payouts/CommissionSettingsForm";
+import { ConfirmSalesAdminList } from "@/components/payouts/ConfirmSalesAdminList";
 import { PayoutKpiRow } from "@/components/payouts/PayoutKpiRow";
 import { PaymentAlertsList } from "@/components/payouts/PaymentAlertsList";
 import { PendingRepassesTable } from "@/components/payouts/PendingRepassesTable";
@@ -30,10 +31,11 @@ export default async function RepassesPage({ searchParams }: { searchParams: Pro
 
   const payouts = getPayoutService();
   const billing = getBillingService();
-  const [settings, schoolConfigs, schoolOptions, sales, pending, batches, alerts] = await Promise.all([
+  const [settings, schoolConfigs, schoolOptions, confirmableSales, sales, pending, batches, alerts] = await Promise.all([
     payouts.getActiveSettings(),
     payouts.listSchoolConfigs(actor),
     payouts.listSchoolOptions(actor),
+    payouts.listConfirmableSalesForAdmin(actor),
     payouts.listRecentSalePayments(actor, 100),
     payouts.listPendingRepasses(actor),
     payouts.listBatches(actor, 50),
@@ -62,6 +64,8 @@ export default async function RepassesPage({ searchParams }: { searchParams: Pro
           <h2 className="mb-3 text-[18px] font-extrabold">Escolas com repasse configurado</h2>
           <SchoolConfigTable rows={schoolConfigs} />
         </section>
+
+        <ConfirmSalesAdminList sales={confirmableSales} schools={schoolOptions} />
 
         <section>
           <h2 className="mb-3 text-[18px] font-extrabold">Repasse pendente</h2>

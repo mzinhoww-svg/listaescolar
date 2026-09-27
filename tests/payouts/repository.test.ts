@@ -86,8 +86,9 @@ describe("PayoutStore × banco real", () => {
       seedLead(c, { stationeryId, requesterId: IDS.parent, status: "converted", overrides: { declared_sale_cents: 10000, declared_at: new Date().toISOString(), is_demo: false } }),
     );
 
-    const memberActor = await actor(IDS.stationery_member, "stationery_member");
-    const saleId = await store.confirmSale(memberActor, { leadId: lead.id, schoolId });
+    // revisão de segurança (S23): repasse só quando quem confirma é admin/system — a própria papelaria nunca cria
+    // obrigação de repasse (conluio), só a comissão dela; por isso a venda COM repasse é confirmada pelo admin aqui.
+    const saleId = await store.confirmSale(adminActor, { leadId: lead.id, schoolId });
     expect(saleId).toBeTruthy();
 
     const rows = await store.listRecentSalePayments(adminActor, 10);
@@ -102,6 +103,22 @@ describe("PayoutStore × banco real", () => {
     expect(mine?.stationeryName).toBeTruthy();
   });
 
+  it("revisão de segurança: papelaria confirmando sozinha (com escola) gera comissão mas NUNCA repasse", async () => {
+    const store = createPayoutStore(admin);
+    const adminActor = await actor(IDS.admin, "admin");
+    await store.publishSettings(adminActor, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+    const schoolId = await withSuperuser((c) => ensureSchool(c));
+    await store.publishSchoolConfig(adminActor, { schoolId, target: "school", payoutBps: 200, beneficiaryName: "Escola Teste 2", pixKey: "escola2@teste.invalid", pixKeyKind: "email" });
+    const lead = await withSuperuser((c) =>
+      seedLead(c, { stationeryId, requesterId: IDS.parent, status: "converted", overrides: { declared_sale_cents: 10000, declared_at: new Date().toISOString(), is_demo: false } }),
+    );
+    const memberActor = await actor(IDS.stationery_member, "stationery_member");
+    const saleId = await store.confirmSale(memberActor, { leadId: lead.id, schoolId });
+    const rows = await store.listRecentSalePayments(adminActor, 10);
+    const mine = rows.find((r) => r.id === saleId);
+    expect(mine).toMatchObject({ commissionCents: 1000, repasseCents: 0, repasseTarget: null });
+  });
+
   it("listPendingRepasses + createBatch/markBatchExecuted zera o pendente e fica idempotente", async () => {
     const store = createPayoutStore(admin);
     const adminActor = await actor(IDS.admin, "admin");
@@ -112,7 +129,8 @@ describe("PayoutStore × banco real", () => {
     const lead = await withSuperuser((c) =>
       seedLead(c, { stationeryId, requesterId: IDS.parent, status: "converted", overrides: { declared_sale_cents: 20000, declared_at: new Date().toISOString(), is_demo: false } }),
     );
-    await store.confirmSale(await actor(IDS.stationery_member, "stationery_member"), { leadId: lead.id, schoolId });
+    // revisão de segurança (S23): repasse só nasce de confirmação admin/system.
+    await store.confirmSale(adminActor, { leadId: lead.id, schoolId });
 
     const pending = await store.listPendingRepasses(adminActor);
     const mine = pending.find((p) => p.schoolId === schoolId);

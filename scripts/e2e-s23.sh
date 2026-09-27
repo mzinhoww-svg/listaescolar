@@ -90,20 +90,23 @@ wait_text admin "Feito." 15
 expect_text admin "APM Escola E2E S23" "repasse da escola aparece na tabela"
 shot admin "$OUT/S23-admin13-escola-config.png"
 
-echo "== 3) papelaria confirma 'Pix pela plataforma' de LC-S23A1 com a escola; LC-S23A2 sem escola"
+echo "== 3) revisão de segurança: só o ADMIN confirma COM escola (repasse); a papelaria sozinha (Pap03) só gera comissão"
+ab admin open "$BASE/admin/repasses" >/dev/null
+wait_text admin "Vendas para confirmar" 20
+expect_text admin "LC-S23A1" "venda 1 aparece na fila de confirmação do admin"
+shot admin "$OUT/S23-admin13-confirmar-vendas.png"
+ab admin eval "(() => { const li=[...document.querySelectorAll('li')].find(x=>x.textContent.includes('LC-S23A1')); li.querySelector('select[name=schoolId]').value = '$SCHOOL_ID'; li.querySelector('form').requestSubmit(); return 'ok'; })()" >/dev/null
+wait_text admin "Feito." 15
+expect_text admin "LC-S23A2" "venda 2 (ainda não confirmada) continua na fila; venda 1 saiu"
+shot admin "$OUT/S23-admin13-venda-confirmada.png"
+
 ab a set viewport 1280 900 >/dev/null
-login a s14a@listacerta.test "/papelaria/leads/LC-S23A1"
-wait_text a "Lead LC-S23A1" 20
-ab a eval "document.querySelector('select[name=schoolId]').value = '$SCHOOL_ID'" >/dev/null
+login a s14a@listacerta.test "/papelaria/leads/LC-S23A2"
+wait_text a "Lead LC-S23A2" 20
 shot a "$OUT/S23-pap03-confirmar-form.png"
-ab a eval "[...document.querySelectorAll('form')].find(f=>f.querySelector('select[name=schoolId]')).requestSubmit()" >/dev/null
+ab a eval "document.querySelector('[aria-label=\"Pix pela plataforma\"] form').requestSubmit()" >/dev/null
 wait_text a "Registrado" 15
-expect_text a "Confirmado" "venda 1 confirmada (com escola)"
-shot a "$OUT/S23-pap03-confirmada.png"
-ab a open "$BASE/papelaria/leads/LC-S23A2" >/dev/null; wait_text a "Lead LC-S23A2" 15
-ab a eval "[...document.querySelectorAll('form')].find(f=>f.querySelector('select[name=schoolId]')).requestSubmit()" >/dev/null
-wait_text a "Registrado" 15
-expect_text a "Confirmado" "venda 2 confirmada (sem escola)"
+expect_text a "Confirmado" "venda 2 confirmada pela própria papelaria (só comissão, sem repasse)"
 
 echo "== 4) admin vê as duas vendas com comissão e o repasse pendente da APM"
 ab admin open "$BASE/admin/repasses" >/dev/null; wait_text admin "Vendas confirmadas" 15
@@ -147,8 +150,11 @@ ab admin eval "[...document.querySelectorAll('form')].find(f=>f.querySelector('i
 wait_text admin "Feito." 15
 expect_text admin "Nenhum alerta em aberto." "alerta resolvido some da fila"
 
-echo "== 8) inadimplência: fatura vencida há mais de 7 dias pausa a papelaria (some de novas cotações)"
-sql "insert into public.invoices (stationery_id, kind, package_id, amount_cents, due_date, status, provider, is_demo, idempotency_key) values ('$STATIONERY_A','credit_package',(select id from public.plan_credit_packages where plan_id = (select id from public.plans where status='active') limit 1),1000,(current_date - 10),'open','fake',true,gen_random_uuid());" >/dev/null
+echo "== 8) inadimplência: PARCELA DE PASSE real vencida há mais de 7 dias pausa a papelaria (recarga de crédito NUNCA pausa, revisão de segurança)"
+PASS_ID=$(sql "insert into public.season_passes (stationery_id, plan_id, status, price_cents, included_leads, installments, season_start, season_end, is_demo, idempotency_key) values ('$STATIONERY_A',(select id from public.plans where status='active'),'active',30000,40,1,current_date,current_date + 90,false,gen_random_uuid()) returning id;")
+sql "insert into public.invoices (stationery_id, kind, season_pass_id, installment_no, amount_cents, due_date, status, provider, is_demo, idempotency_key) values ('$STATIONERY_A','season_pass_installment','$PASS_ID',1,30000,(current_date - 10),'open','pix',false,gen_random_uuid());" >/dev/null
+# recarga de crédito (credit_package) vencida NÃO deve pausar (só parcela de passe conta) — checagem negativa.
+sql "insert into public.invoices (stationery_id, kind, package_id, amount_cents, due_date, status, provider, is_demo, idempotency_key) values ('$STATIONERY_A','credit_package',(select id from public.plan_credit_packages where plan_id = (select id from public.plans where status='active') limit 1),1000,(current_date - 400),'open','fake',true,gen_random_uuid());" >/dev/null
 ab admin open "$BASE/admin/inadimplencia" >/dev/null; wait_text admin "Inadimplência" 15
 expect_text admin "Papelaria Demo A" "papelaria aparece na régua de cobrança"
 expect_text admin "Pausado" "status pausado (atraso > 7 dias)"

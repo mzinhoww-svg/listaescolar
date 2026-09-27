@@ -174,6 +174,12 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
+Nota (revisão de segurança da S23, rodada única sobre `a51b62b`): D-120, D-121 e D-122 seguem exatamente como
+descritas — nenhum dos 2 bloqueantes/4 importantes/5 menores desta rodada toca o escopo delas (Pap07 "respondido em
+1h"/bairro, ações manuais do Admin14, cobrança automática da comissão). Todos os achados da revisão foram corrigidos
+diretamente no código (nenhum ficou como dívida nova); ver `docs/superpowers/ledger-comercio.md`, seção "S23 ·
+correções da revisão de segurança".
+
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |

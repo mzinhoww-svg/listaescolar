@@ -322,13 +322,49 @@ describe("S23 · inadimplência (payout_delinquency_status / pausa de lead)", ()
   beforeAll(seedUsers);
   afterAll(cleanupUsers);
 
-  // Fatura vencida sem passar pelo fluxo completo de pacote/passe (só o suficiente para a régua ler `invoices`).
+  // Parcela de PASSE vencida, real (is_demo=false) — só isso conta para a régua (revisão de segurança: uma recarga
+  // de crédito pré-paga abandonada não é dívida, e fatura de demonstração nunca deve pausar papelaria nenhuma).
   async function withOverdueInvoice(c: Client, stationeryId: string, daysOverdue: number): Promise<void> {
+    const passId = (
+      await asOwnerQuery<{ rows: { id: string }[] }>(
+        c,
+        `insert into public.season_passes (stationery_id, plan_id, status, price_cents, included_leads, installments, season_start, season_end, is_demo, idempotency_key)
+         values ($1, (select id from public.plans where status = 'active'), 'active', 30000, 40, 1, current_date, current_date + 90, false, $2) returning id`,
+        [stationeryId, randomUUID()],
+      )
+    ).rows[0]!.id;
+    await asOwnerQuery(
+      c,
+      `insert into public.invoices (stationery_id, kind, season_pass_id, installment_no, amount_cents, due_date, status, provider, is_demo, idempotency_key)
+       values ($1, 'season_pass_installment', $2, 1, 30000, ((now() at time zone 'America/Cuiaba')::date - $3::int), 'open', 'pix', false, $4)`,
+      [stationeryId, passId, daysOverdue, randomUUID()],
+    );
+  }
+
+  // Recarga de crédito (não é parcela de passe) e fatura de DEMONSTRAÇÃO: nenhuma das duas conta para a régua.
+  async function withOverdueCreditPackageInvoice(c: Client, stationeryId: string, daysOverdue: number): Promise<void> {
     await asOwnerQuery(
       c,
       `insert into public.invoices (stationery_id, kind, package_id, amount_cents, due_date, status, provider, is_demo, idempotency_key)
-       values ($1, 'credit_package', (select id from public.plan_credit_packages limit 1), 1000, (current_date - $2::int), 'open', 'fake', true, $3)`,
+       values ($1, 'credit_package', (select id from public.plan_credit_packages limit 1), 1000, ((now() at time zone 'America/Cuiaba')::date - $2::int), 'open', 'fake', true, $3)`,
       [stationeryId, daysOverdue, randomUUID()],
+    );
+  }
+
+  async function withOverdueDemoPassInvoice(c: Client, stationeryId: string, daysOverdue: number): Promise<void> {
+    const passId = (
+      await asOwnerQuery<{ rows: { id: string }[] }>(
+        c,
+        `insert into public.season_passes (stationery_id, plan_id, status, price_cents, included_leads, installments, season_start, season_end, is_demo, idempotency_key)
+         values ($1, (select id from public.plans where status = 'active'), 'active', 30000, 40, 1, current_date, current_date + 90, true, $2) returning id`,
+        [stationeryId, randomUUID()],
+      )
+    ).rows[0]!.id;
+    await asOwnerQuery(
+      c,
+      `insert into public.invoices (stationery_id, kind, season_pass_id, installment_no, amount_cents, due_date, status, provider, is_demo, idempotency_key)
+       values ($1, 'season_pass_installment', $2, 1, 30000, ((now() at time zone 'America/Cuiaba')::date - $3::int), 'open', 'demo', true, $4)`,
+      [stationeryId, passId, daysOverdue, randomUUID()],
     );
   }
 
@@ -365,6 +401,24 @@ describe("S23 · inadimplência (payout_delinquency_status / pausa de lead)", ()
       const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
       await withOverdueInvoice(c, st, 16);
       expect((await c.query("select status from public.payout_delinquency_status($1)", [st])).rows[0].status).toBe("pausado");
+    });
+  });
+
+  it("revisão de segurança: recarga de crédito vencida (credit_package) NUNCA conta para a régua", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      await withOverdueCreditPackageInvoice(c, st, 400);
+      expect((await c.query("select status from public.payout_delinquency_status($1)", [st])).rows[0].status).toBe("em_dia");
+    });
+  });
+
+  it("revisão de segurança: parcela de passe de DEMONSTRAÇÃO vencida NUNCA conta para a régua", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      await withOverdueDemoPassInvoice(c, st, 400);
+      expect((await c.query("select status from public.payout_delinquency_status($1)", [st])).rows[0].status).toBe("em_dia");
     });
   });
 
@@ -424,6 +478,20 @@ describe("S23 · billing_flag_late_payment / billing_resolve_payment_alert (D-10
       expect(row.rows[0].resolution_note).toBe("estornado manualmente"); // 2ª chamada não regrava
     });
   });
+
+  it("revisão de segurança: billing_flag_late_payment recusa ator que não se autoidentifica como 'system'", async () => {
+    await withClaims("system", async (c) => {
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const paidInv = await asOwnerQuery<{ rows: { id: string }[] }>(
+        c,
+        `insert into public.invoices (stationery_id, kind, package_id, amount_cents, due_date, status, provider, is_demo, paid_at, paid_amount_cents, idempotency_key)
+         values ($1,'credit_package',(select id from public.plan_credit_packages limit 1),1000, current_date, 'paid','fake', true, now(), 1000, $2) returning id`,
+        [st, randomUUID()],
+      );
+      const bad = await flagLatePayment(c, { invoiceId: paidInv.rows[0]!.id, providerChargeId: "fake-late-x", amountCents: 1000, actorRole: "admin" });
+      expect(bad.hint).toBe("invalid_input");
+    });
+  });
 });
 
 describe("S23 · imutabilidade (sale_payments, payout_ledger)", () => {
@@ -452,6 +520,170 @@ describe("S23 · imutabilidade (sale_payments, payout_ledger)", () => {
       expect(delL.code).toBe("42501");
       const truncL = await attemptH(c, "truncate public.payout_ledger");
       expect(truncL.code).toBe("42501");
+    });
+  });
+});
+
+describe("S23 · correções da revisão de segurança (Opus, rodada única)", () => {
+  beforeAll(seedUsers);
+  afterAll(cleanupUsers);
+
+  it("BLOQUEANTE 1: EXECUTE negado a anon/authenticated em toda função nova; service_role só nas 9 principais", async () => {
+    await withSuperuser(async (c) => {
+      const main = [
+        "payout_confirm_sale(uuid,text,uuid,uuid)",
+        "payout_settings_publish(uuid,integer,integer,integer)",
+        "payout_school_config_publish(uuid,uuid,text,integer,text,text,text)",
+        "payout_batch_create(uuid,uuid,text)",
+        "payout_batch_mark_executed(uuid,uuid)",
+        "payout_admin_delinquency_list(uuid)",
+        "payout_reverse_entry(uuid,uuid,text)",
+        "billing_flag_late_payment(uuid,text,text,integer,text)",
+        "billing_resolve_payment_alert(uuid,uuid,text)",
+      ];
+      const triggers = ["payout_settings_guard()", "school_payout_settings_guard()", "payout_batches_guard()", "billing_payment_alerts_guard()", "payout_ledger_no_truncate()"];
+      for (const fn of main) {
+        for (const role of ["anon", "authenticated"]) {
+          const r = await c.query<{ ok: boolean }>("select has_function_privilege($1, $2, 'execute') as ok", [role, `public.${fn}`]);
+          expect(r.rows[0]?.ok, `${role} em ${fn}`).toBe(false);
+        }
+        const svc = await c.query<{ ok: boolean }>("select has_function_privilege('service_role', $1, 'execute') as ok", [`public.${fn}`]);
+        expect(svc.rows[0]?.ok, `service_role em ${fn}`).toBe(true);
+      }
+      for (const fn of triggers) {
+        for (const role of ["anon", "authenticated", "service_role"]) {
+          const r = await c.query<{ ok: boolean }>("select has_function_privilege($1, $2, 'execute') as ok", [role, `public.${fn}`]);
+          expect(r.rows[0]?.ok, `${role} em ${fn}`).toBe(false);
+        }
+      }
+    });
+  });
+
+  it("BLOQUEANTE 2: audit_log nunca guarda pix_key nem beneficiary_name de school_payout_settings", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300, beneficiaryName: "Nome Sensível Beneficiário", pixKey: "chave-pix-secreta@fixture.invalid", pixKeyKind: "email" });
+      const rows = await c.query<{ before: unknown; after: unknown }>(
+        "select before, after from public.audit_log where entity_table = 'school_payout_settings' order by created_at desc limit 1",
+      );
+      const text = JSON.stringify(rows.rows[0]);
+      expect(text).not.toContain("chave-pix-secreta");
+      expect(text).not.toContain("Nome Sensível Beneficiário");
+    });
+  });
+
+  it("payout_check_admin recusa quando o sub do JWT difere do ator informado (mesmo padrão de billing_check_admin)", async () => {
+    await withClaims("system", async (c) => {
+      await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role", sub: IDS.school_member })]);
+      const r = await publishPayoutSettings(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 }, IDS.admin);
+      expect(r.hint).toBe("forbidden");
+    });
+  });
+
+  it("payout_confirm_sale: ator 'system' com p_actor_id não-nulo é recusado", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const r = await confirmSale(c, { actorId: IDS.admin, actorRole: "system", leadId: lead.id });
+      expect(r.hint).toBe("invalid_input");
+    });
+  });
+
+  it("payout_confirm_sale: papelaria suspensa é recusada", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "suspended", ownerId: IDS.stationery_member });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const r = await confirmSale(c, { actorId: IDS.stationery_member, actorRole: "stationery_member", leadId: lead.id });
+      expect(r.hint).toBe("stationery_unavailable");
+    });
+  });
+
+  it("IMPORTANTE 5 (conluio): papelaria sozinha nunca cria repasse_due, mesmo escolhendo uma escola — só admin/system", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const r = await confirmSale(c, { actorId: IDS.stationery_member, actorRole: "stationery_member", leadId: lead.id, schoolId: school });
+      expect(r.error).toBeNull();
+      const commission = await ledgerFor(c, "platform", null);
+      expect(commission.filter((x) => x.sale_payment_id === r.rows[0]!.id)).toMatchObject([{ entry_type: "commission", amount_cents: 1000 }]);
+      const repasse = await ledgerFor(c, "apm", school);
+      expect(repasse.filter((x) => x.sale_payment_id === r.rows[0]!.id)).toHaveLength(0); // sem repasse: quem confirmou foi a papelaria
+    });
+  });
+
+  it("confirmação por admin, com escola, gera commission E repasse_due normalmente", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const r = await confirmSale(c, { actorId: IDS.admin, actorRole: "admin", leadId: lead.id, schoolId: school });
+      expect(r.error).toBeNull();
+      const repasse = await ledgerFor(c, "apm", school);
+      expect(repasse.filter((x) => x.sale_payment_id === r.rows[0]!.id)).toMatchObject([{ entry_type: "repasse_due", amount_cents: 300 }]);
+    });
+  });
+
+  it("IMPORTANTE 4: lead_conversion_signals.pix_confirmed só conta quando confirmado por admin/system", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const leadByMember = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      await confirmSale(c, { actorId: IDS.stationery_member, actorRole: "stationery_member", leadId: leadByMember.id });
+      const s1 = await c.query("select pix_confirmed from public.lead_conversion_signals($1)", [leadByMember.id]);
+      expect(s1.rows[0].pix_confirmed).toBe(false); // papelaria sozinha não soma o sinal
+
+      const leadByAdmin = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      await confirmSale(c, { actorId: IDS.admin, actorRole: "admin", leadId: leadByAdmin.id });
+      const s2 = await c.query("select pix_confirmed from public.lead_conversion_signals($1)", [leadByAdmin.id]);
+      expect(s2.rows[0].pix_confirmed).toBe(true);
+    });
+  });
+
+  it("IMPORTANTE 6: payout_reverse_entry estorna commission e repasse_due, admin-only, idempotente", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const sale = await confirmSale(c, { actorId: IDS.admin, actorRole: "admin", leadId: lead.id, schoolId: school });
+      const saleId = sale.rows[0]!.id as string;
+
+      const commissionRow = (await ledgerFor(c, "platform", null)).find((r) => r.sale_payment_id === saleId)!;
+      const repasseRow = (await ledgerFor(c, "apm", school)).find((r) => r.sale_payment_id === saleId)!;
+
+      const notAdmin = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [commissionRow.id, IDS.parent, "teste"]);
+      expect(notAdmin.hint).toBe("forbidden");
+
+      const wrongType = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [randomUUID(), IDS.admin, "teste"]);
+      expect(wrongType.hint).toBe("not_found");
+
+      const rev1 = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [commissionRow.id, IDS.admin, "cancelado"]);
+      const rev2 = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [commissionRow.id, IDS.admin, "de novo"]);
+      expect(rev1.error).toBeNull();
+      expect(rev1.rows[0]!.id).toBe(rev2.rows[0]!.id); // idempotente: 1 único estorno
+
+      const revRepasse = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [repasseRow.id, IDS.admin, "cancelado"]);
+      expect(revRepasse.error).toBeNull();
+
+      const commissionTotal = await c.query<{ n: string }>(
+        "select coalesce(sum(amount_cents),0)::bigint as n from public.payout_ledger where sale_payment_id = $1 and beneficiary_type = 'platform'",
+        [saleId],
+      );
+      expect(commissionTotal.rows[0]!.n).toBe("0"); // 1000 - 1000 (estornado)
+      const repasseTotal = await c.query<{ n: string }>(
+        "select coalesce(sum(amount_cents),0)::bigint as n from public.payout_ledger where sale_payment_id = $1 and beneficiary_type = 'apm'",
+        [saleId],
+      );
+      expect(repasseTotal.rows[0]!.n).toBe("0"); // 300 - 300 (estornado)
     });
   });
 });

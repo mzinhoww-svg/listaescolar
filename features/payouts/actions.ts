@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { safeNextPath } from "@/features/auth/redirect";
 import { getSessionActor } from "@/features/stationeries/actor";
 
 import { parsePercentToBps } from "./bps";
@@ -81,7 +82,7 @@ export async function publishSchoolPayoutConfigAction(formData: FormData): Promi
  * nada — só gera comissão/repasse no livro-razão. Volta para onde a papelaria/admin estava.
  */
 export async function confirmSaleAction(formData: FormData): Promise<void> {
-  const back = text(formData, "back") || "/papelaria/leads";
+  const back = safeNextPath(text(formData, "back") || undefined, "/papelaria/leads");
   const actor = await getSessionActor();
   if (!actor) redirect(`/entrar?next=${encodeURIComponent(back)}`);
   const schoolId = text(formData, "schoolId");

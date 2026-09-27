@@ -90,9 +90,10 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
 
 Pendente de staging: `0403_repasses.sql` (S23 — comissão, repasse e inadimplência; aditiva sobre 0401/0402, que já
-estão no staging), ainda só local (`pnpm db:reset` verde nesta sessão); não aplicada porque a tarefa da S23 marcou
-staging/Vercel como invioláveis para este implementador. Aplicar via Supabase MCP na sequência normal antes ou
-durante a próxima sessão que tiver mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/0701
+estão no staging), ainda só local (`pnpm db:reset` verde nesta sessão, inclusive depois da rodada de correções da
+revisão de segurança — ver abaixo); não aplicada porque a tarefa da S23 marcou staging/Vercel como invioláveis para
+este implementador. Aplicar via Supabase MCP na sequência normal antes ou durante a próxima sessão que tiver
+mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/0701
 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização
 escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir
 na revisão de segurança da S19.
@@ -106,7 +107,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Dados | S03, S04, S05, S06 | **Completa** (S03–S06) |
 | Pipeline | S07, S08, S09, S10 | **Completa** (S07–S10) |
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
-| Comércio | S12, S13, S14, S27, S21, S22 | **Completa** (S12–S14, S27, S21 e S22, mescladas em `main` nos PRs #34 e #36). **S23 concluída** (branch `slice/S23-repasses`, worktree T3, criada de `main` em `0ee3771` com S21/S22 dentro: migration `0403_repasses.sql` (aditiva sobre 0401/0402, já no staging), `features/payouts/**`, telas Admin13-Repasses, Admin14-Inadimplência, Pap07-Desempenho e "Pix pela plataforma" em Pap03; fecha D-099–D-101, D-103, D-105, D-107–D-111; abre D-120–D-122 (baixa/média, renumeradas por colisão com os IDs da S24); gate completo verde (1598 testes de banco, 2994 unitários) e E2E local 25/25 verde (`e2e/S23.md`) — **sem PR aberto, por instrução da tarefa**; falta revisão e merge; migration `0403` ainda só local, não aplicada em staging) |
+| Comércio | S12, S13, S14, S27, S21, S22 | **Completa** (S12–S14, S27, S21 e S22, mescladas em `main` nos PRs #34 e #36). **S23 concluída, com rodada de correções da revisão de segurança (Opus) já aplicada** (branch `slice/S23-repasses`, worktree T3, criada de `main` em `0ee3771` com S21/S22 dentro: migration `0403_repasses.sql` (aditiva sobre 0401/0402, já no staging), `features/payouts/**`, telas Admin13-Repasses, Admin14-Inadimplência, Pap07-Desempenho e "Pix pela plataforma" em Pap03; fecha D-099–D-101, D-103, D-105, D-107–D-111; abre D-120–D-122 (baixa/média, renumeradas por colisão com os IDs da S24). Revisão sobre `a51b62b` achou 2 bloqueantes (EXECUTE aberto a anon/authenticated em 8 funções novas; `audit_log` guardando `pix_key`/`beneficiary_name`) e 4 importantes (régua de inadimplência contando recarga de crédito; sinal Pix contável só pela própria declaração; conluio papelaria+escola gerando repasse sem revisão; falta de `payout_reverse_entry`), todos corrigidos nesta mesma migration editada no lugar (ver ledger-comercio, seção "S23 · correções da revisão de segurança") — gate completo verde (1721 testes de banco, 3252 unitários) e E2E local refeito 26/26 (`e2e/S23.md`) — **sem PR aberto, por instrução da tarefa**; falta revisão da correção e merge; migration `0403` ainda só local, não aplicada em staging) |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 

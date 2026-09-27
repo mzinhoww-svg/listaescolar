@@ -52,10 +52,8 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
     console.error("ler contestação do pedido", error instanceof Error ? error.message : "erro");
   }
   let sale = null;
-  let schoolOptions: { id: string; name: string }[] = [];
   try {
-    const payouts = getPayoutService();
-    [sale, schoolOptions] = await Promise.all([payouts.getSaleForLead(ctx.actor, lead.id), payouts.listSchoolOptions(ctx.actor)]);
+    sale = await getPayoutService().getSaleForLead(ctx.actor, lead.id);
   } catch (error) {
     console.error("ler confirmação de venda (Pix pela plataforma)", error instanceof Error ? error.message : "erro");
   }
@@ -107,14 +105,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
           )}
           {disputeGate ? <DisputeForm code={lead.code} gate={disputeGate} /> : null}
           {lead.status === "converted" && !frozen ? (
-            <ConfirmSaleForm
-              leadId={lead.id}
-              declaredSaleCents={lead.declaredSaleCents}
-              sale={sale}
-              back={`/papelaria/leads/${lead.code}`}
-              schoolNameHint={lead.schoolName}
-              schools={schoolOptions}
-            />
+            <ConfirmSaleForm leadId={lead.id} declaredSaleCents={lead.declaredSaleCents} sale={sale} back={`/papelaria/leads/${lead.code}`} />
           ) : null}
           <Timeline events={events} side="stationery" />
         </div>

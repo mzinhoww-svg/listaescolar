@@ -19,6 +19,7 @@ function makeStore(over: Partial<PayoutStore> = {}): PayoutStore {
     getSaleForLead: async () => null,
     listRecentSalePayments: async () => [],
     listConfirmableLeadsForStationery: async () => [],
+    listConfirmableSalesForAdmin: async () => [],
     listPendingRepasses: async () => [],
     listBatches: async () => [],
     createBatch: async () => "batch-1",

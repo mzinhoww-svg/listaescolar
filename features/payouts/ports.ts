@@ -113,6 +113,11 @@ export interface PayoutStore {
   listRecentSalePayments(actor: SessionActor, limit: number): Promise<SalePaymentView[]>;
   /** Leads convertidos com valor declarado, ainda sem `sale_payments` — candidatos a confirmar (Admin13/Pap03). */
   listConfirmableLeadsForStationery(actor: SessionActor, stationeryId: string): Promise<{ leadId: string; leadCode: string; amountCents: number; schoolNameHint: string }[]>;
+  /**
+   * Admin13 ("Vendas para confirmar"): mesma listagem, mas de TODAS as papelarias — é aqui que o admin confirma
+   * COM escola (a única confirmação que gera repasse; a da papelaria, Pap03, nunca gera — revisão de segurança).
+   */
+  listConfirmableSalesForAdmin(actor: SessionActor): Promise<{ leadId: string; leadCode: string; stationeryName: string; amountCents: number; schoolNameHint: string }[]>;
 
   listPendingRepasses(actor: SessionActor): Promise<PendingRepasseView[]>;
   listBatches(actor: SessionActor, limit: number): Promise<PayoutBatchView[]>;

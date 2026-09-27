@@ -1,0 +1,12 @@
+Refatoração pura (D-158, S19): sem teste vermelho novo (não é comportamento novo, é só mover código).
+Rede de segurança: as 159 suítes existentes de tests/billing/** continuam verdes ANTES e DEPOIS da divisão
+(mesma asserção, nenhuma edição), prova de que nenhum comportamento mudou.
+
+$ pnpm check:sizes (antes)
+  603	features/billing/repository.ts
+  334	features/billing/service.ts
+
+$ pnpm check:sizes (depois)
+  nenhum dos dois na lista de arquivos acima de 250 linhas.
+
+Gate completo (typecheck, lint, pnpm test — 159/159 em tests/billing —, pnpm db:reset && pnpm test:db) verde.

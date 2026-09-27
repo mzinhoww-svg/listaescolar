@@ -54,6 +54,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S11 Integração das trilhas e notificações | #29 | 05160d5 | 2026-09-25 | ✓ | ✓ | 2691 | 1492 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, portas REAIS, IA falsa, worker Deno: 57 verificações, 0 falhas (`e2e/S11.md`); no staging: login por link mágico e envio OK, leitura por IA bloqueada por OPENROUTER_KEY (D-077) |
 | S21 Cobrança da papelaria (Comércio) | #34 | b7c6229 | 2026-09-26 | ✓ | ✓ | 2959 | 1539 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 17 verificações, 0 falhas (`e2e/S21.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | #36 | 0ee3771 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
+| S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -61,7 +62,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-20 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+21 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -81,6 +82,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0701_pesquisa_maes_ajustes.sql | Pesquisa com mães (ADR-005) | pesquisa_maes_ajustes | aplicada 2026-09-25 via MCP (aditiva: `created_at`/`updated_at` faltantes, função recriada com `search_path = ''`) |
 | 0401_billing.sql | S21 | billing | 20260926232215 (uma chamada transacional; fidelidade conferida contra o banco local: md5 das 23 funções, RLS das 8 tabelas, 22 gatilhos e privilégios idênticos; SEM plano publicado: staging em `billing_unavailable` até decisão) |
 | 0402_lead_conversions.sql | S22 | lead_conversions | 20260927010517 (uma chamada transacional; md5 das 10 funções, RLS, gatilhos e privilégios idênticos ao banco local; sem advisor novo) |
+| 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
@@ -119,7 +121,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (branch `slice/S22-conversao`, sem PR ainda), S23 (próxima)] ∥ [S24 (em andamento: Task 2), S25, S26].
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 (em andamento)] ∥ [S24 ✓ (#38), S25 (em andamento), S26].
 4. S15, S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.

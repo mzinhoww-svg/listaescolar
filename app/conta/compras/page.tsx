@@ -30,7 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
     failed = true;
   }
   return (
-    <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-12">
+    <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-12">
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Suas compras</h1>
       {sp.ok ? <p role="status" className="bg-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold text-white">Registrado, obrigado!</p> : null}
       {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}

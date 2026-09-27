@@ -2667,3 +2667,55 @@ com S23/S25). Nesta resolução de merge, os itens da S26 foram renumerados para
 número mudou) — ver `docs/superpowers/DEBT.md`, nota de numeração. Sem conflito de conteúdo: `docs/superpowers/
 PROGRESS.md` só teve a mesma linha "Em paralelo"/"S15" editada dos dois lados, resolvida por união (mantendo os
 dois "✓").
+
+## S18 · correções da revisão (rodada única sobre `7df909a`)
+
+Revisão não achou bloqueantes na refatoração de D-057 (confirmado: movimento puro, sem lógica alterada). 4 itens
+pedidos, todos corrigidos ou verificados nesta rodada, worktree T3.
+
+1. **Área da família (`app/conta`) sem skip-link/`id="conteudo"`/foco visível.** Corrigida a nota do plano
+   (`docs/superpowers/plans/2026-09-27-s18-estados-a11y.md`): não existe (nem existiu) um componente `ContaShell`
+   — `/conta` é `app/conta/layout.tsx` (compartilhado pelas 8 páginas) + cada `page.tsx` com o próprio `<main>`.
+   `<SkipLink />` entra uma vez no `layout.tsx` (mesmo padrão de `app/(site)/layout.tsx`); `id="conteudo"` em
+   TODOS os `<main>` já existentes das 8 páginas (9 ocorrências — `app/conta/notificacoes/page.tsx` tem dois
+   `<main>`, um por branch de erro/sucesso) — nenhum `<main>` novo criado, nenhuma duplicação. Foco visível
+   acrescentado aos 4 links/botão sem substituto em `app/conta/page.tsx` (hub da conta): "Buscar lista da
+   escola", "Ver suas cotações...", "Privacidade e dados" e "Sair" — nenhum dos outros 7 arquivos sob `/conta`
+   tinha link/botão sem `focus-visible` (checado um a um). Teste em `tests/a11y/conta.test.tsx`.
+2. **Capturas `S18-03`/`S18-04` idênticas.** Confirmado por md5 (mesmo hash, 46835 bytes) antes de investigar.
+   Os dois estados são reais e diferentes (a asserção de `disabled` que roda ENTRE as duas capturas já provava
+   isso: `true` na primeira, `false` na segunda) — o defeito era só na CAPTURA, não no produto nem na asserção.
+   Causa: não identificada com certeza (a explicação mais provável é uma janela de corrida entre o
+   `location.reload()`/clique e o `shot()`, que só dorme 1 s antes de capturar); em vez de adivinhar a causa,
+   `scripts/e2e-s18.sh` ganhou uma folga maior antes de cada captura do passo 3 (2 s em vez de 1 s implícito do
+   `shot()`) e uma checagem de md5 dentro do próprio roteiro que FALHA (`bad`) se as duas capturas saírem
+   idênticas — nunca mais um par de capturas iguais passa em silêncio. Regeradas e confirmadas diferentes (ver
+   gate desta rodada).
+3. **Foco visível ausente em `SearchForm.tsx:45` e nos 3 checkboxes da pesquisa (ADR-005).** Verificado achado a
+   achado, sem tocar em nenhum dos quatro: os quatro têm `outline-none` no elemento de FORM (input/checkbox) mas
+   o elemento PAI (o `<div>` ou `<label>` que os envolve) já tem o substituto — `focus-within:outline-verde-fundo`
+   em `SearchForm.tsx` (linha 33) e `has-focus-visible:outline-verde-fundo` nos três `<label>` da pesquisa
+   (`OpcaoMultipla.tsx`, `PerguntaCompraIdeal.tsx`, `TelaFinal.tsx`) — mesmo padrão já usado em
+   `components/stationeries/fields.tsx` (`has-[:focus-visible]:ring-2`). Conferido que a variante `has-focus-
+   visible:` do Tailwind v4 compila para CSS real (não é classe morta): `.next/static/chunks/*.css` do build
+   desta sessão tem `.has-focus-visible\:outline-verde-fundo:has(:focus-visible){outline-color:var(--verde-fundo)}`.
+   Falso positivo da revisão (grep de `outline-none` sem checar o elemento pai) — nenhum código mudado nestes 4
+   pontos, para não arriscar mudar lógica/texto da pesquisa (ADR-005, regra explícita do pedido). Varredura
+   ampla: os 16 arquivos do repositório com `outline-none` foram checados um a um — os outros 12 têm o
+   substituto no MESMO elemento (`focus-visible:ring-*`/`focus-visible:outline-*`); nenhum achado real de foco
+   ausente em todo o repositório. Custo se esta análise estiver errada: reabrir os 4 pontos com o achado
+   original (nenhuma mudança de código a desfazer, já que nada foi tocado).
+4. **Nota sobre o padrão de refatoração do roteador.** `supabase/functions/_shared/ai/router.ts` →
+   `router-helpers.ts` (D-057, commit `0df7936`) usou o mesmo padrão de `features/claims/repository.ts` →
+   `repository-evidence.ts`/`repository-tokens.ts` (commit `02dd693`): a fábrica principal (`createRouter`)
+   mantém as closures que capturam `deps` (`fakeAllowed`, e agora também `resolve`, que envolve a função pura
+   `resolveRoute` do arquivo-irmão com os argumentos já capturados), em vez de exportar o estado como um objeto
+   de contexto explícito (o padrão usado nos módulos de `leads`/`stationeries`/`cart`, que são coleções de
+   funções top-level sem estado fechado). Os dois padrões (closure→sub-fábrica para módulos com UM estado
+   fechado por chamada; funções top-level puras para módulos sem estado) foram escolhidos caso a caso conforme a
+   forma original de cada arquivo, não por uma regra única — registrado aqui só para quem for ler o diff de
+   D-057 entender por que os dois grupos de arquivos-irmãos têm formas de composição diferentes.
+
+Gate desta rodada: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
+verdes (ver relatório da rodada). E2E das partes tocadas (`/conta`, `/admin/denuncias/[id]`) repetido com
+`scripts/e2e-s18.sh` — PASS, capturas `S18-03`/`S18-04` confirmadas diferentes por md5 dentro do próprio roteiro.

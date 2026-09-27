@@ -2,8 +2,9 @@
 # E2E da S18 (Estados e acessibilidade) com agent-browser, build de produção local da trilha 3 (porta 3003).
 # Cobre: skip-link/foco visível por teclado no AdminShell (novo nesta fatia), D-153 (campos de resolução
 # desabilitados em /admin/denuncias/[id] com status=open), D-034 (itens agrupados por categoria) e D-140
-# ("Montar carrinho com esta lista") na página pública de uma lista oficial, e um passe axe-core (via CDN, sem
-# dependência nova no projeto) em 3 rotas representativas.
+# ("Montar carrinho com esta lista") na página pública de uma lista oficial, skip-link/main#conteudo/foco visível
+# em /conta (correção da revisão desta fatia), e um passe axe-core (via CDN, sem dependência nova no projeto) em
+# 3 rotas representativas.
 # Pré-requisitos: `pnpm db:reset`; `.env.local` com as variáveis de `node scripts/supa.mjs env`; `pnpm build &&
 # PORT=3003 pnpm start`. Reaproveita admin@listacerta.test/parent@listacerta.test (supabase/seed.sql).
 set -u
@@ -82,6 +83,12 @@ SEL_DISABLED=$(ab admin eval "document.querySelector('select[name=resolution]')?
 eq "$SEL_DISABLED" "true" "D-153: <select> de resolução desabilitado com status=open"
 RESOLVE_DISABLED=$(ab admin eval "[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Resolver')?.disabled ?? 'none'" | tr -d '"')
 eq "$RESOLVE_DISABLED" "true" "D-153: botão Resolver desabilitado com status=open"
+# Achado da revisão da S18: as duas capturas deste passo (open/reviewing) saíram BYTE-IDÊNTICAS numa rodada
+# anterior (md5 igual), mesmo com a asserção de `disabled` provando que o DOM realmente mudava entre elas — o
+# defeito era só na captura (janela de corrida entre o `shot()` e o redesenho), nunca no produto. `shot()` já
+# dorme 1 s; aqui dorme mais 1 s explícito ANTES de cada captura deste passo, e a segunda captura é comparada por
+# md5 com a primeira: se saírem iguais, o roteiro FALHA (nunca mais um par de capturas iguais passa em silêncio).
+sleep 1
 shot admin "$OUT/S18-03-denuncia-open.png"
 clicktext admin "Colocar em análise"
 wait_ok admin "Em análise" "clique em Colocar em análise muda o status (REPORT_STATUS_LABEL)" 10 || true
@@ -93,7 +100,22 @@ ab admin eval "location.reload()" >/dev/null
 sleep 1
 SEL_DISABLED2=$(ab admin eval "document.querySelector('select[name=resolution]')?.disabled ?? 'none'" | tr -d '"')
 eq "$SEL_DISABLED2" "false" "D-153: <select> de resolução habilitado depois de 'Colocar em análise' (status=reviewing)"
+sleep 1
 shot admin "$OUT/S18-04-denuncia-reviewing.png"
+M3=$(md5 -q "$OUT/S18-03-denuncia-open.png" 2>/dev/null || md5sum "$OUT/S18-03-denuncia-open.png" | cut -d' ' -f1)
+M4=$(md5 -q "$OUT/S18-04-denuncia-reviewing.png" 2>/dev/null || md5sum "$OUT/S18-04-denuncia-reviewing.png" | cut -d' ' -f1)
+if [ "$M3" != "$M4" ]; then ok "capturas S18-03/S18-04 são diferentes (md5 $M3 vs $M4)"; else bad "capturas S18-03/S18-04" "saíram IDÊNTICAS (md5 $M3) — defeito de captura, repetir"; fi
+
+echo "== 3b) área da família (/conta): skip-link, main#conteudo e foco visível (correção da revisão)"
+ab parent set viewport 390 844 >/dev/null
+login parent parent@listacerta.test "/conta"
+expect_text parent "Minha conta" "hub da conta abre para o parent"
+PARENT_SKIP_HREF=$(ab parent eval "document.querySelector('a')?.getAttribute('href') ?? 'none'" | tr -d '"')
+eq "$PARENT_SKIP_HREF" "#conteudo" "/conta: skip-link (1º link da página) aponta para #conteudo"
+PARENT_CONTEUDO=$(ab parent eval "document.getElementById('conteudo') ? 'sim' : 'nao'" | tr -d '"')
+eq "$PARENT_CONTEUDO" "sim" "/conta: main#conteudo existe (sem duplicar o <main> da página)"
+BUSCAR_FOCUSABLE=$(ab parent eval "[...document.querySelectorAll('a,button')].find(b=>b.textContent.trim()==='Buscar lista da escola')?.className.includes('focus-visible:outline') ?? false" | tr -d '"')
+eq "$BUSCAR_FOCUSABLE" "true" "/conta: link \"Buscar lista da escola\" tem foco visível"
 
 echo "== 4) verificador axe-core (via CDN, sem dependência nova) em 3 rotas"
 AXE_CDN="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js"

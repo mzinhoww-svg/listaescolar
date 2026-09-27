@@ -23,7 +23,7 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
   if (!student) notFound();
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
+    <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
       <BackHeader href="/conta" title="Editar aluno" />
       <StudentForm
         action={updateStudentAction}

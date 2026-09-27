@@ -91,4 +91,126 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: a S15 (área da família) começa no worktree T3 logo após o merge da S23, antes de a trilha B2B (S25/S26) terminar — a S15 não depende de S25/S26 e o worktree ficaria parado; S16 segue depois da S15 — custo se estiver errada: conflitos em ledgers/PROGRESS/DEBT com a trilha B2B, resolvidos por união no merge
 - Ruling: o PR #42 (S25) foi mesclado com os jobs `verify`/`db` ainda pendentes — o laço de espera saiu antes de os jobs aparecerem; conferido em seguida que o run do PR (`8532ed8`) e o da `main` (`634c9f2`) terminaram em `success`; regra operacional daqui em diante: só mesclar depois de o run do `head_sha` do PR estar `completed/success` — custo se estiver errada: nenhum neste caso; um CI vermelho pós-merge exigiria PR de correção
 - Ruling: na aplicação da 0502 no staging o subagente removeu comentários de DENTRO de 7 corpos de função; a comparação por md5 com o banco local detectou e as funções foram reaplicadas idênticas ao arquivo — a comparação por md5(prosrc) continua obrigatória em toda aplicação — custo se estiver errada: nenhum (o comportamento não mudava; só a fidelidade textual)
+## S15 · Área da família (fora de trilha, worktree T3, 2026-09-27)
+
+- Ruling: migration na faixa "pós-trilhas" `06xx` (próximo prefixo livre após `0602`, S11): `0603_family_area.sql`
+  (tabelas `students`, `saved_lists`) — a S15 não é de trilha (PLAN: "S11 e S15 a S20 rodam depois do merge das
+  três") e o Ruling de `0001` já reserva `06xx` para isso; FKs reais para `schools`/`grades`/`profiles`/
+  `school_lists` são permitidas aqui (pós-integração) — custo se estiver errada: renomear o arquivo antes de
+  aplicar em staging (nunca aplicado nesta sessão).
+- Ruling: `students`/`saved_lists` como CRUD direto por RLS (grants por tabela + `with check`, cliente de SESSÃO),
+  não por função RPC — mesmo padrão de `carts`/`cart_items` (S12). A única regra cross-tabela ("lista salva precisa
+  ser `published`", "aluno da linha pertence ao mesmo dono") cabe num gatilho `BEFORE INSERT`
+  (`SECURITY DEFINER`, `search_path=''`, `EXECUTE` revogado de todos) — mais simples que uma função pública. Custo
+  se estiver errada: trocar por função é mecânico, sem migração de dado.
+- Ruling: nenhuma política de leitura para admin/system em `students`/`saved_lists` (diferente de `carts`, que tem
+  `carts_select_admin`) — mínimo de dado de menor (CLAUDE.md); nem o painel do admin (S16) nem o suporte enxergam
+  aluno por família nesta fatia. Custo se estiver errada: uma migration aditiva com a policy que faltar, quando
+  uma fatia futura de suporte precisar.
+- Ruling: apelido validado nas DUAS camadas (Zod no Server Action, na mesma ordem do `CHECK` do banco via
+  `student_nickname_valid`) — sem espaço (sinal prático de "nome e sobrenome"), sem dígito, sem controle, 2-30
+  caracteres. Escola e série são obrigatórias no cadastro (App13 já mostra os dois preenchidos): sem os dois a
+  família não consegue comparar a lista.
+- Ruling: exclusão de aluno é DELETE real (LGPD), com cascade em `saved_lists`; carrinho não referencia `students`
+  (nenhuma tela pede essa amarração nesta fatia).
+- Ruling: "cotações com status" do prompt da S15 já está pronto desde a S14/S22 (`/cotacao`, `listMyLeads`,
+  `StatusBadge`) — o hub só linka para lá, sem duplicar.
+- Ruling: D-082 e D-029 (dono S15, marcados "se couberem" no briefing) NÃO foram resolvidos nesta fatia: adicionar
+  o sino de notificações a `PanelShell`/`AdminShell`/`SchoolShell` (D-082) mexeria em toda página que usa essas
+  três cascas (dezenas de arquivos) para uma dívida de severidade baixa; D-029 é de outra área (`listCandidateStationeries`,
+  papelarias candidatas do lead), sem relação com a área da família. Custo/benefício desfavorável perto do fim da
+  sessão (risco de regressão ampla por pouco ganho); dono passa para S18 (D-082 já listava S18 como dono
+  alternativo). Ficam abertas, sem mudança de severidade.
+- Achado do E2E (correção de produto real, não só do roteiro): React 19 reinicializa campos NÃO controlados de um
+  `<form action={...}>` depois de QUALQUER conclusão da action, inclusive quando ela devolve erro — o formulário de
+  aluno usava `defaultValue` para apelido/série/ano/consentimento; depois de uma primeira tentativa recusada
+  (apelido com espaço), esses campos voltavam ao estado inicial e a segunda tentativa falhava em silêncio (bloqueio
+  nativo de campo `required` vazio, sem mensagem). Corrigido tornando esses campos controlados em `StudentForm`/
+  `GradeSelect`/`SchoolYearSelect`. Sem essa correção, qualquer família que errasse o apelido uma vez teria a
+  segunda tentativa quebrada silenciosamente — bug real, não só de teste.
+- Achado do E2E: `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, conferido por
+  `list_reader_get`, 0601/S11), não o id de `school_lists`; a página pública de uma lista oficial
+  (`/escolas/[inep]/[serie]`) não tem, hoje, nenhum link para "montar carrinho" (só a cópia do pai, via
+  `ParentCopyEditor`, linka para lá) — dívida nova registrada no DEBT.md, dona de uma fatia futura de UX de
+  carrinho (fora do escopo da S15, que só consome carrinhos existentes no hub).
+- Achado de roteiro (`docs/superpowers/e2e/S15.md`): `clicktext` por `.click()` via `eval` falhou silenciosamente
+  para o botão "Salvar aluno"; substituído por `agent-browser find text "..." click` (clique real do Playwright) —
+  candidato a atualizar o padrão `PAT-002` do Segundo Cérebro.
+
+## S15 · correções da revisão de segurança (rodada única sobre 5951fb1, worktree T3)
+
+- Ruling: migration `0603_family_area.sql` editada NO LUGAR (não aplicada em nenhum ambiente além do local desta
+  sessão) — as 5 correções pedidas: (1) `students` perde `school_id`/`school_year` (SPEC §5: só apelido e série;
+  escola/ano vivem na lista salva, via `school_lists`); (2) `student_nickname_valid` fica só-letras Unicode (um
+  apóstrofo interno no máximo), rejeitando hífen, ponto, sublinhado, arroba, dígito e invisível/formatação (Zod
+  espelha a mesma regra, com NFC e apóstrofo curvo→reto antes de gravar); (3) `students_check_limit`/
+  `saved_lists_check_limit`/`saved_lists_guard` passam de `SECURITY DEFINER` para `SECURITY INVOKER` — a RLS já
+  escopa as consultas internas ao dono de quem chama, fechando o oráculo de antes (um `owner_id` forjado no INSERT
+  não revela mais, pela mensagem de erro, se um aluno/dono alheio existe ou se o teto de outra família já foi
+  atingido); (4) `grant update` em `students` só nas colunas editáveis (`nickname`, `grade_id`); (5) os dois tetos
+  (10 alunos, 50 listas salvas) tomam `pg_advisory_xact_lock(hashtextextended('namespace:'||owner_id, 0))` antes de
+  contar, fechando a corrida de duas inserções concorrentes passando do teto (mesmo padrão de
+  `claim_create`/`lead_create`/`stationery_register`). Custo se alguma estiver errada: a migration ainda não foi
+  aplicada em lugar nenhum além do local, então corrigir de novo é só editar o arquivo outra vez.
+- Ruling: "torná-los SECURITY INVOKER onde bastar" (opção dada pela revisão) escolhida em vez de checar
+  `owner_id = auth.uid()` no início de cada gatilho — motivo: a contagem/existência já roda sob a RLS de quem
+  chama, então o resultado (0 linhas para um `owner_id` alheio, real ou forjado) é sempre o mesmo,
+  independentemente de o alvo existir de verdade; um `if ... raise 42501` explícito seria redundante com o que a
+  RLS já garante, e ficaria mais uma checagem para manter sincronizada se a política mudar — custo se estiver
+  errada: reintroduzir o `if` explícito é aditivo, não quebra nada.
+- Ruling: apelido aceita um apóstrofo interno no máximo (`D'Alva`) — "se quiser" da revisão; decidido incluir por
+  realismo de nome brasileiro/lusófono, mesmo raro; sem isso a regra ficaria estritamente `^[[:alpha:]]+$` — custo
+  se estiver errada: remover o segundo ramo do `CHECK` e do regex do Zod, sem migração de dado (nenhum aluno com
+  apóstrofo existe em produção, que nem existe ainda).
+- Ruling: teste de corrida real (`pg_advisory_xact_lock`) usa conexões `pg.Client` separadas com
+  `Promise.all` (padrão PAT-003) contra o teto de `students`; não repetido para `saved_lists` por seguir exatamente
+  a mesma implementação (mesma função, mesmo padrão de lock) — custo se estiver errada: replicar o teste é
+  mecânico, a implementação já está testada indiretamente pela simetria de código.
+- Achado de produto (React 19, real, corrigido em `StudentForm.tsx`/`GradeSelect.tsx`): depois de QUALQUER
+  conclusão de uma `<form action={...}>` (sucesso ou erro), o `form.reset()` nativo que o React 19 dispara reseta
+  `<select>` controlado de volta à primeira opção, mesmo com `value`/`onChange` corretos — o `<input type=text>`
+  escapa disso porque tem um rastreador de valor (`_valueTracker`) próprio que o protege de mutação externa do
+  DOM; `<select>` não tem o mesmo rastreador, então o reset nativo "ganha" da última renderização do React sem
+  disparar novo render. Corrigido com `ref` + `useEffect` que reaplica `select.value` a cada conclusão da action
+  (efeitos rodam depois do commit e depois do reset síncrono do navegador, então sempre "ganham" a corrida
+  seguinte). O mesmo `ref`+`useEffect` foi aplicado também ao checkbox de consentimento por defesa, mas o
+  checkbox não chegou a ser reproduzido como bug real do produto (ver achado de roteiro abaixo) — manter o
+  reforço ali é seguro e não custa nada.
+- Achados de roteiro (E2E, não são bugs de produto): (1) a técnica usada para simular a marcação do checkbox de
+  consentimento — setar `.checked` pelo setter nativo do protótipo e disparar um `change` sintético (o mesmo
+  truque que funciona para `<input type=text>`/`<select>`) — nunca chegou a marcar o estado do React: o
+  `ChangeEventPlugin` do React para `input[type=checkbox]` escuta o evento `click`, não `change`; isso fez
+  parecer, por várias rodadas de diagnóstico manual, que havia um segundo bug de reset (idêntico ao do
+  `<select>`) no checkbox — não havia; o checkbox nunca chegou a ficar `true` de verdade nesses testes. Corrigido
+  trocando a simulação por `checkbox.click()` (alterna o estado de verdade e dispara o `onChange` real) em
+  `set_new_student_fields` do `scripts/e2e-s15.sh`. (2) Com isso corrigido, a falha ficou isolada nas duas
+  primeiras submissões do App13: o roteiro usava `wait_text "sem sobrenome"`/`wait_text "letras"` para esperar a
+  mensagem de erro, mas o AVISO ESTÁTICO abaixo do campo ("Só letras, sem sobrenome nem documento.") já contém os
+  dois trechos — o `wait_text` casava na página em repouso, ANTES de a action resolver, e o `expect_text` seguinte
+  rodava cedo demais, vendo o formulário limpo sem nenhum erro ainda. Corrigido esperando a mensagem de erro
+  COMPLETA e única ("Use só um apelido, sem sobrenome"/"Use só letras, sem número"), nunca um trecho que também
+  exista em texto estático da tela. Lição para o PAT-002 do Segundo Cérebro: (a) simular clique/marcação de
+  checkbox via `eval` precisa de `.click()`, não `set value + dispatch('change')`; (b) `wait_text` deve sempre
+  esperar por um texto que só exista no estado-alvo, nunca um substring presente também no estado de repouso da
+  tela.
+
+## S15 · segunda reverificação de segurança (Opus, sobre `abf5f4e`)
+
+- Ruling: `student_nickname_valid` (0603) e `LETTERS_ONLY` (Zod) trocam a base de "letra Unicode" (`[[:alpha:]]`
+  no banco, `\p{L}` no Zod) por "letra do SCRIPT LATINO" (faixas A-Z/a-z, Latin-1 Supplement e Latin Extended-A
+  acentuadas no banco; `\p{Script=Latin}` no Zod) — achado da reverificação: "letra" Unicode (categoria `L`) inclui
+  coisa que não é letra de verdade, como os preenchedores de Hangul (U+115F, U+1160, U+3164, U+FFA0 — categoria
+  `Lo`, invisíveis) e a U+02BC apóstrofo-letra (categoria `Lm`); `"Maria"+U+3164+"Silva"` passava as duas
+  validações e aparecia como "Maria Silva" (sem espaço de verdade, então também escapava do teste de sobrenome).
+  Restringir ao script latino fecha as duas faixas de Hangul, a U+02BC e qualquer outro script (cirílico etc.) de
+  uma vez, sem precisar listar caractere invisível um por um — mais robusto que ir caçando exceção por exceção.
+  Verificado direto contra o Postgres local (`en_US.UTF-8`) antes de decidir pela faixa literal de caracteres (não
+  há operador de script/propriedade Unicode no regex ARE do Postgres): as faixas casam por valor de código, não
+  por ordenação de locale, então funcionam independente do collation do banco. Custo se estiver errada: a
+  migration ainda não foi aplicada em lugar nenhum além do local, então ajustar a faixa é só editar o arquivo de
+  novo.
+- Achado (vermelho confirmado antes da correção, não só teórico): rodado contra o código antigo, tanto o teste do
+  Zod (`tests/students/schemas.test.ts`) quanto o de banco (`tests/db/family-area.test.ts`) falharam para
+  `"MariaㅤSilva"` (e os demais códigos U+FFA0/U+115F/U+1160/U+02BC/cirílico) — `\p{L}`/`[[:alpha:]]`
+  aceitavam, confirmando o achado da revisão antes de qualquer correção no arquivo.
 - Ruling: a S28 (ADR-006) entra no PLAN entre a S19 e a S20 e passa a ser pré-requisito do go-live; o brainstorming dela roda em modo autônomo (o orquestrador responde às perguntas da skill com SPEC, PLAN, `docs/design`, a pesquisa do ADR-005 e dados do staging) e o spec resultante vira Ruling — pedido explícito do humano em 2026-09-27 — custo se estiver errada: uma fatia a mais no caminho crítico antes do go-live

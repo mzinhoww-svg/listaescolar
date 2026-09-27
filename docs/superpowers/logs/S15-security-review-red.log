@@ -1,0 +1,55 @@
+S15 — correções da rodada única de revisão de segurança (Opus) sobre 5951fb1: registro do ciclo vermelho→verde.
+
+Migration 0603 editada NO LUGAR (não aplicada em nenhum ambiente além do local desta sessão), como pedido.
+tests/db/family-area.test.ts reescrito para as 5 correções; a versão NOVA dos testes falha vermelho contra o
+schema ANTIGO (students com school_id/school_year, gatilhos SECURITY DEFINER, sem lock, UPDATE liberado em todas
+as colunas), confirmando que cada correção tem cobertura própria:
+
+1) `students` sem school_id/school_year (SPEC §5): teste "students e saved_lists têm id/created_at/updated_at,
+   RLS habilitada, e students não tem escola/ano" falha vermelho contra o schema antigo (`expect(studentCols).not
+   .toContain('school_id')` — antes a coluna existia). Teste de FK também falhava (esperava `schools` fora da
+   lista antes do fix, incluía `schools` com o schema antigo).
+
+2) Apelido só letras: `student_nickname_valid` antigo aceitava "Ana-Clara" (hífen) — o teste
+   "aceita só letras...; recusa espaço, hífen, ponto, sublinhado, arroba, dígito, controle e vazio" falha vermelho
+   contra a função antiga para "Maria-Silva", "Maria.Silva", "Maria_Silva", "joaogmailcom@x" (todos aceitos pela
+   função antiga, já que ela só barrava espaço/dígito/controle) e para "Maria​Silva" (zero-width space, que a
+   função antiga também aceitava — nenhuma checagem cobria caractere invisível).
+
+3) Gatilhos SECURITY INVOKER: teste "gatilhos ... são SECURITY INVOKER" falha vermelho contra o schema antigo
+   (`prosecdef = true` para os três antes do fix). Teste do oráculo fechado ("aluno real de outro dono e aluno
+   inventado dão a MESMA recusa, sem oráculo") não existia antes; escrito já esperando paridade de erro, que só a
+   versão INVOKER garante (a versão DEFINER antiga também recusava os dois casos com 42501, então este teste
+   específico não distinguia bem o achado — a correção real está em (5) abaixo, mas o teste documenta o
+   comportamento correto de qualquer forma).
+
+4) GRANT de UPDATE só em nickname/grade_id: teste "UPDATE só nas colunas editáveis" falha vermelho contra o schema
+   antigo — `update students set created_at = ...`/`updated_at = ...` tinha GRANT de UPDATE liberado em TODA
+   coluna (`grant select, insert, update, delete on public.students to authenticated`), então o `attempt` não
+   recebia 42501 de GRANT (só o gatilho `students_guard` bloqueava id/owner_id, não created_at/updated_at — essas
+   duas colunas passavam sem erro no schema antigo).
+
+5) Advisory lock nos tetos: teste de corrida real ("duas inserções concorrentes no teto não deixam passar de 10")
+   — rodado contra o schema ANTIGO (sem `pg_advisory_xact_lock`) apresentou o comportamento de corrida esperado:
+   das 10 execuções manuais de validação, o teste ocasionalmente terminava com 11 alunos em vez de 10 (duas
+   conexões contando 9 ao mesmo tempo e ambas passando), confirmando o vermelho antes do lock; com o lock
+   (`hashtextextended('student_create:' || owner_id, 0)`), as 3 execuções seguintes sempre terminaram em exatamente
+   10, uma falha com hint 'limit'.
+
+Depois das 5 correções: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` verdes (com `pnpm db:reset`
+antes), `pnpm build` verde. 18 testes em `tests/db/family-area.test.ts` (todos verdes), 7 em
+`tests/students/repository.test.ts` + `tests/saved-lists/repository.test.ts` (todos verdes, incluindo o teste novo
+do oráculo fechado no nível do repositório TS).
+
+E2E: roteiro `scripts/e2e-s15.sh` teve de ser ajustado (App13 não pede mais escola/ano no cadastro do aluno — só
+apelido e série). No caminho, achado real de produto: o `<select>` de série (controlado) voltava para a primeira
+opção depois de QUALQUER conclusão de `<form action>` — um `form.reset()` nativo do React 19 que o
+`<input type=text>` não sofre (tem `_valueTracker` próprio) mas o `<select>` sofre; corrigido em
+`StudentForm.tsx`/`GradeSelect.tsx` com `ref` + `useEffect` reaplicando o valor a cada conclusão da action.
+Achados de roteiro (não de produto): a simulação do checkbox de consentimento via `set .checked + dispatch
+change` nunca marcava o React de verdade (React detecta clique em checkbox pelo evento `click`, não `change`) —
+parecia um reset igual ao do `<select>`, mas nunca chegou a ficar `true`; corrigido usando `.click()` no roteiro.
+E o `wait_text` das duas primeiras rejeições de apelido casava com o AVISO ESTÁTICO da tela ("Só letras, sem
+sobrenome nem documento.") antes de a action responder, fazendo o `expect_text` seguinte rodar cedo demais;
+corrigido esperando a mensagem de erro completa. Ver `docs/superpowers/e2e/S15.md` e o Ruling no `ledger.md` para
+o detalhe de cada achado.

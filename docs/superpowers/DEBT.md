@@ -51,7 +51,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-026 | ledger-pipeline S07 onda final | Sem "kick" do worker: envio assíncrono espera até 1 min pelo pg_cron | baixa | S19 | aberta |
 | D-027 | ledger-dados S03 | Lote preso em `processing` após queda dura só é retomado depois de 10 min; CSV parseado inteiro em memória (maiores exigem streaming) | baixa | S20 | aberta |
 | D-028 | ledger-comercio S13 onda final | Limite de 5.000 candidatos da cotação local conta itens vencidos (a validade é aplicada depois, no domínio) | baixa | S20 | aberta |
-| D-029 | ledger-comercio S14 T2 | `listCandidateStationeries` corta em silêncio acima do limite; mostrar "e mais N" ou paginar | baixa | S15 | aberta |
+| D-029 | ledger-comercio S14 T2 | `listCandidateStationeries` corta em silêncio acima do limite; mostrar "e mais N" ou paginar | baixa | S18 (revisitada na S15, não coube: sem relação com área da família) | aberta |
 
 ## UX, design e produto
 
@@ -130,7 +130,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-079 | ledger-comercio S11 T3 revisão | Endpoint de push revogado não pode ser reatribuído entre contas no mesmo aparelho (`endpoint_owned` vale mesmo revogado): quem troca de conta no mesmo navegador não liga o aviso até o endpoint mudar; decidir entre transferir endpoint revogado ou orientar "desativar antes de sair" | média | S17 | aberta |
 | D-080 | ledger-comercio S11 T4 / T5 | `PushOptIn` guarda o endpoint só em estado React: após recarregar volta a "Ativar" mesmo com assinatura ativa (não consulta `pushManager.getSubscription()`), e "Desativar" não chama `sub.unsubscribe()` no navegador | média | S18 | aberta |
 | D-081 | ledger-comercio S11 T3 revisão / T5 | Endpoint de push: o Zod normaliza host em maiúsculas e porta `:443` (via `new URL()`), mas o CHECK de `push_subscriptions.endpoint` valida a string crua e recusa esses casos ("Não foi possível ativar"); normalizar antes de gravar ou alinhar o CHECK | baixa | S19 | aberta |
-| D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S15 / S18 | aberta |
+| D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S18 (revisitada na S15: mudaria dezenas de páginas por dívida de baixa severidade, ficou para lá) | aberta |
 | D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S16 | aberta |
 | D-084 | ledger-comercio S11 T4 | `AsyncOptions` (S07, "continuar aguardando") não oferece "Ativar notificação do navegador" nem aponta para `/conta/notificacoes` | baixa | S18 | aberta |
 | D-085 | ledger-comercio S11 T3 escopo | `ClaimTokenSender` (S06) ainda não usa o `ResendEmailTransport` da S11: o link de reivindicação por e-mail continua sem envio real até o humano fornecer conta/credencial (`EMAIL_NOTIFICATIONS_ENABLED`, `EMAIL_API_KEY`, `EMAIL_FROM`) e a S16/S19 ligar o transporte | média | Humano / S16 | aberta |
@@ -188,6 +188,9 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-137 | reverificação de segurança S25 (PR #42) | Cotas de reenvio de webhook (5 por entrega, 20/h por parceiro) sem lock: reenvios concorrentes podem passar um pouco do limite | baixa | S19 | aberta |
 | D-138 | reverificação de segurança S25 (PR #42) | Entrega em `sending` com lease vencida fica em `sending` para sempre se o endpoint for desativado depois (a varredura de dead letter só pega `attempts >= 10` e o claim a exclui); entregas `queued` de parceiro suspenso nunca são purgadas | média | S19 | aberta |
 | D-139 | reverificação de segurança S25 (PR #42) | Rate limit do widget ainda chaveado por `ip:partnerId` (`features/widget/route-helpers.ts:25`): UUIDs aleatórios contornam o limite por IP; chavear só por IP e validar o parceiro antes de contar | média | S19 | aberta |
+| D-140 | ledger.md S15 (achado do E2E, renumerado de D-123 por colisão com a S23/S25) | `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, `list_reader_get`/0601), não o id de `school_lists`; a página pública de uma lista oficial (`/escolas/[inep]/[serie]`) não tem hoje NENHUM link para "montar carrinho" — só a cópia do pai (`ParentCopyEditor`) linka para `/carrinho/novo?lista=`. Uma família que navega até a lista oficial não acha como montar o carrinho a partir dela pela UI | média | futura fatia de UX do carrinho (S18/S19) | aberta |
+| D-141 | ledger.md S15 (renumerado de D-124) | App19-Histórico (mapeada para a S15 em `SCREENS.md`) não foi construída como tela dedicada: o hub (`/conta`) e `/conta/carrinhos`/`/conta/listas-salvas` cobrem estudantes/listas salvas/carrinhos, mas não a vista cronológica combinada e filtrável por aluno que o design mostra | baixa | futura fatia de melhoria | aberta |
+| D-142 | ledger.md S15 (renumerado de D-125) | App16-HubPais mostra "% da lista resolvida" por aluno (barra de progresso); não implementado nesta fatia por falta de um sinal real de "resolvido" (nenhuma tabela liga item de carrinho/lista a "comprado"/"resolvido" por aluno hoje) — mostrar um número inventado violaria "nada inventado" (regra de produto) | baixa | futura fatia (definir o sinal de "resolvido" antes de mostrar progresso) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -199,25 +202,26 @@ correções da revisão de segurança".
 
 Nota (numeração): D-120–D-127 pertencem à S23 (mesclada em `main` primeiro); os itens da S25 que colidiam com esses
 IDs (originalmente também D-120–D-126, escritos numa branch que ainda não via a S23) foram renumerados para
-D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudou.
+D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudou. D-140–D-142 (S15) colidiam com
+D-123–D-125, já ocupados por achados da S23/S25 quando esta branch mesclou `origin/main`; renumerados na mesma
+resolução, mesmo conteúdo.
 
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 41 | 9 | 50 |
-| baixa | 63 | 10 | 73 |
-| **Total** | **114** | **24** | **138** |
+| média | 42 | 9 | 51 |
+| baixa | 65 | 10 | 75 |
+| **Total** | **117** | **24** | **141** |
 
-Contagem atualizada em 2026-09-27 (merge de `main` — S23, Comissão/repasses/inadimplência — com a rodada de
-correções da revisão de segurança da S25 nesta branch). D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23
-(7 baixa + 3 média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais
-baixa/abertas); a rodada de correções da S25 sobre esta branch resolve D-120 (renumerada D-128 nesta resolução de
-merge — auditoria de revelar/rotacionar/criar segredo implementada) e soma D-129–D-134 (D-129 média/aberta —
-chave de cifra do servidor sem caminho de recifra em lote —, as demais baixa/abertas). Estado anterior a este
-merge, só no lado `main` (2026-09-26): mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas
-baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a
-D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e
-reforça D-104; a S24 (Portal B2B) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de
-parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas.
+Contagem atualizada em 2026-09-27 (merge de `origin/main` — S23 e S25, com a reverificação de segurança de ambas —
+na `slice/S15-area-familia`). Lado `main`: D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23 (7 baixa + 3
+média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais baixa/abertas); a rodada
+de correções da S25 resolve D-120 (renumerada D-128 — auditoria de revelar/rotacionar/criar segredo implementada) e
+soma D-129–D-134 (D-129 média/aberta), depois D-135–D-139 da reverificação de segurança do PR #42 (D-138/D-139
+média/abertas, as demais baixa/abertas). Lado desta branch (S15, área da família): soma D-140 (média/aberta, achado
+do E2E — `/carrinho/novo?lista=` sem link nenhum a partir da lista oficial pública) e D-141/D-142 (baixa/abertas —
+Histórico App19 não construído como tela dedicada; "% da lista resolvida" do App16 não mostrado por falta de sinal
+real de "resolvido"); D-029 e D-082 (dono S15/S18) revisitados e não resolvidos nesta fatia, dono passa
+integralmente para S18 (registrado no `ledger.md`, seção S15).

@@ -1,0 +1,40 @@
+S15 Task 2 — domínio e telas: registro do ciclo vermelho/verde.
+
+Diferente da Task 1 (schema puro, vermelho isolado com a migration fora do lugar), a Task 2 combina domínio e UI:
+os testes de `features/students`/`features/saved-lists`/`tests/cart/repository.test.ts` foram escritos ANTES da
+implementação final estar consistente e falharam nas primeiras rodadas por erros reais de tipo e lint, capturados
+abaixo (evidência do ciclo vermelho→verde desta task):
+
+1) `pnpm typecheck` (vermelho, antes do ajuste em tests/students/schemas.test.ts):
+   tests/students/schemas.test.ts(6,36): error TS2339: Property 'params' does not exist on type '$ZodIssue'.
+     Property 'params' does not exist on type '$ZodIssueInvalidType<unknown>'.
+   [ELIFECYCLE] Command failed with exit code 2.
+   Causa: leitura de `issues[0].params` sem antes estreitar o tipo por `issue.code === "custom"` (Zod v4 tipa
+   `params` só no membro `custom` da união de issues). Corrigido em `codeOf()` do teste.
+
+2) `pnpm lint` (vermelho, antes da limpeza):
+   features/students/schemas.ts
+     36:5  warning  Unused eslint-disable directive (no problems were reported from 'no-control-regex')
+   tests/students/repository.test.ts
+     31:5  warning  'gradeId' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   Corrigido: removida a diretiva eslint-disable supérflua e a variável `gradeId` morta (o teste usa slugs de
+   série diretamente, nunca o uuid).
+
+3) `pnpm test` (vermelho, antes de reescrever o comentário de schemas.ts):
+   FAIL tests/ai/model-names.test.ts > nomes de modelo nunca ficam no código > varredura de ...
+     AssertionError: expected [ Array(1) ] to deeply equal []
+     + ["features/students/schemas.ts:9: * Só apelido: nunca sobrenome (CLAUDE.md/SPEC §5). ..."]
+   Causa: o detector de nomes de modelo de IA (`\bclaude\b`, case-insensitive) bateu na palavra "CLAUDE" dentro de
+   "CLAUDE.md" num comentário — nenhum outro arquivo em lib/features/supabase/functions/app/components menciona
+   "CLAUDE.md" por esse motivo. Corrigido: comentário reescrito para "regra de produto (SPEC §5)", sem o nome do
+   arquivo.
+
+Depois dessas três correções: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build` verdes
+(3257 testes unitários, 1750 de banco, 79 arquivos de banco, build sem erro nem warning) — ver o final-report da
+fatia para os números completos.
+
+Testes de banco novos desta task (`tests/students/repository.test.ts`, `tests/saved-lists/repository.test.ts`,
+o acréscimo em `tests/cart/repository.test.ts`) foram escritos contra as funções de `features/students/repository.ts`
+e `features/saved-lists/repository.ts` que ainda não existiam no início da task — a primeira execução de cada
+arquivo antes do repositório correspondente ser criado falha com `Cannot find module`, o vermelho trivial de
+"arquivo referenciado ainda não existe" que precede toda implementação nova neste padrão de TDD.

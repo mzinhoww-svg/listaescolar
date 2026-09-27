@@ -9,6 +9,7 @@ import {
   getCart,
   getPriceSnapshots,
   listActiveRetailers,
+  listCartsForOwner,
   recordClick,
   RepositoryError,
   saveCartChoice,
@@ -327,5 +328,23 @@ describe("features/cart/repository (Postgres local, RLS)", () => {
     expect((data ?? []).every((c) => Array.isArray(c.cart_items) && c.cart_items.length > 0)).toBe(
       true,
     );
+  });
+
+  it("listCartsForOwner: só do dono, mais recente primeiro, com contagem de itens (S15)", async () => {
+    const older = await createCart(alice.client, { ownerId: alice.id, listId: null, items: [{ name: "Régua", quantity: 1 }] });
+    await new Promise((r) => setTimeout(r, 10));
+    const newer = await createCart(alice.client, {
+      ownerId: alice.id,
+      listId: null,
+      items: [{ name: "Apontador", quantity: 1 }, { name: "Borracha", quantity: 2 }],
+    });
+    const rows = await listCartsForOwner(alice.client, alice.id);
+    const ids = rows.map((r) => r.id);
+    expect(ids.indexOf(newer)).toBeLessThan(ids.indexOf(older));
+    expect(rows.find((r) => r.id === newer)).toMatchObject({ itemCount: 2, isDemo: false, strategy: "cheapest" });
+    expect(rows.find((r) => r.id === older)).toMatchObject({ itemCount: 1 });
+    // bob não vê os carrinhos da alice.
+    expect((await listCartsForOwner(bob.client, alice.id)).length).toBe(0);
+    expect((await listCartsForOwner(bob.client, bob.id)).some((r) => r.id === newer || r.id === older)).toBe(false);
   });
 });

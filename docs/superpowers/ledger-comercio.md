@@ -758,3 +758,91 @@ Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnp
 (2971 testes unitários; 1567 de banco, 3 skipped pré-existentes). E2E (`scripts/e2e-s22.sh`) repetido: 21/21, ver
 `docs/superpowers/e2e/S22.md`. Vermelho real (4 achados de teste, listados) em
 `docs/superpowers/logs/s22-security-review-red.log`.
+
+## S23 · Comissão, repasses e inadimplência
+
+Plano: `docs/superpowers/plans/2026-09-26-s23-repasses.md`. Migration `0403_repasses.sql` (aditiva sobre 0401/0402,
+ambas já no staging), `features/payouts/**`, telas `/admin/repasses` (Admin13), `/admin/inadimplencia` (Admin14),
+`/papelaria/desempenho` (Pap07) e a seção "Pix pela plataforma" em Pap03.
+
+**Ruling 1 — "Pix pela plataforma" não custodia dinheiro; é um registro declarativo.** O adapter Pix da S21 coleta
+para UMA conta (a da plataforma), sem split de pagamento; não existe hoje uma forma real de a plataforma receber o
+Pix do pai e repassar automaticamente à papelaria. `payout_confirm_sale` registra a venda (`sale_payments`) como
+CONFIRMADA por quem chama (papelaria ao declarar "Vendi" com escola opcional, ou admin) — não cria cobrança nem
+reconsulta PSP nenhum. Isso também fecha D-105 (S22): `lead_conversion_signals.pix_confirmed` passa a refletir
+`sale_payments` de verdade em vez de `false` fixo. Custo se errado: se a S23+ um dia tiver um PSP real com split,
+essa função vira o ponto único a trocar (confirmação passa a vir de um webhook, não de um clique).
+
+**Ruling 2 — comissão é uma COBRANÇA separada da papelaria, nunca uma dedução de um pagamento custodiado.**
+`payout_confirm_sale` grava `commission` (o que a plataforma tem a cobrar) e, se houver config de escola/APM ativa,
+`repasse_due` (saído da própria comissão, nunca mais que ela — `least(...)` defensivo). Nenhum dos dois toca
+`stationery_wallets`/`credit_ledger` (S21): a papelaria continua com 100% do que o pai pagou direto a ela; a
+comissão apurada fica só registrada, sem instrumento de cobrança nesta fatia (D-114, nova). Decisão deliberada: um
+instrumento de cobrança automática da comissão (nova fatura, ou débito do saldo) é escopo maior que "gerar
+registros/instruções" pedido pelo PLAN, e misturaria dois razões (comissão E crédito pré-pago) que hoje são
+propositalmente separados.
+
+**Ruling 3 — escola do lead não é resolvida automaticamente.** `leads.list_id` não tem FK para `schools`
+(0600 marca isso "fora do escopo, polimórfica"); tentar casar por `school_name`/`municipality_id` seria uma
+adivinhação, não uma fonte. `sale_payments.school_id` só é preenchido se quem confirma escolher explicitamente —
+Pap03 ganhou um seletor de escola (`listSchoolOptions`, relaxado para qualquer ator autenticado: nome/id de escola
+já é público em `/escolas/[inep]`, S04, não é dado sensível). Sem escolha, fica nulo e não há repasse — nunca
+inventa.
+
+**Ruling 4 — inadimplência é uma régua de 3 estágios sobre `invoices` (S21), nunca um saldo em cache.**
+`payout_settings` guarda `grace_days`/`block_days`; `payout_delinquency_status` classifica `em_dia` (≤ grace_days de
+atraso) / `atraso` (entre os dois) / `pausado` (> block_days) a partir da fatura aberta mais antiga — sempre
+calculado, nunca armazenado. Sem `payout_settings` publicado, todo mundo fica `em_dia` (falha ABERTA, mesmo
+espírito de D-102: não pausar ninguém por falta de configuração). `pausado` é aplicado via `create or replace` em
+`billing_can_receive_lead` e `billing_charge_lead_delivery` (0401, já no staging) — aditivo, sem editar o arquivo;
+preserva 100% do comportamento de saldo já existente (suíte inteira da S21 continua verde). Sem override manual de
+"pausar"/"reativar" nesta fatia (D-113, nova): menos um estado que pode divergir do calculado.
+
+**Ruling 5 — D-100/D-101 (S21) corrigidos sem tocar SQL.** D-100: `attachPixChargeIfNeeded`
+(`features/billing/service.ts`) SEMPRE criava uma cobrança nova, mesmo com uma pendente ainda válida no PSP; a
+lógica de "reconsultar antes de decidir" que `payInvoice` já tinha foi extraída para dentro dessa mesma função
+(único lugar agora), e `buyPackage`/`buyPass`/`payInvoice` passaram a chamá-la com a fatura inteira (não só o
+`providerChargeId`). D-101: `findAnyInvoiceByChargeId` (por qualquer status) + `billing_flag_late_payment`
+(idempotente por fatura+txid) — o webhook/cron, quando não acha fatura ABERTA para um txid, reconsulta o PSP e,
+só se ele confirmar `paid`, registra o alerta (nunca por confiar no corpo do webhook). Fila de alertas exposta em
+Admin13 (D-101 pedia "tela de inadimplência/conciliação"; entrou em Repasses, que já é a tela de conciliação de
+dinheiro).
+
+**Ruling 6 — D-107 (S22) era um falso positivo, verificado por teste, não por migration.** A revisão de segurança
+da S22 registrou D-107 assumindo que `lead_create` (0303) não recusava um solicitante membro da PRÓPRIA papelaria
+escolhida. Rodando `tests/db/lead-create.test.ts` isolado (`"recusa o solicitante que é membro da papelaria"`)
+ANTES de qualquer mudança, o teste já passava — a checagem (`exists (select 1 from stationery_members ...)`) está
+na 0303 desde a S14, para QUALQUER `member_role` (não filtra por 'owner'), cobrindo dono e staff. Em vez de uma
+`create or replace` sem necessidade (risco de transcrição num corpo de ~150 linhas para uma mudança de
+comportamento zero), adicionei só o teste de regressão que faltava (membro NÃO-owner, `tests/db/lead-create.test.ts`)
+e fechei D-107 como "verificado, não bug". Custo se errado: nenhum — o comportamento correto já existia; o único
+risco seria um FUTURO reviewer reabrir a mesma dúvida sem achar este registro.
+
+**Achado durante o Task 2 (fora do pedido, corrigido).** `listConfirmableLeadsForStationery` checava só
+`actor.role in ('admin', 'stationery_member')`, sem conferir que o `stationery_member` era vínculo DA papelaria
+pedida — qualquer dono de papelaria podia listar os leads confirmáveis de OUTRA papelaria trocando o
+`stationeryId`. Corrigido com `requireStationeryAccess` (mesmo predicado de `requireMemberOrAdmin` da S21).
+Achado por leitura de código ao escrever `getPerformanceSummary` (que precisava do mesmo helper), não por um
+teste vermelho específico — sem CVE real conhecido (nenhuma tela desta fatia expõe esse parâmetro ao cliente ainda),
+mas corrigido antes de qualquer tela usar.
+
+**Ruling 7 — Pap07 fica sem "respondido em 1h" nem comparação de bairro (D-112, nova).** O funil, o ticket médio
+(só vendas com Pix pela plataforma confirmado — nunca inventa valor de venda fora dela) e "declarado × confirmado"
+(reaproveita `lead_conversion_signals` da S22) entraram; tempo de resposta agregado (`lead_events`) e comparação
+anônima de bairro com k-anonimato ≥ 3 papelarias ficaram de fora por tempo da fatia.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos
+verdes. `pnpm test`: 2994 (2971 + 23 novos: schemas/service do payouts + D-100/D-101 em `tests/billing/
+service.test.ts`). `pnpm test:db`: 70 arquivos (1 skip), 1597 testes, 3 skipped (1567 + 30 novos: 19 em
+`tests/db/payouts.test.ts`, 6 de regressão D-108–D-111/D-099/D-107, 5 em `tests/payouts/repository.test.ts`). E2E
+(`scripts/e2e-s23.sh`): 25/25, ver `docs/superpowers/e2e/S23.md`.
+
+## S23 · Dívida (bloco pronto para o DEBT.md; IDs já atribuídos)
+
+- (baixa) D-112: Pap07 sem "respondido em até 1h" (agregação de `lead_events`) nem comparação anônima de bairro
+  (k-anonimato ≥ 3). Dona: futura fatia de melhoria.
+- (baixa) D-113: Admin14 sem "Cobrar"/"Pausar leads"/"Reativar" manuais do design de referência — a régua é 100%
+  automática. Dona: futura fatia de melhoria.
+- (média) D-114: comissão apurada em `payout_ledger` não tem instrumento de cobrança da papelaria (nem debita
+  `credit_ledger`, nem gera fatura) — só registro para o admin cobrar manualmente fora do sistema. Dona: futura
+  fatia (cobrança automática da comissão).

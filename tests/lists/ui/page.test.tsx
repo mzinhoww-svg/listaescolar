@@ -73,6 +73,11 @@ describe("página da lista", () => {
     expect(screen.getByText("Lápis preto")).toBeInTheDocument();
     expect(screen.getByText("Versão 1 · versão anterior")).toBeInTheDocument();
     expect(getPublishedList).toHaveBeenCalledWith("99001001", "ef-5", year);
+    // D-140 (S18): a lista oficial agora linka para montar carrinho com o id da VERSÃO publicada.
+    expect(screen.getByRole("link", { name: "Montar carrinho com esta lista" })).toHaveAttribute(
+      "href",
+      `/carrinho/novo?lista=${list.version.id}`,
+    );
   });
 
   it("metadata: noindex; título com Demonstração; inválidos viram 'não encontrada'", async () => {

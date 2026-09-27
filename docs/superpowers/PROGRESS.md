@@ -195,6 +195,7 @@ Conteúdo e dados:
 - Next 16 reescreve um bloco em CLAUDE.md: rode `git checkout CLAUDE.md` antes de commitar.
 - Após mudar `supabase/config.toml` (auth), rode `pnpm db:stop && pnpm db:start`; `db:reset` sozinho não recarrega o auth.
 - Banco local: `pnpm db:start`, `pnpm db:reset`, `pnpm test:db` (só banco local; o helper recusa host remoto).
+- `pnpm test:db` supõe banco recém-`db:reset` (D-090): rodar depois de um roteiro E2E que semeou dados dá falhas ambientais (dados extras contam em `count(*)`/limites que os testes esperam exatos). Sempre `pnpm db:reset` antes de `pnpm test:db` num gate; se algo falhar só depois de um E2E na mesma sessão, rode `db:reset` de novo antes de julgar a falha como regressão real.
 - Staging: advisor aceito com `auth_role()` executável por anon, `rls_auto_enable()` (função da plataforma) e a view definer `stationery_public` (S13, esperado).
 - Encerrar só o servidor aberto pela própria sessão (`kill "$(lsof -ti tcp:<porta> -sTCP:LISTEN)"`); nunca `pkill`.
 - Subagentes: nunca despachar dois na mesma rodada no mesmo worktree.

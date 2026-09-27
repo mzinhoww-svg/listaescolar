@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ItemsTable } from "@/components/lists/ItemsTable";
@@ -94,6 +95,12 @@ export default async function ListPage({ params, searchParams }: Props) {
         {version && list ? (
           <>
             <ItemsTable items={version.items} />
+            <Link
+              href={`/carrinho/novo?lista=${version.id}`}
+              className="bg-verde-certo text-tinta focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center rounded-botao text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              Montar carrinho com esta lista
+            </Link>
             <SaveListButton
               listId={list.id}
               students={myStudents.map((s) => ({ id: s.id, nickname: s.nickname }))}

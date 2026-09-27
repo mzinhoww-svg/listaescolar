@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { setNotifyAction } from "@/app/enviar-lista/[submissionId]/actions";
@@ -40,6 +41,10 @@ export function AsyncOptions({ submissionId }: { submissionId: string }) {
           Ativar notificação do navegador
         </button>
       </form>
+      {/* D-084 (S18): a página não apontava para onde gerenciar/confirmar o aviso já ativado. */}
+      <Link href="/conta/notificacoes" className="text-papel/80 text-[13px] font-bold underline underline-offset-2">
+        Gerenciar avisos em Minha conta
+      </Link>
       <form action={action} className="flex flex-col gap-2">
         <input type="hidden" name="submissionId" value={submissionId} />
         <label htmlFor="notify-channel" className="text-papel/80 text-[13px] font-semibold">

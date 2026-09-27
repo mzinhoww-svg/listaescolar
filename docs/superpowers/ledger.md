@@ -583,6 +583,80 @@ para quem só consulta o ledger.
   asserção de comportamento RUNTIME mudou (os 4 outros testes do arquivo, que exercitam `decideListPublication`/
   `resumePublication` de verdade, passam sem alteração) — custo se estiver errada: reverter os dois `expect` é uma
   linha cada.
+- Ruling: D-124 (venda demo confirmada pela papelaria sem gravar validação, `payout_admin_validate_sale`,
+  0403_repasses.sql) mantida `aberta`, sem tentativa de correção nesta fatia — a função é `SECURITY DEFINER` já
+  revisada em rodada de segurança dedicada da S23 ("correção funcional (revisão de segurança, rodada 2)" no
+  próprio comentário da migration); a regra desta fatia (Global Constraints do plano) proíbe alterar lógica de
+  segurança já revisada além de mover código de posição, e D-124 exige mudança de LÓGICA (gravar a validação),
+  não só reposicionamento. Severidade baixa: custo de adiar é baixo (a fila do Admin13 continua "aguardando
+  validação" para esse caso específico, sem efeito de segurança ou de dinheiro); custo se a correção for feita
+  errada numa fatia futura sem revisão de segurança dedicada seria alto (função toca repasse/dinheiro).
+- Ruling: D-031 (tela de status decide "leitura indisponível" pelo `pipelineAvailable` calculado do AMBIENTE —
+  `isPipelineAvailable()`/`getExtractionPipeline()`, `features/submissions/status.ts` — e não pelas rotas
+  configuradas em `ai_settings`) mantida `aberta` — corrigir de verdade exigiria reimplementar, na tela de
+  status, a mesma avaliação de disponibilidade de rota que `ai/router.ts#resolveRoute` já faz (provider
+  configurado, `fake` só fora de produção, etc.), duplicando ou expondo lógica do roteador de IA (área revisada
+  em rodada de segurança dedicada da S08/S09) fora do adapter único (`lib/ai/providers/*`, regra do CLAUDE.md).
+  Severidade média, mas risco de regressão numa área sensível > ganho de precisão no texto de um estado
+  transitório de tela — custo se estiver errada: o texto "leitura indisponível" pode aparecer numa janela em que
+  a rota está tecnicamente configurada mas o processo Node não tem a chave (caso raro: só ocorre com
+  configuração incoerente entre `ai_settings` e variáveis de ambiente do mesmo processo).
+- Ruling: D-072 (build do CI depende de `next/font/google` para a Plus Jakarta Sans; hospedar localmente) mantida
+  `aberta`, dono principal S19 — a S27 já commitou `assets/fonts` para a OG image (fonte estática já existe no
+  repo), então o trabalho restante é trocar `next/font/google` por `next/font/local` no layout raiz e conferir
+  que nenhuma tela depende do CDN do Google em runtime; é uma mudança de configuração de build que toca TODA
+  página (qualquer regressão de carregamento de fonte é visível em produção) e está fora do escopo desta fatia
+  (D-057 + estados/a11y) — custo se estiver errada: falha rara e intermitente do `pnpm build` no CI (já teve
+  rerun verde uma vez, PR #20), sem efeito em produção fora do momento do build.
+- Ruling: D-039 (cinco achados pequenos e não relacionados entre si, agrupados num só ID: `createLeadAction`
+  perde papelaria/bairro no redirect de erro; `/cotacao` aberta a papéis que não criam lead; cartão mobile "valor
+  enviado: indisponível"; item em falta como "fora do subtotal (em falta)"; tabela e cartões duplicados no HTML)
+  mantida `aberta` — cada um exigiria abrir e testar um fluxo de comércio (leads/cotação) diferente; combinados,
+  o custo de investigação e teste de regressão é desproporcional para 5 itens de severidade baixa numa fatia cujo
+  objetivo central é D-057 + estados/a11y, não comércio. Sugestão para quem pegar o item: separar em 5 dívidas
+  próprias antes de corrigir, uma por vez, com teste dedicado — custo se estiver errada: nenhum (só readabilidade
+  do backlog).
+- Ruling: D-052 (reenvio por `add_file` no E2E da S06 não confirma o fim do upload; flakiness do roteiro, não do
+  produto) mantida `aberta` — é dívida de ROTEIRO de E2E (script `scripts/e2e-s06.sh`), não de produto; a Task 5
+  desta fatia escreve um E2E NOVO (`scripts/e2e-s18.sh`) que não reusa esse trecho do S06, então corrigir o
+  roteiro antigo não bloqueia nada desta fatia — custo se estiver errada: flakiness ocasional ao re-rodar o E2E
+  da S06 isoladamente (não é rodado como gate desta fatia).
+- Ruling: D-067 (o array `calls` do `MemoryListPublisher`, singleton em memória por processo, cresce sem limite)
+  mantida `aberta` — é um FAKE de teste/E2E local ("aparato de teste/E2E local", comentário do próprio arquivo,
+  `supabase/functions/_shared/publication/memory.ts`), nunca usado em produção real (só pipeline demo); capar o
+  array quebraria as asserções existentes que dependem do histórico completo (`tests/publication/decide.test.ts`
+  usa `calls[0]`, `calls.map(...)`, `calls` como contagem exata) — mudaria testes de comportamento sem necessidade
+  real (o crescimento é limitado na prática pelo volume de envios demo, pequeno por desenho) — custo se estiver
+  errada: uso de memória cresce devagar num processo Edge Function de vida muito longa com muitíssimos envios
+  demo, cenário que não ocorre no piloto.
+- Ruling: D-082 (sino de notificação ausente em `PanelShell`/`AdminShell`/`SchoolShell`) mantida `aberta`,
+  terceira vez adiada (já revisitada e adiada nas S15 e S16 pelo mesmo motivo: mexeria em dezenas de páginas que
+  usam essas três cascas, para uma dívida de severidade baixa) — nesta fatia as três cascas JÁ foram tocadas para
+  skip-link/foco visível (ver Rulings acima), então o custo marginal de acrescentar o sino caiu, mas ainda exige
+  uma consulta de contagem de não lidas plugada em cada casca (server-side, cache) e não é um ajuste de estados/
+  a11y no sentido do prompt desta fatia — mantido fora do escopo, registrado para não se perder de vista: uma
+  fatia futura de UX de notificação pode reaproveitar o mesmo `id="conteudo"`/`SkipLink` já presente nas três
+  cascas como ponto de referência de onde entra o sino.
+- Ruling: D-151 (sem índice navegável de listas publicadas para o admin arquivar; só por id direto) mantida
+  `aberta` — corrigir de verdade exige uma tela nova (`/admin/listas`, com busca/paginação sobre potencialmente
+  milhares de listas publicadas), não um ajuste pontual; é a única dívida S18 restante que pede uma FUNCIONALIDADE
+  nova de admin, não um ajuste de estado/a11y ou um split de arquivo — desproporcional para severidade baixa
+  dentro desta fatia — custo se estiver errada: o admin continua alcançando a lista só pela fila de denúncias (o
+  único caminho de entrada hoje), sem índice de navegação direta.
+- Ruling: D-091 (helpers de E2E duplicados em ~40 linhas por script) resolvida SÓ PARA A FRENTE — criado
+  `scripts/e2e-lib.sh` (ab/sql/ok/bad/eq/has/lacks/expect_text/absent_text/wait_text/wait_ok/shot/login/
+  clicktext), fonte a partir do padrão já usado nos scripts existentes (com o achado da S16 sobre `sleep 1` após
+  `open` incorporado); `scripts/e2e-s18.sh` (Task 5 desta fatia) já nasce usando-o via `source`. Os 17 roteiros
+  já executados (S06 a S27) NÃO foram retrofitados: cada um já rodou com sucesso para a própria fatia, nenhum é
+  reexecutado em CI ou faz parte de um gate contínuo, e o risco de introduzir uma regressão mecânica ao editar um
+  script arquivístico (17 arquivos) supera o ganho de legibilidade de uma dívida de severidade baixa — custo se
+  estiver errada: continuar copiando o bloco de helpers em scripts futuros até alguém decidir migrar os antigos.
+- Ruling: D-092 (`NotificationBell` sem atualização periódica) mantida `aberta` — a correção exigiria uma rota
+  nova (`GET /api/notifications/unread-count`, autenticada, só leitura) e converter o componente (hoje Server
+  Component puro, só usado em `app/conta/layout.tsx`) num Client Component com `useEffect`/polling de 60 s;
+  moderado (2-3 arquivos + testes de rota e de componente), sem risco de segurança, mas o tempo desta fatia foi
+  para D-057 (10 arquivos) e os demais itens de estados/a11y/dívida — custo se estiver errada: o contador de não
+  lidas só atualiza ao navegar entre páginas, não em tempo real (o dado em si nunca é o errado).
 
 ## Trilha Dados (consolidado de ledger-dados.md, D-048, S18)
 

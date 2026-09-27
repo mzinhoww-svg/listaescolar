@@ -16,6 +16,7 @@ import { InMemoryLeadListContextReader } from "@/features/leads/memory-context-r
 import { NoopLeadNotifier } from "@/features/leads/notifier";
 import type { NewLeadRecord } from "@/features/leads/ports";
 import {
+  OPTION_LIMIT,
   createLead,
   createLeadStore,
   expireDue,
@@ -379,7 +380,7 @@ describe("ciclo do lead pelo repositório", () => {
       }
       await c.query("insert into public.stationery_areas (stationery_id, municipality_id, neighborhood, display_name) values ($1, $2, 'jardim novo', 'Jardim Novo')", [far, municipalityId]);
     });
-    const found = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: ["caderno 96 folhas", "lapis hb"], itemCount: 2 });
+    const { options: found } = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: ["caderno 96 folhas", "lapis hb"], itemCount: 2 });
     const ids = found.map((o) => o.id);
     expect(ids).toContain(inArea);
     expect(ids).not.toContain(far);
@@ -395,8 +396,23 @@ describe("ciclo do lead pelo repositório", () => {
       new Date(),
     );
     expect(estimate).toMatchObject({ status: "partial", subtotalCents: 3000, pricedCount: 1, totalCount: 2, source: "informed_by_stationery" });
-    const viaArea = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "Jardim Novo", itemKeys: [], itemCount: 1 });
+    const { options: viaArea } = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "Jardim Novo", itemKeys: [], itemCount: 1 });
     expect(viaArea.map((o) => o.id)).toContain(far);
+  });
+
+  it("D-029 (S18): acima de OPTION_LIMIT candidatas, corta em OPTION_LIMIT e avisa truncated (nunca corte silencioso)", async () => {
+    const extra = OPTION_LIMIT + 1;
+    const bulkIds = await withSuperuser(async (c) => {
+      const ids: string[] = [];
+      for (let i = 0; i < extra; i++) {
+        ids.push(await seedStationery(c, { status: "active", overrides: { municipality_id: municipalityId, neighborhood: "Centro" } }));
+      }
+      return ids;
+    });
+    stationeryIds.push(...bulkIds);
+    const { options, truncated } = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, itemKeys: [], itemCount: 1 });
+    expect(options.length).toBe(OPTION_LIMIT);
+    expect(truncated).toBe(true);
   });
 
   it("S21 · sem plano ativo: some do App21 e lead_create falha com billing_unavailable (mensagem neutra ao pai)", async () => {
@@ -410,7 +426,7 @@ describe("ciclo do lead pelo repositório", () => {
     try {
       await withSuperuser((c) => c.query("update public.plans set status = 'archived' where status = 'active'"));
 
-      const found = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: [], itemCount: 2 });
+      const { options: found } = await listCandidateStationeries(admin, await actor(parentId), { municipalityId, neighborhood: "sao jose", itemKeys: [], itemCount: 2 });
       expect(found.map((o) => o.id)).not.toContain(stationeryId);
 
       // isDemo: false — o default do helper `record()` é `true`; sem isso o lead nasceria classificado como

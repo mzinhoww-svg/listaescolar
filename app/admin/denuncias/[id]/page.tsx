@@ -84,9 +84,12 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                     Colocar em análise
                   </button>
                 ) : null}
+                {/* D-153 (S18): enquanto a única transição válida é "Colocar em análise" (status=open), os campos de
+                    resolução ficam desabilitados — o servidor já ignora esse valor nesse status, mas a tela não
+                    deveria sugerir uma escolha que não é aplicada ainda. */}
                 <label className="flex flex-col gap-1.5 text-[13px] font-bold">
                   Procede?
-                  <select name="resolution" defaultValue="" className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium">
+                  <select name="resolution" defaultValue="" disabled={report.status === "open"} className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium disabled:opacity-50">
                     <option value="" disabled>Escolha</option>
                     <option value="upheld">Sim, procede</option>
                     <option value="no_action">Não procede</option>
@@ -94,11 +97,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                 </label>
                 <label className="flex flex-col gap-1.5 text-[13px] font-bold">
                   Código da resolução (opcional, sem prosa)
-                  <input name="resolutionNote" maxLength={60} placeholder="lista_arquivada" className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium" />
+                  <input name="resolutionNote" maxLength={60} placeholder="lista_arquivada" disabled={report.status === "open"} className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium disabled:opacity-50" />
                 </label>
                 <div className="flex gap-2">
-                  <button type="submit" name="status" value="resolved" className="bg-tinta text-papel rounded-botao h-11 flex-1 text-[14px] font-extrabold">Resolver</button>
-                  <button type="submit" name="status" value="dismissed" className="border-tinta text-tinta rounded-botao h-11 flex-1 border-[1.5px] bg-transparent text-[14px] font-extrabold">Arquivar sem ação</button>
+                  <button type="submit" name="status" value="resolved" disabled={report.status === "open"} className="bg-tinta text-papel rounded-botao h-11 flex-1 text-[14px] font-extrabold disabled:opacity-50">Resolver</button>
+                  <button type="submit" name="status" value="dismissed" disabled={report.status === "open"} className="border-tinta text-tinta rounded-botao h-11 flex-1 border-[1.5px] bg-transparent text-[14px] font-extrabold disabled:opacity-50">Arquivar sem ação</button>
                 </div>
               </form>
             )}

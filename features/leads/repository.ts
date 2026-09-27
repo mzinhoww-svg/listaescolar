@@ -81,11 +81,12 @@ const optionSchema = z.object({
 });
 
 /** Papelarias `active` que atendem o local (mesma regra `servesLocation` da cotação local), com o catálogo dos itens. */
+/** D-029 (S18): `truncated` avisa que passou de `OPTION_LIMIT` (nunca corte silencioso; mesmo padrão de `listForStationery`). */
 export async function listCandidateStationeries(
   admin: SupabaseClient,
   actor: SessionActor,
   query: { municipalityId: string; neighborhood?: string; itemKeys: readonly string[]; itemCount: number },
-): Promise<StationeryOption[]> {
+): Promise<{ options: StationeryOption[]; truncated: boolean }> {
   requireActor(actor);
   const municipalityId = z.uuid().parse(query.municipalityId);
   const [areasRes, inMuniRes] = await Promise.all([
@@ -149,10 +150,8 @@ export async function listCandidateStationeries(
   // S21: papelaria sem passe com cota, sem grátis e sem saldo não pode receber o lead — some da lista sem revelar o
   // motivo (o pai nunca vê "sem saldo"; a corrida cai em `billing_required` no lead_create se ela sair da lista tarde).
   const billable = await filterByCanReceiveLead(admin, options.map((o) => o.id), query.itemCount);
-  return options
-    .filter((o) => billable.has(o.id))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-    .slice(0, OPTION_LIMIT);
+  const all = options.filter((o) => billable.has(o.id)).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  return { options: all.slice(0, OPTION_LIMIT), truncated: all.length > OPTION_LIMIT };
 }
 
 const canReceiveRow = z.object({ stationery_id: z.uuid(), can_receive: z.boolean() });

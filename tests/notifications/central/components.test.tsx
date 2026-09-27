@@ -76,13 +76,18 @@ describe("PreferencesForm", () => {
 
 describe("PushOptIn", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
-  const setup = (permission: NotificationPermission) => {
+  const setup = (permission: NotificationPermission, existing: { endpoint: string; unsubscribe: ReturnType<typeof vi.fn> } | null = null) => {
     const request = vi.fn(async () => permission);
     const subscribe = vi.fn(async () => ({ toJSON: () => ({ endpoint: "https://push.example/1", keys: { p256dh: "B".repeat(87), auth: "a".repeat(22) } }) }));
+    const getSubscription = vi.fn(async () => (existing ? { endpoint: existing.endpoint, unsubscribe: existing.unsubscribe } : null));
+    const getRegistration = vi.fn(async () => ({ pushManager: { getSubscription } }));
     vi.stubGlobal("Notification", Object.assign(function () {}, { requestPermission: request, permission: "default" }));
     vi.stubGlobal("PushManager", function () {});
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { register: vi.fn(async () => ({ pushManager: { subscribe } })), ready: Promise.resolve({ pushManager: { subscribe } }) } });
-    return { request, subscribe };
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { register: vi.fn(async () => ({ pushManager: { subscribe } })), ready: Promise.resolve({ pushManager: { subscribe } }), getRegistration },
+    });
+    return { request, subscribe, getRegistration, getSubscription };
   };
   it("sem VAPID público: 'indisponível neste ambiente' e sem botão", () => {
     render(<PushOptIn publicKey={null} subscribe={vi.fn()} unsubscribe={vi.fn()} />);
@@ -95,6 +100,23 @@ describe("PushOptIn", () => {
     expect(request).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Ativar neste navegador" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+  });
+  it("D-080: ao montar, se já existe assinatura ativa no navegador, mostra 'Desativar' (sem pedir permissão)", async () => {
+    const unsubscribe = vi.fn(async () => true);
+    const { request } = setup("granted", { endpoint: "https://push.example/existing", unsubscribe });
+    render(<PushOptIn publicKey={"P".repeat(87)} subscribe={vi.fn()} unsubscribe={vi.fn(async () => ({ status: "ok" as const }))} />);
+    expect(await screen.findByRole("button", { name: "Desativar neste navegador" })).toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+  });
+  it("D-080: desativar encerra a assinatura de verdade no navegador (sub.unsubscribe), não só no servidor", async () => {
+    const unsubscribe = vi.fn(async () => true);
+    setup("granted", { endpoint: "https://push.example/existing", unsubscribe });
+    const serverUnsubscribe = vi.fn(async () => ({ status: "ok" as const }));
+    render(<PushOptIn publicKey={"P".repeat(87)} subscribe={vi.fn()} unsubscribe={serverUnsubscribe} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Desativar neste navegador" }));
+    await waitFor(() => expect(serverUnsubscribe).toHaveBeenCalledWith({ endpoint: "https://push.example/existing" }));
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("button", { name: "Ativar neste navegador" })).toBeInTheDocument();
   });
   it("permissão concedida: assina e envia à action; sucesso em role=status", async () => {
     const { subscribe } = setup("granted");
@@ -117,6 +139,25 @@ describe("PushOptIn", () => {
     vi.stubGlobal("Notification", undefined);
     render(<PushOptIn publicKey={"P".repeat(87)} subscribe={vi.fn()} unsubscribe={vi.fn()} />);
     expect(screen.getByText(/não oferece/i)).toBeInTheDocument();
+  });
+  // D-080 (S18): ao carregar, o componente consultava só o estado React (sempre "Ativar"), nunca
+  // pushManager.getSubscription() — recarregar a página escondia que o aparelho já tinha o aviso ligado.
+  it("assinatura já existente no navegador: mostra 'Desativar' já ao carregar (D-080)", async () => {
+    setup("default", { endpoint: "https://push.example/1", unsubscribe: vi.fn(async () => true) });
+    render(<PushOptIn publicKey={"P".repeat(87)} subscribe={vi.fn()} unsubscribe={vi.fn(async () => ({ status: "ok" as const }))} />);
+    expect(await screen.findByRole("button", { name: "Desativar neste navegador" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ativar neste navegador" })).toBeNull();
+  });
+  // D-080 (S18): "Desativar" só chamava a action do servidor; a assinatura continuava viva no navegador.
+  it("desativar chama unsubscribe() no navegador, não só a action do servidor (D-080)", async () => {
+    const browserUnsubscribe = vi.fn(async () => true);
+    setup("default", { endpoint: "https://push.example/1", unsubscribe: browserUnsubscribe });
+    const serverUnsubscribe = vi.fn(async () => ({ status: "ok" as const }));
+    render(<PushOptIn publicKey={"P".repeat(87)} subscribe={vi.fn()} unsubscribe={serverUnsubscribe} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Desativar neste navegador" }));
+    await waitFor(() => expect(serverUnsubscribe).toHaveBeenCalledWith({ endpoint: "https://push.example/1" }));
+    expect(browserUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("button", { name: "Ativar neste navegador" })).toBeInTheDocument();
   });
 });
 

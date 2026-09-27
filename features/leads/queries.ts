@@ -54,6 +54,7 @@ export async function loadQuoteView(actor: SessionActor, cartId: string, neighbo
   const stationeries = await listCandidateStationeries(createAdminClient(), actor, {
     municipalityId,
     itemKeys: cart.items.map((i) => i.itemKey),
+    itemCount: cart.items.length,
     ...(neighborhood ? { neighborhood } : {}),
   });
   const now = new Date();

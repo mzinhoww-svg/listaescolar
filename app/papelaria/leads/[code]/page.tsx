@@ -6,14 +6,17 @@ import { ItemsTable } from "@/components/leads/ItemsTable";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
+import { errorMessageForCode as conversionErrorMessageForCode } from "@/features/conversion/messages";
 import { normalizeLeadCode } from "@/features/leads/code";
-import { errorMessageForCode } from "@/features/leads/messages";
+import { LEAD_ERROR_CODES, errorMessageForCode } from "@/features/leads/messages";
 import { estimateOwnCatalog, getStationeryLead } from "@/features/leads/queries";
 import { getLeadService } from "@/features/leads/wiring";
 import { CLOSE_REASON_LABEL, isTerminal } from "@/features/leads/state";
 import { getOwnerContext } from "@/features/stationeries/session";
+import { getConversionService } from "@/features/conversion/wiring";
 
 import { CopyCode } from "./CopyCode";
+import { DisputeForm } from "./DisputeForm";
 import { StatusForm } from "./StatusForm";
 
 export const metadata: Metadata = { title: "Lead · ListaCerta" };
@@ -38,7 +41,14 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
   if (!detail) notFound();
   const { lead, items, events } = detail;
   const estimate = await estimateOwnCatalog(ctx.stationery, items);
-  const erro = errorMessageForCode(one(sp.erro));
+  let disputeGate = null;
+  try {
+    disputeGate = await getConversionService().getDisputeGate(ctx.actor, lead.id);
+  } catch (error) {
+    console.error("ler contestação do pedido", error instanceof Error ? error.message : "erro");
+  }
+  const erroCode = one(sp.erro);
+  const erro = erroCode && !(LEAD_ERROR_CODES as readonly string[]).includes(erroCode) ? conversionErrorMessageForCode(erroCode) : errorMessageForCode(erroCode);
   const frozen = ctx.stationery.status === "suspended";
   const closed = isTerminal(lead.status);
   return (
@@ -79,6 +89,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
           ) : (
             <StatusForm code={lead.code} status={lead.status} />
           )}
+          {disputeGate ? <DisputeForm code={lead.code} gate={disputeGate} /> : null}
           <Timeline events={events} side="stationery" />
         </div>
       </div>

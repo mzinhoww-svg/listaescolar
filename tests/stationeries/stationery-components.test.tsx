@@ -19,7 +19,7 @@ const fill = (label: string, value: string) => fireEvent.change(screen.getByLabe
 
 describe("RegistrationForm", () => {
   const setup = (action = vi.fn(async (): Promise<RegisterState> => ({ status: "idle" }))) => {
-    render(<RegistrationForm action={action} municipalities={municipalities} />);
+    render(<RegistrationForm action={action} municipalities={municipalities} freeLeads={null} hasPass={false} />);
     return action;
   };
 
@@ -71,6 +71,20 @@ describe("RegistrationForm", () => {
     setup();
     expect(screen.getByText("Como você recebe leads")).toBeInTheDocument();
     expect(screen.queryByText(/grátis/i)).not.toBeInTheDocument();
+  });
+
+  it("S21 · com plano ativo, mostra 'Primeiros [N] leads grátis' (número do plano, não fixo)", () => {
+    const action = vi.fn(async (): Promise<RegisterState> => ({ status: "idle" }));
+    render(<RegistrationForm action={action} municipalities={municipalities} freeLeads={3} hasPass={true} />);
+    expect(screen.getByText("Primeiros 3 leads grátis")).toBeInTheDocument();
+    expect(screen.getByText(/passe de temporada/)).toBeInTheDocument();
+  });
+
+  it("S21 · plano sem passe: não menciona passe de temporada", () => {
+    const action = vi.fn(async (): Promise<RegisterState> => ({ status: "idle" }));
+    render(<RegistrationForm action={action} municipalities={municipalities} freeLeads={3} hasPass={false} />);
+    expect(screen.getByText("Primeiros 3 leads grátis")).toBeInTheDocument();
+    expect(screen.queryByText(/passe de temporada/)).not.toBeInTheDocument();
   });
 });
 
@@ -142,14 +156,24 @@ describe("PublicProfileView", () => {
     serviceRadiusKm: 0, openingHours: null, paymentMethods: ["pix"], whatsapp: "+5565999991234", isDemo: false, updatedAt: new Date(), areas: ["Centro"],
     catalog: [{ id: "1", name: "Lápis", itemKey: "lapis", priceCents: 150, priceSource: "informed_by_stationery", stock: "unknown" as const, isActive: true, priceUpdatedAt: new Date("2026-09-20T15:00:00Z") }],
   };
-  it("só dados públicos, sem avaliações, selos ou prazos; CTA WhatsApp", () => {
+  it("só dados públicos, sem selo de parceria, CNPJ ou prazo; CTA WhatsApp; sem avaliação pendura estado vazio (S22)", () => {
     const { container } = render(<PublicProfileView profile={profile} />);
     expect(screen.getByRole("heading", { level: 1, name: "Papelaria Boa" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Pedir lista pelo WhatsApp" }).getAttribute("href")).toContain("wa.me/5565999991234");
     expect(screen.getByText(/Informado pela papelaria · 20\/09\/2026/)).toBeInTheDocument();
+    expect(screen.getByText("Ainda sem avaliações de quem comprou aqui.")).toBeInTheDocument();
     const text = container.textContent ?? "";
-    expect(text).not.toMatch(/avalia|estrela|parceira|cnpj|prazo/i);
+    expect(text).not.toMatch(/estrela|parceira|cnpj|prazo/i);
     expect(text).not.toContain("Demonstração");
+  });
+  it("avaliações publicadas (S22): nota entre colchetes (Ruling SPEC-2), etiqueta legível (não o slug) e comentário", () => {
+    const reviews = [
+      { id: "r1", leadId: "l1", stationeryId: "a", rating: 5, tags: ["bom_atendimento"], comment: "Atendimento ótimo", status: "published" as const, isDemo: false, hiddenReason: null, createdAt: new Date() },
+    ];
+    render(<PublicProfileView profile={profile} reviews={reviews} />);
+    expect(screen.getByText("Avaliações · [5.0] (média das últimas 1)")).toBeInTheDocument();
+    expect(screen.getByText("[5/5] · Bom atendimento")).toBeInTheDocument();
+    expect(screen.getByText("Atendimento ótimo")).toBeInTheDocument();
   });
   it("demo tem selo; sem preços e sem WhatsApp: estados vazios honestos", () => {
     render(<PublicProfileView profile={{ ...profile, isDemo: true, catalog: [], whatsapp: null, paymentMethods: [] }} />);

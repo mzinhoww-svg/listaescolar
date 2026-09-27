@@ -19,6 +19,9 @@ const BY_CODE: Record<LeadErrorCode | "desconhecido", string> = {
   invalid_input: "Dados inválidos. Revise e tente de novo.",
   list_unavailable: "Cotação indisponível para esta lista.",
   whatsapp_unavailable: "O WhatsApp desta papelaria não está disponível agora.",
+  // Nunca fala de saldo/plano/cobrança ao responsável (S21): mesma mensagem neutra das duas causas.
+  billing_required: "Esta papelaria não está recebendo pedidos agora. Escolha outra.",
+  billing_unavailable: "Esta papelaria não está recebendo pedidos agora. Escolha outra.",
   database: "Não foi possível concluir agora. Tente de novo.",
   desconhecido: "Não foi possível concluir agora. Tente de novo.",
 };

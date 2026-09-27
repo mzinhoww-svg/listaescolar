@@ -9,8 +9,12 @@
       "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/cron/b2b-maintenance",
+      "path": "/api/cron/billing-reconcile",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/b2b-maintenance",
+      "schedule": "0 10 * * *"
     }
   ]
 }

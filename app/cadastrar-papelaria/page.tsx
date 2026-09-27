@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Notice } from "@/components/stationeries/PanelShell";
 import { RegistrationForm } from "@/components/stationeries/RegistrationForm";
 import { StatusPanel } from "@/components/stationeries/StatusPanel";
+import { getBillingService } from "@/features/billing/wiring";
 import { ROLE_BLOCK_MESSAGE } from "@/features/stationeries/messages";
 import { listEnabledMunicipalities, listStatusEvents } from "@/features/stationeries/queries";
 import { requireSession } from "@/features/stationeries/session";
@@ -48,5 +49,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   if (municipalities.length === 0) {
     return wrap(<Notice kind="info">Ainda não há município habilitado para cadastro de papelarias.</Notice>);
   }
-  return wrap(<RegistrationForm action={registerStationeryAction} municipalities={municipalities} />);
+  const plan = await getBillingService().getActivePlan();
+  return wrap(<RegistrationForm action={registerStationeryAction} municipalities={municipalities} freeLeads={plan?.freeLeads ?? null} hasPass={plan?.pass !== null && plan?.pass !== undefined} />);
 }

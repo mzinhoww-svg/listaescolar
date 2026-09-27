@@ -6,6 +6,7 @@ import { KpiRow } from "@/components/leads/KpiRow";
 import { LeadCards } from "@/components/leads/LeadCards";
 import { LeadTable } from "@/components/leads/LeadTable";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
+import { getBillingService } from "@/features/billing/wiring";
 import { computeKpis, FUNNEL_TABS, matchesTab, parseTab, type FunnelTabId } from "@/features/leads/funnel";
 import { errorMessageForCode } from "@/features/leads/messages";
 import { listStationeryLeads } from "@/features/leads/queries";
@@ -30,6 +31,9 @@ export default async function LeadsPage({ searchParams }: PageProps<"/papelaria/
   const school = one(sp.escola) ?? "";
   const erro = errorMessageForCode(one(sp.erro));
   const { rows, truncated } = await listStationeryLeads(ctx.actor, ctx.stationery.id);
+  const billingSummary = await getBillingService().getSummary(ctx.actor, ctx.stationery.id);
+  const paused = !billingSummary.available || !billingSummary.canReceiveMinTier;
+  const balanceCents = billingSummary.available ? billingSummary.balanceCents : null;
   const schools = [...new Set(rows.map((r) => r.schoolName))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const scoped = school && schools.includes(school) ? rows.filter((r) => r.schoolName === school) : rows;
   const counts = Object.fromEntries(FUNNEL_TABS.map((t) => [t.id, scoped.filter((r) => matchesTab(r.status, t.id)).length])) as Record<FunnelTabId, number>;
@@ -52,7 +56,16 @@ export default async function LeadsPage({ searchParams }: PageProps<"/papelaria/
       {frozen ? <Notice kind="info">Papelaria suspensa: você só consulta o histórico.</Notice> : null}
       {ctx.stationery.status === "paused" ? <Notice kind="info">Papelaria pausada: não recebe leads novos, mas você segue atendendo os que já chegaram.</Notice> : null}
       {truncated ? <Notice kind="info">Há mais de 500 leads: os indicadores ficam indisponíveis e a lista mostra os mais recentes.</Notice> : null}
-      <KpiRow kpis={kpis} />
+      {paused ? (
+        <Notice kind="info">
+          Leads pausados: sem saldo, sem grátis e sem passe.{" "}
+          <Link href="/papelaria/creditos" className="text-verde-fundo underline">
+            Ver créditos e plano
+          </Link>
+          .
+        </Notice>
+      ) : null}
+      <KpiRow kpis={kpis} balanceCents={balanceCents} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <FunnelTabs active={tab} counts={counts} hrefFor={href} />
         {schools.length > 1 ? (

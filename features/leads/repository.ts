@@ -34,6 +34,8 @@ const HINT_CODES: ReadonlySet<string> = new Set<LeadErrorCode>([
   "consent_required",
   "invalid_input",
   "not_found",
+  "billing_required",
+  "billing_unavailable",
 ]);
 
 function dbErrorCode(error: { code?: string; hint?: string | null }): LeadErrorCode {
@@ -532,7 +534,7 @@ const optionSchema = z.object({
 export async function listCandidateStationeries(
   admin: SupabaseClient,
   actor: SessionActor,
-  query: { municipalityId: string; neighborhood?: string; itemKeys: readonly string[] },
+  query: { municipalityId: string; neighborhood?: string; itemKeys: readonly string[]; itemCount: number },
 ): Promise<StationeryOption[]> {
   requireActor(actor);
   const municipalityId = z.uuid().parse(query.municipalityId);
@@ -593,7 +595,24 @@ export async function listCandidateStationeries(
       candidates: candidates.filter((c) => c.stationeryId === r.id),
     });
   }
-  return options.sort((a, b) => a.name.localeCompare(b.name, "pt-BR")).slice(0, OPTION_LIMIT);
+
+  // S21: papelaria sem passe com cota, sem grátis e sem saldo não pode receber o lead — some da lista sem revelar o
+  // motivo (o pai nunca vê "sem saldo"; a corrida cai em `billing_required` no lead_create se ela sair da lista tarde).
+  const billable = await filterByCanReceiveLead(admin, options.map((o) => o.id), query.itemCount);
+  return options
+    .filter((o) => billable.has(o.id))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+    .slice(0, OPTION_LIMIT);
+}
+
+const canReceiveRow = z.object({ stationery_id: z.uuid(), can_receive: z.boolean() });
+
+/** IDs que `billing_can_receive_lead` (0401_billing.sql) autoriza para um lead com `itemCount` itens. */
+async function filterByCanReceiveLead(admin: SupabaseClient, stationeryIds: string[], itemCount: number): Promise<Set<string>> {
+  if (stationeryIds.length === 0) return new Set();
+  const { data, error } = await admin.rpc("billing_can_receive_lead", { p_stationery_ids: stationeryIds, p_item_count: itemCount });
+  if (error) fail("conferir cobrança das papelarias", error);
+  return new Set(z.array(canReceiveRow).parse(data ?? []).filter((r) => r.can_receive).map((r) => r.stationery_id));
 }
 
 // ---------------------------------------------------------------------------

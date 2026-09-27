@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { PublicProfileView } from "@/components/stationeries/PublicProfileView";
+import type { ReviewView } from "@/features/conversion/ports";
+import { getConversionService } from "@/features/conversion/wiring";
 import { getPublicProfile } from "@/features/stationeries/repository";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,5 +28,11 @@ export default async function Page({ params }: Props) {
   const { slug } = await params;
   const profile = await load(slug);
   if (!profile) notFound();
-  return <PublicProfileView profile={profile} />;
+  let reviews: ReviewView[] = [];
+  try {
+    reviews = await getConversionService().listPublishedReviews(profile.id, 10);
+  } catch (error) {
+    console.error("ler avaliações públicas", error instanceof Error ? error.message : "erro");
+  }
+  return <PublicProfileView profile={profile} reviews={reviews} />;
 }

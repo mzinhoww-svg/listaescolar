@@ -354,6 +354,410 @@ Passo 0 (revalidação contra `main` @ 02dfe00, S10 mesclada). Divergências do 
 | D-0xx | ledger-comercio S11 T5 | `docs/superpowers/e2e/S14.md` termina com a tabela da seção g vazia (só cabeçalho) — já em D-053; nada novo, só reconferido | baixa | S20 | aberta (D-053) |
 | D-0xx | revisão final S11 (PR #29) | `NotificationBell` é estático: o plano da Task 4 previa atualização leve da contagem a cada 60 s (sem WebSocket); hoje só atualiza ao navegar | baixa | S18 | aberta |
 
+## S21 · Planejamento (cobrança: grátis, créditos e passe)
+- Ruling (S21 plano): a implementação começa só depois do merge da S11; o passo 0 revalida em `main` as migrations 0600–0602, a versão final de `leads`/`lead_create`, os gatilhos de notificação em `leads`, `system_profile_id()`, a FK `leads.consent_id`, o `SessionActor` unificado e os helpers de teste — custo se errada: baixo (retrabalho de ajuste no passo 0).
+- Ruling (S21 plano): o débito é um gatilho `AFTER INSERT` em `public.leads` (`enable always`) na mesma transação do `lead_create`; sem passe com cota, sem grátis e sem saldo o gatilho levanta `billing_required` e o lead não nasce (nem itens, consentimento, evento ou notificação). Consumidor assíncrono do evento `created` rejeitado: entregaria lead antes de cobrar e violaria o aceite do PLAN. Gatilho em vez de reescrever `lead_create`: vale para todo caminho de inserção e não depende da assinatura (a 0601 pode recriá-la) — custo se errada: médio (mover a chamada para dentro do `lead_create`).
+- Ruling (S21 plano): "entregue" = linha em `leads` inserida (o evento `created` da S14 nasce na mesma transação) — custo se errada: baixo.
+- Ruling (S21 plano): ordem de consumo passe (com cota) → grátis → crédito; preserva os grátis enquanto há passe — custo se errada: baixo (trocar a ordem na função).
+- Ruling (S21 plano): saldo em centavos de real (não em "créditos" unitários): o PLAN manda preço por faixa de itens, o que torna "1 crédito = 1 lead" do Pap06 falso; Pap06 mostra "Saldo R$" e a tabela de faixas; pacotes são valores de recarga (crédito = valor pago, sem bônus inventado) — custo se errada: médio (converter para unidades com preço em créditos por faixa).
+- Ruling (S21 plano): sem coluna de saldo em cache; saldo = soma do `credit_ledger` e cada lançamento guarda `balance_after_cents` (check ≥ 0) calculado sob `for update` da carteira — custo se errada: baixo (índice/visão materializada se a soma pesar).
+- Ruling (S21 plano): leads grátis e validade são snapshot do plano ativo na criação da carteira (validade conta da 1ª ativação da papelaria); plano novo não altera carteiras existentes; créditos comprados não expiram — custo se errada: baixo.
+- Ruling (S21 plano): o passe tem cota de leads (`pass_included_leads`, conforme "[N] leads incluídos" do Pap06/Admin10), não é ilimitado; esgotada a cota, cai para grátis/crédito — custo se errada: baixo (cota nula = ilimitado).
+- Ruling (S21 plano): passe comprado a qualquer momento até o fim da temporada, preço cheio, sem pró-rata; parcelas mensais a partir da compra, todas até o fim da temporada; passe ativa com a 1ª parcela paga; parcela em atraso não suspende o passe nesta fatia (inadimplência e pausa de leads são da S23) — custo se errada: médio (S23 endurece).
+- Ruling (S21 plano): Admin10 sem comissão Pix nem repasse (S23 adiciona em nova versão do plano); ganha o card "Pacotes de crédito", ausente no design, porque o Pap06 vende pacotes e o valor tem de vir de configuração — custo se errada: baixo.
+- Ruling (S21 plano): textos do design sem fonte ficam de fora: "Mais usado", "R$ [x] por lead" do pacote, "destaque na lista das escolas parceiras", "relatório semanal", "Lista aprovada +[N]" — custo se errada: baixo (copy).
+- Ruling (S21 plano): "notas" do Pap06 = faturas e recibos da plataforma; nenhuma nota fiscal é emitida nem prometida — custo se errada: médio (integração fiscal futura).
+- Ruling (S21 plano): adapter Pix segue a API Pix do BACEN v2 (`cob`), padrão entre PSPs, com OAuth2 + mTLS por `node:https` (sem dependência nova); webhook autenticado por token no path/cabeçalho (a Vercel não termina mTLS do PSP) e confirmação só após reconsultar a cobrança; PSP, credenciais, certificado e chave são pendência humana — custo se errada: médio (adapter específico do PSP escolhido).
+- Ruling (S21 plano): `provider in ('fake','demo')` só em fatura/carteira `is_demo` (CHECK no banco); `DemoPaymentProvider` só com `isDemoEnabled` da S12 e nunca em produção — custo se errada: baixo.
+- Ruling (S21 plano): admin lê cobrança pelo cliente de serviço depois de checar `role = 'admin'` no servidor; tabelas de cobrança sem política RLS de admin — custo se errada: baixo.
+- Ruling (S21 plano): sem plano ativo o sistema falha fechado (`billing_unavailable`, lead não entregue, telas "indisponível"); no staging o orquestrador publica um plano provisório não comercial logo após aplicar a 0401 — custo se errada: médio (leads parados no staging até publicar).
+- Ruling (S21 plano): o pai nunca vê motivo de cobrança: papelaria que não pode receber some do App21 e a corrida devolve "Esta papelaria não está recebendo pedidos agora. Escolha outra." — custo se errada: baixo.
+- Ruling (S21 plano): nenhum evento de notificação novo na S21; avisos de saldo, passe e régua de cobrança são da S23 — custo se errada: baixo.
+- Ruling (S21 plano): limpeza de testes com lançamentos confirmados por `purgeBilling` (superuser desabilita e reabilita `enable always` os gatilhos de imutabilidade dentro de uma transação); só em teste, com teste que garante `tgenabled = 'A'` depois — custo se errada: baixo.
+- Ruling (S21 plano): D-040 (coluna "Estimado" no Pap02) passa para a S22, que já mexe no Pap02/Pap03; D-041 (Pap05, créditos por lista aprovada) passa para a S23: depende do upload integrado e de um valor de crédito por lista que ainda não existe em `plans` — custo se errada: baixo.
+- Ruling (S21 plano): migration única `0401_billing.sql` — tudo da fatia cabe numa migration e a integração com `leads` é só um gatilho — custo se errada: baixo.
+
+## S21 · Task 1 (0401_billing.sql: esquema, funções, gatilho de débito, testes de banco)
+Contexto: retomada depois de o implementador anterior parar por limite de uso com só os testes de banco escritos (commit `b449b60`, vermelhos; nenhuma migration nem código de app). Revisão dos testes + implementação da migration `0401_billing.sql`.
+- Ruling: `plans.published_by` sem FK para `profiles` (era `on delete set null`). O guard de imutabilidade de `plans` (`plans_guard`, só permite a transição exata `active -> archived`) bloqueia QUALQUER outro UPDATE, inclusive o `SET NULL` automático que o Postgres dispara ao apagar o perfil do admin (FK `on delete set null`) — isso quebrava `cleanupUsers()` com "plans é imutável" sempre que um teste apagava o admin de teste depois de publicar um plano. Sem FK, `published_by` é só rastro (como `lead_events.actor_id`), consistente com o padrão já usado no repositório para colunas de auditoria — custo se errada: baixo (rastro de quem publicou sobrevive à exclusão da conta, mas não há FK para conferir integridade referencial).
+- Ruling: dois testes do WIP (`billing-lead-delivery.test.ts`, `billing-passes-invoices.test.ts`) chamavam `seedStationery` duas vezes na MESMA transação com o mesmo `ownerId`, violando `stationery_members_one_owner_per_profile` (um perfil só pode ser dono de uma papelaria); corrigido trocando o dono da segunda papelaria por outro perfil fixo (`IDS.school_member`). Mesmo problema em `billing-concurrency.test.ts`, mas ali os dados são CONFIRMADOS (`asServiceCommitted`) e só limpos no `afterAll`, então cada `it` (não só cada transação) precisava de um dono diferente — usei `stationery_member`, `school_member`, `admin` e `parent` um por teste — custo se errada: baixo (é só fixture de teste).
+- Ruling: `billing-ledger.test.ts` tinha uma asserção de invariante com a soma errada (presumia a ordem dos débitos como 500,900,500,900 e o estorno de `rows[2]` devolvendo 900; a ordem real dos débitos, dada por `item_count` alternado no teste, é 900,500,900,500, e `rows[2]` é o SEGUNDO débito, -500) — corrigida a fórmula esperada para bater com o dado real (verificado com um script de depuração fora do repositório, apagado depois) — custo se errada: baixo (é só a asserção; a implementação já estava certa).
+- Ruling: `billing-lead-delivery.test.ts` esperava que uma papelaria SEM carteira mantivesse `can_receive: true` depois de o plano ativo mudar para `free_leads: 0`, mas o próprio nome do teste ("usa o plano ATIVO") e o design ("sem carteira usa o snapshot do plano ativo diretamente, sem gravar") implicam reavaliação contra o plano CORRENTE, não um valor congelado; sem carteira não há snapshot para congelar. Corrigida a expectativa para `false` (mesma regra vale para as duas papelarias sem carteira) — custo se errada: médio (se o produto quiser "quem já viu true continua true até a 1ª cobrança", precisa de outra fonte de estado, não dá para inferir sem carteira).
+- Ruling: risco sistêmico descoberto ao rodar `pnpm test:db` completo: o gatilho `leads_billing_charge` (`AFTER INSERT` em `public.leads`, `enable always`) passou a valer para TODO insert em `leads`, inclusive o `seedLead`/`lead_create` usados pelos testes de outras fatias (S06/S09/S14) que não sabem nada de cobrança; sem um plano ativo, esses testes passavam a falhar com `billing_unavailable`. Depender da ordem alfabética dos arquivos (billing-* antes de lead-*/notification-*) para garantir um plano publicado achou correto num arquivo cheio, mas se mostrou FRÁGIL (uma rodada completa do `pnpm test:db` falhou de forma intermitente com "sem plano ativo" nos arquivos de leads, e a mesma rodada, repetida, passou). Corrigido com `globalSetup` no `vitest.db.config.ts` (`tests/db/db-global-setup.ts`, chama `ensureTestBillingPlan()` uma vez antes de qualquer arquivo) — decoupla de ordem de arquivo, idempotente, não sobrescreve planos que os próprios testes publicam — custo se errada: alto se removido sem substituto (qualquer fatia futura que crie `leads` em teste de banco pode falhar de forma instável).
+- Verificação: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build` verdes. `pnpm test:db` completo: 65 arquivos, 1533 testes, 3 skipped, 0 falhas (rodado duas vezes, incluindo isolando os arquivos de leads sem nenhum arquivo de billing antes, para confirmar a correção do `globalSetup`).
+- Pendências desta task: nenhum código de aplicação (`features/billing`, `PaymentProvider`, telas Pap06/Admin10, integração com a S14) ainda existe — só a migration e os testes de banco. Fica para a Task 2 em diante.
+
+## S21 · Passo 0 (retomada após reinício da máquina no meio da Task 2)
+- Verificação: `pnpm db:reset` + `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build` sobre `4ec6fae` (HEAD ao retomar). `test:db` teve 1 falha isolada em `tests/db/lead-transitions.test.ts` ("mark_viewed é idempotente"): ordem de `lead_events` veio `["viewed","created"]` em vez de `["created","viewed"]`. Investigação: `eventTypes` ordena por `created_at, id` (`lead_events.created_at default clock_timestamp()`, ordem real de inserção esperada); o evento `created` nasce ANTES do `viewed` no fluxo do teste (chamadas sequenciais, não concorrentes), então só uma leitura de relógio não-monotônica explicaria a inversão. Reexecutei o arquivo isolado 3× (verde) e o `test:db` completo de novo (65 arquivos, 1535 testes, 3 skipped, verde) — Ruling: falha atribuída a uma correção de relógio do Docker/Colima logo após o boot da máquina (coincide com o motivo do reinício registrado no handoff), não a uma regressão da 0401; nenhuma mudança de código — custo se errada: baixo (se recorrer, é candidato a `clock_timestamp()` → uma coluna `bigserial` auxiliar de ordenação em `lead_events`, mas não há sinal de recorrência).
+
+## S21 · Task 2 (domínio, repositório, PaymentProvider fake/demo/Pix, integração com a entrega do lead)
+Contexto: Task 1 (migration `0401_billing.sql`) já mesclada nesta branch (commit `4ec6fae`); esta task cobre tudo em `features/billing/**`, os três provedores de pagamento, as rotas de webhook/cron e a integração com `features/leads`.
+- Ruling: `BillingStore` (ports.ts) é implementado como fábrica `createBillingStore(admin): BillingStore` em `repository.ts`, no mesmo padrão de `createLeadStore` (S14) — funções de módulo chamadas com `admin`/`actor` explícitos, agrupadas num objeto só para o `BillingService` injetar. Evita uma classe repositório paralela às funções — custo se errada: baixo (é só organização).
+- Ruling: `billing_wallet_summary` e `billing_ensure_wallet` (SQL) NÃO conferem posse (não chamam `billing_check_member`) — são leitura/idempotência puras. O repositório TS confere posse (`requireMemberOrAdmin`: papel `admin` ou linha em `stationery_members` pelo MESMO predicado da política RLS) ANTES de chamar essas funções com o cliente de serviço; sem essa checagem em app, qualquer `stationeryId` veria o saldo de outra papelaria. Escritas (`billing_create_package_invoice`, `billing_purchase_season_pass`) já conferem posse dentro da própria função SQL (`billing_check_member`), então o repositório não duplica ali — custo se errada: alto (vazamento de saldo entre papelarias) se a checagem em app for removida sem substituto no SQL.
+- Ruling: `provider` NUNCA é entrada do cliente em `buyPackage`/`buyPass` (removido de `buyPackageInputSchema`/`buyPassInputSchema`): o servidor sempre decide com `resolvePaymentProvider(env, wallet)`. O CHECK do banco (`provider = 'pix' or is_demo`) já impediria dinheiro de mentira virar crédito real, mas deixar o cliente ESCOLHER o provedor era uma superfície de decisão que não é dele — custo se errada: baixo (o CHECK do banco ainda protege).
+- Ruling: a validade da cobrança Pix (`calendario.expiracao`) vem SEMPRE de `PixConfig.chargeTtlSeconds` (`PIX_CHARGE_TTL_SECONDS` do ambiente), nunca do `ChargeInput` do chamador — é config técnica do PSP, não uma decisão por compra. `FakePaymentProvider`/`DemoPaymentProvider` (sem PSP real) usam um default técnico nomeado (`DEFAULT_CHARGE_TTL_SECONDS` em `limits.ts`) quando o chamador não informa — custo se errada: baixo.
+- Ruling: `DemoPaymentProvider` recusa na CONSTRUÇÃO (não só na fábrica) quando `!isDemo` ou `!isDemoEnabled(env)` — defesa em profundidade: mesmo um bug na fábrica não entrega um provedor de demonstração para carteira real ou produção. Reaproveita `isDemoEnabled` de `features/cart/demo-provider.ts` (S12), já fail-closed por design — custo se errada: baixo.
+- Ruling: "Simular pagamento (demonstração)" (`BillingService.simulateDemoPayment`) confirma a fatura DIRETO (`confirmInvoicePayment`), sem passar por `provider.getCharge()` — não há PSP real na demonstração, então não há o que reconsultar; `DemoPaymentProvider.getCharge` existe só por completude de interface e nunca é chamado por este fluxo. Mantém a regra "confirmação sempre reconsulta o PSP" só para o Pix real, onde ela importa (defesa contra webhook falso) — custo se errada: baixo.
+- Ruling: `listCandidateStationeries` (features/leads/repository.ts) ganhou o parâmetro obrigatório `itemCount` (= número de itens da lista, o mesmo `jsonb_array_length` que `lead_create` grava em `leads.item_count`) e filtra o resultado por `billing_can_receive_lead` antes de ordenar/cortar — papelaria sem passe/grátis/saldo simplesmente SOME da lista, sem expor o motivo (App21/Pap01). `LEAD_ERROR_CODES` ganhou `billing_required`/`billing_unavailable` com a MESMA mensagem neutra ("Esta papelaria não está recebendo pedidos agora. Escolha outra.") — o pai nunca vê "sem saldo" — custo se errada: baixo (é só o texto/filtro; o gatilho do banco já impede a entrega em qualquer caminho).
+- Ruling: webhook Pix em `/api/billing/pix/webhook/[token]` (token no PATH, não em cabeçalho `Authorization`) — o BACEN recomenda configurar a URL do webhook com um segredo embutido; comparação em tempo constante (`isAuthorizedPixWebhook`, mesmo padrão de `features/leads/cron-auth.ts`). Corpo só extrai `txid`(s) para SABER o que reconsultar; o valor pago nunca vem do `POST`, sempre de `provider.getCharge()` seguido de `billing_confirm_invoice_payment` (que também confere `amount_cents`) — custo se errada: alto (webhook que confia no corpo é a superfície clássica de fraude Pix) se a reconsulta for removida.
+- Ruling: varredura estática (`tests/billing/no-secrets-scan.test.ts`) cobre só PEM/`client_secret` literal e "só a fábrica importa `PixPaymentProvider`" — o item do PLAN sobre "nenhum literal numérico além dos limites de validação" em `features/billing/**` NÃO ganhou um scanner automatizado (o `grep` ingênuo teria muitos falsos positivos em índices de array, `.length`, status HTTP etc.; um AST-aware ficaria caro para o tempo desta task). Conferido manualmente: todo valor de negócio (grátis, faixas, pacotes, passe, parcelas, meses) vem de `plans`/filhas via `ActivePlan`; `limits.ts` só tem limites de validação e duas constantes técnicas (`CENTS_PER_BRL`, `DEFAULT_CHARGE_TTL_SECONDS`) — custo se errada: médio (regressão futura sem scanner automatizado; considerar um scanner AST na S22/S23 se a área crescer).
+- Verificação: testes antes da implementação em cada módulo (domínio puro rodou verde de primeira graças à conferência prévia contra o Postgres real via `psql`/`node-postgres` para a semântica de `date + interval 'n months'`, que CLAMPA o dia no mês de destino em vez de rolar para o mês seguinte — replicada em `features/billing/tz.ts#addMonthsClamped`); `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build` verdes. `pnpm test` (unitário): 2802 testes (2695 antes da task + 107 novos). `pnpm test:db`: 65 arquivos, 1535 testes, 3 skipped (2 a mais que a Task 1: os dois novos casos de integração em `tests/leads/repository.test.ts` e `tests/billing/repository.test.ts`).
+- Pendências desta task: telas Pap06/Admin10 e E2E ficam para a Task 3.
+
+## S21 · Task 3 (telas Pap06 e Admin10, integração com Pap01/Pap02/admin, E2E)
+- Ruling: `PackageCards`, `PassCard` e `TermsCheckbox` foram para `components/billing/` (junto de `BalanceCard`,
+  `StatementTable`, `InvoiceList`, `PriceTierTable`, `DemoPayButton`) em vez de `app/papelaria/creditos/` como o
+  plano listava — são componentes puros de apresentação sem estado de rota, mesmo critério já usado para os outros
+  cinco; só `PayInvoice` (específico da página de fatura, usa a ação `payInvoiceAction`) ficou em
+  `app/papelaria/creditos/faturas/[id]/`. Deviation de local, não de comportamento — custo se errada: baixo
+  (mover arquivo).
+- Ruling: `provider` nunca é campo do formulário de compra (Pap06): o servidor decide com `BillingService.providerFor`
+  a partir de `stationeries.is_demo`; `buyPackageInputSchema`/`buyPassInputSchema` (já sem esse campo desde a Task 2)
+  confirmam a decisão de design na Task 3, sem exigir mudança.
+- Ruling: `getSummary`/`getStatement`/`listInvoices` (leitura, service_role) exigem `requireMemberOrAdmin`
+  (Task 2); a leitura de "Cobrança" em `/admin/papelarias/[id]` usa o mesmo caminho com o `actor` ADMIN da sessão
+  (bypassa a checagem de vínculo, como o Ruling de Task 2 já previa) — nenhuma política RLS de admin nova.
+- Ruling: o extrato (`StatementTable`) só mostra o nome da escola em `lead_debit`; `free_lead`/`pass_lead` mostram
+  "Lead grátis · LC-XXXX"/"Lead do passe · LC-XXXX" sem escola — decisão de texto (não do PLAN), mantém a descrição
+  curta e sinaliza a fonte do lead sem inventar relevância da escola nesses casos — custo se errada: baixo (é só
+  copy; o dado da escola está disponível se o produto quiser mostrá-lo também aí).
+- Ruling: `KpiRow` (Pap02) ganhou um 5º cartão "Saldo" opcional (`balanceCents?`); mantém o componente compartilhado
+  em vez de duplicar o grid — custo se errada: baixo.
+- Ruling: E2E rodado com os meses de temporada PADRÃO do formulário (janeiro a dezembro), não nov–mar do PLAN,
+  porque o roteiro não preencheu os seletores de mês (tempo de sessão); a semântica de virada de ano/mês curto já é
+  coberta exaustivamente por `tests/billing/season.test.ts` contra o Postgres real. D-0xx (baixa): repetir o E2E
+  preenchendo nov/mar antes do go-live, se quiser o print com a temporada real do produto.
+- Ruling: E2E não exercitou a compra do PASSE pela UI nem o estado "Pagamento via Pix indisponível no momento" para
+  carteira não-demo (tempo de sessão); ambos cobertos por `tests/billing/service.test.ts` e
+  `tests/billing/components.test.tsx`. D-0xx (baixa): fechar esse trecho do roteiro numa sessão futura.
+- Verificação: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build`
+  verdes. `pnpm test`: 2832 testes (2804 antes da Task 3 + 28 novos: `stationery-components` +2, `admin-actions` +7,
+  `actions` +9, `components` +12 — os demais já contados na Task 2). `pnpm test:db`: 65 arquivos, 1535 testes, 3
+  skipped (mesma contagem da Task 2; a Task 3 não mexeu em SQL). E2E real com `agent-browser` contra o build de
+  produção local (`scripts/e2e-s21.sh`): **17 de 17 verificações passaram** numa execução limpa (`pnpm db:reset` +
+  `scripts/e2e-s14-seed.sql`); relatório e o que ficou de fora em `docs/superpowers/e2e/S21.md`, prints em
+  `docs/superpowers/e2e/screenshots/S21-*.png`.
+- Achado durante o E2E (corrigido nesta task, sem precisar de novo teste automatizado): `getBillingService()` seria
+  chamado com `{ userId, role: "admin" } as never` no rascunho inicial de `app/admin/planos/page.tsx` — um
+  `SessionActor` forjado (não vindo de `getSessionActor()`) teria falhado em runtime na checagem de marca
+  (`isSessionActor`, `features/auth/actor.ts`) com "ator não vem da sessão" assim que alguém abrisse `/admin/planos`.
+  Achado e corrigido ANTES do E2E (leitura de código), não pelo E2E em si — registrado aqui porque é exatamente o
+  tipo de erro que só apareceria em runtime (TypeScript não pega, já que o cast escondia o tipo). Troquei por
+  `getSessionActor()` real.
+
+## S21 · correções da revisão de segurança (Opus)
+Rodada única sobre `6e63de6`. Testes antes (vermelho registrado abaixo por item), gate completo depois de cada
+correção, dois commits (Task 1/SQL num commit por si, o resto junto).
+
+**1) Lead de demonstração debitava carteira real.** Vermelho: `tests/db/billing-lead-delivery.test.ts` (banco real) —
+`leadCreate` com `isDemo: true` numa papelaria `is_demo: false` debitava a faixa normalmente (nenhuma proteção).
+Ruling: **pulei o débito, NÃO recusei o lead** (a alternativa que a revisão também aceitava). Recusar quebrava um
+fluxo já em produção e ~70 testes de OUTRAS fatias (S06/S09/S14): o carrinho de demonstração da S12 (`cart.is_demo`)
+com uma papelaria REAL é um caso normal (`lead_create`/0303 já força `is_demo = stationeries.is_demo OR
+carts.is_demo`, de propósito, para deixar alguém testar o fluxo sem lista real); descobri isso só depois de a
+primeira tentativa (recusar com hint `demo_mismatch`) quebrar a suíte inteira. A versão final:
+`billing_charge_lead_delivery` (0401) compara `new.is_demo` com `stationery_wallets.is_demo`; se o lead é demo e a
+carteira é real, a função só dá `return null` (sem gatilho de exceção, sem lançamento no razão) — o lead nasce
+normal, mas nenhum centavo sai da carteira real. "Registro" é o próprio `leads.is_demo = true` numa papelaria não
+demo (consulta direta, sem coluna nova). O sentido oposto (lead real numa carteira demo) já não ocorre pela mesma
+regra OR — custo se errada: baixo (o pior caso é a papelaria real "doar" um lead de brincadeira, nunca perder
+dinheiro).
+
+**2) Pagamento perdido ao regenerar a cobrança Pix.** Vermelho: `tests/billing/service.test.ts` (`BillingService.
+payInvoice`, 4 casos novos). Ruling: escolhi **reconsultar o PSP antes de decidir regenerar** (a 2ª opção do item,
+sem migração nem tabela de histórico de txids). `payInvoice` agora, quando a fatura já tem `providerChargeId`,
+SEMPRE chama `provider.getCharge(providerChargeId)` primeiro: `paid` (valor batendo) confirma direto e não gera
+cobrança nova; `pending` devolve o BR Code antigo tal como o PSP diz que ainda vale (ignora o relógio local, que
+pode estar errado); só `expired`/`unknown` gera uma cobrança nova. `InvoiceView` ganhou `providerChargeId` (coluna já
+existia no banco, só não estava exposta ao TS) — custo se errada: médio (sem isso, um pagamento feito no intervalo
+entre "vencida localmente" e o clique em "Pagar com Pix" seria perdido de verdade).
+
+**3) Webhook Pix e o sufixo `/pix` do BACEN.** O BACEN entrega a notificação em `{urlCadastrada}/pix`; a rota
+`[token]` (segmento único) nunca bateria com a URL real. Troquei para `app/api/billing/pix/webhook/[...path]/route.ts`
+(catch-all): só o PRIMEIRO segmento é o token, o resto (`/pix` ou qualquer sufixo) é ignorado; a comparação
+continua em tempo constante. Vermelho: `tests/billing/routes.test.ts` (novo caso "aceita o sufixo /pix"). Ruling:
+registrado aqui e em `.env.example` que **a URL do webhook COM o token é, na prática, uma credencial** (aparece em
+logs de acesso, no painel do PSP e em qualquer proxy no caminho) — tratar como segredo, nunca colar em issue/PR/chat;
+gerar com `openssl rand -hex 24` ou equivalente — custo se errada: baixo (é só documentação; o token ainda é
+comparado em tempo constante e sem ele a rota responde 503).
+
+**Menores:**
+- `getCharge`/`createCharge` (Pix) agora conferem `cob.txid === txid pedido` e `cob.chave === receiverKey`
+  (quando o PSP devolve `chave`) antes de aceitar a resposta — nunca confia cegamente numa resposta que "parece"
+  certa. Usa `pix[].valor` (valor EFETIVAMENTE recebido) em vez de `valor.original` (nominal da cobrança) quando o
+  PSP devolve o array `pix`. Testes vermelhos→verdes em `tests/billing/payments/pix.test.ts` (5 casos novos).
+- `pixConfigSchema` (`PIX_API_BASE_URL`, `PIX_OAUTH_TOKEN_URL`) exige `https://` — recusa config com `http://`.
+  Teste em `tests/billing/payments/factory.test.ts`.
+- Ruling documentado (sem código, limite inerente do Postgres): um SUPERUSUÁRIO sempre pode `alter table ...
+  disable trigger` e religar depois — nenhuma trigger, nem `enable always`, resiste a quem tem esse poder; a defesa
+  do desenho é contra `authenticated`/`service_role` via API e contra `session_replication_role = replica`, não
+  contra o dono do banco (mesmo limite de `audit_log`/`ai_decisions`, já aceito nas fatias anteriores). Comentário
+  adicionado no cabeçalho de `0401_billing.sql`.
+- `billing_wallet_summary` NÃO mudou (continua criando a carteira: é a ação explícita da própria papelaria olhando
+  o Pap06). Criei `billing_wallet_summary_readonly` (nova função, mesmo formato, NUNCA chama `billing_ensure_wallet`)
+  para leitura PASSIVA de terceiro; `/admin/papelarias/[id]` (card "Cobrança") passou a usar
+  `BillingService.getSummaryReadOnly` em vez de `getSummary`. Ruling: preferi duas funções a uma só com um parâmetro
+  "criar ou não" — deixa explícito no nome de cada chamada qual é a intenção, sem um booleano solto que alguém possa
+  inverter por engano. Vermelho: `tests/db/billing-lead-delivery.test.ts` (a leitura passiva não cria carteira; a
+  ação da própria papelaria continua criando) — tive que reverter uma primeira tentativa de mudar
+  `billing_wallet_summary` direto, que quebrou dois testes da Task 1 que já cobriam o comportamento antigo de
+  propósito — custo se errada: baixo (o pior caso é o admin criar uma carteira cedo demais, não perder dado).
+- `payInvoiceAction`, `buyPackageAction`, `buyPassAction` e `simulateDemoPaymentAction` agora exigem
+  `actor.role === "stationery_member"` (redirecionam para `/403` senão) — defesa em profundidade: o banco
+  (`billing_check_member`) já recusaria um admin sem vínculo com a papelaria na esmagadora maioria dos casos, isto
+  cobre o caso raro de um perfil admin que também é membro de alguma papelaria. Testes em `tests/billing/
+  actions.test.ts` (4 casos novos, um por ação).
+- Chave de idempotência de `buyPackageAction`/`buyPassAction` deixou de ser gerada dentro da Server Action
+  (`randomUUID()` a cada POST) e passou a vir de um campo oculto gerado UMA VEZ pela página
+  (`app/papelaria/creditos/page.tsx`, `PackageCards`/`PassCard`): um duplo clique reenvia a MESMA chave e
+  `billing_create_package_invoice`/`billing_purchase_season_pass` (já idempotentes por chave desde a Task 1)
+  devolvem o registro já criado em vez de um segundo. Sem isso, cada POST gerava uma chave nova e a idempotência do
+  banco nunca entrava em ação. Teste em `tests/billing/actions.test.ts` ("chave ausente/inválida: erro sem chamar o
+  serviço").
+- `reconcileOpenInvoices` (cron) agora busca só um LOTE (`RECONCILE_BATCH_SIZE = 200`, as faturas mais ANTIGAS
+  primeiro) e para se estourar um ORÇAMENTO de tempo (`RECONCILE_TIME_BUDGET_MS = 20s`), devolvendo `truncated:
+  true`; a próxima execução diária continua de onde parou (nunca reprocessa as mesmas primeiro, já que a busca é
+  sempre pelas mais antigas). Testes em `tests/billing/service.test.ts` (3 casos novos).
+
+Verificação: `pnpm typecheck && pnpm lint && pnpm test && pnpm test:db` (com `pnpm db:reset` antes) e `pnpm build`
+verdes. `pnpm test`: 2957 testes (2938 antes desta rodada + 19 novos, líquido). `pnpm test:db`: 65 arquivos, 1538
+testes, 3 skipped — numa rodada intermediária, dois arquivos SEM RELAÇÃO com billing (`publication-service.test.ts`
+e `claim-tokens.test.ts`, trilhas Pipeline e Dados) falharam por ordenação de evento por timestamp; reexecutados
+isolados (2/3 e depois a suíte inteira de novo) voltaram verdes — mesma classe de flakiness de relógio do
+Docker/Colima já registrada no "Passo 0" desta fatia, não uma regressão desta rodada (nenhum arquivo de outra
+trilha foi tocado). E2E real (`scripts/e2e-s21.sh`) rodado de novo sobre o build corrigido: **17 de 17 verificações
+passaram**, incluindo a compra do pacote com a chave de idempotência agora vinda do campo oculto (sem mudança
+visível ao usuário).
+
+## S21 · correções do BLOQUEANTE da reverificação (Opus, sobre `c5b3762`)
+Reverificação achou um bloqueante no item 2 (cobrança Pix). Rodada única, testes antes (vermelho registrado por
+item), gate completo (`db:reset` + `typecheck` + `lint` + `test` + `test:db` + `build`) depois.
+
+**1) `ATIVA` do BACEN v2 nunca expirava.** O BACEN mantém `status: "ATIVA"` para sempre; quem expira é
+`calendario.criacao + calendario.expiracao` (prazo CALCULADO, não um status). `getCharge` devolvia `pending` pra
+sempre numa cobrança vencida — fatura impagável por Pix (BR Code morto exibido indefinidamente). Vermelho:
+`tests/billing/payments/pix.test.ts` ("ATIVA depois de calendario.criacao + calendario.expiracao -> expired").
+Corrigido em `features/billing/payments/pix.ts` (`getCharge`): `ATIVA` com `criacao + expiracao` no passado (mais
+`PIX_EXPIRY_MARGIN_MS = 5s` de `features/billing/limits.ts`, contra relógio ligeiramente adiantado do PSP) vira
+`expired` (dispara regeneração no `payInvoice`); dentro da margem continua `pending`. Ruling: margem pequena e fixa
+(5s) — o objetivo é só absorver diferença de relógio, não dar folga real de pagamento (isso já é
+`chargeTtlSeconds`/`DEFAULT_CHARGE_TTL_SECONDS`). Ajustei o teste que fixava o comportamento errado (renomeado para
+descrever o cenário DENTRO da validade) e acrescentei o caso "um instante antes do prazo, dentro da margem".
+
+**2) `billing_attach_charge` sobrescrevia sem histórico nem CAS.** Regenerar a cobrança perdia o txid antigo — se o
+pagador já tinha pago o BR Code velho (ou pagava logo depois de ele ser trocado por corrida), o webhook/cron nunca
+mais achavam essa fatura por aquele txid, e a `payInvoice` concorrente virava duas cobranças vinculadas
+(inconsistente). Vermelho: `tests/db/billing-passes-invoices.test.ts` (CAS + histórico) e
+`tests/db/billing-concurrency.test.ts` (5 `billing_attach_charge` concorrentes na mesma fatura). Corrigido em
+`0401_billing.sql` (editada em place — ainda não aplicada em lugar nenhum além do local, por instrução explícita):
+  - Tabela nova `invoice_charges` (append-only, `unique (provider, provider_charge_id)`, índice por
+    `invoice_id, created_at`, trigger `enable always` bloqueando update/delete — mesmo padrão de `credit_ledger` —,
+    RLS habilitada sem política nenhuma, `select` só para `service_role`): guarda TODO txid já emitido por fatura,
+    vencedor ou não da corrida.
+  - `billing_attach_charge` (6 parâmetros agora: ganhou `p_expected_current_charge_id`) passou a ser
+    compare-and-swap: trava a fatura (`for update`), grava SEMPRE no histórico (`on conflict do nothing`,
+    idempotente), e só troca `invoices.provider_charge_id` se ele ainda for igual ao `expected` que o chamador leu
+    antes de gerar a cobrança no PSP — senão devolve a cobrança REAL atual (nunca a perdedora). Duas `payInvoice`
+    concorrentes geram duas cobranças no PSP (inevitável, ele já foi chamado antes desta função) mas só UMA fica
+    vinculada; a chamada perdedora recebe de volta a da vencedora, nunca mostra ao usuário um BR Code que não é
+    mais o oficial. Ruling: os parâmetros de saída (`returns table`) usam prefixo `out_` (`out_provider_charge_id`
+    etc.) — sem ele o plpgsql recusa a função com "column reference is ambiguous", porque esses nomes de saída
+    colidem com colunas de mesmo nome em `invoices`/`invoice_charges` referenciadas dentro do corpo da função
+    (`variable_conflict` padrão do plpgsql é `error`, não silencioso); `features/billing/repository.ts`
+    (`attachCharge`) e o teste de concorrência ajustados para os novos nomes de coluna.
+  - `findOpenInvoiceByChargeId` (webhook) e `listOpenPixChargeIds` (cron) passaram a resolver/listar por QUALQUER
+    txid histórico da fatura (via `invoice_charges`), não só o atual — confirmam a fatura (idempotente, linha
+    travada) mesmo que o pagamento tenha sido no txid velho.
+  - `payInvoice` (`features/billing/service.ts`): status `unknown` do PSP agora é ERRO
+    (`payments_unavailable`) em vez de regenerar cegamente — nunca cria uma segunda cobrança só porque a consulta ao
+    PSP falhou/expirou.
+  - `tests/db/helpers.ts` (`purgeBilling`): precisou apagar `invoice_charges` antes de `invoices` (FK
+    `on delete restrict`) e desabilitar a trigger de imutabilidade da tabela nova, mesmo padrão das outras guardas.
+
+**3) Lead demo criava a carteira REAL antes de checar `is_demo`.** `billing_charge_lead_delivery` chamava
+`billing_ensure_wallet` (que cria a carteira se não existir) ANTES do check de pular o débito — uma papelaria real
+sem carteira nenhuma ganhava uma carteira (vazia, mas real, com snapshot do plano) só por causa de um lead de
+brincadeira. Corrigido: o check `new.is_demo and not v_stationery_is_demo -> return null` (pula o débito, ver seção
+anterior) agora vem ANTES de `billing_ensure_wallet` — nenhum efeito colateral em papelaria real por lead demo.
+Isto expôs um acoplamento acidental em três testes pré-existentes que combinavam papelaria REAL (padrão
+`is_demo=false`) com carrinho/lead DEMO (padrão `is_demo=true` de `seedCart`/`newCart`/`record()`) sem querer testar
+esse cenário — o teste da corrida OUTRO caminho antigo (a exceção de `billing_ensure_wallet` disparando ANTES do
+check de demo) mascarava a mistura por acidente. Corrigidos para is_demo consistente (isolando "sem plano ativo"
+do "lead demo × papelaria real", que já tem teste próprio): `tests/db/billing-lead-delivery.test.ts` ("sem plano
+ativo..." -> `overrides: { is_demo: true }` na papelaria) e `tests/leads/repository.test.ts` ("S21 · sem plano
+ativo..." -> carrinho e `record(..., { isDemo: false })` não-demo).
+
+**Achado ao escrever o teste de concorrência, sem relação com a revisão:** `tests/db/billing-concurrency.test.ts`
+usava txids FIXOS (`race0xxx...`) — como o teste faz commit de verdade (não usa savepoint/rollback), rodar
+`pnpm test:db` duas vezes sem `db:reset` entre elas colidia com a `unique (provider, provider_charge_id)` deixada
+pela rodada anterior. Troquei por um sufixo aleatório por execução (mesmo padrão de `seedStationery`).
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos verdes.
+`pnpm test`: 2959 testes. `pnpm test:db`: 66 arquivos (1 skipped), 1539 testes. Não repeti o E2E (`scripts/e2e-s21.sh`)
+nesta rodada — nenhuma tela/UI mudou, só SQL e `features/billing/**`; o roteiro usa os providers fake/demo, que não
+exercitam os caminhos Pix corrigidos aqui.
+
+
+- D-097 (baixa, `docs/superpowers/DEBT.md`): scanner AST de "nenhum literal numérico fora de `limits.ts`" em
+  `features/billing/**` não existe (Ruling da Task 2); hoje a garantia é revisão manual. Considerar na S22/S23 se a
+  área crescer.
+- D-098 (baixa, `docs/superpowers/DEBT.md`): E2E não cobriu a compra do passe pela UI, o estado "Pix indisponível"
+  para carteira real, nem a temporada nov–mar (formulário usou os meses padrão); tudo coberto por teste
+  automatizado, falta só o clique.
+- D-076 (média, já existia, anotada nesta fatia): o adapter Pix ficou genérico BACEN v2 como o plano pedia; ainda
+  não verificado contra a API real do Asaas (PSP escolhido pelo humano) por falta de credencial/conta.
+- Pendências humanas (sem ação possível pelo Claude): PSP Pix (conta, credenciais, certificado mTLS, chave Pix,
+  `PIX_WEBHOOK_TOKEN`, cadastro do webhook no painel do PSP), `PAYMENTS_PIX_ENABLED`/`CRON_SECRET` nos ambientes da
+  Vercel; sem isso, `/papelaria/creditos` mostra "Pagamento via Pix indisponível no momento" e nenhuma cobrança real
+  acontece (Ruling do plano, já registrado em "S21 · Planejamento"). Plano PROVISÓRIO de staging: fica para o
+  orquestrador aplicar depois do merge (mesma nota do plano, seção final).
+
+## S22 · Atribuição, conversão e contestação
+
+Plano: `docs/superpowers/plans/2026-09-26-s22-conversao.md`. Migration `0402_lead_conversions.sql`, `features/conversion/**`,
+telas (`/conta/compras`, Pap03 `DisputeForm`, `/admin/auditoria`, `/admin/contestacoes`, avaliações em Pap08).
+
+**Ruling 1 — "Pix pela plataforma" fica AUSENTE, não inventado.** O terceiro sinal do PLAN/SPEC-2 ("Pix pela
+plataforma") pressupõe um registro do PAGAMENTO do pai à papelaria feito pela plataforma. A S21/0401 só cobra a
+PAPELARIA pelo LEAD (crédito pré-pago); não existe hoje nenhuma tabela ou evento que registre um pagamento do pai à
+papelaria via Pix — isso é escopo da S23 (comissão só quando o Pix passa pela plataforma). `lead_conversion_signals`
+devolve `pix_confirmed = false` sempre, com comentário explícito no SQL e nas telas (Admin11 mostra "Pix pela
+plataforma indisponível nesta fase" em vez de omitir o motivo). Custo se errado: se a S23 registrar esse sinal sob
+outro nome/formato, só precisa trocar o `false` fixo por uma consulta real — nenhuma migration desta fatia muda.
+
+**Ruling 2 — heurística de regex para "sem dado pessoal no comentário", não fila de moderação.** O SPEC-2 pede
+"avaliação sem texto livre com dado pessoal (ou moderado)". Implementei a defesa mais simples que ainda cumpre a
+regra: `lead_review_contains_personal_data` (SQL, `immutable`) rejeita na escrita (hint `personal_data_rejected`)
+comentários com padrão de e-mail ou uma sequência de 8+ dígitos com no máximo um separador entre cada um (telefone,
+CPF, CEP colado). Não é um validador de PII completo (não pega texto ofensivo nem nomes) e não guarda um estado
+"pendente" para o admin revisar depois — uma fila de moderação exigiria mais uma tabela, tela e fluxo de aprovação,
+fora do tempo desta fatia. Custo se errado: falso negativo deixa passar um dado pessoal disfarçado (ex.: "seis cinco
+nove nove..."); falso positivo (raro) recusa um comentário legítimo com muitos números seguidos, pedindo que o pai
+reescreva — sem perda de dado, só fricção. Revisitar na S23 se o volume de avaliações justificar.
+
+**Ruling 3 — prazo de 72h contado de `leads.created_at` (entrega do lead), não da declaração da papelaria.** O
+PLAN diz só "em até 72 h"; o SPEC-2 não ancora explicitamente. Escolhi `created_at` porque os 4 motivos fixos (número
+errado, lista incompleta, duplicado, fora da área) são sobre a QUALIDADE DO LEAD recebido, não sobre o resultado da
+venda — fazem sentido contestar assim que a papelaria vê o problema, não depois de ela mesma declarar "Vendi"/"Não
+fechou" (que pode nunca acontecer). Testado na fronteira com margem de 1 min (71h59 aceita, 72h01 recusa) para não
+depender de timing exato de rede nos testes; a função SQL usa `now()` do servidor, nunca input do cliente. Custo se
+errado: se o produto quisesse ancorar em outro evento (ex.: primeira visualização do lead), é um `interval` a trocar
+em `lead_dispute_open`, sem mudar schema.
+
+**Ruling 4 — Pap07-Desempenho (funil, conversão declarada x confirmada) NÃO entra nesta fatia.** O SPEC-2 lista
+Pap07 junto da S22 em `SCREENS.md`, mas o PLAN §S22 não a cita nem no prompt nem no aceite (só cita as 5 telas do
+Referência). Pap07 é um painel agregado (funil, ticket médio, comparação anônima de bairro) que combina sinais de
+conversão com dados de repasse/comissão — faz mais sentido junto da S23 (comissão, repasses), que já vai calcular
+ticket e repasse por venda confirmada. `listAuditRows` (Admin11) já expõe os dados brutos que Pap07 vai agregar.
+Registrado como dívida (ver bloco abaixo).
+
+**Reuso deliberado de `billing_reverse_entry` (S21) sem alteração.** `lead_dispute_resolve` chama a função existente
+da 0401 (mesma assinatura, `p_actor_role` também aceita `system`); a idempotência ("uma contestação aceita estorna
+uma vez") vem de dois lugares que se reforçam: (a) `billing_reverse_entry` já é idempotente por natureza
+(`reverses_entry_id` único — uma segunda chamada com o mesmo `p_entry_id` devolve o estorno existente); (b)
+`lead_dispute_resolve` também checa `d.status <> 'open'` antes de chamar o estorno e devolve o `id` da disputa sem
+gravar de novo se a decisão já resolvida for igual à pedida. Testado com 2 chamadas reais (banco e E2E).
+
+**`lead_disputes.reversed_entry_id` é uuid solto (sem FK) de propósito.** Uma FK para `credit_ledger` faria
+`TRUNCATE credit_ledger` falhar com `0A000` (regra do Postgres para qualquer FK externa) em vez do `42501` do
+gatilho de imutabilidade da 0401 — quebraria `billing-ledger.test.ts` (S21), que testa exatamente esse `42501`.
+Descoberto rodando o gate (vermelho real, não hipotético): a primeira versão da migration tinha a FK e quebrou esse
+teste da S21; removida e documentada no comentário da coluna.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos verdes
+(2971 testes unitários; 1558 de banco, 1 arquivo skip pré-existente). E2E (`scripts/e2e-s22.sh`): 21/21, ver
+`docs/superpowers/e2e/S22.md`.
+
+## S22 · Dívida (bloco pronto para o DEBT.md; IDs a atribuir pelo orquestrador)
+
+- (baixa) Pap07-Desempenho (funil, conversão declarada x confirmada por escola/bairro) não foi construída nesta
+  fatia (Ruling 4 acima); os dados brutos já existem em `lead_conversion_signals`/`listAuditRows`. Dona: S23.
+- (baixa) A heurística de "dado pessoal" no comentário da avaliação (Ruling 2) é regex, não um validador de PII nem
+  uma fila de moderação humana; pode deixar passar ofuscações simples ("seis cinco nove..."). Revisitar se o volume
+  de avaliações justificar.
+- (baixa) O sinal "Pix pela plataforma" está sempre ausente (`pix_confirmed = false`, Ruling 1); nenhuma tela
+  esconde isso (Admin11 rotula "indisponível nesta fase"), mas a regra de 2 de 3 nunca vê esse terceiro sinal até a
+  S23 acrescentar a fonte real.
+- (baixa) `/conta/compras` lista até 30 pedidos do pai sem paginação; não é um problema hoje (poucos leads por pai
+  no piloto), mas cresce sem paginar se o produto pegar tração.
+
+## S22 · correções da revisão de segurança (Opus, rodada única sobre 93f78e7)
+
+Migration `0402_lead_conversions.sql` EDITADA NO LUGAR (ainda não aplicada em nenhum ambiente além do local desta
+sessão — sem PR, sem apply em staging). Um Ruling por item pedido na revisão.
+
+**1) Avaliação só com compra confirmada.** `lead_review_create` agora recusa lead `cancelled` (hint `invalid_state`)
+e exige `l.status = 'converted'` OU uma confirmação `bought_here` em `lead_purchase_confirmations` (hint
+`purchase_not_confirmed`) antes de aceitar a avaliação. Ruling: usei os MESMOS dois sinais da regra de conversão (2
+de 3) como pré-condição de "comprou de verdade" — não um terceiro critério novo — porque são exatamente os dois
+sinais que já existem nesta fatia (o terceiro, Pix pela plataforma, segue ausente). Custo se errado: um pai que
+comprou mas nunca confirmou nem teve a venda declarada não consegue avaliar; aceitável, porque ele sempre pode
+confirmar em `/conta/compras` primeiro.
+
+**2) Autoavaliação/autoconversão.** `lead_confirm_purchase` e `lead_review_create` recusam (hint `forbidden`) um
+ator que é `stationery_members` da papelaria do PRÓPRIO lead, mesmo que `requester_id` coincida com o perfil dele
+(checagem redundante ao `requester_id is distinct from p_actor_id`, mas defesa em profundidade contra o caso em que
+os dois coincidem). `lead_create` (0303, S14) NÃO ganhou o bloqueio simétrico — Ruling: essa migration já está
+aplicada no staging (`billing` já rodou por cima dela na 0401) e este implementador não tem mandato para editar uma
+migration já aplicada fora deste worktree local; fazer isso exigiria uma migration NOVA e aditiva (trigger ou check
+em `lead_create`) que fica fora do escopo de uma correção "rodada única" sobre a 0402. Registrado como D-107 (média,
+`DEBT.md`) para a S23. Custo se errado (enquanto D-107 está aberta): um dono de papelaria consegue CRIAR um lead
+para si mesmo, mas não consegue confirmar a compra nem se autoavaliar — o pior cenário (nota falsa) já está coberto.
+
+**3) Contestação de lead vendido.** `lead_dispute_open` recusa (hint `lead_sold`) quando `l.status = 'converted'`
+OU existe confirmação `bought_here` — os 4 motivos fixos (número errado, lista incompleta, duplicado, fora da área)
+são sobre a QUALIDADE do lead recebido, nunca cabíveis depois que a venda já foi confirmada por qualquer um dos dois
+lados. Também recusa (hint `stationery_unavailable`) quando a papelaria está `suspended`. `getDisputeGate`
+(`features/conversion/repository.ts`) espelha as duas regras para EXIBIÇÃO (`blockedReason: 'sold' | 'suspended' |
+'expired'`), calculadas por leitura própria (join com `lead_purchase_confirmations` e `stationeries.status`) — o
+banco continua sendo a fonte final; a tela só evita mostrar um formulário que o banco recusaria. Admin12
+(`/admin/contestacoes`) passou a mostrar o status do lead e os 3 sinais (via `AdminDisputeView`, que chama
+`lead_conversion_signals` por disputa) antes de "Aceitar"/"Rejeitar" — hoje isso é redundante com a regra 3 (uma
+disputa nova nunca nasce sobre um lead já vendido), mas é informação de auditoria útil para disputas antigas ou uma
+regra futura que mude essa condição.
+
+**4) Moderação de avaliação.** `lead_review_hide(p_review_id, p_actor_id, p_reason)`: só admin, `p_reason` de uma
+lista FECHADA (`personal_data`, `offensive`, `policy_violation`, `other` — nunca texto livre do moderador),
+idempotente (ocultar 2x devolve o mesmo id sem regravar o motivo), nunca reabre (`published -> hidden` é a única
+transição aceita pelo gatilho `lead_reviews_guard`, novo). Botão "Ocultar" em `/admin/auditoria` (componente
+`ReviewModeration`). Ruling: moderação PLENA (fila de revisão antes de publicar, IA de toxicidade, etc.) fica como
+dívida — o que existe é reativo (alguém precisa ver e clicar), não preventivo; ver D-104 (reforçada). A heurística de
+dado pessoal (`lead_review_contains_personal_data`) ganhou: normalização de separador ENTRE dois dígitos (colapsa
+`espaço`/`.`/`-`/`(`/`)` repetidamente até estabilizar, pegando `"9 9 9 9 - 9 9 9 9"`), número por extenso
+(`zero`..`nove`, com fronteira de palavra `\y` para não confundir "um" artigo com dígito isolado — só vira 1 dígito
+quando cercado só por espaço/pontuação de outros números/separadores, nunca some sozinho no meio de uma frase normal
+o bastante para formar 8 dígitos) e `"arroba"` como `@` ofuscado (com o espaço ao redor absorvido, senão o e-mail
+não bate no regex). Achado ao testar: a checagem de e-mail original quebrava com `"fulano arroba exemplo.com"`
+porque sobrava espaço ao redor do `@` recém-substituído — corrigido absorvendo `\s*` nas duas pontas da troca.
+
+**Menores (todos aplicados):**
+- `grant select (..., lead_id, ...)` em `lead_reviews` saiu do `anon` (ficou só em `authenticated`, papelaria/admin):
+  correlacionar uma avaliação publicada a um `lead_id` específico é uma pista de "quem comprou o quê" que ninguém
+  de fora precisa.
+- Avaliação `is_demo` nunca aparece no perfil público de papelaria REAL (`listPublishedReviews` cruza com
+  `stationeries.is_demo`); optei por FILTRAR (não por selo por avaliação) porque o perfil já tem o selo
+  "Demonstração" no cabeçalho quando a papelaria é demo — um selo por avaliação seria redundante.
+- Etiquetas mostram o rótulo legível (`REVIEW_TAG_LABEL`, compartilhado entre `PurchaseCard` e `PublicProfileView`),
+  nunca o slug cru.
+- Média honesta: "Avaliações · [nota] (média das últimas N)", `N` = quantidade REALMENTE usada no cálculo (o mesmo
+  limite passado a `listPublishedReviews`), nunca um número diferente do que está na tela.
+- `getDisputeGate` devolve `existingDispute.detail = null` quando quem pede é o SOLICITANTE (pai) do lead — só a
+  papelaria e o admin leem o texto livre que a papelaria escreveu ao contestar.
+- Disputa aceita sem lançamento a estornar mostra "sem crédito a devolver" (Pap03 e Admin12), nunca "crédito
+  devolvido"; teste novo confirma que `reversed_entry_id`, quando não nulo, sempre existe em `credit_ledger` com
+  `entry_type = 'reversal'`.
+- Papelaria `suspended` não contesta (regra 3 acima cobre isso; a UI usa o mesmo `blockedReason`).
+
+**Achado sem relação direta com o pedido, mas bloqueante para o gate:** o novo gatilho `lead_reviews_guard`
+quebrava `ON DELETE SET NULL` de `lead_reviews.actor_id -> profiles` (exclusão de conta, LGPD) — qualquer teste que
+apagasse um usuário com uma avaliação sua disparava "lead_reviews é imutável". Corrigido acrescentando ao guard uma
+segunda transição permitida: `actor_id` virando `NULL` com todas as outras colunas iguais (o efeito exato do
+cascade). Sem esse ajuste, excluir a conta de um pai que já avaliou uma papelaria falharia em produção.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos verdes
+(2971 testes unitários; 1567 de banco, 3 skipped pré-existentes). E2E (`scripts/e2e-s22.sh`) repetido: 21/21, ver
+`docs/superpowers/e2e/S22.md`. Vermelho real (4 achados de teste, listados) em
+`docs/superpowers/logs/s22-security-review-red.log`.
 ## S24 · Planejamento (portal B2B, chaves e API v1)
 - Ruling (S24 plano): a implementação começa só depois do merge da S11 em `main`; o passo 0 revalida 0600–0602, a forma final de `schools`/`school_lists`/`list_versions`/`list_items` (inclui colunas novas da S10/S11 fora da whitelist), `parent_list_copies` fora da API, `system_profile_id()`, `consents`, catálogo de notificações, ausência de acoplamento com a S21, `SessionActor` unificado, `AdminShell`/`access.ts`/`proxy.ts` e helpers de teste — custo se errada: baixo (ajuste no passo 0).
 - Ruling (S24 plano): implementação num worktree próprio da trilha B2B (recomendado `T5-b2b`, `.track` = 5, app 3005), porque o T1 hospeda a S21 em paralelo — custo se errada: baixo (o orquestrador escolhe outro worktree livre).
@@ -462,7 +866,7 @@ Passo 0 (revalidação contra `main` @ 02dfe00, S10 mesclada). Divergências do 
 - Ruling (revisão final, Important #2): `DecisionForm` ignorava plano/cobertura/limites ATUAIS do parceiro — aprovar/promover sem editar resetava a cobertura para nacional e os limites de sandbox para os padrões de negócio, mesmo para um parceiro que já tinha plano Regional (MT) definido. Corrigido: `DecisionForm` recebe `plan`/`coverageUfs`/`limits` (de `PartnerOverview`, já carregados por `getPartnerForAdmin`) como props opcionais; `app/admin/parceiros/[id]/page.tsx` passa `overview.plan`/`overview.coverageUfs`/`overview.limits`. O select de Plano usa `defaultValue={plan ?? ""}`; o checkbox Nacional inicia com `coverageUfs == null`; cada checkbox de UF ganha `defaultChecked={coverageUfs?.includes(uf) ?? false}`; cada campo de limite usa `limits?.<campo> ?? <RANGE>.default` (parceiro que nunca teve o campo cai no padrão de negócio, não em nacional/generic por acidente). Custo se errada: médio (uma aprovação de rotina alargando silenciosamente a cobertura que o parceiro enxerga) — por isso a prioridade Important.
 - Ruling (revisão final, Important #3): `realPepper()` (`features/b2b/api/handler.ts`) e o `pepper` de `getB2bService()` (`features/b2b/wiring.ts`) engoliam QUALQUER exceção de `getServerEnv()` sem log — não só a falta do pepper, qualquer variável inválida/ausente do `serverSchema` inteiro (`OPENROUTER_KEY`, `AI_MODEL_*` etc.) derrubava a API B2B inteira com `503` sem pista nenhuma no log. Corrigido: os dois `catch` agora fazem `console.error("b2b pepper/env", error instanceof Error ? error.name : "erro")` — só o NOME do erro, nunca a mensagem/stack (evita ecoar um valor inválido no log). Custo se errada: baixo (só logging; nenhuma mudança de comportamento da resposta).
 - Ruling (revisão final, correção barata #1): os `<dialog>` de `NewKeyDialog`, `RotateDialog`, `RevokeButton` (dono) e o novo diálogo de confirmação do `DecisionForm`/`AdminRevokeButton` ganharam `m-auto` na classe — o preflight do Tailwind remove o `margin: auto` padrão do elemento `<dialog>`, deixando-o no canto superior esquerdo e cortado (visível nas capturas antigas do E2E). Confirmado corrigido nas capturas novas.
-- Ruling (revisão final, correção barata #2): `docs/superpowers/e2e/screenshots/S24-b2b-nova-chave.png` mostrava uma chave `lc_test_…` completa em claro (chave de teste local, pepper aleatório só desta trilha, banco resetável — sem risco real, mas contraria "texto claro nunca persistido em lugar nenhum" e pode disparar scanner de segredo em CI). O implementador redigiu com Pillow, mas em seguida reexecutou `scripts/e2e-s24.sh` do zero para confirmar o gate pós-correção, e o script recapturou essa tela SEM a redação (`scripts/e2e-s24.sh` não redige, só tira a captura) — a versão commitada em `c99467d` continuava com a chave legível; a re-revisão (Opus) do fix wave final pegou isso como achado residual. Corrigido diretamente pelo controlador (não é rodada de correção nova: é a adjudicação do achado, o script não muda de comportamento e não há chave real a proteger além da de teste) — retângulo sólido + nota "[chave em claro redigida]" sobre a mesma região, arquivo verificado visualmente depois. Registrado em DEBT.md (D-104): `scripts/e2e-s24.sh` precisa aplicar a redação automaticamente (ou mascarar antes do `shot`) para não repetir o problema numa próxima execução — custo se não corrigir o script: baixo (mecânico, refazer a redação manual a cada rerun até alguém ajustar o script).
+- Ruling (revisão final, correção barata #2): `docs/superpowers/e2e/screenshots/S24-b2b-nova-chave.png` mostrava uma chave `lc_test_…` completa em claro (chave de teste local, pepper aleatório só desta trilha, banco resetável — sem risco real, mas contraria "texto claro nunca persistido em lugar nenhum" e pode disparar scanner de segredo em CI). O implementador redigiu com Pillow, mas em seguida reexecutou `scripts/e2e-s24.sh` do zero para confirmar o gate pós-correção, e o script recapturou essa tela SEM a redação (`scripts/e2e-s24.sh` não redige, só tira a captura) — a versão commitada em `c99467d` continuava com a chave legível; a re-revisão (Opus) do fix wave final pegou isso como achado residual. Corrigido diretamente pelo controlador (não é rodada de correção nova: é a adjudicação do achado, o script não muda de comportamento e não há chave real a proteger além da de teste) — retângulo sólido + nota "[chave em claro redigida]" sobre a mesma região, arquivo verificado visualmente depois. Registrado em DEBT.md (D-119): `scripts/e2e-s24.sh` precisa aplicar a redação automaticamente (ou mascarar antes do `shot`) para não repetir o problema numa próxima execução — custo se não corrigir o script: baixo (mecânico, refazer a redação manual a cada rerun até alguém ajustar o script).
 - Ruling (revisão final): revogar pelo Admin15 (`KeyList.tsx`) era irreversível e sem confirmação nenhuma. Em vez de duplicar o `RevokeButton` do dono com uma Server Action nova (ele usa `revokeKeyAction`, que devolve `ActionResult` sem redirect; o admin usa `adminRevokeKeyAction`, redirect-based), criei `app/admin/parceiros/[id]/AdminRevokeButton.tsx`: mesmo texto/UX de confirmação, mas o `<dialog>` só intercepta o envio do MESMO `<form action={adminRevokeKeyAction}>` já existente (sem criar uma segunda Server Action) — barato de verdade, como o revisor sugeriu.
 - `scripts/e2e-s24.sh` ajustado: o passo de suspensão agora clica "Suspender agora" na confirmação depois de enviar a decisão (antes o clique no botão principal já bastava). Roteiro completo rerodado do zero: **41/41 verificações verdes**. Verificação manual adicional (fora do roteiro fixo, via agent-browser) dos dois caminhos que o script não cobre: "Rebaixar para sandbox" (confirmação com o texto certo, valores atuais pré-preenchidos, chave revogada só depois de confirmar) e revogação pelo Admin15 (mesma confirmação do dono) — capturas em `/tmp` (não commitadas, só verificação ad-hoc).
 - Estado: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes; suíte unitária **3044/3044** (+4: `tests/b2b/decision-form.test.tsx`, novo arquivo dedicado — as 5 verificações de `DecisionForm` movidas de `admin-pages.test.tsx` mais 4 novas: nada pré-selecionado, confirmação para rebaixar, valores atuais como padrão, padrão nacional/plano vazio quando o parceiro nunca teve); banco 1601/1604 (3 pulados = baseline). E2E: `scripts/e2e-s24.sh`, 41/41, rodado do zero após todas as correções desta rodada.

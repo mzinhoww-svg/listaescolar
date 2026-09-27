@@ -43,6 +43,18 @@ const serverSchema = z.object({
   AMAZON_ASSOCIATE_TAG: z.string().min(1).optional(),
   /** Autentica o cron de expiração de leads (Bearer). Ausente = o cron responde 503. */
   CRON_SECRET: z.string().min(16).optional(),
+  // S21 (cobrança): Pix atrás de flag, sem nenhuma credencial fixa. Validação fina (config COMPLETA ou nada) é de
+  // `features/billing/payments/factory.ts`; aqui só os tipos, para o Next não reclamar de variável desconhecida.
+  PAYMENTS_PIX_ENABLED: flag,
+  PIX_API_BASE_URL: z.url().optional(),
+  PIX_OAUTH_TOKEN_URL: z.url().optional(),
+  PIX_CLIENT_ID: z.string().min(1).optional(),
+  PIX_CLIENT_SECRET: z.string().min(1).optional(),
+  PIX_CERT_PEM_BASE64: z.string().min(1).optional(),
+  PIX_KEY_PEM_BASE64: z.string().min(1).optional(),
+  PIX_RECEIVER_KEY: z.string().min(1).optional(),
+  PIX_WEBHOOK_TOKEN: z.string().min(16).optional(),
+  PIX_CHARGE_TTL_SECONDS: z.coerce.number().int().positive().optional(),
   /** Senha da página de resultados da pesquisa com mães. Só exigida pelas rotas app/api/pesquisa/**. */
   PESQUISA_RESULTS_PASSWORD: z.string().min(16).optional(),
   /** Sal do hash de IP (rate limit da pesquisa com mães). Só exigido pelas rotas app/api/pesquisa/**. */
@@ -69,6 +81,16 @@ export function getServerEnv(): ServerEnv {
       MELI_AFFILIATE_ID: process.env.MELI_AFFILIATE_ID,
       AMAZON_ASSOCIATE_TAG: process.env.AMAZON_ASSOCIATE_TAG,
       CRON_SECRET: process.env.CRON_SECRET,
+      PAYMENTS_PIX_ENABLED: process.env.PAYMENTS_PIX_ENABLED,
+      PIX_API_BASE_URL: process.env.PIX_API_BASE_URL,
+      PIX_OAUTH_TOKEN_URL: process.env.PIX_OAUTH_TOKEN_URL,
+      PIX_CLIENT_ID: process.env.PIX_CLIENT_ID,
+      PIX_CLIENT_SECRET: process.env.PIX_CLIENT_SECRET,
+      PIX_CERT_PEM_BASE64: process.env.PIX_CERT_PEM_BASE64,
+      PIX_KEY_PEM_BASE64: process.env.PIX_KEY_PEM_BASE64,
+      PIX_RECEIVER_KEY: process.env.PIX_RECEIVER_KEY,
+      PIX_WEBHOOK_TOKEN: process.env.PIX_WEBHOOK_TOKEN,
+      PIX_CHARGE_TTL_SECONDS: process.env.PIX_CHARGE_TTL_SECONDS,
       PESQUISA_RESULTS_PASSWORD: process.env.PESQUISA_RESULTS_PASSWORD,
       IP_HASH_SALT: process.env.IP_HASH_SALT,
       B2B_API_KEY_PEPPER: process.env.B2B_API_KEY_PEPPER,

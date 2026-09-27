@@ -1,0 +1,8 @@
+$ npx vitest run -c vitest.db.config.ts tests/db/security-advisors.test.ts
+(antes da migration 0607_security_advisors.sql)
+
+Sem achado de regressão a corrigir: D-093/D-096 já estavam corretos por desenho (verificação, sem mudança de
+schema; ver comentário da própria migration e Ruling no ledger). Este teste nasce como GUARDA de regressão (não
+havia teste explícito juntando os dois grants + a ausência de pg_net local num só lugar antes da 0607); roda
+verde tanto antes quanto depois da 0607 (a migration não altera nenhum dos três grants nem cria pg_net local —
+é NO-OP aqui por desenho). Gate completo depois da 0607: verde (ver relatório final).

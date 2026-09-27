@@ -116,8 +116,13 @@ export interface PayoutStore {
   /**
    * Admin13 ("Vendas para confirmar"): mesma listagem, mas de TODAS as papelarias — é aqui que o admin confirma
    * COM escola (a única confirmação que gera repasse; a da papelaria, Pap03, nunca gera — revisão de segurança).
+   * Inclui também vendas já confirmadas só pela papelaria e ainda não validadas pelo admin (`awaitingValidation`) —
+   * correção funcional (revisão de segurança, rodada 2): sem isso, essa venda saía da fila para sempre e nunca
+   * virava repasse.
    */
-  listConfirmableSalesForAdmin(actor: SessionActor): Promise<{ leadId: string; leadCode: string; stationeryName: string; amountCents: number; schoolNameHint: string }[]>;
+  listConfirmableSalesForAdmin(
+    actor: SessionActor,
+  ): Promise<{ leadId: string; leadCode: string; stationeryName: string; amountCents: number; schoolNameHint: string; awaitingValidation: boolean }[]>;
 
   listPendingRepasses(actor: SessionActor): Promise<PendingRepasseView[]>;
   listBatches(actor: SessionActor, limit: number): Promise<PayoutBatchView[]>;

@@ -6,6 +6,7 @@ export const PAYOUT_ERROR_CODES = [
   "invalid_state",
   "payout_unavailable",
   "nothing_due",
+  "already_settled",
   "database",
 ] as const;
 export type PayoutErrorCode = (typeof PAYOUT_ERROR_CODES)[number];

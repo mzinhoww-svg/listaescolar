@@ -119,6 +119,37 @@ describe("PayoutStore × banco real", () => {
     expect(mine).toMatchObject({ commissionCents: 1000, repasseCents: 0, repasseTarget: null });
   });
 
+  it("correção funcional (repasse perdido): papelaria confirma primeiro -> venda fica 'aguardando validação'; admin.confirmSale (mesma ação) valida e gera o repasse uma vez", async () => {
+    const store = createPayoutStore(admin);
+    const adminActor = await actor(IDS.admin, "admin");
+    await store.publishSettings(adminActor, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+    const schoolId = await withSuperuser((c) => ensureSchool(c));
+    await store.publishSchoolConfig(adminActor, { schoolId, target: "apm", payoutBps: 300, beneficiaryName: "APM 4", pixKey: "apm4@teste.invalid", pixKeyKind: "email" });
+    const lead = await withSuperuser((c) =>
+      seedLead(c, { stationeryId, requesterId: IDS.parent, status: "converted", overrides: { declared_sale_cents: 10000, declared_at: new Date().toISOString(), is_demo: false } }),
+    );
+    const memberActor = await actor(IDS.stationery_member, "stationery_member");
+
+    // 1) papelaria confirma sozinha, sem escola (Pap03 não tem mais seletor de escola): só comissão.
+    const saleId = await store.confirmSale(memberActor, { leadId: lead.id, schoolId: null });
+
+    // 2) a venda NÃO desaparece da fila do admin: continua lá como "aguardando validação".
+    const queueBefore = await store.listConfirmableSalesForAdmin(adminActor);
+    expect(queueBefore.find((s) => s.leadId === lead.id)).toMatchObject({ awaitingValidation: true });
+
+    // 3) admin usa a MESMA ação (confirmSale) escolhendo a escola: repository.ts decide sozinho que é uma validação.
+    const validatedId = await store.confirmSale(adminActor, { leadId: lead.id, schoolId });
+    expect(validatedId).toBe(saleId); // mesma venda, nunca duplica
+
+    const rows = await store.listRecentSalePayments(adminActor, 10);
+    const mine = rows.find((r) => r.id === saleId);
+    expect(mine).toMatchObject({ commissionCents: 1000, repasseCents: 300, repasseTarget: "apm" });
+
+    // 4) some da fila depois de validada.
+    const queueAfter = await store.listConfirmableSalesForAdmin(adminActor);
+    expect(queueAfter.find((s) => s.leadId === lead.id)).toBeUndefined();
+  });
+
   it("listPendingRepasses + createBatch/markBatchExecuted zera o pendente e fica idempotente", async () => {
     const store = createPayoutStore(admin);
     const adminActor = await actor(IDS.admin, "admin");

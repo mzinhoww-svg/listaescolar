@@ -77,6 +77,23 @@ create table public.sale_payments (
 create index sale_payments_stationery_idx on public.sale_payments (stationery_id, created_at desc);
 create index sale_payments_school_idx on public.sale_payments (school_id) where school_id is not null;
 
+-- sale_payment_admin_validations (revisão de segurança, rodada 2): registro de que um ADMIN validou uma venda que a
+-- PRÓPRIA papelaria já tinha confirmado (`sale_payments.confirmed_role = 'stationery_member'`). Sem isso, uma venda
+-- confirmada primeiro pela papelaria (Pap03) ficava perdida — sumia de "Vendas para confirmar" (Admin13) pela
+-- idempotência de `payout_confirm_sale`, nunca virava repasse e nunca contava o sinal Pix (`pix_confirmed`) por
+-- confirmação de admin/system (IMPORTANTE 5 da rodada anterior). Uma linha por venda (`unique(sale_payment_id)`):
+-- a validação é um evento único, não repetível, mesmo padrão de imutabilidade de `sale_payments`/`payout_ledger`
+-- (nunca UPDATE/DELETE). `school_id` aqui é o que o ADMIN escolheu ao validar (pode ou não coincidir com o que a
+-- papelaria tinha como dica em `leads.school_name`) — ver `payout_admin_validate_sale`.
+create table public.sale_payment_admin_validations (
+  id uuid primary key default gen_random_uuid(),
+  sale_payment_id uuid not null unique references public.sale_payments (id) on delete restrict,
+  school_id uuid references public.schools (id) on delete restrict,
+  validated_by uuid, -- sem FK, rastro (mesmo padrão de payout_settings.published_by)
+  created_at timestamptz not null default clock_timestamp(),
+  updated_at timestamptz not null default clock_timestamp() -- convenção do projeto (toda tabela tem os dois); nunca muda de fato: linha é append-only
+);
+
 -- payout_batches: "lote de pagamento" (Admin13) — o sistema gera a INSTRUÇÃO (quanto, para quem); o admin executa
 -- a transferência de verdade FORA do sistema e só então marca como executado.
 create table public.payout_batches (
@@ -164,6 +181,10 @@ alter table public.sale_payments enable always trigger sale_payments_no_update_d
 create trigger payout_ledger_no_update_delete before update or delete on public.payout_ledger
   for each row execute function public.billing_rows_block_mutation();
 alter table public.payout_ledger enable always trigger payout_ledger_no_update_delete;
+
+create trigger sale_payment_admin_validations_no_update_delete before update or delete on public.sale_payment_admin_validations
+  for each row execute function public.billing_rows_block_mutation();
+alter table public.sale_payment_admin_validations enable always trigger sale_payment_admin_validations_no_update_delete;
 
 create function public.payout_ledger_no_truncate() returns trigger
 language plpgsql
@@ -578,6 +599,72 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- payout_admin_validate_sale: correção funcional (revisão de segurança, rodada 2) do "repasse perdido" — se a
+-- papelaria confirma em Pap03 ANTES do admin, `payout_confirm_sale` já é idempotente (devolve o `sale_payments.id`
+-- existente sem tocar em nada), então uma segunda chamada do admin não gerava repasse nem contava o sinal Pix. Este
+-- é o ÚNICO caminho de "promoção": entrada única do admin em Admin13, tanto para uma venda AINDA não confirmada por
+-- ninguém (delega para `payout_confirm_sale` como 'admin', comportamento idêntico ao de antes) quanto para uma
+-- venda JÁ confirmada só pela papelaria (valida a escola/repasse sem duplicar a comissão já apurada na confirmação
+-- original). Idempotente por venda (`sale_payment_admin_validations.sale_payment_id` é `unique`): validar duas
+-- vezes devolve o mesmo id, sem inserir um segundo `repasse_due`.
+-- ---------------------------------------------------------------------------
+create function public.payout_admin_validate_sale(p_actor_id uuid, p_lead_id uuid, p_school_id uuid default null)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_sale public.sale_payments%rowtype;
+  v_commission_cents integer;
+  v_school_cfg public.school_payout_settings%rowtype;
+  v_repasse_cents integer;
+  v_already_validated uuid;
+begin
+  perform public.payout_check_admin(p_actor_id);
+
+  -- mesma trava do payout_confirm_sale (mesma chave): serializa confirmação/validação concorrente do mesmo lead.
+  perform pg_advisory_xact_lock(hashtextextended('payout_confirm_sale:' || p_lead_id::text, 0));
+
+  select * into v_sale from public.sale_payments where lead_id = p_lead_id for update;
+  if not found then
+    -- ninguém confirmou ainda: o admin está confirmando do zero, caminho idêntico ao de sempre.
+    return public.payout_confirm_sale(p_actor_id, 'admin', p_lead_id, p_school_id);
+  end if;
+
+  if v_sale.is_demo or v_sale.confirmed_role in ('admin', 'system') then
+    return v_sale.id; -- já processada por completo: demo não tem lançamento; admin/system já geraram tudo na confirmação.
+  end if;
+
+  -- idempotência: já validada por um admin antes -> devolve o mesmo id, sem reprocessar nem duplicar repasse_due.
+  select id into v_already_validated from public.sale_payment_admin_validations where sale_payment_id = v_sale.id;
+  if found then
+    return v_sale.id;
+  end if;
+
+  if p_school_id is not null then
+    select coalesce(sum(amount_cents), 0) into v_commission_cents from public.payout_ledger
+     where sale_payment_id = v_sale.id and entry_type = 'commission';
+    select * into v_school_cfg from public.school_payout_settings where school_id = p_school_id and status = 'active';
+    if v_school_cfg.id is not null and v_school_cfg.target in ('school', 'apm') then
+      -- mesma defesa em profundidade de payout_confirm_sale: nunca repassa mais do que a comissão JÁ apurada
+      -- na confirmação original (não recalcula pela comissão vigente hoje, que pode ter mudado desde então).
+      v_repasse_cents := least((v_sale.amount_cents * v_school_cfg.payout_bps) / 10000, v_commission_cents);
+      if v_repasse_cents > 0 then
+        insert into public.payout_ledger (sale_payment_id, entry_type, beneficiary_type, beneficiary_id, amount_cents, actor_id, actor_role)
+        values (v_sale.id, 'repasse_due', v_school_cfg.target, p_school_id, v_repasse_cents, p_actor_id, 'admin');
+      end if;
+    end if;
+  end if;
+
+  insert into public.sale_payment_admin_validations (sale_payment_id, school_id, validated_by)
+  values (v_sale.id, p_school_id, p_actor_id);
+
+  return v_sale.id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- payout_reverse_entry: lançamento compensatório de um `commission`/`repasse_due` (venda cancelada depois de
 -- confirmada, ou repasse indevido). Admin only, append-only, idempotente (mesmo padrão de billing_reverse_entry,
 -- S21): uma 2ª chamada com o mesmo `p_entry_id` devolve o estorno já existente, nunca duplica.
@@ -606,6 +693,25 @@ begin
   select id into v_existing from public.payout_ledger where reverses_entry_id = p_entry_id;
   if found then
     return v_existing; -- idempotente: já estornado.
+  end if;
+
+  -- correção funcional (revisão de segurança, rodada 2): um `repasse_due` que JÁ entrou num lote (pendente OU
+  -- executado) nunca é estornado em silêncio. `payout_batch_create` soma TUDO que existir para a escola/APM até o
+  -- momento em que o lote é criado, num único `repasse_settled` (lançamento de LOTE, sem ligação por linha a cada
+  -- `repasse_due` que ele cobriu); inserir um `repasse_reversed` depois disso não corrige o lote (`payout_batches.
+  -- total_cents` é imutável) — só desconta o total FUTURO, podendo até deixá-lo negativo (`payout_batch_create`
+  -- bloqueia lotes novos com `nothing_due`, mas o "Repasse pendente" da tela ficaria incoerente até compensar
+  -- sozinho com repasses novos). Vale mesmo para lote ainda `pending` (não só `executed`): mesmo sem dinheiro
+  -- movido ainda, o valor do lote já foi decidido e mostrado ao admin como instrução a executar. Comissão nunca cai
+  -- aqui (não tem lote — só o admin cobra a papelaria manualmente, D-122), só `repasse_due`.
+  if v_entry.entry_type = 'repasse_due' and exists (
+    select 1 from public.payout_ledger s
+     where s.entry_type = 'repasse_settled'
+       and s.beneficiary_type = v_entry.beneficiary_type
+       and s.beneficiary_id = v_entry.beneficiary_id
+       and s.created_at > v_entry.created_at
+  ) then
+    raise exception 'repasse já incluído num lote; correção manual fora do sistema' using errcode = '23514', hint = 'already_settled';
   end if;
 
   v_new_type := case when v_entry.entry_type = 'commission' then 'commission_reversed' else 'repasse_reversed' end;
@@ -770,8 +876,15 @@ begin
   -- S23: sinal real (public.sale_payments), não mais sempre `false` (D-105). Revisão de segurança: só conta quando
   -- CONFIRMADO por admin/system — a declaração da própria papelaria (`confirmed_role = 'stationery_member'`)
   -- nunca basta sozinha para este sinal, senão a papelaria fabricaria o 3º sinal da regra de 2 de 3 sozinha.
+  -- Revisão de segurança (rodada 2, "repasse perdido"): uma venda confirmada só pela papelaria e depois VALIDADA
+  -- pelo admin (`payout_admin_validate_sale`, `sale_payment_admin_validations`) também soma o sinal — a validação do
+  -- admin é a mesma verificação externa que uma confirmação direta dele já daria.
   pix_confirmed := exists (
     select 1 from public.sale_payments sp where sp.lead_id = p_lead_id and sp.confirmed_role in ('admin', 'system')
+  ) or exists (
+    select 1 from public.sale_payments sp
+      join public.sale_payment_admin_validations v on v.sale_payment_id = sp.id
+     where sp.lead_id = p_lead_id
   );
   signal_count := (case when stationery_confirmed then 1 else 0 end)
                 + (case when parent_confirmed then 1 else 0 end)
@@ -916,6 +1029,8 @@ revoke execute on function public.payout_school_config_publish(uuid, uuid, text,
 grant execute on function public.payout_school_config_publish(uuid, uuid, text, integer, text, text, text) to service_role;
 revoke execute on function public.payout_confirm_sale(uuid, text, uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.payout_confirm_sale(uuid, text, uuid, uuid) to service_role;
+revoke execute on function public.payout_admin_validate_sale(uuid, uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.payout_admin_validate_sale(uuid, uuid, uuid) to service_role;
 revoke execute on function public.payout_reverse_entry(uuid, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.payout_reverse_entry(uuid, uuid, text) to service_role;
 revoke execute on function public.payout_batch_create(uuid, uuid, text) from public, anon, authenticated, service_role;
@@ -928,7 +1043,8 @@ revoke execute on function public.billing_resolve_payment_alert(uuid, uuid, text
 grant execute on function public.billing_resolve_payment_alert(uuid, uuid, text) to service_role;
 
 revoke all on public.payout_settings, public.school_payout_settings, public.sale_payments, public.payout_batches,
-  public.payout_ledger, public.billing_payment_alerts from public, anon, authenticated, service_role;
+  public.payout_ledger, public.billing_payment_alerts, public.sale_payment_admin_validations
+  from public, anon, authenticated, service_role;
 
 -- Leitura direta só para service_role (telas Admin13/Admin14/Pap07 usam o cliente de serviço com checagem de papel
 -- em app, mesmo padrão de invoice_charges/plan_price_tiers na S21) — nenhuma política de RLS para authenticated:
@@ -939,6 +1055,7 @@ grant select on public.sale_payments to service_role;
 grant select on public.payout_batches to service_role;
 grant select on public.payout_ledger to service_role;
 grant select on public.billing_payment_alerts to service_role;
+grant select on public.sale_payment_admin_validations to service_role;
 
 -- ---------------------------------------------------------------------------
 -- RLS (habilitada, sem política para anon/authenticated: nega por padrão; service_role lê pelos grants acima)
@@ -949,3 +1066,4 @@ alter table public.sale_payments enable row level security;
 alter table public.payout_batches enable row level security;
 alter table public.payout_ledger enable row level security;
 alter table public.billing_payment_alerts enable row level security;
+alter table public.sale_payment_admin_validations enable row level security;

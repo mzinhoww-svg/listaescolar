@@ -9,6 +9,7 @@ const BY_CODE: Record<PayoutErrorCode | "desconhecido", string> = {
   invalid_state: "Esta ação não está disponível agora.",
   payout_unavailable: "A comissão ainda não foi configurada. Publique a configuração antes de confirmar vendas.",
   nothing_due: "Não há repasse pendente para gerar um lote agora.",
+  already_settled: "Este repasse já entrou num lote e não pode ser estornado por aqui; corrija manualmente fora do sistema.",
   database: "Não foi possível concluir agora. Tente de novo.",
   desconhecido: "Não foi possível concluir agora. Tente de novo.",
 };

@@ -14,6 +14,7 @@ import {
   publishSchoolConfig,
   purgePayouts,
   resolveAlert,
+  validateSale,
 } from "./payout-fixtures";
 import {
   asServiceCommitted,
@@ -522,16 +523,35 @@ describe("S23 · imutabilidade (sale_payments, payout_ledger)", () => {
       expect(truncL.code).toBe("42501");
     });
   });
+
+  it("sale_payment_admin_validations recusa update/delete (correção funcional, rodada 2)", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const r1 = await confirmSale(c, { actorId: IDS.stationery_member, actorRole: "stationery_member", leadId: lead.id });
+      const saleId = r1.rows[0]!.id as string;
+      await validateSale(c, { actorId: IDS.admin, leadId: lead.id, schoolId: null });
+      const row = await c.query<{ id: string }>("select id from public.sale_payment_admin_validations where sale_payment_id = $1", [saleId]);
+      const id = row.rows[0]!.id;
+
+      const upd = await attemptH(c, "update public.sale_payment_admin_validations set school_id = null where id = $1", [id]);
+      expect(upd.code).toBe("42501");
+      const del = await attemptH(c, "delete from public.sale_payment_admin_validations where id = $1", [id]);
+      expect(del.code).toBe("42501");
+    });
+  });
 });
 
 describe("S23 · correções da revisão de segurança (Opus, rodada única)", () => {
   beforeAll(seedUsers);
   afterAll(cleanupUsers);
 
-  it("BLOQUEANTE 1: EXECUTE negado a anon/authenticated em toda função nova; service_role só nas 9 principais", async () => {
+  it("BLOQUEANTE 1: EXECUTE negado a anon/authenticated em toda função nova; service_role só nas 10 principais", async () => {
     await withSuperuser(async (c) => {
       const main = [
         "payout_confirm_sale(uuid,text,uuid,uuid)",
+        "payout_admin_validate_sale(uuid,uuid,uuid)",
         "payout_settings_publish(uuid,integer,integer,integer)",
         "payout_school_config_publish(uuid,uuid,text,integer,text,text,text)",
         "payout_batch_create(uuid,uuid,text)",
@@ -684,6 +704,127 @@ describe("S23 · correções da revisão de segurança (Opus, rodada única)", (
         [saleId],
       );
       expect(repasseTotal.rows[0]!.n).toBe("0"); // 300 - 300 (estornado)
+    });
+  });
+});
+
+describe("S23 · correções da revisão de segurança (Opus, rodada 2)", () => {
+  beforeAll(seedUsers);
+  afterAll(cleanupUsers);
+
+  it("correção funcional 1 (repasse perdido): papelaria confirma primeiro, admin valida depois -> repasse gerado uma vez, sem duplicar comissão", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+
+      // papelaria confirma primeiro (Pap03 não tem mais seletor de escola: sem repasse por esse caminho).
+      const r1 = await confirmSale(c, { actorId: IDS.stationery_member, actorRole: "stationery_member", leadId: lead.id });
+      expect(r1.error).toBeNull();
+      const saleId = r1.rows[0]!.id as string;
+      expect((await ledgerFor(c, "platform", null)).filter((x) => x.sale_payment_id === saleId)).toMatchObject([{ entry_type: "commission", amount_cents: 1000 }]);
+      expect((await ledgerFor(c, "apm", school)).filter((x) => x.sale_payment_id === saleId)).toHaveLength(0);
+      const signalBefore = await c.query("select pix_confirmed from public.lead_conversion_signals($1)", [lead.id]);
+      expect(signalBefore.rows[0].pix_confirmed).toBe(false);
+
+      // admin valida depois, escolhendo a escola.
+      const r2 = await validateSale(c, { actorId: IDS.admin, leadId: lead.id, schoolId: school });
+      expect(r2.error).toBeNull();
+      expect(r2.rows[0]!.id).toBe(saleId); // mesma venda, nunca duplica
+
+      expect((await ledgerFor(c, "platform", null)).filter((x) => x.sale_payment_id === saleId)).toHaveLength(1); // comissão NÃO duplicou
+      expect((await ledgerFor(c, "apm", school)).filter((x) => x.sale_payment_id === saleId)).toMatchObject([{ entry_type: "repasse_due", amount_cents: 300 }]);
+      const signalAfter = await c.query("select pix_confirmed from public.lead_conversion_signals($1)", [lead.id]);
+      expect(signalAfter.rows[0].pix_confirmed).toBe(true);
+
+      // idempotência: validar de novo não duplica o repasse_due nem regrava a validação.
+      const r3 = await validateSale(c, { actorId: IDS.admin, leadId: lead.id, schoolId: school });
+      expect(r3.error).toBeNull();
+      expect((await ledgerFor(c, "apm", school)).filter((x) => x.sale_payment_id === saleId)).toHaveLength(1);
+    });
+  });
+
+  it("correção funcional 1: ordem inversa (admin confirma direto, sem a papelaria antes) continua funcionando", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+
+      const r = await validateSale(c, { actorId: IDS.admin, leadId: lead.id, schoolId: school });
+      expect(r.error).toBeNull();
+      const saleId = r.rows[0]!.id as string;
+      expect((await ledgerFor(c, "platform", null)).filter((x) => x.sale_payment_id === saleId)).toMatchObject([{ entry_type: "commission", amount_cents: 1000 }]);
+      expect((await ledgerFor(c, "apm", school)).filter((x) => x.sale_payment_id === saleId)).toMatchObject([{ entry_type: "repasse_due", amount_cents: 300 }]);
+    });
+  });
+
+  it("payout_admin_validate_sale: só admin (payout_check_admin)", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const r = await validateSale(c, { actorId: IDS.stationery_member, leadId: lead.id });
+      expect(r.hint).toBe("forbidden");
+    });
+  });
+
+  it("payout_admin_validate_sale: venda de demonstração não gera lançamento nem repasse (mesmo padrão de payout_confirm_sale)", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000, isDemo: true });
+      const r1 = await confirmSale(c, { actorId: IDS.stationery_member, actorRole: "stationery_member", leadId: lead.id });
+      const saleId = r1.rows[0]!.id as string;
+      const r2 = await validateSale(c, { actorId: IDS.admin, leadId: lead.id, schoolId: school });
+      expect(r2.error).toBeNull();
+      expect(r2.rows[0]!.id).toBe(saleId);
+      expect((await ledgerFor(c, "apm", school)).filter((x) => x.sale_payment_id === saleId)).toHaveLength(0);
+    });
+  });
+
+  it("correção funcional 2: payout_reverse_entry recusa estornar repasse_due já incluído num lote, pendente ou executado", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const sale = await confirmSale(c, { actorId: IDS.admin, actorRole: "admin", leadId: lead.id, schoolId: school });
+      const saleId = sale.rows[0]!.id as string;
+      const repasseRow = (await ledgerFor(c, "apm", school)).find((r) => r.sale_payment_id === saleId)!;
+
+      const batch = await batchCreate(c, { actorId: IDS.admin, schoolId: school, beneficiaryType: "apm" });
+      expect(batch.error).toBeNull();
+      const batchId = batch.rows[0]!.id as string;
+
+      // ainda pending (nenhum dinheiro moveu ainda) -> já recusa: o lote já tem total_cents fixo.
+      const revPending = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [repasseRow.id, IDS.admin, "engano"]);
+      expect(revPending.hint).toBe("already_settled");
+
+      await batchMarkExecuted(c, { actorId: IDS.admin, batchId });
+      const revExecuted = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [repasseRow.id, IDS.admin, "engano"]);
+      expect(revExecuted.hint).toBe("already_settled");
+    });
+  });
+
+  it("correção funcional 2: payout_reverse_entry ainda estorna repasse_due que NÃO entrou em nenhum lote", async () => {
+    await withClaims("system", async (c) => {
+      await publishPayoutSettingsOk(c, { commissionBps: 1000, graceDays: 5, blockDays: 15 });
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      const school = await ensureSchool(c);
+      await publishSchoolConfig(c, { schoolId: school, target: "apm", payoutBps: 300 });
+      const lead = await leadForSale(c, { stationeryId: st, amountCents: 10000 });
+      const sale = await confirmSale(c, { actorId: IDS.admin, actorRole: "admin", leadId: lead.id, schoolId: school });
+      const saleId = sale.rows[0]!.id as string;
+      const repasseRow = (await ledgerFor(c, "apm", school)).find((r) => r.sale_payment_id === saleId)!;
+      const rev = await attemptH(c, "select public.payout_reverse_entry($1::uuid, $2::uuid, $3::text) as id", [repasseRow.id, IDS.admin, "engano"]);
+      expect(rev.error).toBeNull();
     });
   });
 });

@@ -1100,3 +1100,62 @@ roteiro ganhou uma etapa extra para confirmar a venda 1 pelo admin, com escola, 
 papelaria, sem escola). Achado e corrigido no meio do processo: o próprio roteiro tinha um bug (login redundante
 do admin já autenticado na etapa 3, causando `Element not found: #email`) — não era uma falha da aplicação; trocado
 por uma navegação simples (`ab admin open`), já que a sessão do admin seguia válida desde a etapa 1.
+
+## S23 · correções da revisão de segurança (rodada 2, Opus, sobre `28f93b5`)
+
+Reverificação da rodada 1 achou 0 bloqueantes, 1 importante funcional e 1 menor funcional. Migration
+`0403_repasses.sql` editada NO LUGAR de novo (ainda só local). Vermelho real antes do fix: revertida temporariamente
+só `supabase/migrations/0403_repasses.sql` para o conteúdo de `28f93b5` (com os testes novos já escritos por cima),
+`pnpm db:reset` + rodada dos testes novos — as 5 asserções nova falharam exatamente como esperado (função
+`payout_admin_validate_sale` inexistente; `payout_reverse_entry` sem recusar lote já criado), log salvo em
+`docs/superpowers/logs/s23-security-round2-red.log`; migration restaurada e `pnpm db:reset` de novo antes de
+qualquer verificação verde.
+
+**1) Repasse perdido: papelaria confirma antes do admin.** Causa raiz: `payout_confirm_sale` é idempotente por
+design (`unique(sale_payments.lead_id)`, 2ª chamada devolve o id existente sem tocar em nada) — bom contra corrida
+concorrente da MESMA confirmação, ruim quando é uma confirmação DIFERENTE (papelaria primeiro, admin depois): a
+venda sumia de `listConfirmableSalesForAdmin` (que excluía qualquer lead com `sale_payments` já existente,
+independente de quem confirmou) e nunca virava repasse nem contava o sinal Pix. Ruling: criei
+`payout_admin_validate_sale(p_actor_id, p_lead_id, p_school_id)` como o ÚNICO ponto de entrada do admin (a
+`confirmSale` do repositório TS agora despacha para ela sempre que `actor.role === 'admin'`, nunca mais chama
+`payout_confirm_sale` diretamente para admin) — ela cobre os dois casos com uma função: lead sem `sale_payments`
+nenhum delega para `payout_confirm_sale('admin', ...)` (comportamento idêntico ao de antes, cobre "ordem inversa");
+lead já confirmado só pela papelaria (`confirmed_role = 'stationery_member'`) é uma VALIDAÇÃO — sem duplicar a
+comissão (só lê o `payout_ledger` já existente para aplicar o mesmo teto `least(declarado × bps, comissão já
+apurada)`), grava um repasse_due novo se houver escola/config, e registra a validação numa tabela nova,
+`sale_payment_admin_validations` (append-only, `unique(sale_payment_id)`, mesma imutabilidade de `sale_payments`/
+`payout_ledger`), que também passou a alimentar `pix_confirmed` em `lead_conversion_signals` — a validação do admin
+é a mesma verificação externa que uma confirmação direta dele já dava. `listConfirmableSalesForAdmin` deixou de
+excluir vendas confirmadas só pela papelaria e ainda não validadas (agora só sai da fila quando plenamente
+processada: admin/system direto, OU papelaria + validação); o campo novo `awaitingValidation` rotula esse caso na
+tela (Admin13: "Confirmada pela papelaria · aguardando validação", botão "Validar" em vez de "Confirmar" — mesma
+`<form>`, mesma ação, o banco decide sozinho). Custo se não corrigido: toda venda que a papelaria confirmasse antes
+do admin olhar a fila perderia o repasse PARA SEMPRE (sem repasse, sem sinal Pix, sem jeito de recuperar depois) —
+o pior tipo de bug funcional aqui, porque é silencioso (nada dá erro, o dinheiro simplesmente nunca é repassado).
+
+**2) Estorno de repasse já liquidado (num lote).** `payout_reverse_entry` (rodada 1) só checava `entry_type in
+('commission', 'repasse_due')`, sem considerar que um `repasse_due` pode já ter sido somado a um LOTE
+(`payout_batches`, via um lançamento `repasse_settled` que soma TUDO que existir para a escola/APM até aquele
+momento, sem ligação por linha a cada `repasse_due` coberto). Ruling: recusar (hint `already_settled`) estornar um
+`repasse_due` quando existe um `repasse_settled` posterior para a MESMA escola/APM — MAIS ESTRITO do que só "lote
+executado" (a redação original do pedido): mesmo um lote ainda `pending` (dinheiro nenhum moveu) já tem
+`total_cents` fixo e foi mostrado ao admin como uma instrução a executar; estornar por baixo dele não corrige o
+lote (imutável) e só desconta o total FUTURO — podendo até deixá-lo negativo, exatamente o "pendente negativo
+descontado em silêncio" que o pedido queria evitar. Optei por RECUSAR (não por um ajuste de lote automático): a
+correção de um repasse já batido em lote precisa da decisão de um humano sobre o que fazer com o lote em si
+(cancelar? gerar um lote negativo manual?), fora do escopo de uma função de estorno de UM lançamento. Comissão
+nunca cai nessa checagem (não tem conceito de lote — D-122, cobrança manual). Custo se a checagem tivesse ficado só
+em "executado" (a redação literal do pedido): um repasse ainda `pending` estornado deixaria o "Repasse pendente" da
+tela incoerente com o `total_cents` já fixado do lote, até compensar sozinho com repasses futuros — um bug sutil
+que só apareceria numa janela de tempo específica (lote gerado mas ainda não executado).
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos
+verdes (3252 unitários; 1729 de banco, 3 skipped pré-existentes — 8 testes novos: 6 em `tests/db/payouts.test.ts`
+["S23 · correções da revisão de segurança (Opus, rodada 2)"] + 1 de imutabilidade da tabela nova + 1 em
+`tests/payouts/repository.test.ts`). E2E (`scripts/e2e-s23.sh`) refeito do zero, com uma etapa nova exercitando
+exatamente a ordem "papelaria confirma primeiro, admin valida depois": 30/30 (era 26/26 na rodada 1). Achado no
+processo (ambiental, não da aplicação): outra trilha (S25, worktree T2) rodou `agent-browser close --all` no meio
+de uma tentativa de E2E, derrubando as sessões `t3s23-*` desta trilha a meio caminho (uma delas chegou a mostrar uma
+página de bloqueio de segurança de terceiros, sinal claro de sessão de browser corrompida por outro processo) —
+refeito do zero numa janela sem colisão; registrado como lembrete (não dívida): fechar sessões do agent-browser só
+pelo nome exato, nunca com `--all`, quando várias trilhas rodam em paralelo no mesmo host.

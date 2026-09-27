@@ -91,44 +91,66 @@ expect_text admin "APM Escola E2E S23" "repasse da escola aparece na tabela"
 shot admin "$OUT/S23-admin13-escola-config.png"
 
 echo "== 3) revisão de segurança: só o ADMIN confirma COM escola (repasse); a papelaria sozinha (Pap03) só gera comissão"
-ab admin open "$BASE/admin/repasses" >/dev/null
-wait_text admin "Vendas para confirmar" 20
-expect_text admin "LC-S23A1" "venda 1 aparece na fila de confirmação do admin"
-shot admin "$OUT/S23-admin13-confirmar-vendas.png"
-ab admin eval "(() => { const li=[...document.querySelectorAll('li')].find(x=>x.textContent.includes('LC-S23A1')); li.querySelector('select[name=schoolId]').value = '$SCHOOL_ID'; li.querySelector('form').requestSubmit(); return 'ok'; })()" >/dev/null
-wait_text admin "Feito." 15
-expect_text admin "LC-S23A2" "venda 2 (ainda não confirmada) continua na fila; venda 1 saiu"
-shot admin "$OUT/S23-admin13-venda-confirmada.png"
-
 ab a set viewport 1280 900 >/dev/null
 login a s14a@listacerta.test "/papelaria/leads/LC-S23A2"
 wait_text a "Lead LC-S23A2" 20
 shot a "$OUT/S23-pap03-confirmar-form.png"
 ab a eval "document.querySelector('[aria-label=\"Pix pela plataforma\"] form').requestSubmit()" >/dev/null
 wait_text a "Registrado" 15
-expect_text a "Confirmado" "venda 2 confirmada pela própria papelaria (só comissão, sem repasse)"
+expect_text a "Confirmado" "venda 2 confirmada pela própria papelaria (só comissão, sem repasse ainda)"
 
-echo "== 4) admin vê as duas vendas com comissão e o repasse pendente da APM"
+ab admin set viewport 1280 900 >/dev/null
+ab admin open "$BASE/admin/repasses" >/dev/null
+wait_text admin "Vendas para confirmar" 20
+expect_text admin "LC-S23A1" "venda 1 (ninguém confirmou ainda) aparece na fila"
+expect_text admin "aguardando validação" "correção funcional (repasse perdido): venda 2, já confirmada pela papelaria, CONTINUA na fila do admin"
+shot admin "$OUT/S23-admin13-confirmar-vendas.png"
+ab admin eval "(() => { const li=[...document.querySelectorAll('li')].find(x=>x.textContent.includes('LC-S23A1')); li.querySelector('select[name=schoolId]').value = '$SCHOOL_ID'; li.querySelector('form').requestSubmit(); return 'ok'; })()" >/dev/null
+wait_text admin "Feito." 15
+expect_text admin "aguardando validação" "venda 1 saiu da fila (confirmada direto); venda 2 ainda aguarda validação do admin"
+shot admin "$OUT/S23-admin13-venda-confirmada.png"
+
+echo "== 3b) correção funcional (repasse perdido): admin VALIDA a venda 2 (confirmada antes pela papelaria), escolhendo a escola -> repasse nasce sem duplicar a comissão já apurada"
+ab admin eval "(() => { const li=[...document.querySelectorAll('li')].find(x=>x.textContent.includes('LC-S23A2')); li.querySelector('select[name=schoolId]').value = '$SCHOOL_ID'; li.querySelector('form').requestSubmit(); return 'ok'; })()" >/dev/null
+wait_text admin "Feito." 15
+if wait_text admin "Nenhuma venda aguardando confirmação." 15; then
+  ok "as duas vendas saíram da fila: uma confirmada direto, a outra validada depois"
+else
+  bad "as duas vendas saíram da fila: uma confirmada direto, a outra validada depois" "texto não apareceu a tempo (navegação/SSR mais lenta nesta transição)"
+fi
+
+echo "== 4) admin vê as duas vendas com comissão e o repasse pendente da APM (venda 1 confirmada direto + venda 2 validada depois de confirmada pela papelaria)"
 ab admin open "$BASE/admin/repasses" >/dev/null; wait_text admin "Vendas confirmadas" 15
 expect_text admin "LC-S23A1" "venda 1 aparece"
 expect_text admin "LC-S23A2" "venda 2 aparece"
-expect_text admin "10,00" "repasse pendente de R\$ 10,00 (5% de R\$ 200,00) aparece"
+expect_text admin "17,50" "repasse pendente de R\$ 17,50 (5% de 200 + 5% de 150, as duas vendas) aparece"
 shot admin "$OUT/S23-admin13-vendas-repasse.png"
 COMMISSION_SUM=$(sql "select coalesce(sum(amount_cents),0) from public.payout_ledger where entry_type = 'commission';")
-[ "$COMMISSION_SUM" = "3500" ] && ok "comissão total = R\$ 35,00 (10% de 200 + 10% de 150)" || bad "soma da comissão" "veio $COMMISSION_SUM"
+[ "$COMMISSION_SUM" = "3500" ] && ok "comissão total = R\$ 35,00 (10% de 200 + 10% de 150) — validar a venda 2 NÃO duplicou a comissão" || bad "soma da comissão" "veio $COMMISSION_SUM"
+REPASSE_SUM=$(sql "select coalesce(sum(amount_cents),0) from public.payout_ledger where entry_type = 'repasse_due';")
+[ "$REPASSE_SUM" = "1750" ] && ok "repasse total = R\$ 17,50 (venda 1 confirmada direto + venda 2 validada depois pelo admin)" || bad "soma do repasse" "veio $REPASSE_SUM"
 
-echo "== 5) admin gera o lote de pagamento da APM; pendente zera; 2ª tentativa (SQL) -> nothing_due"
+echo "== 5) admin gera o lote de pagamento da APM (R\$ 17,50); pendente zera; 2ª tentativa (SQL) -> nothing_due"
 ab admin eval "(() => { const f=[...document.querySelectorAll('form')].find(f=>f.querySelector('button')?.textContent.includes('Gerar lote')); f.requestSubmit(); return 'ok'; })()" >/dev/null
 wait_text admin "Feito." 15
 expect_text admin "Nada pendente de repasse agora." "repasse pendente zerou depois do lote"
 BATCH_ID=$(sql "select id from public.payout_batches where school_id = '$SCHOOL_ID' order by created_at desc limit 1;")
-[ -n "$BATCH_ID" ] && ok "lote gerado (R\$ 10,00, pendente)" || bad "gerar lote" "id veio vazio"
+[ -n "$BATCH_ID" ] && ok "lote gerado (R\$ 17,50, pendente)" || bad "gerar lote" "id veio vazio"
 HINT2=$(sql_stdin <<SQL 2>&1
 set role service_role;
 select public.payout_batch_create('$ADMIN_ID'::uuid, '$SCHOOL_ID'::uuid, 'apm');
 SQL
 )
 grep -qi "nothing_due\|nada pendente" <<<"$HINT2" && ok "2ª geração de lote sem novo repasse_due -> nothing_due" || bad "idempotência do lote" "veio: $HINT2"
+
+echo "== 5b) correção funcional 2: payout_reverse_entry recusa estornar um repasse_due que já entrou neste lote (pendente; nenhum dinheiro moveu ainda, mas o valor do lote já foi decidido)"
+REPASSE_ENTRY_ID=$(sql "select id from public.payout_ledger where entry_type = 'repasse_due' and beneficiary_id = '$SCHOOL_ID' order by created_at limit 1;")
+REV_HINT=$(sql_stdin <<SQL 2>&1
+set role service_role;
+select public.payout_reverse_entry('$REPASSE_ENTRY_ID'::uuid, '$ADMIN_ID'::uuid, 'teste e2e');
+SQL
+)
+grep -qi "already_settled\|já incluído" <<<"$REV_HINT" && ok "estorno de repasse já incluído no lote é recusado (nunca desconta o próximo pendente em silêncio)" || bad "estorno de repasse já em lote" "veio: $REV_HINT"
 
 echo "== 6) admin marca o lote como executado (registro; nenhuma transferência real acontece aqui)"
 ab admin open "$BASE/admin/repasses" >/dev/null; wait_text admin "Lotes de pagamento" 15

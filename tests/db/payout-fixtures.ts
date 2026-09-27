@@ -13,6 +13,7 @@ import { attemptH, IDS, withSuperuser, type HintAttempt } from "./helpers";
 export async function purgePayouts(opts: { leadIds: readonly string[] }): Promise<void> {
   if (opts.leadIds.length === 0) return;
   const guarded: [string, string][] = [
+    ["sale_payment_admin_validations", "sale_payment_admin_validations_no_update_delete"],
     ["sale_payments", "sale_payments_no_update_delete"],
     ["payout_ledger", "payout_ledger_no_update_delete"],
   ];
@@ -22,6 +23,10 @@ export async function purgePayouts(opts: { leadIds: readonly string[] }): Promis
       for (const [table, trigger] of guarded) {
         await c.query(`alter table public.${table} disable trigger ${trigger}`);
       }
+      await c.query(
+        `delete from public.sale_payment_admin_validations where sale_payment_id in (select id from public.sale_payments where lead_id = any($1::uuid[]))`,
+        [opts.leadIds],
+      );
       await c.query(
         `delete from public.payout_ledger where sale_payment_id in (select id from public.sale_payments where lead_id = any($1::uuid[]))`,
         [opts.leadIds],
@@ -96,6 +101,10 @@ export async function confirmSale(
   ]);
 }
 
+export async function validateSale(c: Client, o: { actorId: string; leadId: string; schoolId?: string | null }): Promise<HintAttempt> {
+  return attemptH(c, "select public.payout_admin_validate_sale($1::uuid, $2::uuid, $3::uuid) as id", [o.actorId, o.leadId, o.schoolId ?? null]);
+}
+
 export async function batchCreate(c: Client, o: { actorId: string; schoolId: string; beneficiaryType?: "school" | "apm" }): Promise<HintAttempt> {
   return attemptH(c, "select public.payout_batch_create($1::uuid, $2::uuid, $3::text) as id", [o.actorId, o.schoolId, o.beneficiaryType ?? "apm"]);
 }
@@ -163,6 +172,7 @@ export function randomPixKey(): string {
  */
 export async function purgeAllPayoutTestData(): Promise<void> {
   const guarded: [string, string][] = [
+    ["sale_payment_admin_validations", "sale_payment_admin_validations_no_update_delete"],
     ["sale_payments", "sale_payments_no_update_delete"],
     ["payout_ledger", "payout_ledger_no_update_delete"],
     ["payout_settings", "payout_settings_guard"],
@@ -175,6 +185,8 @@ export async function purgeAllPayoutTestData(): Promise<void> {
       for (const [table, trigger] of guarded) {
         await c.query(`alter table public.${table} disable trigger ${trigger}`);
       }
+      // ordem: validations e ledger antes de sale_payments (FK `on delete restrict` das duas para sale_payments.id).
+      await c.query("delete from public.sale_payment_admin_validations");
       await c.query("delete from public.payout_ledger");
       await c.query("delete from public.sale_payments");
       await c.query("delete from public.payout_batches");

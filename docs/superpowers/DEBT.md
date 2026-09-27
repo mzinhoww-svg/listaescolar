@@ -18,8 +18,8 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-003 | ledger.md (S01, itens adiados) | S01: `created_at` mutável (sem trigger), guard de papel sem `current_user`/SECURITY DEFINER, políticas permissivas múltiplas (advisor), triggers de auditoria supõem `id` uuid, sem FORCE RLS | média | S19 | aberta |
 | D-004 | ledger.md (S01) | `auth_role()` executável por anon como RPC e ramos `system` inertes nas políticas `to authenticated` | baixa | S19 | aberta |
 | D-005 | ledger.md (S02) | Erros do provedor de auth e do exchange sem registro no Sentry (sem PII) | média | S19 | aberta |
-| D-006 | ledger-dados S06 revisão final | Aprovar reivindicação é terminal e imediato, sem tela de confirmação; clique errado do admin exige correção manual no banco | média | S16 | aberta |
-| D-007 | ledger-dados S06 T1 revisão | `schools_guard_verification` bloqueia `claimed/verified -> suspended` por admin; falta função de suspensão (SECURITY DEFINER do dono) | média | S16 | aberta |
+| D-006 | ledger-dados S06 revisão final | Aprovar reivindicação é terminal e imediato, sem tela de confirmação; clique errado do admin exige correção manual no banco | média | S16 | resolvida em 2026-09-27 (S16): `ActionForm` ganhou `confirmMessage` (confirmação do navegador antes de enviar); `DecisionForm` passa a pedir confirmação só para "Aprovar" — teste em `tests/claims/action-form.test.tsx` |
+| D-007 | ledger-dados S06 T1 revisão | `schools_guard_verification` bloqueia `claimed/verified -> suspended` por admin; falta função de suspensão (SECURITY DEFINER do dono) | média | S17 | aberta (reatribuída da S16: não bloqueia dashboard/auditoria/denúncias/`ai_settings`/arquivar, o prompt central desta fatia) |
 | D-008 | ledger-dados S06 revisão final | Token do link de e-mail da reivindicação vai na query da URL e aparece em logs de acesso (aceito: uso único, expira, exige sessão); mover para POST/fragmento | baixa | S19 | aberta |
 | D-009 | ledger-comercio S14 T2 | `CRON_SECRET` com `min(16)` em `lib/env.ts` derruba o boot com segredo curto, enquanto o contrato da rota é 503 | baixa | S19 | aberta |
 | D-010 | ledger-comercio S12 T2 | Trava fail-closed do demo de varejistas depende de `VERCEL_ENV`; deploy fora da Vercel sem a variável precisa ser documentado | baixa | S20 | aberta |
@@ -62,9 +62,9 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-032 | ledger-pipeline S08 | Sem extração da camada de texto do PDF (`text_document_mismatch` só quando o modelo sinaliza) | baixa | S20 | aberta |
 | D-033 | ledger-dados S05 | Lista e perfil sempre `noindex`; liberar indexação de lista real de escola `claimed/verified` | média | S27 | aberta |
 | D-034 | ledger-dados S05 | Itens da lista não agrupados por categoria (a App05 agrupa) | baixa | S18 | aberta |
-| D-035 | ledger-dados S06 (dívida, plano) | Convites de co-admin e telas Escola04, Escola05, Escola06 e Escola12 adiados | média | S16 | aberta |
-| D-036 | ledger-comercio S13 onda final | Sem tela para o dono editar cadastro de papelaria `rejected` (razão social, CNPJ, contato) | média | S16 | aberta |
-| D-037 | ledger-comercio S13 onda final | `recordConsent` sem tela; editar item do catálogo pelo nome cria item novo se o nome mudar | baixa | S16 | aberta |
+| D-035 | ledger-dados S06 (dívida, plano) | Convites de co-admin e telas Escola04, Escola05, Escola06 e Escola12 adiados | média | S17 | aberta (reatribuída da S16: sem relação com o prompt desta fatia) |
+| D-036 | ledger-comercio S13 onda final | Sem tela para o dono editar cadastro de papelaria `rejected` (razão social, CNPJ, contato) | média | S17 | aberta (reatribuída da S16: sem relação com o prompt desta fatia) |
+| D-037 | ledger-comercio S13 onda final | `recordConsent` sem tela; editar item do catálogo pelo nome cria item novo se o nome mudar | baixa | S17 | aberta (reatribuída da S16: sem relação com o prompt desta fatia) |
 | D-038 | ledger-comercio S14 T2 / T3 | Rótulo "últimos 7 dias" dos KPIs com janela rolante `WEEK_MS`; revisar o texto | baixa | S18 | aberta |
 | D-039 | ledger-comercio S14 revisão final | `createLeadAction` perde papelaria/bairro no redirect de erro; `/cotacao` aberta a papéis que não criam lead; cartão mobile "valor enviado: indisponível"; item em falta como "fora do subtotal (em falta)"; tabela e cartões duplicados no HTML | baixa | S18 | aberta |
 | D-040 | ledger-comercio S14 revisão final | Pap02 sem a coluna "Estimado" (exigiria consulta agregada de itens × catálogo) | baixa | S22 (Ruling S21 plano) | aberta |
@@ -131,7 +131,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-080 | ledger-comercio S11 T4 / T5 | `PushOptIn` guarda o endpoint só em estado React: após recarregar volta a "Ativar" mesmo com assinatura ativa (não consulta `pushManager.getSubscription()`), e "Desativar" não chama `sub.unsubscribe()` no navegador | média | S18 | aberta |
 | D-081 | ledger-comercio S11 T3 revisão / T5 | Endpoint de push: o Zod normaliza host em maiúsculas e porta `:443` (via `new URL()`), mas o CHECK de `push_subscriptions.endpoint` valida a string crua e recusa esses casos ("Não foi possível ativar"); normalizar antes de gravar ou alinhar o CHECK | baixa | S19 | aberta |
 | D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S18 (revisitada na S15: mudaria dezenas de páginas por dívida de baixa severidade, ficou para lá) | aberta |
-| D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S16 | aberta |
+| D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S18 | aberta (reatribuída da S16: item de copy/UX, sem relação com o prompt desta fatia) |
 | D-084 | ledger-comercio S11 T4 | `AsyncOptions` (S07, "continuar aguardando") não oferece "Ativar notificação do navegador" nem aponta para `/conta/notificacoes` | baixa | S18 | aberta |
 | D-085 | ledger-comercio S11 T3 escopo | `ClaimTokenSender` (S06) ainda não usa o `ResendEmailTransport` da S11: o link de reivindicação por e-mail continua sem envio real até o humano fornecer conta/credencial (`EMAIL_NOTIFICATIONS_ENABLED`, `EMAIL_API_KEY`, `EMAIL_FROM`) e a S16/S19 ligar o transporte | média | Humano / S16 | aberta |
 | D-086 | ledger-comercio S11 T3 escopo | `ocr-worker` sem "kick" opcional do despachante (`NOTIFY_DISPATCH_URL`): a notificação `submission_ready` do worker só sai por push/e-mail no próximo ciclo do cron; a central não depende disso | baixa | S19 | aberta |
@@ -191,6 +191,10 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-140 | ledger.md S15 (achado do E2E, renumerado de D-123 por colisão com a S23/S25) | `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, `list_reader_get`/0601), não o id de `school_lists`; a página pública de uma lista oficial (`/escolas/[inep]/[serie]`) não tem hoje NENHUM link para "montar carrinho" — só a cópia do pai (`ParentCopyEditor`) linka para `/carrinho/novo?lista=`. Uma família que navega até a lista oficial não acha como montar o carrinho a partir dela pela UI | média | futura fatia de UX do carrinho (S18/S19) | aberta |
 | D-141 | ledger.md S15 (renumerado de D-124) | App19-Histórico (mapeada para a S15 em `SCREENS.md`) não foi construída como tela dedicada: o hub (`/conta`) e `/conta/carrinhos`/`/conta/listas-salvas` cobrem estudantes/listas salvas/carrinhos, mas não a vista cronológica combinada e filtrável por aluno que o design mostra | baixa | futura fatia de melhoria | aberta |
 | D-142 | ledger.md S15 (renumerado de D-125) | App16-HubPais mostra "% da lista resolvida" por aluno (barra de progresso); não implementado nesta fatia por falta de um sinal real de "resolvido" (nenhuma tabela liga item de carrinho/lista a "comprado"/"resolvido" por aluno hoje) — mostrar um número inventado violaria "nada inventado" (regra de produto) | baixa | futura fatia (definir o sinal de "resolvido" antes de mostrar progresso) | aberta |
+| D-150 | ledger.md S16 (Ruling de escopo) | Denúncia pública (`reports`) só tem ponto de entrada na tela para `target_type = 'school_list'` (página da escola); a tabela já suporta `stationery` e `catalog_item`, mas não há tela pública para denunciar papelaria ou item de catálogo | baixa | S17/S27 | aberta |
+| D-151 | ledger.md S16 (Ruling de escopo) | Não há índice navegável de todas as listas publicadas para o admin arquivar; a entrada é só por id direto (`/admin/listas/[id]`, alcançada pela fila de denúncias) | baixa | S18 | aberta |
+| D-152 | ledger.md S16 (Ruling de escopo) | Edição de `ai_settings.routes` (roteamento de modelo por provedor) e de `auto_publish_enabled` fica de fora da tela `/admin/ia`; ambos ficam só leitura por decisão desta fatia (routes é JSON heterogêneo sem cobertura de teste proporcional ao tempo disponível; `auto_publish_enabled` exige Ruling explícito antes de ligar) | média | futura fatia (com Ruling explícito para `auto_publish_enabled`) | aberta |
+| D-153 | ledger.md S16 (achado do E2E) | O clique em "Colocar em análise" (`/admin/denuncias/[id]`) submete o `<select name=resolution>` na mesma tela mesmo sem o admin ter escolhido nada; o servidor já ignora esse valor quando `status=reviewing` (`features/reports/actions.ts`), mas o `<select>` deveria ficar desabilitado enquanto não houver uma transição para resolver, por clareza de UI | baixa | S18 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -211,9 +215,14 @@ resolução, mesmo conteúdo.
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 42 | 9 | 51 |
-| baixa | 65 | 10 | 75 |
-| **Total** | **117** | **24** | **141** |
+| média | 42 | 10 | 52 |
+| baixa | 68 | 10 | 78 |
+| **Total** | **120** | **25** | **145** |
+
+Contagem atualizada em 2026-09-27 (S16, admin): D-006 resolvida (confirmação antes de aprovar reivindicação);
+D-007/D-035/D-036/D-037/D-083 reatribuídas para S17/S18 (nenhuma bloqueava o prompt desta fatia — Ruling no
+`ledger.md`, seção S16); D-150–D-153 novas (achados/Rulings de escopo da S16). Esta contagem ainda não reconcilia
+com `origin/main` pós-S26 (D-143–D-149 lá); reconciliada no merge desta branch.
 
 Contagem atualizada em 2026-09-27 (merge de `origin/main` — S23 e S25, com a reverificação de segurança de ambas —
 na `slice/S15-area-familia`). Lado `main`: D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23 (7 baixa + 3

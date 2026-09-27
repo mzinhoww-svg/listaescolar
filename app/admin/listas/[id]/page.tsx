@@ -72,7 +72,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                   <textarea name="reason" required minLength={3} maxLength={1000} rows={3} className="bg-campo rounded-campo w-full p-3 text-[14px] font-medium" />
                 </label>
                 <button type="submit" className="border-[1.5px] border-[#8a1c14] bg-transparent text-[#8a1c14] rounded-botao h-11 text-[14px] font-extrabold">
-                  Arquivar lista
+                  Confirmar arquivamento
                 </button>
               </form>
             )}

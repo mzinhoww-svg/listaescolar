@@ -73,7 +73,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             ) : null}
           </section>
           <aside className="flex flex-col gap-3 rounded-[20px] bg-white p-5">
-            <h2 className="text-[16px] font-extrabold">Resolver</h2>
+            <h2 className="text-[16px] font-extrabold">Resolver denúncia</h2>
             {report.status === "resolved" || report.status === "dismissed" ? (
               <p className="text-texto-3 text-[13px] font-semibold">Esta denúncia já foi encerrada.</p>
             ) : (

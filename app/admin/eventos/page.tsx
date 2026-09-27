@@ -14,10 +14,12 @@ function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Cuiaba" }).format(d);
 }
 
+// 480: cabe a maioria das linhas de configuração (ex.: ai_settings tem ~600 chars com routes+pipeline_version);
+// bloqueia só blobs claramente grandes demais para uma tabela.
 function json(v: unknown): string {
   if (v === null || v === undefined) return "—";
   const s = JSON.stringify(v);
-  return s.length > 160 ? `${s.slice(0, 160)}…` : s;
+  return s.length > 480 ? `${s.slice(0, 480)}…` : s;
 }
 
 type SP = { acao?: string | string[]; entidade?: string | string[]; entidadeId?: string | string[]; ator?: string | string[]; de?: string | string[]; ate?: string | string[] };

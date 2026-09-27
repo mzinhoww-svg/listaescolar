@@ -12,8 +12,11 @@ type Act = (formData: FormData) => Promise<void>;
  */
 export function ReportListForm({ listId, action, ok, erro }: { listId: string; action: Act; ok: boolean; erro: string | null }) {
   const id = useId();
+  // Depois de enviar (sucesso ou erro), o redirect volta com #denunciar; sem abrir de novo, a mensagem fica
+  // dentro do <details> fechado (o navegador não expande sozinho: o alvo do fragmento é o próprio <details>,
+  // não um elemento dentro dele).
   return (
-    <details id="denunciar" className="rounded-campo bg-campo p-4 text-[13px]">
+    <details id="denunciar" open={ok || erro ? true : undefined} className="rounded-campo bg-campo p-4 text-[13px]">
       <summary className="cursor-pointer font-extrabold">Encontrou um problema nesta lista?</summary>
       <div className="mt-3 flex flex-col gap-3">
         {ok ? <p role="status" className="bg-verde-certo/20 text-verde-fundo rounded-campo px-3 py-2 font-bold">Denúncia enviada. A equipe vai revisar.</p> : null}

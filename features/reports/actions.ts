@@ -11,6 +11,9 @@ import { getReportsService } from "./wiring";
 
 /** Denúncia pública (S16): qualquer autenticado, sobre a lista publicada em exibição (app/escolas/[inep]). */
 export async function submitReportAction(next: string, formData: FormData): Promise<void> {
+  // `next` pode já ter query string própria (?serie=...&ano=...): o separador do parâmetro de retorno precisa
+  // respeitar isso, senão um segundo "?" quebra a leitura de searchParams na página de destino.
+  const sep = next.includes("?") ? "&" : "?";
   const actor = await getSessionActor();
   if (!actor) redirect(`/entrar?next=${encodeURIComponent(next)}`);
   const parsed = createReportSchema.safeParse({
@@ -19,16 +22,16 @@ export async function submitReportAction(next: string, formData: FormData): Prom
     reason: formData.get("reason"),
     detailCode: formData.get("detailCode") || undefined,
   });
-  if (!parsed.success) redirect(`${next}?denunciaErro=invalido#denunciar`);
+  if (!parsed.success) redirect(`${next}${sep}denunciaErro=invalido#denunciar`);
   try {
     const service = await getReportsService();
     await service.submit(actor, parsed.data);
   } catch (error) {
     console.error("denunciar", error instanceof Error ? error.message : "erro");
-    redirect(`${next}?denunciaErro=${reportErrorCode(error)}#denunciar`);
+    redirect(`${next}${sep}denunciaErro=${reportErrorCode(error)}#denunciar`);
   }
   revalidatePath(next);
-  redirect(`${next}?denunciaOk=1#denunciar`);
+  redirect(`${next}${sep}denunciaOk=1#denunciar`);
 }
 
 /** Resolução do admin: transição de estado + resolução (o gatilho de banco confere a matriz de novo). */

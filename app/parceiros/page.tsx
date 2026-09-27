@@ -5,15 +5,20 @@ import { ComingSoonBadge } from "@/components/b2b/ComingSoonBadge";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { getCurrentUser } from "@/features/auth/queries";
+import { getSessionActor } from "@/features/auth/actor";
+import { isB2bFeatureEnabled } from "@/features/b2b/features";
 import { b2bServiceMessage } from "@/features/b2b/messages";
+import { getMyPartnerHeader } from "@/features/b2b/queries";
 import { buildPageMetadata } from "@/lib/seo";
 
 import { ApplyForm } from "./ApplyForm";
 
 // B2B00 (`/parceiros`): página pública e indexável. Cabeçalho/rodapé reaproveitados da S27 (`components/site/*`).
 // Nenhuma promessa sem fonte: recursos de S25 (widget/webhooks) e S26 (campanhas/checagem Procon/relatórios de
-// demanda) aparecem com `ComingSoonBadge`; "Respondemos em até [N] dias úteis" e o e-mail `parceiros@…` do design
-// saem por falta de fonte (Ruling S24 · Task 2).
+// demanda) aparecem com `ComingSoonBadge` só enquanto `isB2bFeatureEnabled` da flag correspondente for `false`
+// (revisão de segurança da Task 3, Important #1 — o selo tem que sumir sozinho quando S25/S26 ligarem a flag,
+// nunca fixo no código); "Respondemos em até [N] dias úteis" e o e-mail `parceiros@…` do design saem por falta de
+// fonte (Ruling S24 · Task 2).
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Para parceiros · ListaCerta",
@@ -39,6 +44,10 @@ function Feature({ children, soon = false }: { children: React.ReactNode; soon?:
 export default async function Page({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const { erro } = await searchParams;
   const user = await getCurrentUser();
+  // Quem já é membro de um parceiro não deve ver o formulário de cadastro de novo (enviar de novo só devolveria
+  // `already_member`) — revisão de segurança da Task 3, Important #3: mostra "Ir para o portal" em vez disso.
+  const actor = user ? await getSessionActor() : null;
+  const myPartner = actor ? await getMyPartnerHeader(actor) : null;
   return (
     <>
       <SiteHeader />
@@ -59,6 +68,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             <Link href="/parceiros/docs" className="border-tinta rounded-botao flex h-14 items-center border-[1.5px] px-6 text-[16px] font-extrabold">
               Ver documentação
             </Link>
+            {/* Caminho de descoberta do portal (revisão de segurança da Task 3, Important #3): `/b2b` já resolve
+               sozinho quem não está logado (`/entrar?next=/b2b`) e quem não é membro (`/parceiros?cadastro=1`). */}
+            <Link href="/b2b" className="text-tinta rounded-botao flex h-14 items-center px-2 text-[16px] font-extrabold underline underline-offset-4">
+              Entrar no portal
+            </Link>
           </div>
         </section>
 
@@ -68,7 +82,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             <p className="text-texto-2 text-[15px] font-medium">Leve o pai da lista da escola direto para o seu carrinho.</p>
             <ul className="flex flex-col gap-2">
               <Feature>API com escolas, listas e itens</Feature>
-              <Feature soon>Widget pronto para o seu site</Feature>
+              <Feature soon={!isB2bFeatureEnabled("widget")}>Widget pronto para o seu site</Feature>
               <Feature>Casamento de itens com seus SKUs</Feature>
             </ul>
           </div>
@@ -76,9 +90,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             <h2 className="text-[22px] font-extrabold">Marcas</h2>
             <p className="text-[15px] font-medium text-white/70">Apareça como sugestão na hora da compra, sem mexer na lista oficial.</p>
             <ul className="flex flex-col gap-2">
-              <Feature soon>Sugestão patrocinada separada da lista</Feature>
-              <Feature soon>Checagem automática Procon</Feature>
-              <Feature soon>Relatórios de demanda agregada</Feature>
+              <Feature soon={!isB2bFeatureEnabled("campaigns")}>Sugestão patrocinada separada da lista</Feature>
+              <Feature soon={!isB2bFeatureEnabled("campaigns")}>Checagem automática Procon</Feature>
+              <Feature soon={!isB2bFeatureEnabled("insights")}>Relatórios de demanda agregada</Feature>
             </ul>
           </div>
           <div className={`${CARD} bg-white`}>
@@ -87,7 +101,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             <ul className="flex flex-col gap-2">
               <Feature>API de leitura de escolas e listas</Feature>
               <Feature>Sem custo para a escola</Feature>
-              <Feature soon>Webhooks de publicação</Feature>
+              <Feature soon={!isB2bFeatureEnabled("webhooks")}>Webhooks de publicação</Feature>
             </ul>
           </div>
         </section>
@@ -103,7 +117,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             </div>
             <div className="bg-papel rounded-[20px] p-6">
               <h3 className="flex items-center gap-2 text-[17px] font-extrabold">
-                Lista oficial intocada <ComingSoonBadge />
+                Lista oficial intocada {isB2bFeatureEnabled("campaigns") ? null : <ComingSoonBadge />}
               </h3>
               <p className="text-texto-2 mt-1 text-[14px] font-medium">
                 Campanhas de marca (quando existirem) nunca trocam item exigido pela escola.
@@ -122,7 +136,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
               {b2bServiceMessage(erro) ?? "Não foi possível concluir agora."}
             </p>
           ) : null}
-          {user?.email ? (
+          {myPartner ? (
+            <div className="flex flex-col gap-3 rounded-[24px] bg-white p-7">
+              <p className="text-texto-2 text-[15px] font-semibold">
+                {myPartner.tradeName} já está cadastrada como parceira. Acompanhe o status e gerencie as chaves no portal.
+              </p>
+              <Link href="/b2b" className="bg-tinta text-papel rounded-botao flex h-12 w-fit items-center px-6 text-[15px] font-extrabold">
+                Ir para o portal
+              </Link>
+            </div>
+          ) : user?.email ? (
             <ApplyForm accountEmail={user.email} />
           ) : (
             <div className="flex flex-col gap-3 rounded-[24px] bg-white p-7">

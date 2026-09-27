@@ -235,7 +235,19 @@ describe("S24 · leitura pública da API (b2b_v1_*)", () => {
       const k = await seedKey(c, p, { environment: "live" });
       await seedPublishedList(c, { demo: false });
       await seedPublishedList(c, { demo: true });
-      await c.query("insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count, match_items_total, match_items_matched) values ($1, $2, current_date, 'schools.list', '2xx', 7, 0, 0), ($1, $2, current_date, 'carts.match', '2xx', 2, 10, 6), ($1, $2, current_date, 'lists.items', '4xx', 3, 0, 0), ($1, $2, current_date, 'lists.items', '429', 1, 0, 0), ($1, $2, current_date - 40, 'schools.list', '2xx', 100, 0, 0)", [k.id, p]);
+      // "Hoje" no fuso America/Cuiaba, igual ao `v_today`/`v_month` de `b2b_partner_overview` (0501) — usar
+      // `current_date` (fuso da sessão, normalmente UTC) fazia o teste falhar de forma determinística todo dia
+      // entre 00h00 e 03h59 UTC (20h–23h59 em Cuiabá, UTC-4), quando os dois dias civis divergem.
+      const today = "(now() at time zone 'America/Cuiaba')::date";
+      await c.query(
+        `insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count, match_items_total, match_items_matched) values
+         ($1, $2, ${today}, 'schools.list', '2xx', 7, 0, 0),
+         ($1, $2, ${today}, 'carts.match', '2xx', 2, 10, 6),
+         ($1, $2, ${today}, 'lists.items', '4xx', 3, 0, 0),
+         ($1, $2, ${today}, 'lists.items', '429', 1, 0, 0),
+         ($1, $2, ${today} - 40, 'schools.list', '2xx', 100, 0, 0)`,
+        [k.id, p],
+      );
       const o = (await c.query("select public.b2b_partner_overview($1, 30) as j", [p])).rows[0]?.j as J;
       expect(o.calls_month).toBe(13);
       expect(o.calls_today).toBe(13);

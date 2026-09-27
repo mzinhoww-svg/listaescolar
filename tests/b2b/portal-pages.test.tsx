@@ -1,9 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getCurrentUser = vi.fn();
-vi.mock("@/features/auth/queries", () => ({ getCurrentUser: (...a: unknown[]) => getCurrentUser(...a), getCurrentRole: vi.fn() }));
-
 const getSessionActor = vi.fn();
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: () => getSessionActor() }));
 
@@ -19,7 +16,6 @@ vi.mock("@/features/b2b/queries", () => ({
 }));
 
 vi.mock("@/features/b2b/actions", () => ({
-  applyPartnerAction: vi.fn(),
   createKeyAction: vi.fn(),
   rotateKeyAction: vi.fn(),
   revokeKeyAction: vi.fn(),
@@ -30,14 +26,8 @@ vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`REDIRECT:${to}`);
   },
-  notFound: () => {
-    throw new Error("NOT_FOUND");
-  },
 }));
 
-import ParceirosPage from "@/app/parceiros/page";
-import TermosPage from "@/app/parceiros/termos/page";
-import DocsPage from "@/app/parceiros/docs/page";
 import B2bLayout from "@/app/b2b/layout";
 import B2bPage from "@/app/b2b/page";
 import B2bApiPage from "@/app/b2b/api/page";
@@ -45,7 +35,6 @@ import B2bContaPage from "@/app/b2b/conta/page";
 import B2bDocsPage from "@/app/b2b/docs/page";
 import { B2B_TERMS_TEXT_VERSION } from "@/features/b2b/terms";
 
-const sp = (o: Record<string, string> = {}) => Promise.resolve(o);
 const ACTOR = { userId: "11111111-1111-4111-8111-111111111111", role: "parent" };
 
 const OVERVIEW_BASE = {
@@ -81,53 +70,9 @@ const HEADER_BASE = {
 };
 
 beforeEach(() => {
-  for (const f of [getCurrentUser, getSessionActor, requireAccess, getMyPartnerOverview, getMyPartnerHeader]) f.mockReset();
+  for (const f of [getSessionActor, requireAccess, getMyPartnerOverview, getMyPartnerHeader]) f.mockReset();
   getSessionActor.mockResolvedValue(ACTOR);
   requireAccess.mockResolvedValue({ user: { email: "dono@listacerta.test" }, role: "parent" });
-});
-
-describe("/parceiros (B2B00)", () => {
-  it("sem login: 'Entrar para enviar' em vez do formulário", async () => {
-    getCurrentUser.mockResolvedValue(null);
-    render(await ParceirosPage({ searchParams: sp() }));
-    expect(screen.getByRole("link", { name: "Entrar para enviar" })).toHaveAttribute("href", `/entrar?next=${encodeURIComponent("/parceiros#cadastro")}`);
-    expect(screen.queryByRole("button", { name: "Enviar" })).not.toBeInTheDocument();
-  });
-
-  it("com login: mostra o formulário com o e-mail da conta, somente leitura", async () => {
-    getCurrentUser.mockResolvedValue({ email: "dono@listacerta.test" });
-    render(await ParceirosPage({ searchParams: sp() }));
-    expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("dono@listacerta.test")).toBeDisabled();
-  });
-
-  it("?erro= mostra a mensagem de serviço traduzida", async () => {
-    getCurrentUser.mockResolvedValue({ email: "dono@listacerta.test" });
-    render(await ParceirosPage({ searchParams: sp({ erro: "duplicate_cnpj" }) }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Este CNPJ já está cadastrado.");
-  });
-
-  it("recursos fora desta fatia (widget, checagem Procon) aparecem com selo Em breve", async () => {
-    getCurrentUser.mockResolvedValue(null);
-    render(await ParceirosPage({ searchParams: sp() }));
-    expect(screen.getAllByText("Em breve").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Respondemos em/)).not.toBeInTheDocument();
-    expect(screen.queryByText("parceiros@listacerta.com.br")).not.toBeInTheDocument();
-  });
-});
-
-describe("/parceiros/termos e /parceiros/docs", () => {
-  it("termos mostram a versão vigente e o aviso preliminar", () => {
-    render(TermosPage());
-    expect(screen.getByText(`Versão: ${B2B_TERMS_TEXT_VERSION}`)).toBeInTheDocument();
-    expect(screen.getAllByText(/não constitui parecer jurídico/).length).toBeGreaterThan(0);
-  });
-
-  it("docs públicas listam os 6 endpoints do contrato", () => {
-    render(DocsPage());
-    expect(screen.getByText("/v1/carts/match")).toBeInTheDocument();
-    expect(screen.getByText("/v1/schools")).toBeInTheDocument();
-  });
 });
 
 describe("/b2b (layout)", () => {

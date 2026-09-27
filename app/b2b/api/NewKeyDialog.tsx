@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { createKeyAction } from "@/features/b2b/actions";
 import type { GeneratedApiKey } from "@/features/b2b/keys/format";
+import { MAX_USABLE_KEYS_PER_ENVIRONMENT } from "@/features/b2b/limits";
 import { ALLOWED_SCOPES, scopesForPartnerType, type B2bPartnerType, type B2bScope } from "@/features/b2b/scopes";
 import { environmentAllowed, type ApiKeyEnvironment, type B2bPartnerStatus } from "@/features/b2b/states";
 
@@ -32,7 +33,7 @@ export function NewKeyDialog({ partnerType, partnerStatus, usableCountByEnv }: P
   const [copied, setCopied] = useState(false);
 
   const environments = (["test", "live"] as const).filter((e) => environmentAllowed(e, partnerStatus));
-  const tooMany = (usableCountByEnv[environment] ?? 0) >= 2;
+  const tooMany = (usableCountByEnv[environment] ?? 0) >= MAX_USABLE_KEYS_PER_ENVIRONMENT;
 
   function reset() {
     setResult(null);

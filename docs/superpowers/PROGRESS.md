@@ -57,8 +57,8 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
 | S23 Comissão, repasses e inadimplência (Comércio) | #40 | d30849f | 2026-09-27 | ✓ | ✓ | 3252 | 1729 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 30 verificações, 0 falhas (`e2e/S23.md`) |
 | S25 Widget e webhooks (B2B) | #42 | 634c9f2 | 2026-09-27 | ✓ | ✓ | 3303 | 1759 (3 skipped) | ✓ | verify ✓ db ✓ (concluídos depois do merge; ver Ruling) | ✓ | build local + receptor de webhook, 22 verificações, 0 falhas (`e2e/S25.md`) |
-| S26 Campanhas de marca, insights e faturamento B2B | — (sem PR, por instrução) | 738500e | 2026-09-27 | ✓ | ✓ | 3365 | 1805 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 20 verificações, 0 falhas (`e2e/S26.md`); 3 rodadas de reverificação de segurança aplicadas |
 | S15 Área da família | #45 | ccd4c54 | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
+| S26 Campanhas de marca, insights e faturamento B2B | #47 | 3f28fb5 | 2026-09-27 | ✓ | ✓ | 3365 | 1805 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 20 verificações, 0 falhas (`e2e/S26.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -66,7 +66,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-24 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+25 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -91,13 +91,13 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
 | 0503_b2b_campaigns.sql | S26 | — | **ainda não aplicada** (ver "Pendente de staging" abaixo) |
 | 0603_family_area.sql | S15 | family_area | aplicada em 2026-09-27 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
+| 0503_b2b_campaigns.sql | S26 | b2b_campaigns | 20260927131850 (arquivo aplicado sem alteração; md5 das 16 funções, políticas, gatilhos e privilégios idênticos ao banco local; `authenticated` sem nenhum acesso a eventos e livro-razão de campanha) |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
 | 0601_integration.sql | S11 | integration | aplicada em 2026-09-25 (perfil `system` criado; `auth.users` do hospedado conferido antes) |
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
 
-Pendente de staging: `0503_b2b_campaigns.sql` (S26 — campanhas de marca CPM/CPC, insights com k-anonimato e
 faturamento B2B: `b2b_campaigns`, `b2b_campaign_events`/`_ledger` imutáveis — sem NENHUM select para
 `authenticated`, nem por coluna, desde a 3ª rodada de reverificação de segurança —, `b2b_insights_settings`,
 `b2b_statements`/`_line_items` imutáveis), só local (`pnpm db:reset` + `pnpm test:db` verdes: 1805/1808, 3 pulados
@@ -116,8 +116,8 @@ Produção: nenhuma migration (o projeto não existe).
 | Pipeline | S07, S08, S09, S10 | **Completa** (S07–S10) |
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
 | Comércio e cobrança | S12, S13, S14, S27, S21, S22, S23 | **Completa** (S21 #34, S22 #36, S23 #40; migrations 0401–0403 no staging) |
-| B2B | S24, S25, S26 | **Completa**: S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (branch `slice/S26-campanhas`, sem PR por instrução; 3 rodadas de reverificação de segurança; migration `0503` só local, ver "Pendente de staging") |
-| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 em andamento** (worktree T3) |
+| B2B | S24, S25, S26 | **Completa** (S24 #38, S25 #42, S26 #47; migrations 0501–0503 no staging) |
+| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 em andamento** (worktree T3); **S17 em andamento** (worktree T2, em paralelo — ver Ruling) |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -139,7 +139,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas; migration `0503` só local)].
-4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 (em andamento no worktree T3).
+4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 (em andamento no worktree T3). S17 (em andamento no worktree T2, em paralelo).
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.

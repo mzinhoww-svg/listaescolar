@@ -1,0 +1,173 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T3-comercio
+
+ ❯ tests/db/reports.test.ts (8 tests | 8 failed) 303ms
+   ❯ tabela reports: colunas e RLS (1)
+     × tem id/created_at/updated_at e RLS habilitada 21ms
+   ❯ report_transition_allowed (1)
+     × só permite a matriz esperada, sem 'resolvido -> aberto' de novo 12ms
+   ❯ com lista publicada como alvo (5)
+     × regex de código: recusa detail_code/resolution_note com espaço (prosa) e aceita código curto 27ms
+     × authenticated insere a própria denúncia 'open'; não pode forjar reporter_id de outro nem status resolvido 43ms
+     × denunciante vê a própria denúncia; não vê a de terceiros; admin vê todas 28ms
+     × parent não resolve denúncia; admin resolve com sucesso; identidade e resolução ficam imutáveis depois 27ms
+     × resolver sem informar resolution/resolved_by/resolved_at falha no CHECK de consistência 58ms
+   ❯ privilégios de EXECUTE (1)
+     × report_transition_allowed e reports_guard: ninguém tem EXECUTE direto 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/db/reports.test.ts > tabela reports: colunas e RLS > tem id/created_at/updated_at e RLS habilitada
+AssertionError: expected [] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   "id",
+-   "created_at",
+-   "updated_at",
+-   "target_type",
+-   "target_id",
+-   "reason",
+-   "reporter_id",
+-   "status",
+- ]
++ []
+
+ ❯ tests/db/reports.test.ts:31:51
+     29|     await withSuperuser(async (c) => {
+     30|       const cols = await c.query("select column_name from information_…
+     31|       expect(cols.rows.map((r) => r.column_name)).toEqual(
+       |                                                   ^
+     32|         expect.arrayContaining(["id", "created_at", "updated_at", "tar…
+     33|       );
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:29:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/db/reports.test.ts > report_transition_allowed > só permite a matriz esperada, sem 'resolvido -> aberto' de novo
+error: function public.report_transition_allowed(unknown, unknown) does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ allowed tests/db/reports.test.ts:43:56
+     41|   it("só permite a matriz esperada, sem 'resolvido -> aberto' de novo"…
+     42|     await inTx(async (c) => {
+     43|       const allowed = async (f: string, t: string) => (await c.query<{…
+       |                                                        ^
+     44|       expect(await allowed("open", "reviewing")).toBe(true);
+     45|       expect(await allowed("open", "resolved")).toBe(true);
+ ❯ tests/db/reports.test.ts:44:14
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/reports.test.ts:42:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  tests/db/reports.test.ts > com lista publicada como alvo > regex de código: recusa detail_code/resolution_note com espaço (prosa) e aceita código curto
+AssertionError: expected 'relation "public.reports" does not ex…' to be null
+
+- Expected:
+null
+
++ Received:
+"relation \"public.reports\" does not exist"
+
+ ❯ tests/db/reports.test.ts:79:24
+     77|         [school.listId, IDS.parent],
+     78|       );
+     79|       expect(ok.error).toBeNull();
+       |                        ^
+     80|       await c.query("rollback");
+     81|     });
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:65:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/db/reports.test.ts > com lista publicada como alvo > authenticated insere a própria denúncia 'open'; não pode forjar reporter_id de outro nem status resolvido
+error: relation "public.reports" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/reports.test.ts:23:5
+     21|   if (targetIds.length === 0) return;
+     22|   await withSuperuser(async (c) => {
+     23|     await c.query("delete from public.reports where target_id = any($1…
+       |     ^
+     24|   });
+     25| }
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ cleanupReports tests/db/reports.test.ts:22:3
+ ❯ tests/db/reports.test.ts:111:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/db/reports.test.ts > com lista publicada como alvo > denunciante vê a própria denúncia; não vê a de terceiros; admin vê todas
+error: relation "public.reports" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ insertOpen tests/db/reports.test.ts:13:13
+     11|   reporterId = IDS.parent,
+     12| ): Promise<string> {
+     13|   const r = await c.query(
+       |             ^
+     14|     "insert into public.reports (target_type, target_id, reason, detai…
+     15|     [targetId, reporterId],
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:117:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/db/reports.test.ts > com lista publicada como alvo > parent não resolve denúncia; admin resolve com sucesso; identidade e resolução ficam imutáveis depois
+error: relation "public.reports" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ insertOpen tests/db/reports.test.ts:13:13
+     11|   reporterId = IDS.parent,
+     12| ): Promise<string> {
+     13|   const r = await c.query(
+       |             ^
+     14|     "insert into public.reports (target_type, target_id, reason, detai…
+     15|     [targetId, reporterId],
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:137:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/db/reports.test.ts > com lista publicada como alvo > resolver sem informar resolution/resolved_by/resolved_at falha no CHECK de consistência
+error: relation "public.reports" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ insertOpen tests/db/reports.test.ts:13:13
+     11|   reporterId = IDS.parent,
+     12| ): Promise<string> {
+     13|   const r = await c.query(
+       |             ^
+     14|     "insert into public.reports (target_type, target_id, reason, detai…
+     15|     [targetId, reporterId],
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:179:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  tests/db/reports.test.ts > privilégios de EXECUTE > report_transition_allowed e reports_guard: ninguém tem EXECUTE direto
+error: type "public.report_status" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/reports.test.ts:197:21
+    195|       for (const sig of sigs) {
+    196|         for (const role of ["anon", "authenticated", "service_role"]) {
+    197|           const r = await c.query<{ ok: boolean }>("select has_functio…
+       |                     ^
+    198|           expect(r.rows[0]!.ok, `${role} × ${sig}`).toBe(false);
+    199|         }
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:193:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed (8)
+   Start at  10:15:46
+   Duration  502ms (tests 88%, import 6%, transform 5%)
+

@@ -216,3 +216,102 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: a S28 (ADR-006) entra no PLAN entre a S19 e a S20 e passa a ser pré-requisito do go-live; o brainstorming dela roda em modo autônomo (o orquestrador responde às perguntas da skill com SPEC, PLAN, `docs/design`, a pesquisa do ADR-005 e dados do staging) e o spec resultante vira Ruling — pedido explícito do humano em 2026-09-27 — custo se estiver errada: uma fatia a mais no caminho crítico antes do go-live
 - Ruling: a S17 (LGPD e dados demonstrativos) roda no worktree T2 em paralelo com a S16 (Admin, worktree T3), logo após o fim da trilha B2B — as duas fatias quase não se tocam (S16: telas e funções do admin; S17: consentimento, retenção, exportação/exclusão de conta) e os worktrees ficariam ociosos; migrations na faixa 06xx com números distintos e renumeração no merge se colidirem — custo se estiver errada: conflitos de merge em ledgers/PROGRESS/DEBT e, no pior caso, renumerar uma migration antes de aplicar no staging
 - Ruling: a proposta de instrumentação com PostHog vira ADR-007 (o pedido citou "ADR-004", número já usado pelas trilhas paralelas) com status "proposta"; não entra no PLAN nem vira código até o humano aprovar; `identify` usa só o uuid do perfil (o telefone dispara o identify mas nunca é enviado), para cumprir "sem PII nos eventos" — custo se estiver errada: renumerar o ADR ou mover o identificador, sem código afetado
+
+## S16 · Admin (branch `slice/S16-admin`, worktree T3)
+
+- Ruling: dashboard (Admin01-Visao) e auditoria filtrável (Admin08-Eventos) leem por RLS já existente
+  (`..._select_admin` em `schools`/`school_lists`/`claims`/`stationeries`/`leads`/`audit_log`, desde S01–S14) com o
+  client de sessão, sem função SQL nova — menos superfície nova, mesma garantia (RLS + `getSessionActor` na
+  página) — custo se estiver errada: adicionar a função depois é aditivo, sem migrar dado.
+- Ruling: `reports` (denúncias) é tabela nova em `0604_admin_reports.sql` (faixa pós-trilhas `06xx`, seguinte à
+  `0603`); `reason` é enum, `detail_code`/`resolution_note` são código curto com a mesma regex de
+  `ai_decisions.justification` (nunca prosa/PII); sem coluna de contato do denunciante. Transição de estado por
+  `report_transition_allowed`/`reports_guard` (SECURITY DEFINER, `search_path=''`, EXECUTE revogado de todos);
+  auditoria automática reaproveitando `audit_row_change` (0001) — custo se estiver errado: tabela aditiva, sem FK
+  de terceiros para dentro dela; corrigir é migration nova.
+- Ruling: `ai_settings` (S16) fica com `auto_publish_enabled` e `routes` SÓ LEITURA na UI de edição — nunca liga
+  `auto_publish_enabled` sozinha (regra do CLAUDE.md) e `routes` (JSON heterogêneo de roteamento de modelo) fica
+  fora do formulário por risco/tempo — só os campos com CHECK simples (`confidence_threshold`,
+  `item_confidence_threshold`, `critical_alerts`, `max_escalations`, `pipeline_version`) são editáveis — custo se
+  estiver errado: uma fatia futura abre os dois campos com o próprio Ruling explícito exigido.
+- Ruling: "arquivar lista" reaproveita `list_archive`/`features/lists/repository.ts#archive()`, já existentes
+  desde S05 e sem uso em UI nenhuma — sem função SQL nova. Entrada única: `/admin/denuncias/[id]` (para
+  `target_type = 'school_list'`) e busca direta por id em `/admin/listas/[id]`; sem índice navegável de todas as
+  listas publicadas (fora do prompt da fatia) — custo se estiver errado: adicionar o índice depois é só uma tela
+  nova, sem tocar em banco.
+- Ruling: ponto de entrada público de denúncia nesta fatia é só a página da escola (`app/escolas/[inep]`), só
+  autenticado, só para a lista publicada em exibição (`target_type = 'school_list'`). Denúncia de
+  papelaria/catálogo fica só no schema (sem tela pública ainda) — dívida nova registrada no DEBT.md — custo se
+  estiver errado: a tabela já suporta os dois tipos, é só a tela que falta.
+- Ruling: DEBT D-006 (confirmação antes de aprovar reivindicação) entra nesta fatia (pequena, UX direta, sem
+  migration). D-007, D-035, D-036, D-037 e D-083 continuam abertas com dono reatribuído para S17/S18: nenhuma
+  bloqueia o prompt central da S16 (dashboard/auditoria/denúncias/`ai_settings`/arquivar) — custo se estiver
+  errado: são todas independentes, resolver mais tarde não bloqueia nada desta fatia.
+
+## S16 · correções da revisão de segurança (Opus, sobre `682ab71`, sem bloqueantes)
+
+Migration `0604_admin_reports.sql` editada no lugar (ainda só local, sem staging). Testes novos antes da correção
+(vermelho registrado em `docs/superpowers/logs/s16-security-review-red.txt`: 9 de 16 falhas em
+`tests/db/reports.test.ts` contra a versão anterior do arquivo); depois da correção, 16/16 e o resto da suíte de
+banco sem regressão (1821 testes).
+
+1. **Denúncias: só `school_list` por enquanto, com CHECK + gatilho (não só Zod).** `reports_target_type_scope`
+   (CHECK) e o `else` de `reports_check_before_insert` recusam `stationery`/`catalog_item` com hint
+   `target_type_not_allowed` — custo se estiver errado: tirar a trava é um `alter table drop constraint` +
+   remover o `else`, sem migração de dado.
+2. **Teto diário por denunciante, função própria (`reports_max_per_day`, hoje 10/dia).** Valor isolado numa
+   função SQL trivial (não hardcoded dentro do gatilho): trocar o teto depois é um `create or replace function`,
+   sem editar `reports_check_before_insert` — custo se o valor estiver errado: um `create or replace` resolve.
+3. **Alvo precisa existir e (para `school_list`) estar `published`**, validado no BEFORE INSERT
+   (`reports_check_before_insert`, hint `target_not_found`) — sem essa checagem, dava para denunciar uma lista
+   arquivada ou um uuid qualquer.
+4. **Índice único parcial `(reporter_id, target_type, target_id) where status in ('open','reviewing')`**: nunca
+   duas denúncias em aberto/análise do MESMO denunciante para o MESMO alvo; libera de novo depois de
+   resolvida/arquivada (o índice só cobre os dois estados abertos) — mapeado para `already_exists` no repositório
+   (`23505`).
+5. **`resolved_by` forçado por `auth.uid()` dentro de `reports_guard`** na transição para `resolved`/`dismissed`
+   — a coluna continua gravável por grant (defesa em profundidade real: mesmo que o cliente mande outro id, o
+   gatilho sobrescreve antes do CHECK). Achado ao escrever o teste: `reports_guard` é `SECURITY DEFINER`, então
+   `auth.uid()` (GUC de sessão) segue lendo o chamador certo independente disso — sem armadilha aqui, ao
+   contrário do achado abaixo em `ai_settings`.
+6. **`resolved_by` sem SELECT para `authenticated`.** Achado real desta rodada: um `REVOKE SELECT (coluna) FROM
+   role` feito DEPOIS de um `GRANT SELECT ON tabela TO role` (grant de tabela inteira) não revoga nada — a ACL de
+   coluna só reduz o que não está coberto por um grant de tabela mais amplo (confirmado direto no Postgres local
+   antes de decidir). Corrigido concedendo desde o início só a lista de colunas sem `resolved_by`
+   (allow-list), em vez de "concede tudo, revoga depois" — quem resolveu já fica no `audit_log` (gatilho
+   `reports_audit`), então não faz falta ler pela tabela. `features/reports/repository.ts` para de pedir a coluna
+   (pedir uma coluna sem privilégio derruba a consulta inteira).
+7. **`ai_settings.auto_publish_enabled`/`routes`: gatilho, não `REVOKE`, pelo mesmo motivo do item 6** — a 0202
+   (já no staging) concede `UPDATE` de tabela inteira para `authenticated`; um `REVOKE UPDATE (coluna)` aditivo na
+   0604 não teria efeito nenhum (mesmo achado). Fix real: `ai_settings_lock_sensitive_fields` (gatilho BEFORE
+   UPDATE) bloqueia mudança nas duas colunas a menos que `auth_role() = 'system'` OU `current_user in
+   ('postgres','supabase_admin')`. **Segundo achado, direto de um teste que quebrou**: a primeira versão do
+   gatilho era `SECURITY DEFINER`, o que faz `current_user` dentro da função ser sempre o DONO da função
+   (tipicamente `postgres`), nunca quem chamou — o bypass ficava sempre verdadeiro para qualquer chamador,
+   inutilizando a trava. Corrigido trocando para `SECURITY INVOKER` (sem a cláusula), mesmo padrão de
+   `public.profiles_guard_role` (0001) para esse tipo de bypass de superusuário/migration — confirmado contra
+   `tests/db/extraction-real-pipeline.test.ts`, que escreve `routes` como dono via `reset role` (pipeline real).
+   `tests/db/publication-decisions.test.ts` (S09) tinha um teste que verificava exatamente o comportamento ANTIGO
+   (admin ligando `auto_publish_enabled` direto por SQL) — reescrito para verificar o novo invariante: admin não
+   liga mais direto (bloqueado), `service_role`/`system` continua ligando, com auditoria.
+8. **Gatilhos de auditoria de `lead_reviews`/`lead_disputes` (0402, S22, já no staging) recriados na 0604**
+   (aditivo, `DROP TRIGGER` + `CREATE TRIGGER`, sem editar o arquivo aplicado) excluindo `comment`/`detail` do
+   `audit_row_change` — escaparam do mesmo padrão que a 0402 já aplica em `claims`/`stationeries`
+   (`claimant_name`, `evidence_note` etc.) — custo se estiver errado: recriar os gatilhos de novo é aditivo,
+   sem migrar dado (o `audit_log` antigo, se existir em algum banco já rodando, ficaria com as colunas — mas
+   nenhum banco além do local rodou esta versão ainda).
+9. **`next` da denúncia pública só com prefixo `/escolas/`, senão cai para `/escolas`.** Hoje o único chamador
+   (`app/escolas/[inep]/page.tsx`) já só passa um `next` seguro; a checagem é defesa em profundidade contra um
+   futuro chamador que erre — custo se estiver errada: qualquer novo chamador que precise de outro prefixo tem
+   que ser adicionado à lista permitida.
+10. **Motivo de arquivamento de lista por código, não texto livre** (`features/lists/close-reasons.ts`, mesmo
+    padrão de `lead_reviews.hidden_reason`): vocabulário fixo (`denuncia_procedente`, `solicitacao_escola`,
+    `conteudo_indevido`, `duplicada`, `outro`) + observação curta opcional com a mesma regex de código de
+    `reports.detail_code`. `list_status_events.reason` (0103, base) continua aceitando texto livre até 1000 chars
+    a nível de banco — decisão desta fatia foi disciplinar só a UI/Zod, sem migrar `0103` (fora de alcance,
+    aplicada desde a S05) — custo se estiver errado: trocar o vocabulário depois é só editar
+    `close-reasons.ts`, sem migration.
+11. **Auditoria: `auditFilterSchema` estava definido mas nunca chamado** (achado real, não hipotético: um
+    `entidadeId` que não fosse uuid ia direto para a consulta e virava "Não foi possível carregar", indistinguível
+    de uma falha de banco de verdade). `app/admin/eventos/page.tsx` passa a validar com `safeParse` antes de
+    chamar `searchAuditLog`; filtro inválido mostra "Filtro inválido: confira..." e nunca chega ao banco.

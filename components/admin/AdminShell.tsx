@@ -15,6 +15,9 @@ const NAV = [
   { href: "/admin/contestacoes", label: "Contestações" },
   { href: "/admin/repasses", label: "Repasses" },
   { href: "/admin/inadimplencia", label: "Inadimplência" },
+  { href: "/admin/denuncias", label: "Denúncias" },
+  { href: "/admin/eventos", label: "Eventos (auditoria)" },
+  { href: "/admin/ia", label: "Configuração de IA" },
 ] as const;
 
 type Props = {
@@ -30,7 +33,11 @@ type Props = {
     | "/admin/auditoria"
     | "/admin/contestacoes"
     | "/admin/repasses"
-    | "/admin/inadimplencia";
+    | "/admin/inadimplencia"
+    | "/admin/denuncias"
+    | "/admin/eventos"
+    | "/admin/ia"
+    | "/admin/listas";
   /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
   email: string | null | undefined;
   breadcrumb: string;

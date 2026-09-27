@@ -5,10 +5,12 @@ import { ClaimBlock, type OwnClaimSummary } from "@/components/schools/ClaimBloc
 import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
 import { ProfileNotices } from "@/components/schools/ProfileNotices";
+import { ReportListForm } from "@/components/schools/ReportListForm";
 import { getSessionActor } from "@/features/auth/actor";
 import { getMyClaimForSchool } from "@/features/claims/queries";
 import { academicYears, defaultAcademicYear, parseGradeSelection } from "@/features/grades/catalog";
 import { getPublishedList } from "@/features/lists/queries";
+import { submitReportAction } from "@/features/reports/actions";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { buildSchoolMetadata } from "@/features/schools/search/seo";
@@ -89,6 +91,14 @@ export default async function SchoolPage({ params, searchParams }: Props) {
           }
         />
         <ClaimBlock inep={school.inep} status={school.verificationStatus} claim={ownClaim} />
+        {list ? (
+          <ReportListForm
+            listId={list.id}
+            action={submitReportAction.bind(null, `/escolas/${school.inep}?serie=${grade?.slug ?? ""}&ano=${selectedYear}`)}
+            ok={first(sp.denunciaOk) === "1"}
+            erro={first(sp.denunciaErro) ?? null}
+          />
+        ) : null}
         <ProfileInfo school={school} />
       </main>
     </div>

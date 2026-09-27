@@ -533,3 +533,43 @@ banco sem regressão (1821 testes).
     `entidadeId` que não fosse uuid ia direto para a consulta e virava "Não foi possível carregar", indistinguível
     de uma falha de banco de verdade). `app/admin/eventos/page.tsx` passa a validar com `safeParse` antes de
     chamar `searchAuditLog`; filtro inválido mostra "Filtro inválido: confira..." e nunca chega ao banco.
+
+## S18 · Estados e acessibilidade (fora de trilha, worktree T3, 2026-09-27)
+
+Plano em `docs/superpowers/plans/2026-09-27-s18-estados-a11y.md`. Rulings de escopo completos lá; resumo abaixo
+para quem só consulta o ledger.
+
+- Ruling: memória global do Segundo Cérebro (CLAUDE.md pessoal, fora do repositório) não consultada nesta sessão
+  pelo mesmo motivo já registrado na S17 — a tarefa já tem seu próprio mecanismo de memória de projeto (ledger/
+  DEBT/PROGRESS) e o cofre Obsidian pessoal não guarda contexto de implementação de código desta fatia — custo se
+  estiver errada: nenhum aprendizado de produto/técnica pessoal fica sem registrar fora deste repositório.
+- Ruling: o aceite do PLAN cita literalmente "nenhum arquivo de D-057 acima de 250 linhas" — o refactor desta
+  fatia cobre só os 10 arquivos DE D-057 (conferidos de novo: todos ainda acima de 250 linhas). Uma varredura
+  ampla do repositório achou MAIS 7 arquivos acima de 250 linhas nascidos depois de D-057 ter sido escrito
+  (S21–S26: `features/billing/repository.ts` 603, `features/b2b/api/handler.ts` 549, `features/payouts/
+  repository.ts` 533, `features/conversion/repository.ts` 496, `features/b2b/repository.ts` 411, `features/
+  billing/service.ts` 334, `features/campaigns/repository.ts` 320) — todos já passaram por revisão de segurança
+  dedicada (Opus) nas próprias fatias de cobrança/B2B; reabri-los para um split de legibilidade, sem relação com
+  o objetivo desta fatia e sem uma nova rodada de revisão de segurança dedicada, é risco desproporcional ao
+  ganho. Registrados como dívida nova (ver DEBT.md, D-158) com dono numa fatia futura de manutenção — custo se
+  estiver errada: mais uma fatia de refactor puro; nenhum comportamento muda enquanto isso.
+- Ruling: estratégia de split dos 10 arquivos de D-057 é extrair funções/métodos para arquivos-irmãos por
+  responsabilidade e manter o arquivo original como barrel fino (`export * from "./x-parte"`) — nenhum import de
+  chamador muda, `pnpm typecheck` garante que nenhum call site quebrou. Em `features/claims/repository.ts` (única
+  fábrica com estado fechado por closures), os métodos extraídos viram sub-fábricas que recebem o client/deps/
+  helpers compartilhados e a fábrica principal compõe o objeto por spread — comportamento runtime idêntico.
+- Ruling: estados de rota (loading/sucesso/erro/vazio/retry) e a11y são tratados por auditoria + correção
+  sistêmica (primitivos compartilhados, CSS de foco visível global, skip-link) em vez de edição manual de cada
+  uma das ~90 rotas — mesmo espírito arquitetural do D-057. Cobertura é documentada no relatório E2E
+  (`docs/superpowers/e2e/S18.md`), nunca alegada 100% sem verificação.
+- Ruling (D-048): consolidação dos ledgers de trilha em `ledger.md` é movimentação fiel — o texto de
+  `ledger-dados.md`/`ledger-pipeline.md`/`ledger-comercio.md` entra sob um cabeçalho "## Trilha <nome>
+  (consolidado de ledger-<trilha>.md)" sem reescrever nenhuma frase; cada arquivo de trilha fica com um ponteiro
+  de uma linha. Motivo: preservar a redação original (evidência da decisão tomada em cada fatia) e cumprir a
+  instrução literal da tarefa. Feito nesta sessão (ver seções abaixo).
+- Ruling: dívidas S18 de severidade baixa que exigiriam tocar dezenas de arquivos para um ganho pequeno (D-082:
+  sino de notificação em `PanelShell`/`AdminShell`/`SchoolShell`) mantidas `aberta` com Ruling de adiamento —
+  já revisitadas e adiadas nas S15/S16 pelo mesmo motivo (risco de regressão ampla por pouco ganho). As demais
+  dívidas S18 foram triadas uma a uma (ver DEBT.md para o resultado de cada uma).
+- Ruling: nenhuma migration nova nesta fatia — D-057, estados e a11y não tocam schema; nenhum achado de
+  severidade alta apareceu que exigisse uma.

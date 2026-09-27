@@ -62,23 +62,23 @@ export function NovaCampanhaForm({ partnerId }: { partnerId: string }) {
     <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4 rounded-[20px] bg-white p-6">
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Nome da campanha</span>
-        <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} maxLength={120} />
+        <input required name="name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} maxLength={120} />
       </label>
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Produto sugerido</span>
-        <input required value={productLabel} onChange={(e) => setProductLabel(e.target.value)} className={inputClass} maxLength={200} placeholder="Ex.: Caderno universitário 96 folhas" />
+        <input required name="productLabel" value={productLabel} onChange={(e) => setProductLabel(e.target.value)} className={inputClass} maxLength={200} placeholder="Ex.: Caderno universitário 96 folhas" />
       </label>
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Texto do criativo (opcional)</span>
-        <input value={creativeText} onChange={(e) => setCreativeText(e.target.value)} className={inputClass} maxLength={280} />
+        <input name="creativeText" value={creativeText} onChange={(e) => setCreativeText(e.target.value)} className={inputClass} maxLength={280} />
       </label>
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Categoria alvo (mesma da lista, ex.: papelaria, uniforme)</span>
-        <input required value={targetCategory} onChange={(e) => setTargetCategory(e.target.value)} className={inputClass} maxLength={100} />
+        <input required name="targetCategory" value={targetCategory} onChange={(e) => setTargetCategory(e.target.value)} className={inputClass} maxLength={100} />
       </label>
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Série (opcional; vazio = todas)</span>
-        <select value={gradeStage} onChange={(e) => setGradeStage(e.target.value as typeof gradeStage)} className={inputClass}>
+        <select name="gradeStage" value={gradeStage} onChange={(e) => setGradeStage(e.target.value as typeof gradeStage)} className={inputClass}>
           <option value="">Todas as séries</option>
           {GRADE_STAGES.map((s) => (
             <option key={s} value={s}>
@@ -89,7 +89,7 @@ export function NovaCampanhaForm({ partnerId }: { partnerId: string }) {
       </label>
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Modelo de cobrança</span>
-        <select value={pricingModel} onChange={(e) => setPricingModel(e.target.value as "cpm" | "cpc")} className={inputClass}>
+        <select name="pricingModel" value={pricingModel} onChange={(e) => setPricingModel(e.target.value as "cpm" | "cpc")} className={inputClass}>
           {PRICING_MODELS.map((m) => (
             <option key={m} value={m}>
               {PRICING_MODEL_LABEL[m]}
@@ -100,16 +100,16 @@ export function NovaCampanhaForm({ partnerId }: { partnerId: string }) {
       <div className="grid grid-cols-2 gap-4">
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Bid (R$ {pricingModel === "cpm" ? "por mil exibições" : "por clique"})</span>
-          <input required type="number" min={0.01} step={0.01} value={bidReais} onChange={(e) => setBidReais(e.target.value)} className={inputClass} />
+          <input required name="bidReais" type="number" min={0.01} step={0.01} value={bidReais} onChange={(e) => setBidReais(e.target.value)} className={inputClass} />
         </label>
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Orçamento total (R$)</span>
-          <input required type="number" min={0.01} step={0.01} value={totalBudgetReais} onChange={(e) => setTotalBudgetReais(e.target.value)} className={inputClass} />
+          <input required name="totalBudgetReais" type="number" min={0.01} step={0.01} value={totalBudgetReais} onChange={(e) => setTotalBudgetReais(e.target.value)} className={inputClass} />
         </label>
       </div>
       <label className="flex flex-col gap-1">
         <span className={labelClass}>Orçamento diário (R$, opcional)</span>
-        <input type="number" min={0.01} step={0.01} value={dailyBudgetReais} onChange={(e) => setDailyBudgetReais(e.target.value)} className={inputClass} />
+        <input name="dailyBudgetReais" type="number" min={0.01} step={0.01} value={dailyBudgetReais} onChange={(e) => setDailyBudgetReais(e.target.value)} className={inputClass} />
       </label>
       <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[13px] font-bold">
         Toda campanha aparece marcada como <strong>&ldquo;Patrocinado&rdquo;</strong>. O orçamento acima é só o limite que você definiu — é acúmulo informativo, nunca uma cobrança automática.

@@ -35,11 +35,11 @@ export function InsightsExplorer() {
       <form onSubmit={search} className="flex flex-wrap items-end gap-4 rounded-[20px] bg-white p-6">
         <label className="flex flex-col gap-1">
           <span className="text-texto-2 text-[13px] font-bold">Categoria</span>
-          <input value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass} maxLength={100} />
+          <input name="category" value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass} maxLength={100} />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-texto-2 text-[13px] font-bold">Série</span>
-          <select value={gradeStage} onChange={(e) => setGradeStage(e.target.value as typeof gradeStage)} className={inputClass}>
+          <select name="gradeStage" value={gradeStage} onChange={(e) => setGradeStage(e.target.value as typeof gradeStage)} className={inputClass}>
             {GRADE_STAGES.map((s) => (
               <option key={s} value={s}>
                 {GRADE_STAGE_LABEL[s]}

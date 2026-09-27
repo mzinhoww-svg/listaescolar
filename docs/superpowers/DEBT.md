@@ -18,8 +18,8 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-003 | ledger.md (S01, itens adiados) | S01: `created_at` mutável (sem trigger), guard de papel sem `current_user`/SECURITY DEFINER, políticas permissivas múltiplas (advisor), triggers de auditoria supõem `id` uuid, sem FORCE RLS | média | S19 | aberta |
 | D-004 | ledger.md (S01) | `auth_role()` executável por anon como RPC e ramos `system` inertes nas políticas `to authenticated` | baixa | S19 | aberta |
 | D-005 | ledger.md (S02) | Erros do provedor de auth e do exchange sem registro no Sentry (sem PII) | média | S19 | aberta |
-| D-006 | ledger-dados S06 revisão final | Aprovar reivindicação é terminal e imediato, sem tela de confirmação; clique errado do admin exige correção manual no banco | média | S16 | aberta |
-| D-007 | ledger-dados S06 T1 revisão | `schools_guard_verification` bloqueia `claimed/verified -> suspended` por admin; falta função de suspensão (SECURITY DEFINER do dono) | média | S16 | aberta |
+| D-006 | ledger-dados S06 revisão final | Aprovar reivindicação é terminal e imediato, sem tela de confirmação; clique errado do admin exige correção manual no banco | média | S16 | resolvida em 2026-09-27 (S16): `ActionForm` ganhou `confirmMessage` (confirmação do navegador antes de enviar); `DecisionForm` passa a pedir confirmação só para "Aprovar" — teste em `tests/claims/action-form.test.tsx` |
+| D-007 | ledger-dados S06 T1 revisão | `schools_guard_verification` bloqueia `claimed/verified -> suspended` por admin; falta função de suspensão (SECURITY DEFINER do dono) | média | S17 | aberta (reatribuída da S16: não bloqueia dashboard/auditoria/denúncias/`ai_settings`/arquivar, o prompt central desta fatia) |
 | D-008 | ledger-dados S06 revisão final | Token do link de e-mail da reivindicação vai na query da URL e aparece em logs de acesso (aceito: uso único, expira, exige sessão); mover para POST/fragmento | baixa | S19 | aberta |
 | D-009 | ledger-comercio S14 T2 | `CRON_SECRET` com `min(16)` em `lib/env.ts` derruba o boot com segredo curto, enquanto o contrato da rota é 503 | baixa | S19 | aberta |
 | D-010 | ledger-comercio S12 T2 | Trava fail-closed do demo de varejistas depende de `VERCEL_ENV`; deploy fora da Vercel sem a variável precisa ser documentado | baixa | S20 | aberta |
@@ -36,8 +36,8 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-016 | ledger-dados S06 plano | Aceite de privacidade da reivindicação fica em `claims.privacy_ack_at` e não em `consents` | baixa | S17 | aberta — Ruling 9 (S17): mudar o fluxo de aceite da reivindicação (S06) para gravar em `consents` tem custo de mudar outra fatia; o timestamp e a versão do texto já existem em `claims`, só não centralizados — não bloqueia LGPD, mantido `aberta` |
 | D-017 | ledger-dados S06 revisão final | Falha em `claim_add_evidence` depois do upload deixa objeto órfão no Storage (limpeza best-effort); falta varredura | baixa | S17 | aberta — fora do escopo de D-012: o job de retenção da S17 apaga evidência COM linha em `claim_evidence` vencida, não objetos órfãos SEM linha (upload que sobreviveu a uma falha de INSERT); varredura de órfãos continua pendente |
 | D-018 | ledger-pipeline S07 T3 | Worker com pipeline demo sobre envio de app sem pipeline deixava `is_demo` falso | média | S07 | resolvida em S07 (`jobs_complete` com `p_is_demo`) |
-| D-153 | ledger.md (S17 · correções da revisão de segurança) | `auth.audit_log_entries` (schema `auth`, gerido pelo GoTrue) guarda o e-mail em claro de cada evento de autenticação (login, magic link, etc.), sem prazo de retenção definido; não é alterável por esta fatia (schema de sistema do Supabase Auth, fora de `public`) | média | Humano | aberta |
-| D-150 | ledger.md (S17) | `audit_log` não tem rotina de exclusão/anonimização própria (é append-only por desenho); `LEGAL.auditRetention` fica placeholder — decidir o prazo (e se cabe uma rotina) é uma decisão jurídica/de produto, não técnica, pendente do humano | média | Humano / S19 | aberta |
+| D-154 | ledger.md (S17 · correções da revisão de segurança, renumerado de D-153 por colisão com a S16) | `auth.audit_log_entries` (schema `auth`, gerido pelo GoTrue) guarda o e-mail em claro de cada evento de autenticação (login, magic link, etc.), sem prazo de retenção definido; não é alterável por esta fatia (schema de sistema do Supabase Auth, fora de `public`) | média | Humano | aberta |
+| D-155 | ledger.md (S17, renumerado de D-150 por colisão com a S16) | `audit_log` não tem rotina de exclusão/anonimização própria (é append-only por desenho); `LEGAL.auditRetention` fica placeholder — decidir o prazo (e se cabe uma rotina) é uma decisão jurídica/de produto, não técnica, pendente do humano | média | Humano / S19 | aberta |
 
 ## Desempenho e escala
 
@@ -64,9 +64,9 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-032 | ledger-pipeline S08 | Sem extração da camada de texto do PDF (`text_document_mismatch` só quando o modelo sinaliza) | baixa | S20 | aberta |
 | D-033 | ledger-dados S05 | Lista e perfil sempre `noindex`; liberar indexação de lista real de escola `claimed/verified` | média | S27 | aberta |
 | D-034 | ledger-dados S05 | Itens da lista não agrupados por categoria (a App05 agrupa) | baixa | S18 | aberta |
-| D-035 | ledger-dados S06 (dívida, plano) | Convites de co-admin e telas Escola04, Escola05, Escola06 e Escola12 adiados | média | S16 | aberta |
-| D-036 | ledger-comercio S13 onda final | Sem tela para o dono editar cadastro de papelaria `rejected` (razão social, CNPJ, contato) | média | S16 | aberta |
-| D-037 | ledger-comercio S13 onda final | `recordConsent` sem tela; editar item do catálogo pelo nome cria item novo se o nome mudar | baixa | S16 | aberta |
+| D-035 | ledger-dados S06 (dívida, plano) | Convites de co-admin e telas Escola04, Escola05, Escola06 e Escola12 adiados | média | S17 | aberta (reatribuída da S16: sem relação com o prompt desta fatia) |
+| D-036 | ledger-comercio S13 onda final | Sem tela para o dono editar cadastro de papelaria `rejected` (razão social, CNPJ, contato) | média | S17 | aberta (reatribuída da S16: sem relação com o prompt desta fatia) |
+| D-037 | ledger-comercio S13 onda final | `recordConsent` sem tela; editar item do catálogo pelo nome cria item novo se o nome mudar | baixa | S17 | aberta (reatribuída da S16: sem relação com o prompt desta fatia) |
 | D-038 | ledger-comercio S14 T2 / T3 | Rótulo "últimos 7 dias" dos KPIs com janela rolante `WEEK_MS`; revisar o texto | baixa | S18 | aberta |
 | D-039 | ledger-comercio S14 revisão final | `createLeadAction` perde papelaria/bairro no redirect de erro; `/cotacao` aberta a papéis que não criam lead; cartão mobile "valor enviado: indisponível"; item em falta como "fora do subtotal (em falta)"; tabela e cartões duplicados no HTML | baixa | S18 | aberta |
 | D-040 | ledger-comercio S14 revisão final | Pap02 sem a coluna "Estimado" (exigiria consulta agregada de itens × catálogo) | baixa | S22 (Ruling S21 plano) | aberta |
@@ -74,7 +74,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-042 | ledger.md (S02) | `/entrar` mostra o link mágico abaixo dos termos (desvio da App02); reorganizar quando o Google OAuth for ativado | baixa | S18 | aberta |
 | D-043 | ledger-dados S04 T3; ledger-dados S05 T3; ledger-comercio S12 T3 e S13; e2e/S04, S05 | Soft-404: `notFound()`/`redirect()` respondiam HTTP 200 por causa dos `loading.tsx` que forçavam streaming | média | chore | resolvida em chore/soft-404 (PR #17) |
 | D-044 | ledger-comercio S13 T3 | Nome do bairro digitado não era preservado (normalizado para minúsculas) | baixa | S13 | resolvida em S13 T2 rodada 2 (`display_name`) |
-| D-152 | ledger.md (S17) | Auditoria do selo "Demonstração" (`DemoBadge`/`DemoSeal`) foi por amostragem dirigida (S17), não exaustiva por todo `is_demo` do schema; nenhuma lacuna encontrada nos pontos verificados (schools/listas, papelarias, leads — inclusive `LeadTable`/`LeadCards` da papelaria), mas uma varredura completa (grep de todo `is_demo` exposto à UI × todo componente que o consome) ainda não foi feita | baixa | S18 | aberta |
+| D-156 | ledger.md (S17, renumerado de D-152 por colisão com a S16) | Auditoria do selo "Demonstração" (`DemoBadge`/`DemoSeal`) foi por amostragem dirigida (S17), não exaustiva por todo `is_demo` do schema; nenhuma lacuna encontrada nos pontos verificados (schools/listas, papelarias, leads — inclusive `LeadTable`/`LeadCards` da papelaria), mas uma varredura completa (grep de todo `is_demo` exposto à UI × todo componente que o consome) ainda não foi feita | baixa | S18 | aberta |
 
 ## Integração entre trilhas (S11)
 
@@ -97,7 +97,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-054 | ledger.md (S01); ledger-dados S03 T2 | Testes de RLS usam `pg` direto (não cobrem PostgREST/GoTrue); o gateway supabase-js só é exercitado no E2E | baixa | S20 | aberta |
 | D-055 | ledger-pipeline S08; e2e/S08 | Pipeline de IA nunca rodou com provedor real (`scripts/ai-smoke.ts` tem custo) | média | Humano / S20 | aberta |
 | D-056 | ledger-pipeline S07 (Edge Function) | Teste E2E da Edge Function é ignorado sem `WORKER_URL`/`WORKER_SHARED_SECRET` (não roda no CI) | baixa | S19 | aberta |
-| D-151 | ledger.md (S17) | `pnpm test:db`/`pnpm test` completos (1800+/3300+ testes, `fileParallelism`/paralelismo altos) ocasionalmente falham 1 teste aleatório não relacionado à mudança da sessão (`tests/db/audit.test.ts`, `tests/claims/repository.test.ts`, `tests/submissions/school-picker.test.tsx`, um por vez, em 3 rodadas completas diferentes durante a S17); todos passam 100% quando rodados isolados — flakiness de ordem/tempo pré-existente na suíte grande, não causada pela S17 | baixa | S18 | aberta |
+| D-157 | ledger.md (S17, renumerado de D-151 por colisão com a S16) | `pnpm test:db`/`pnpm test` completos (1800+/3300+ testes, `fileParallelism`/paralelismo altos) ocasionalmente falham 1 teste aleatório não relacionado à mudança da sessão (`tests/db/audit.test.ts`, `tests/claims/repository.test.ts`, `tests/submissions/school-picker.test.tsx`, um por vez, em 3 rodadas completas diferentes durante a S17); todos passam 100% quando rodados isolados — flakiness de ordem/tempo pré-existente na suíte grande, não causada pela S17 | baixa | S18 | aberta |
 
 ## Arquivos grandes (limite de 250 linhas)
 
@@ -135,7 +135,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-080 | ledger-comercio S11 T4 / T5 | `PushOptIn` guarda o endpoint só em estado React: após recarregar volta a "Ativar" mesmo com assinatura ativa (não consulta `pushManager.getSubscription()`), e "Desativar" não chama `sub.unsubscribe()` no navegador | média | S18 | aberta |
 | D-081 | ledger-comercio S11 T3 revisão / T5 | Endpoint de push: o Zod normaliza host em maiúsculas e porta `:443` (via `new URL()`), mas o CHECK de `push_subscriptions.endpoint` valida a string crua e recusa esses casos ("Não foi possível ativar"); normalizar antes de gravar ou alinhar o CHECK | baixa | S19 | aberta |
 | D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S18 (revisitada na S15: mudaria dezenas de páginas por dívida de baixa severidade, ficou para lá) | aberta |
-| D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S16 | aberta |
+| D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S18 | aberta (reatribuída da S16: item de copy/UX, sem relação com o prompt desta fatia) |
 | D-084 | ledger-comercio S11 T4 | `AsyncOptions` (S07, "continuar aguardando") não oferece "Ativar notificação do navegador" nem aponta para `/conta/notificacoes` | baixa | S18 | aberta |
 | D-085 | ledger-comercio S11 T3 escopo | `ClaimTokenSender` (S06) ainda não usa o `ResendEmailTransport` da S11: o link de reivindicação por e-mail continua sem envio real até o humano fornecer conta/credencial (`EMAIL_NOTIFICATIONS_ENABLED`, `EMAIL_API_KEY`, `EMAIL_FROM`) e a S16/S19 ligar o transporte | média | Humano / S16 | aberta |
 | D-086 | ledger-comercio S11 T3 escopo | `ocr-worker` sem "kick" opcional do despachante (`NOTIFY_DISPATCH_URL`): a notificação `submission_ready` do worker só sai por push/e-mail no próximo ciclo do cron; a central não depende disso | baixa | S19 | aberta |
@@ -202,6 +202,10 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-147 | ledger-comercio S26 Task 3 (fidelidade ao design vs. escopo, renumerado de D-144) | `NovaCampanhaForm` (B2B07) só permite escolher UMA série por campanha (`<select>` simples), embora o schema (`targetGradeStages`) e a migration aceitem até 3 — cortado do MVP desta fatia por tempo; trocar por um grupo de checkboxes depois não muda a API | baixa | S26 (B2B) | aberta |
 | D-148 | reverificação de segurança S26, rodada 2 (`1e35153`, renumerado de D-145) | O limite de eventos por (IP /24, campanha) de `features/campaigns/tracking-service.ts` é um balde em memória POR INSTÂNCIA — um invasor distribuindo requisições entre múltiplas instâncias/lambdas da Vercel contorna o teto. Um teto diário de verdade precisa de armazenamento COMPARTILHADO (tabela/contador no Postgres, ou Redis). Ruling: **obrigatório resolver antes de ligar este rastreamento a qualquer rota pública** — não é opcional para depois, ao contrário do racional "primeira camada" aceito para o widget/API B2B (D-001/D-113/D-139), porque aqui o abuso infla diretamente a cobrança informativa de um parceiro terceiro, não só o tráfego da própria plataforma | média | S26 (B2B) / obrigatório antes de wiring com rota pública | aberta |
 | D-149 | reverificação de segurança S26, rodada 2 (`1e35153`, renumerado de D-146) | O agregado anônimo "outras" dos insights (`features/campaigns/insights-service.ts`) é seguro numa consulta ISOLADA, mas repetir a mesma consulta ao longo do tempo (conforme escolas publicam/removem listas) pode permitir um ataque de diferenciação: comparar dois retornos em momentos diferentes pode isolar a contribuição de uma escola que entrou ou saiu do agregado. Sem solução simples nesta fatia (exigiria limitar frequência de consulta por combinação categoria/série, ou uma técnica de privacidade diferencial); registrada como dívida | baixa | S19 | aberta |
+| D-150 | ledger.md S16 (Ruling de escopo) | Denúncia pública (`reports`) só tem ponto de entrada na tela para `target_type = 'school_list'` (página da escola); a tabela já suporta `stationery` e `catalog_item`, mas não há tela pública para denunciar papelaria ou item de catálogo | baixa | S17/S27 | aberta |
+| D-151 | ledger.md S16 (Ruling de escopo) | Não há índice navegável de todas as listas publicadas para o admin arquivar; a entrada é só por id direto (`/admin/listas/[id]`, alcançada pela fila de denúncias) | baixa | S18 | aberta |
+| D-152 | ledger.md S16 (Ruling de escopo); parcialmente resolvida na revisão de segurança da S16 (0604) | Edição de `ai_settings.routes` (roteamento de modelo por provedor) e de `auto_publish_enabled` fica de fora da tela `/admin/ia`; a revisão de segurança fechou o buraco de fundo (o GRANT de tabela da 0202 deixava `authenticated` gravar as duas colunas direto via PostgREST, sem passar pela Server Action — agora bloqueado por gatilho, `ai_settings_lock_sensitive_fields`, só `service_role`/dono passa); falta só a TELA de edição de `routes` (JSON heterogêneo, sem cobertura de teste proporcional ao tempo disponível) — `auto_publish_enabled` continua exigindo Ruling humano explícito antes de qualquer tela | baixa | futura fatia (com Ruling explícito para `auto_publish_enabled`) | aberta (rebaixada de média: o risco de segurança já foi corrigido, falta só a tela) |
+| D-153 | ledger.md S16 (achado do E2E) | O clique em "Colocar em análise" (`/admin/denuncias/[id]`) submete o `<select name=resolution>` na mesma tela mesmo sem o admin ter escolhido nada; o servidor já ignora esse valor quando `status=reviewing` (`features/reports/actions.ts`), mas o `<select>` deveria ficar desabilitado enquanto não houver uma transição para resolver, por clareza de UI | baixa | S18 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -227,17 +231,33 @@ reverificação de segurança, rodada 2, `1e35153`, sem número anterior).
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 9 | 6 | 15 |
-| média | 45 | 11 | 56 |
-| baixa | 71 | 10 | 81 |
-| **Total** | **125** | **27** | **152** |
+| média | 44 | 12 | 56 |
+| baixa | 75 | 10 | 85 |
+| **Total** | **128** | **28** | **156** |
 
-Contagem atualizada em 2026-09-27 (S17, branch `slice/S17-lgpd-demo`, sobre `3f28fb5`, com a rodada de correções da
-revisão de segurança/privacidade sobre `d405956`): D-012 (alta) e D-013/D-014 (média) resolvidas; D-015/D-016
-mantidas `aberta` com Ruling de que não bloqueiam LGPD; D-017 mantida `aberta` (fora do escopo do job de retenção,
-que cobre evidência com linha vencida, não objeto órfão sem linha); soma D-150 (média, `audit_log` sem rotina de
-retenção própria — decisão do humano/jurídico), D-151 (baixa, flakiness pré-existente de suíte grande), D-152
-(baixa, auditoria do selo "Demonstração" por amostragem, não exaustiva) e D-153 (média, `auth.audit_log_entries`
-guarda e-mail sem prazo de retenção — schema de sistema do Supabase Auth, fora do alcance desta fatia).
+Contagem recontada por script direto das linhas da tabela (sem duplicata de ID) em 2026-09-27, na resolução do
+merge de `origin/main` (S16, PR #50, `c2e8ee6`) com esta branch (S17, `slice/S17-lgpd-demo`): as duas branches
+tinham cada uma seu próprio D-150–D-153; como a S16 chegou primeiro a `main`, os D-150–D-153 desta branch foram
+renumerados para D-154–D-157 (mesmo conteúdo, só o número mudou — ver notas de renumeração abaixo).
+
+Contagem anterior da S16 (revisão de segurança da S16, rodada única sobre `682ab71`): D-152 (dela) rebaixada de
+média para baixa (o risco de segurança em si foi corrigido nesta rodada — gatilho `ai_settings_lock_sensitive_fields`
+—, falta só a tela de `routes`). Totais por severidade mudaram; total geral não mudou (não fechou nem abriu item,
+só reclassificou um).
+
+Contagem anterior da S16, ao mesclar com `origin/main` (S26): base pós-S15 (117/24/141) + S26 (D-143–D-149: 3
+média + 4 baixa, todas abertas → 124/24/148) + S16 (D-006 resolvida — média aberta -1/resolvida +1; D-150–D-153
+novas — D-152 média aberta, D-150/D-151/D-153 baixa abertas). D-007/D-035/D-036/D-037/D-083 só mudaram de dono
+(S16 → S17/S18), sem mudar severidade/status.
+
+Contagem anterior desta branch (S17, sobre `3f28fb5`, com a rodada de correções da revisão de segurança/
+privacidade sobre `d405956`): D-012 (alta) e D-013/D-014 (média) resolvidas; D-015/D-016 mantidas `aberta` com
+Ruling de que não bloqueiam LGPD; D-017 mantida `aberta` (fora do escopo do job de retenção, que cobre evidência
+com linha vencida, não objeto órfão sem linha); somou (com os números de então, já renumerados acima) D-155
+(média, `audit_log` sem rotina de retenção própria — decisão do humano/jurídico), D-157 (baixa, flakiness
+pré-existente de suíte grande), D-156 (baixa, auditoria do selo "Demonstração" por amostragem, não exaustiva) e
+D-154 (média, `auth.audit_log_entries` guarda e-mail sem prazo de retenção — schema de sistema do Supabase Auth,
+fora do alcance desta fatia).
 Estado anterior (merge de `origin/main`, PR #45 — S15 soma D-140–D-142 e revisita D-029/D-082
 sem resolvê-las — com a S26 desta branch: D-143–D-149, renumerados a partir de D-143 por colisão com os IDs da
 S15 já mesclada; D-144, D-146 e D-148 média/abertas — cota/cache de `b2b_campaign_serve`, falta de tela para gerar

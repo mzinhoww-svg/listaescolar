@@ -54,6 +54,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S11 Integração das trilhas e notificações | #29 | 05160d5 | 2026-09-25 | ✓ | ✓ | 2691 | 1492 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, portas REAIS, IA falsa, worker Deno: 57 verificações, 0 falhas (`e2e/S11.md`); no staging: login por link mágico e envio OK, leitura por IA bloqueada por OPENROUTER_KEY (D-077) |
 | S21 Cobrança da papelaria (Comércio) | #34 | b7c6229 | 2026-09-26 | ✓ | ✓ | 2959 | 1539 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 17 verificações, 0 falhas (`e2e/S21.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | #36 | 0ee3771 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
+| S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -61,7 +62,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-20 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+21 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -81,6 +82,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0701_pesquisa_maes_ajustes.sql | Pesquisa com mães (ADR-005) | pesquisa_maes_ajustes | aplicada 2026-09-25 via MCP (aditiva: `created_at`/`updated_at` faltantes, função recriada com `search_path = ''`) |
 | 0401_billing.sql | S21 | billing | 20260926232215 (uma chamada transacional; fidelidade conferida contra o banco local: md5 das 23 funções, RLS das 8 tabelas, 22 gatilhos e privilégios idênticos; SEM plano publicado: staging em `billing_unavailable` até decisão) |
 | 0402_lead_conversions.sql | S22 | lead_conversions | 20260927010517 (uma chamada transacional; md5 das 10 funções, RLS, gatilhos e privilégios idênticos ao banco local; sem advisor novo) |
+| 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
@@ -104,7 +106,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Dados | S03, S04, S05, S06 | **Completa** (S03–S06) |
 | Pipeline | S07, S08, S09, S10 | **Completa** (S07–S10) |
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
-| Comércio | S12, S13, S14, S27, S21 | **Completa** (S12–S14, S27 e S21, mesclada em `main` no #34). **S22 concluída** (branch `slice/S22-conversao`, worktree T3: migration `0402_lead_conversions.sql`, `features/conversion/**`, telas (Pap03 contestar, `/conta/compras`, Admin11 auditoria, Admin12 contestações, avaliações no perfil público) e E2E local 21/21 verde; gate completo verde; branch mesclada com `origin/main` e enviada — **sem PR aberto, por instrução da tarefa**; falta revisão e merge). **S23 concluída** (branch `slice/S23-repasses`, worktree T3, criada de `main` em `0ee3771` com S21/S22 dentro: migration `0403_repasses.sql` (aditiva sobre 0401/0402), `features/payouts/**`, telas Admin13-Repasses, Admin14-Inadimplência, Pap07-Desempenho e "Pix pela plataforma" em Pap03; fecha D-099–D-101, D-103, D-105, D-107–D-111; abre D-112–D-114 (baixa/média); gate completo verde (1598 testes de banco, 2994 unitários) e E2E local 25/25 verde (`e2e/S23.md`) — **sem PR aberto, por instrução da tarefa**; falta revisão e merge; migration `0403` ainda só local, não aplicada em staging) |
+| Comércio | S12, S13, S14, S27, S21, S22 | **Completa** (S12–S14, S27, S21 e S22, mescladas em `main` nos PRs #34 e #36). **S23 concluída** (branch `slice/S23-repasses`, worktree T3, criada de `main` em `0ee3771` com S21/S22 dentro: migration `0403_repasses.sql` (aditiva sobre 0401/0402, já no staging), `features/payouts/**`, telas Admin13-Repasses, Admin14-Inadimplência, Pap07-Desempenho e "Pix pela plataforma" em Pap03; fecha D-099–D-101, D-103, D-105, D-107–D-111; abre D-120–D-122 (baixa/média, renumeradas por colisão com os IDs da S24); gate completo verde (1598 testes de banco, 2994 unitários) e E2E local 25/25 verde (`e2e/S23.md`) — **sem PR aberto, por instrução da tarefa**; falta revisão e merge; migration `0403` ainda só local, não aplicada em staging) |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -125,7 +127,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (branch `slice/S22-conversao`, sem PR ainda), S23 ✓ (branch `slice/S23-repasses`, sem PR ainda)] ∥ [S24 (em andamento: Task 2), S25, S26].
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (branch `slice/S23-repasses`, sem PR ainda)] ∥ [S24 ✓ (#38), S25 (em andamento), S26].
 4. S15, S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
@@ -143,6 +145,8 @@ Ambiente e deploy:
 - Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
 - Pepper do IP de auditoria: FEITO na 0601 (`audit_row_change` lê o Vault quando o GUC não existe; D-059 resolvida); na produção, gerar outro segredo `audit_ip_pepper` no Vault.
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
+- Vercel (S24, Portal B2B): `B2B_API_KEY_PEPPER` (≥ 32 caracteres, gerado aleatoriamente, **diferente por ambiente**, nunca commitado) em Production/Preview/Development — sem ele a API `/v1` responde 503 e o portal não emite chaves. Atenção: um valor com menos de 32 caracteres (ou qualquer outra variável do `serverSchema` de `lib/env.ts` ausente/inválida, ex. `OPENROUTER_KEY`/`AI_MODEL_*`) quebra `getServerEnv()` inteiro e derruba TODA a API B2B com 503 silencioso (sem log — revisão final do branch, corrigido para logar só o nome do erro). Cron diário `/api/cron/b2b-maintenance` (mesmo `CRON_SECRET` já usado por `leads-expire`) precisa do aceite no plano da conta, igual ao S14.
+- Vercel Firewall: rate limit global por IP em `/v1` — o limite em memória por instância do código (S24, revisão de segurança independente, achado 1b: 60 req/min por IP, `features/b2b/api/handler.ts`) é só a primeira camada; o limite de verdade entre todas as instâncias precisa ser configurado no Firewall/WAF da Vercel pelo humano (regra de rate limit por IP no projeto `listaescolar`, escopo `/v1/*`). Sem isso, um invasor distribuindo requisições entre múltiplas instâncias/lambdas contorna o limite por instância.
 
 Credenciais e contas:
 - Provedor real de e-mail (S11) e credencial de WhatsApp (tokens de reivindicação da S06 e notificações).

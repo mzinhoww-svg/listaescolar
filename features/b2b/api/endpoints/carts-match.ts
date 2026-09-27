@@ -78,12 +78,18 @@ export const cartsMatchEndpoint = defineEndpoint(
     const { list_id: listId, skus } = body as z.infer<typeof BodySchema>;
     const admin = createAdminClient();
 
-    const { data: list, error: listError } = await admin.rpc("b2b_v1_list", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_list_id: listId });
+    // Achado D (revisão de segurança independente, rodada 2): as DUAS chamadas RPC deste endpoint recebem o
+    // `AbortSignal` — ver o mesmo comentário em `schools.ts`.
+    let listQuery = admin.rpc("b2b_v1_list", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_list_id: listId });
+    if (ctx.signal) listQuery = listQuery.abortSignal(ctx.signal);
+    const { data: list, error: listError } = await listQuery;
     if (listError) throw new B2bApiError("internal_error");
     if (!list) throw new B2bApiError("not_found");
     const listRow = list as ListRow;
 
-    const { data, error } = await admin.rpc("b2b_v1_list_match_items", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_list_id: listId });
+    let matchQuery = admin.rpc("b2b_v1_list_match_items", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_list_id: listId });
+    if (ctx.signal) matchQuery = matchQuery.abortSignal(ctx.signal);
+    const { data, error } = await matchQuery;
     if (error) throw new B2bApiError("internal_error");
     const rows = (data ?? []) as MatchItemRow[];
 

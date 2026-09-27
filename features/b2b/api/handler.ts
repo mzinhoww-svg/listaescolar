@@ -57,23 +57,8 @@ const NO_STORE_HEADERS = {
 
 class TimeoutError extends Error {}
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new TimeoutError("tempo esgotado")), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
-
-/** Como `withTimeout`, mas para chamadas que aceitam um `AbortSignal` (achado 3, revisão de segurança independente):
+/** Timeout com cancelamento de verdade via `AbortSignal` (achado 3, revisão de segurança independente; rodada 2,
+ * achado D, estendeu o uso para o `impl` de cada endpoint, não só `lookupKey`/`consumeRate`):
  * quando o timeout vence, aborta de verdade o `AbortController` (a chamada real ao Postgres/PostgREST é cancelada
  * via `.abortSignal()` do supabase-js, não só ignorada depois de resolver em segundo plano). */
 function withAbortTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T> {
@@ -96,14 +81,27 @@ function withAbortTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms: number
   });
 }
 
-// ---- Limite por IP em memória (achado 1b, revisão de segurança independente) ----------------------------------
-// Primeira camada, por INSTÂNCIA (um `Map` de módulo, não compartilhado entre lambdas/instâncias da Vercel) —
-// roda ANTES de tocar o banco (antes até do pepper/`verifyApiKey`). Ruling (ver ledger-comercio.md, item 1b): 60
-// requisições/minuto por IP, janela fixa. O limite de VERDADE, entre todas as instâncias, é pendência do HUMANO no
-// Vercel Firewall/Edge Config (ver docs/superpowers/PROGRESS.md, "Pendências humanas") — este código nunca toca
-// infraestrutura, só aplica a primeira camada em memória do processo.
+// ---- Limite por IP em memória (achado 1b, revisão de segurança independente; refinado na rodada 2, achados A/B/C)
+// Primeira camada, por INSTÂNCIA (um `Map` de módulo, não compartilhado entre lambdas/instâncias da Vercel). Ruling
+// (ver ledger-comercio.md, item 1b): 60 tentativas de autenticação FALHAS por minuto por IP, janela fixa. O limite
+// de VERDADE, entre todas as instâncias, é pendência do HUMANO no Vercel Firewall/Edge Config (ver
+// docs/superpowers/PROGRESS.md, "Pendências humanas") — este código nunca toca infraestrutura, só aplica a
+// primeira camada em memória do processo.
+//
+// Achado B (rodada 2): só CHAVE INVÁLIDA conta no balde do IP — uma chave válida (mesmo com escopo errado, que só
+// é checado DEPOIS da consulta da chave) nunca é barrada nem contabilizada aqui; ela sempre segue para o limite
+// por parceiro (`b2b_rate_consume`), configurado pelo próprio admin, sem o limite por IP (pensado para conter
+// martelamento com chaves inválidas) sendo mais restritivo do que o limite que o parceiro contratou. Por isso o
+// PEEK (leitura, sem incrementar) roda ANTES de tudo — antes até do pepper/`verifyApiKey`, sem tocar o banco, para
+// um IP já sobre o teto nem chegar a consultar a chave — e o REGISTRO (incremento) só roda depois que
+// `verifyApiKey` devolve `invalid_key` de verdade.
 const IP_RATE_LIMIT_WINDOW_MS = 60_000;
 const IP_RATE_LIMIT_MAX_PER_WINDOW = 60;
+// Achado A (rodada 2): teto de IPs distintos rastreados ao mesmo tempo — sem ele, um atacante variando o IP de
+// origem (trivial com IPv6) cria uma entrada nova por IP para sempre, esgotando a memória da instância. `let` (não
+// `const`) só para o teste poder baixar o teto e exercitar o comportamento sem precisar de 10 mil iterações reais.
+const IP_RATE_LIMIT_DEFAULT_MAX_TRACKED_IPS = 10_000;
+let ipRateLimitMaxTrackedIps = IP_RATE_LIMIT_DEFAULT_MAX_TRACKED_IPS;
 
 type IpBucket = { windowStart: number; count: number };
 const ipRateBuckets = new Map<string, IpBucket>();
@@ -111,32 +109,79 @@ const ipRateBuckets = new Map<string, IpBucket>();
 /** Só para teste: o limitador por IP é estado de módulo (compartilhado entre chamadas no mesmo processo). */
 export function __resetIpRateLimiterForTests(): void {
   ipRateBuckets.clear();
+  ipRateLimitMaxTrackedIps = IP_RATE_LIMIT_DEFAULT_MAX_TRACKED_IPS;
 }
 
-/** Primeiro valor de `x-forwarded-for` (a Vercel prefixa o IP real do cliente na frente da lista) ou, na ausência
- * dele, `x-real-ip`. `null` quando nenhum dos dois está presente — sem IP identificável, NÃO bloqueia (só loga);
- * bloquear às cegas puniria todo mundo atrás do mesmo proxy sem cabeçalho. */
+/** Só para teste: tamanho atual do mapa de baldes por IP (confirma o teto do achado A). */
+export function __ipRateLimiterSizeForTests(): number {
+  return ipRateBuckets.size;
+}
+
+/** Só para teste: baixa o teto de IPs distintos rastreados (produção usa sempre 10.000; ver
+ * `IP_RATE_LIMIT_DEFAULT_MAX_TRACKED_IPS`), para exercitar o comportamento de despejo sem 10 mil iterações reais.
+ * `__resetIpRateLimiterForTests` devolve ao padrão. */
+export function __setIpRateLimiterMaxTrackedIpsForTests(max: number): void {
+  ipRateLimitMaxTrackedIps = max;
+}
+
+/** Achado C (rodada 2): prioridade corrigida — `x-vercel-forwarded-for` primeiro (escrito pela BORDA da Vercel,
+ * não pode ser forjado por um proxy intermediário antes de chegar lá), depois `x-real-ip`, e só por último (se
+ * nenhum dos dois existir) o primeiro valor de `x-forwarded-for` (que QUALQUER proxy no caminho pode ter
+ * acrescentado ou reescrito antes da borda da Vercel — o menos confiável dos três, mantido só como fallback).
+ * `null` quando nenhum dos três está presente — sem IP identificável, NÃO bloqueia (só loga); bloquear às cegas
+ * puniria todo mundo atrás do mesmo proxy sem cabeçalho. */
 function clientIp(request: Request): string | null {
+  const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for")?.trim();
+  if (vercelForwardedFor) return vercelForwardedFor;
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
     const first = forwardedFor.split(",")[0]?.trim();
     if (first) return first;
   }
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  return realIp || null;
+  return null;
 }
 
-function checkIpRateLimit(ip: string, nowMs: number): { allowed: boolean; retryAfterSeconds: number } {
+/** Leitura pura (nunca incrementa) — roda antes de tocar o banco, para um IP já sobre o teto nem chegar a
+ * consultar a chave. */
+function peekIpRateLimit(ip: string, nowMs: number): { allowed: boolean; retryAfterSeconds: number } {
   const bucket = ipRateBuckets.get(ip);
-  if (!bucket || nowMs - bucket.windowStart >= IP_RATE_LIMIT_WINDOW_MS) {
-    ipRateBuckets.set(ip, { windowStart: nowMs, count: 1 });
-    return { allowed: true, retryAfterSeconds: 0 };
-  }
-  bucket.count += 1;
-  if (bucket.count > IP_RATE_LIMIT_MAX_PER_WINDOW) {
+  if (!bucket || nowMs - bucket.windowStart >= IP_RATE_LIMIT_WINDOW_MS) return { allowed: true, retryAfterSeconds: 0 };
+  if (bucket.count >= IP_RATE_LIMIT_MAX_PER_WINDOW) {
     return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((bucket.windowStart + IP_RATE_LIMIT_WINDOW_MS - nowMs) / 1000)) };
   }
   return { allowed: true, retryAfterSeconds: 0 };
+}
+
+/** Libera janelas já vencidas — chamado só quando o mapa está no teto, antes de decidir se precisa zerar tudo. */
+function pruneExpiredIpBuckets(nowMs: number): void {
+  for (const [ip, bucket] of ipRateBuckets) {
+    if (nowMs - bucket.windowStart >= IP_RATE_LIMIT_WINDOW_MS) ipRateBuckets.delete(ip);
+  }
+}
+
+/** Achado B: só chamado depois que `verifyApiKey` confirma `invalid_key` de verdade (nunca para chave válida,
+ * nunca só por escopo errado). Achado A: antes de criar uma entrada NOVA (IP nunca visto, ou janela anterior já
+ * vencida) que levaria o mapa acima do teto, tenta liberar janelas vencidas; se mesmo assim ainda estiver no teto
+ * (muitos IPs distintos ativos ao mesmo tempo — um ataque de verdade em andamento), zera o mapa inteiro e loga.
+ * Mais simples e igualmente seguro do que uma política de despejo por LRU (Ruling); o custo é perder a contagem em
+ * andamento de quem estava perto do limite quando o teto é atingido — aceitável: o pior caso vira "mais 60
+ * tentativas até barrar de novo", nunca uma falha de disponibilidade. */
+function recordIpAuthFailure(ip: string, nowMs: number): void {
+  const existing = ipRateBuckets.get(ip);
+  if (existing && nowMs - existing.windowStart < IP_RATE_LIMIT_WINDOW_MS) {
+    existing.count += 1;
+    return;
+  }
+  if (ipRateBuckets.size >= ipRateLimitMaxTrackedIps) {
+    pruneExpiredIpBuckets(nowMs);
+    if (ipRateBuckets.size >= ipRateLimitMaxTrackedIps) {
+      console.warn("b2b ip rate limit: teto de IPs rastreados atingido, limpando o mapa");
+      ipRateBuckets.clear();
+    }
+  }
+  ipRateBuckets.set(ip, { windowStart: nowMs, count: 1 });
 }
 
 // ---- Leitura do corpo com corte em stream (achado 2, revisão de segurança independente) ------------------------
@@ -221,18 +266,19 @@ export async function runApiPipeline(
   const requestId = deps.requestId();
   const headers = baseHeaders(requestId);
 
-  // Achado 1b (revisão de segurança independente): limite por IP roda ANTES de tudo — antes até do pepper e da
-  // consulta da chave —, sem tocar o banco. Primeira camada, por instância; ver Ruling no ledger para o porquê do
-  // limite global de verdade (entre instâncias) ser pendência do humano no Vercel Firewall.
+  // Achado 1b (revisão de segurança independente) + achado B (rodada 2): PEEK (leitura, sem incrementar) roda
+  // ANTES de tudo — antes até do pepper e da consulta da chave —, sem tocar o banco: um IP já sobre o teto de
+  // tentativas FALHAS é barrado sem gastar uma consulta. Ver Ruling no ledger para o porquê do limite global de
+  // verdade (entre instâncias) ser pendência do humano no Vercel Firewall.
   const ip = clientIp(request);
   if (ip) {
-    const ipCheck = checkIpRateLimit(ip, deps.now().getTime());
+    const ipCheck = peekIpRateLimit(ip, deps.now().getTime());
     if (!ipCheck.allowed) {
       headers.set("Retry-After", String(ipCheck.retryAfterSeconds));
       return errorResponse("rate_limited", requestId, headers);
     }
   } else {
-    console.warn("b2b ip rate limit: sem x-forwarded-for/x-real-ip identificável — requisição não limitada por IP");
+    console.warn("b2b ip rate limit: sem x-vercel-forwarded-for/x-real-ip/x-forwarded-for identificável — requisição não limitada por IP");
   }
 
   const pepper = deps.pepper();
@@ -252,7 +298,13 @@ export async function runApiPipeline(
     console.error("verificar chave b2b", error instanceof Error ? error.name : "erro");
     return errorResponse("internal_error", requestId, headers);
   }
-  if (!verified.ok) return errorResponse(verified.reason, requestId, headers);
+  if (!verified.ok) {
+    // Achado B (rodada 2): só `invalid_key` de verdade conta no balde do IP — `service_unavailable` (pepper
+    // ausente, já tratado acima, mas por clareza: nunca chega aqui) é um problema operacional, não um sinal de
+    // ataque, e nunca deveria ajudar a barrar um IP legítimo.
+    if (verified.reason === "invalid_key" && ip) recordIpAuthFailure(ip, deps.now().getTime());
+    return errorResponse(verified.reason, requestId, headers);
+  }
   const { key } = verified;
 
   const finish = (response: Response, statusClass?: UsageStatusClass, usage?: { matchTotal?: number; matchMatched?: number }): Response => {
@@ -358,11 +410,15 @@ export async function runApiPipeline(
 
   // ---- impl ---------------------------------------------------------------
   const environment: ApiEnvironment = key.environment;
-  const ctx = { key: { keyId: key.keyId, partnerId: key.partnerId, environment, scopes: key.scopes, coverageUfs: key.coverageUfs }, requestId };
+  const baseCtx = { key: { keyId: key.keyId, partnerId: key.partnerId, environment, scopes: key.scopes, coverageUfs: key.coverageUfs }, requestId };
 
   let result: Awaited<ReturnType<Endpoint["impl"]>>;
   try {
-    result = await withTimeout(impl({ ctx, params, query, body }), deps.timeoutMs);
+    // Achado D (revisão de segurança independente, rodada 2): o achado 3 (rodada 1) só cobriu `lookupKey`/
+    // `consumeRate`; o `impl` de cada endpoint faz suas PRÓPRIAS chamadas RPC (`features/b2b/api/endpoints/*.ts`)
+    // e continuava usando o `withTimeout` antigo (sem abort de verdade). Agora o `signal` do mesmo
+    // `AbortController` do timeout vai dentro de `ctx`, e cada endpoint encadeia `.abortSignal(ctx.signal)`.
+    result = await withAbortTimeout((signal) => impl({ ctx: { ...baseCtx, signal }, params, query, body }), deps.timeoutMs);
   } catch (error) {
     if (error instanceof TimeoutError) return finish(errorResponse("service_unavailable", requestId, headers));
     if (error instanceof B2bApiError) return finish(errorResponse(error.code, requestId, headers, error.details));

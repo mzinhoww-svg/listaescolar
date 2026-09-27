@@ -55,7 +55,11 @@ export const listItemsEndpoint = defineEndpoint(
     const q = query as z.infer<typeof QuerySchema>;
     const admin = createAdminClient();
 
-    const { data: list, error: listError } = await admin.rpc("b2b_v1_list", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_list_id: id });
+    // Achado D (revisão de segurança independente, rodada 2): as DUAS chamadas RPC deste endpoint recebem o
+    // `AbortSignal` — ver o mesmo comentário em `schools.ts`.
+    let listQuery = admin.rpc("b2b_v1_list", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_list_id: id });
+    if (ctx.signal) listQuery = listQuery.abortSignal(ctx.signal);
+    const { data: list, error: listError } = await listQuery;
     if (listError) throw new B2bApiError("internal_error");
     if (!list) throw new B2bApiError("not_found");
 
@@ -65,13 +69,15 @@ export const listItemsEndpoint = defineEndpoint(
       if (!after) throw new B2bApiError("invalid_request", undefined, [{ path: "query.cursor", code: "invalid_cursor" }]);
     }
     const limit = q.limit ?? LIST_ITEMS_LIMIT.default;
-    const { data, error } = await admin.rpc("b2b_v1_list_items", {
+    let itemsQuery = admin.rpc("b2b_v1_list_items", {
       p_environment: ctx.key.environment,
       p_coverage_ufs: ctx.key.coverageUfs,
       p_list_id: id,
       p_after_position: after?.position ?? null,
       p_limit: limit,
     });
+    if (ctx.signal) itemsQuery = itemsQuery.abortSignal(ctx.signal);
+    const { data, error } = await itemsQuery;
     if (error) throw new B2bApiError("internal_error");
     const rows = (data ?? []) as ItemRow[];
 

@@ -69,11 +69,15 @@ export const schoolListsEndpoint = defineEndpoint(
     const q = query as z.infer<typeof QuerySchema>;
     const admin = createAdminClient();
 
-    const { data: school, error: schoolError } = await admin.rpc("b2b_v1_school", {
+    // Achado D (revisão de segurança independente, rodada 2): as DUAS chamadas RPC deste endpoint recebem o
+    // `AbortSignal` — ver o mesmo comentário em `schools.ts`.
+    let schoolQuery = admin.rpc("b2b_v1_school", {
       p_environment: ctx.key.environment,
       p_coverage_ufs: ctx.key.coverageUfs,
       p_inep: inep,
     });
+    if (ctx.signal) schoolQuery = schoolQuery.abortSignal(ctx.signal);
+    const { data: school, error: schoolError } = await schoolQuery;
     if (schoolError) throw new B2bApiError("internal_error");
     if (!school) throw new B2bApiError("not_found");
 
@@ -83,7 +87,7 @@ export const schoolListsEndpoint = defineEndpoint(
       if (!after) throw new B2bApiError("invalid_request", undefined, [{ path: "query.cursor", code: "invalid_cursor" }]);
     }
     const limit = q.limit ?? SCHOOL_LISTS_LIMIT.default;
-    const { data, error } = await admin.rpc("b2b_v1_school_lists", {
+    let listsQuery = admin.rpc("b2b_v1_school_lists", {
       p_environment: ctx.key.environment,
       p_coverage_ufs: ctx.key.coverageUfs,
       p_inep: inep,
@@ -93,6 +97,8 @@ export const schoolListsEndpoint = defineEndpoint(
       p_after_id: after?.id ?? null,
       p_limit: limit,
     });
+    if (ctx.signal) listsQuery = listsQuery.abortSignal(ctx.signal);
+    const { data, error } = await listsQuery;
     if (error) throw new B2bApiError("internal_error");
     const rows = (data ?? []) as ListRow[];
 

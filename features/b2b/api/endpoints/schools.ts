@@ -95,7 +95,9 @@ export const schoolsEndpoint = defineEndpoint(
     }
     const limit = q.limit ?? SCHOOLS_LIST_LIMIT.default;
     const admin = createAdminClient();
-    const { data, error } = await admin.rpc("b2b_v1_schools", {
+    // Achado D (revisão de segurança independente, rodada 2): `.abortSignal()` encaminha o timeout do pipeline até
+    // o `fetch` do PostgREST — sem isso, a consulta continuava rodando em segundo plano depois do 503.
+    let rpcQuery = admin.rpc("b2b_v1_schools", {
       p_environment: ctx.key.environment,
       p_coverage_ufs: ctx.key.coverageUfs,
       p_city: q.city ?? null,
@@ -106,6 +108,8 @@ export const schoolsEndpoint = defineEndpoint(
       p_after_inep: after?.inep ?? null,
       p_limit: limit,
     });
+    if (ctx.signal) rpcQuery = rpcQuery.abortSignal(ctx.signal);
+    const { data, error } = await rpcQuery;
     if (error) throw new B2bApiError("internal_error");
     const rows = (data ?? []) as SchoolRow[];
 

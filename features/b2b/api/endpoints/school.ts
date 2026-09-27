@@ -40,7 +40,10 @@ export const schoolEndpoint = defineEndpoint(
   async ({ ctx, params }) => {
     const { inep } = params as z.infer<typeof ParamsSchema>;
     const admin = createAdminClient();
-    const { data, error } = await admin.rpc("b2b_v1_school", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_inep: inep });
+    // Achado D (revisão de segurança independente, rodada 2): ver o mesmo comentário em `schools.ts`.
+    let query = admin.rpc("b2b_v1_school", { p_environment: ctx.key.environment, p_coverage_ufs: ctx.key.coverageUfs, p_inep: inep });
+    if (ctx.signal) query = query.abortSignal(ctx.signal);
+    const { data, error } = await query;
     if (error) throw new B2bApiError("internal_error");
     if (!data) throw new B2bApiError("not_found");
     return { data };

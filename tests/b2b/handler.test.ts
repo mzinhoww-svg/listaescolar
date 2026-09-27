@@ -5,7 +5,12 @@ import { generateApiKey } from "@/features/b2b/keys/format";
 import { hashSecret } from "@/features/b2b/keys/hash";
 import { B2bApiError } from "@/features/b2b/errors";
 import type { ApiHandlerDeps, RateConsumeResult } from "@/features/b2b/api/handler";
-import { __resetIpRateLimiterForTests, runApiPipeline } from "@/features/b2b/api/handler";
+import {
+  __ipRateLimiterSizeForTests,
+  __resetIpRateLimiterForTests,
+  __setIpRateLimiterMaxTrackedIpsForTests,
+  runApiPipeline,
+} from "@/features/b2b/api/handler";
 import type { EndpointEntry } from "@/features/b2b/api/contract";
 
 const PEPPER = "pepper-de-teste-com-mais-de-32-caracteres-0001";
@@ -330,27 +335,125 @@ describe("runApiPipeline", () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
-  // Revisão de segurança independente, achado 1b: limite por IP em memória (por instância), aplicado ANTES até de
-  // olhar a chave — a 61ª requisição da mesma origem em menos de um minuto é cortada sem consultar o banco.
-  it("limite por IP em memória: 61ª requisição da mesma origem em 1 min -> 429 antes de consultar a chave", async () => {
+  // Revisão de segurança independente (rodada 2), achado B: só falha de autenticação conta no balde do IP — uma
+  // sequência de CHAVES INVÁLIDAS da mesma origem é barrada; chave válida nunca é, mesmo bem acima do teto.
+  it("limite por IP conta só falhas de autenticação: 61ª chave inválida da mesma origem -> 429 antes de consultar o banco de novo", async () => {
+    const invalidLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => null);
     const headers = new Headers();
     headers.set("x-listacerta-key", KEY.plaintext);
-    headers.set("x-forwarded-for", "203.0.113.7, 10.0.0.1");
+    headers.set("x-vercel-forwarded-for", "203.0.113.9");
     const reqFromIp = () => new Request("https://api.listacerta.example/v1/test", { headers });
     let last: Response | undefined;
     for (let i = 0; i < 61; i += 1) {
-      last = await runApiPipeline(entry, okImpl, deps(), reqFromIp(), {});
+      last = await runApiPipeline(entry, okImpl, deps({ lookupKey: invalidLookup }), reqFromIp(), {});
     }
     expect(last?.status).toBe(429);
     expect(last?.headers.get("Retry-After")).toBeTruthy();
-    expect(lookupKey).toHaveBeenCalledTimes(60); // a 61ª nem chega a olhar a chave
+    const body = await last?.json();
+    expect(body.error.code).toBe("rate_limited");
+    expect(invalidLookup).toHaveBeenCalledTimes(60); // a 61ª nem chega a consultar a chave: barrada pelo PEEK
   });
 
-  it("sem x-forwarded-for/x-real-ip -> não bloqueia por IP (só loga), segue o pipeline normal", async () => {
+  it("chave válida nunca é barrada nem contabilizada pelo limite por IP, mesmo bem acima do teto", async () => {
+    const headers = new Headers();
+    headers.set("x-listacerta-key", KEY.plaintext);
+    headers.set("x-vercel-forwarded-for", "203.0.113.10");
+    const reqFromIp = () => new Request("https://api.listacerta.example/v1/test", { headers });
+    let last: Response | undefined;
+    for (let i = 0; i < 90; i += 1) {
+      last = await runApiPipeline(entry, okImpl, deps(), reqFromIp(), {});
+    }
+    expect(last?.status).toBe(200);
+    expect(lookupKey).toHaveBeenCalledTimes(90);
+  });
+
+  it("escopo errado (chave válida) nunca conta no balde do IP, mesmo acima do teto", async () => {
+    const wrongScopeLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => ({
+      keyId: KEY_ID,
+      partnerId: PARTNER_ID,
+      environment: "test" as const,
+      keyHash: hashSecret(KEY.secret, PEPPER),
+      hashVersion: 1,
+      scopes: ["lists:read"], // sem schools:read
+      usable: true,
+      coverageUfs: null,
+    }));
+    const headers = new Headers();
+    headers.set("x-listacerta-key", KEY.plaintext);
+    headers.set("x-vercel-forwarded-for", "203.0.113.11");
+    const reqFromIp = () => new Request("https://api.listacerta.example/v1/test", { headers });
+    let last: Response | undefined;
+    for (let i = 0; i < 90; i += 1) {
+      last = await runApiPipeline(entry, okImpl, deps({ lookupKey: wrongScopeLookup }), reqFromIp(), {});
+    }
+    expect(last?.status).toBe(403); // nunca 429: escopo errado não é `invalid_key`, não conta no balde do IP
+  });
+
+  // Achado A (rodada 2): teto de IPs distintos rastreados ao mesmo tempo — o mapa nunca cresce além dele, mesmo
+  // com um atacante variando o IP de origem a cada tentativa.
+  it("teto de IPs distintos rastreados nunca é ultrapassado, mesmo com IPs novos chegando sem parar", async () => {
+    __setIpRateLimiterMaxTrackedIpsForTests(3);
+    const invalidLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => null);
+    for (let i = 0; i < 10; i += 1) {
+      const headers = new Headers();
+      headers.set("x-listacerta-key", KEY.plaintext);
+      headers.set("x-vercel-forwarded-for", `198.51.100.${i}`);
+      await runApiPipeline(entry, okImpl, deps({ lookupKey: invalidLookup }), new Request("https://api.listacerta.example/v1/test", { headers }), {});
+      expect(__ipRateLimiterSizeForTests()).toBeLessThanOrEqual(3);
+    }
+  });
+
+  // Achado C (rodada 2): `x-vercel-forwarded-for` (escrito pela borda da Vercel) vence sobre `x-real-ip`/
+  // `x-forwarded-for` (que um proxy intermediário pode forjar antes de chegar à Vercel).
+  it("prioridade de IP: x-vercel-forwarded-for vence mesmo com x-real-ip/x-forwarded-for diferentes a cada tentativa", async () => {
+    const invalidLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => null);
+    let last: Response | undefined;
+    for (let i = 0; i < 61; i += 1) {
+      const headers = new Headers();
+      headers.set("x-listacerta-key", KEY.plaintext);
+      headers.set("x-vercel-forwarded-for", "203.0.113.50"); // constante: é este que deve valer
+      headers.set("x-real-ip", `192.0.2.${i}`); // varia a cada volta; não deveria importar
+      headers.set("x-forwarded-for", `10.0.0.${i}`); // varia a cada volta; não deveria importar
+      last = await runApiPipeline(entry, okImpl, deps({ lookupKey: invalidLookup }), new Request("https://api.listacerta.example/v1/test", { headers }), {});
+    }
+    // Se o código usasse x-real-ip/x-forwarded-for (que mudam a cada volta) em vez de x-vercel-forwarded-for,
+    // cada tentativa cairia num balde novo e nunca chegaria a 429.
+    expect(last?.status).toBe(429);
+  });
+
+  it("sem x-vercel-forwarded-for, cai para x-real-ip e por último x-forwarded-for (fallback)", async () => {
+    const invalidLookup = vi.fn<ApiHandlerDeps["lookupKey"]>(async () => null);
+    let last: Response | undefined;
+    for (let i = 0; i < 61; i += 1) {
+      const headers = new Headers();
+      headers.set("x-listacerta-key", KEY.plaintext);
+      headers.set("x-forwarded-for", "203.0.113.60, 10.0.0.1"); // só este presente
+      last = await runApiPipeline(entry, okImpl, deps({ lookupKey: invalidLookup }), new Request("https://api.listacerta.example/v1/test", { headers }), {});
+    }
+    expect(last?.status).toBe(429);
+  });
+
+  it("sem nenhum dos três cabeçalhos de IP -> não bloqueia (só loga), segue o pipeline normal", async () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const res = await runApiPipeline(entry, okImpl, deps(), request(), {});
     expect(res.status).toBe(200);
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  // Achado D (rodada 2): o `impl` recebe, dentro de `ctx`, o `AbortSignal` do mesmo `AbortController` do timeout —
+  // cada endpoint encadeia `.abortSignal(ctx.signal)` nas suas próprias chamadas RPC (não testado aqui SKU a SKU;
+  // ver `tests/b2b/endpoints/*.test.ts` para a integração real por endpoint). Aqui confirmamos que `runApiPipeline`
+  // aborta de verdade o `signal` recebido pelo `impl` quando o timeout vence.
+  it("timeout do impl aborta de verdade o AbortSignal recebido em ctx.signal", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const slowImpl = ({ ctx }: { ctx: { signal?: AbortSignal } }) => {
+      capturedSignal = ctx.signal;
+      return new Promise<{ data: { ok: boolean } }>((resolve) => setTimeout(() => resolve({ data: { ok: true } }), 500));
+    };
+    const res = await runApiPipeline(entry, slowImpl, deps({ timeoutMs: 20 }), request(), {});
+    expect(res.status).toBe(503);
+    expect(capturedSignal).toBeInstanceOf(AbortSignal);
+    expect(capturedSignal?.aborted).toBe(true);
   });
 });

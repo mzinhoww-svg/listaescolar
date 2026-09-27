@@ -16,7 +16,13 @@ export type VerifiedApiKeyContext = {
   coverageUfs: readonly string[] | null;
 };
 
-export type ApiRequestContext = { key: VerifiedApiKeyContext; requestId: string };
+/** `signal` (achado D, revisão de segurança independente, rodada 2): repassado pelo `runApiPipeline` a partir do
+ * `AbortController` do timeout — cada `impl` que faz sua própria chamada `admin.rpc(...)` (ver
+ * `features/b2b/api/endpoints/*.ts`) deve encadear `.abortSignal(ctx.signal)` nela, mesmo padrão de
+ * `realLookupKey`/`realConsumeRate` em `handler.ts`, para que o timeout cancele a consulta de verdade no
+ * Postgres/PostgREST, não só ignore a resposta tardia. `undefined` fora do pipeline real (ex.: um teste que chama
+ * `impl` direto sem passar por `runApiPipeline`). */
+export type ApiRequestContext = { key: VerifiedApiKeyContext; requestId: string; signal?: AbortSignal };
 
 export type EndpointExample = { request?: unknown; response: unknown };
 

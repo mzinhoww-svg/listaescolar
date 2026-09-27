@@ -60,6 +60,9 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S26 Campanhas de marca, insights e faturamento B2B | — (sem PR, por instrução) | 55fde47 | 2026-09-27 | ✓ | ✓ | 3336 | 1769 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 17 verificações, 0 falhas (`e2e/S26.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
+| S15 Área da família (fora de trilha) | — (sem PR, por instrução) | 90a1ad5 | 2026-09-27 | ✓ | ✓ | 3257 | 1750 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
+| S15 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | 0941356 | 2026-09-27 | ✓ | ✓ | 3307 | 1785 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0603 editada no lugar (5 correções, ver ledger) |
+| S15 · segunda reverificação de segurança (Opus) | #45 (aberto por outra sessão; esta correção entra por push) | 072da2f | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | n/d | n/d | build local + E2E rápido do formulário de aluno (bypass recusado, nome acentuado aceito); migration 0603 editada no lugar de novo (apelido restrito a script latino, ver ledger) |
 
 Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto `listaescolare`; o humano as criou em 2026-09-25 e desde o #22 os previews ficam READY e públicos (noindex). O E2E passa a rodar no preview quando o deploy estiver verde (Ruling do ledger); a S11 ainda rodou local porque a leitura por IA no staging está bloqueada (D-077).
 
@@ -98,7 +101,9 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 Pendente de staging: `0403_repasses.sql` (S23 — comissão, repasse e inadimplência; aditiva sobre 0401/0402, que já
 estão no staging), ainda só local (`pnpm db:reset` verde nesta sessão, inclusive depois da rodada de correções da
 revisão de segurança — ver abaixo); não aplicada porque a tarefa da S23 marcou staging/Vercel como invioláveis para
-este implementador. Aplicar via Supabase MCP na sequência normal antes ou durante a próxima sessão que tiver
+este implementador. `0603_family_area.sql` (S15 — estudantes e listas salvas; fora de trilha, faixa pós-trilhas
+06xx, sem FK cruzando com 0403) também só local, pela mesma regra de invioláveis desta sessão (não tocar staging).
+Aplicar as duas via Supabase MCP na sequência normal (prefixo numérico) antes ou durante a próxima sessão que tiver
 mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/0701
 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização
 escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir
@@ -143,8 +148,8 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`)].
-4. S15 (implementada no worktree T3, em correções da revisão de segurança; antecipada — ver Ruling), S16.
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas)].
+4. S15 ✓ (branch `slice/S15-area-familia`, worktree T3, antecipada — ver Ruling; correções obrigatórias da revisão de segurança aplicadas — school_id/school_year fora de `students`, apelido só letras, gatilhos SECURITY INVOKER, grant de UPDATE restrito, advisory lock nos tetos; gate verde, E2E 21/21; PR #45 mesclado, migration `0603` só local; segunda reverificação — apelido restrito a script latino, fecha bypass de letra invisível/apóstrofo-letra — aplicada, gate verde, E2E rápido do formulário confirmado). S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.

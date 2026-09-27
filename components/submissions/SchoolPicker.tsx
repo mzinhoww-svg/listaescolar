@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 
 import { searchSchoolsAction, type SchoolHit } from "@/app/enviar-lista/school-search-action";
 
+export type { SchoolHit };
+
 const field = "bg-campo text-tinta min-h-[52px] w-full rounded-campo px-4 text-[15px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-verde-fundo";
 
 export type LinkedSchool = { id: string; name: string; inep: string };
@@ -24,12 +26,21 @@ export function LinkedSchoolSelect({ schools, initialId }: { schools: readonly L
   );
 }
 
-/** Busca de escola (S04) para família e admin: nome ou INEP; escolhe uma da lista ou nenhuma (`optional`). */
-export function SchoolSearchPicker({ optional = true, label = "Escola da lista (opcional)" }: { optional?: boolean; label?: string }) {
+/** Busca de escola (S04) para família e admin: nome ou INEP; escolhe uma da lista ou nenhuma (`optional`).
+ * `initial` pré-seleciona uma escola já escolhida antes (ex.: editar aluno, S15), sem precisar buscar de novo. */
+export function SchoolSearchPicker({
+  optional = true,
+  label = "Escola da lista (opcional)",
+  initial,
+}: {
+  optional?: boolean;
+  label?: string;
+  initial?: SchoolHit | null;
+}) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SchoolHit[] | null>(null);
   const [failed, setFailed] = useState(false);
-  const [chosen, setChosen] = useState<SchoolHit | null>(null);
+  const [chosen, setChosen] = useState<SchoolHit | null>(initial ?? null);
   const [pending, start] = useTransition();
 
   const search = () =>

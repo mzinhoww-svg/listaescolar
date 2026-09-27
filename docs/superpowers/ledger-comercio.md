@@ -1328,14 +1328,14 @@ ainda sem a correção — ver histórico desta sessão).
 - Achado da implementação (não é dívida, é comportamento correto do Postgres): `truncate` em
   `b2b_campaign_events` falha com `0A000` (bloqueado pela FK de `b2b_campaign_ledger`, antes mesmo do gatilho
   disparar) em vez de `42501` — os dois bloqueiam a imutabilidade; o teste aceita ambos os códigos.
-- Dívida nova (D-140, baixa): não há caminho para reemitir/corrigir um extrato de período já gerado (o registro é
+- Dívida nova (D-143, baixa): não há caminho para reemitir/corrigir um extrato de período já gerado (o registro é
   imutável por desenho) — hoje, se o admin errar `payment_instruction` ou gerar um período antes da hora, a única
   saída é gerar um extrato para um período diferente; falta uma nota de retificação ou reemissão explícita.
-- Dívida nova (D-141, média): `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns`
+- Dívida nova (D-144, média): `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns`
   com `order by random()`; em volume alto de listas publicadas servidas simultaneamente isso pode custar caro
   (mesmo racional de N+1/cota que apareceu em outras fatias B2B, ex. D-113); sem medição real de tráfego ainda,
   então fica registrado em vez de otimizado às pressas.
-- Dívida nova (D-142, baixa): `target_cities` usa `ibge_code` (texto livre validado contra `municipalities` na
+- Dívida nova (D-145, baixa): `target_cities` usa `ibge_code` (texto livre validado contra `municipalities` na
   criação), mas não há tela nem endpoint para o parceiro BUSCAR o código pelo nome da cidade — a Task 3 (telas)
   precisa de um seletor de município (nome → ibge_code) na Nova Campanha (B2B07), hoje só um campo de código.
 - Estado ao final da Task 1: `pnpm typecheck && pnpm lint` verdes; `pnpm db:reset && pnpm test:db`: **1769/1772**
@@ -1364,11 +1364,11 @@ ainda sem a correção — ver histórico desta sessão).
 - Ruling: geração do extrato (`b2b_statement_generate`) não ganhou tela de admin nesta fatia — só é chamada pelo
   seed do E2E (simulando um fechamento de período). Faltaria uma Server Action + botão (ou um cron mensal, mesmo
   padrão do despacho de webhooks/notificações) para o admin gerar o extrato de cada parceiro sem depender de
-  script manual. Registrado como D-143 (média): sem isso, a tela B2B09 do parceiro fica vazia até alguém rodar
+  script manual. Registrado como D-146 (média): sem isso, a tela B2B09 do parceiro fica vazia até alguém rodar
   a função manualmente no banco.
 - Ruling: `NovaCampanhaForm` (B2B07) só permite escolher UMA série (`<select>` simples), embora o schema e a
   migration aceitem até 3 (`targetGradeStages`) — cortado do MVP por tempo, sem mudar a API; registrado como
-  D-144 (baixa).
+  D-147 (baixa).
 - Estado ao final da Task 3: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
   verdes. Unitária **3336/3336**. Banco **1769/1772** (3 pulados = baseline; uma rodada intermediária teve 1 falha
   isolada, não reprodutível, em `publication-service.test.ts`/`payouts.test.ts` — flutuação já conhecida da suíte
@@ -1510,7 +1510,7 @@ em `features/campaigns/tracking-service.ts`; 2 menores resolvidos direto (um vir
   `x-forwarded-for`) quando isto for ligado a uma rota de verdade. Testado: 6 casos novos (token expira depois de
   10 min, token "do futuro" além de 5s de tolerância é recusado, token malformado não lança, limite soma listas
   diferentes da mesma campanha, limite é por campanha — outra campanha tem cota própria). O teto por instância
-  (em vez de compartilhado entre instâncias) virou dívida D-145 (média), com Ruling de que é **obrigatório**
+  (em vez de compartilhado entre instâncias) virou dívida D-148 (média), com Ruling de que é **obrigatório**
   resolver antes de ligar a uma rota pública — diferente do racional "primeira camada, Firewall resolve o resto"
   aceito em outras fatias, porque aqui o abuso infla diretamente o "acúmulo informativo" cobrável de um parceiro
   terceiro.
@@ -1529,7 +1529,7 @@ em `features/campaigns/tracking-service.ts`; 2 menores resolvidos direto (um vir
   em `b2b_campaign_eligible` (que `serve()` também usa, em volume de LEITURA bem maior — travar ali serializaria
   leituras concorrentes à toa). Resolvido em código, sem virar dívida (o pedido permitia resolver "se for barato",
   e era).
-- Dívida nova (D-146, baixa): diferença de "outras" ao longo do tempo — repetir a mesma consulta de insights
+- Dívida nova (D-149, baixa): diferença de "outras" ao longo do tempo — repetir a mesma consulta de insights
   conforme escolas publicam/removem listas pode, em tese, isolar a contribuição de uma escola por diferenciação
   entre duas leituras. Sem solução simples nesta fatia (limitar frequência de consulta, ou privacidade
   diferencial de verdade); registrada para revisão futura.
@@ -1570,3 +1570,12 @@ em `features/campaigns/tracking-service.ts`; 2 menores resolvidos direto (um vir
   baseline; uma rodada intermediária teve 2 falhas isoladas em `submissions.test.ts`, arquivo alheio a esta fatia,
   confirmadas não reprodutíveis ao rodar de novo). E2E `scripts/e2e-s26.sh`: **20/20**, sem regressão (nada no
   roteiro lê `b2b_campaign_events`/`b2b_campaign_ledger` direto).
+
+## S26 · merge de origin/main (PR #45, S15) — renumeração de dívida
+
+`origin/main` avançou com a S15 (PR #45) enquanto esta branch tinha D-140–D-146 escritos (Task 1, Task 3,
+rodada 2 da revisão de segurança). A S15 já tinha ocupado D-140–D-142 (renumerados lá de D-123–D-125 por colisão
+com S23/S25). Nesta resolução de merge, os itens da S26 foram renumerados para D-143–D-149 (mesmo conteúdo, só o
+número mudou) — ver `docs/superpowers/DEBT.md`, nota de numeração. Sem conflito de conteúdo: `docs/superpowers/
+PROGRESS.md` só teve a mesma linha "Em paralelo"/"S15" editada dos dois lados, resolvida por união (mantendo os
+dois "✓").

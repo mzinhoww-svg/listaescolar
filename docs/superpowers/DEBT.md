@@ -51,7 +51,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-026 | ledger-pipeline S07 onda final | Sem "kick" do worker: envio assíncrono espera até 1 min pelo pg_cron | baixa | S19 | aberta |
 | D-027 | ledger-dados S03 | Lote preso em `processing` após queda dura só é retomado depois de 10 min; CSV parseado inteiro em memória (maiores exigem streaming) | baixa | S20 | aberta |
 | D-028 | ledger-comercio S13 onda final | Limite de 5.000 candidatos da cotação local conta itens vencidos (a validade é aplicada depois, no domínio) | baixa | S20 | aberta |
-| D-029 | ledger-comercio S14 T2 | `listCandidateStationeries` corta em silêncio acima do limite; mostrar "e mais N" ou paginar | baixa | S15 | aberta |
+| D-029 | ledger-comercio S14 T2 | `listCandidateStationeries` corta em silêncio acima do limite; mostrar "e mais N" ou paginar | baixa | S18 (revisitada na S15, não coube: sem relação com área da família) | aberta |
 
 ## UX, design e produto
 
@@ -130,7 +130,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-079 | ledger-comercio S11 T3 revisão | Endpoint de push revogado não pode ser reatribuído entre contas no mesmo aparelho (`endpoint_owned` vale mesmo revogado): quem troca de conta no mesmo navegador não liga o aviso até o endpoint mudar; decidir entre transferir endpoint revogado ou orientar "desativar antes de sair" | média | S17 | aberta |
 | D-080 | ledger-comercio S11 T4 / T5 | `PushOptIn` guarda o endpoint só em estado React: após recarregar volta a "Ativar" mesmo com assinatura ativa (não consulta `pushManager.getSubscription()`), e "Desativar" não chama `sub.unsubscribe()` no navegador | média | S18 | aberta |
 | D-081 | ledger-comercio S11 T3 revisão / T5 | Endpoint de push: o Zod normaliza host em maiúsculas e porta `:443` (via `new URL()`), mas o CHECK de `push_subscriptions.endpoint` valida a string crua e recusa esses casos ("Não foi possível ativar"); normalizar antes de gravar ou alinhar o CHECK | baixa | S19 | aberta |
-| D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S15 / S18 | aberta |
+| D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S18 (revisitada na S15: mudaria dezenas de páginas por dívida de baixa severidade, ficou para lá) | aberta |
 | D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S16 | aberta |
 | D-084 | ledger-comercio S11 T4 | `AsyncOptions` (S07, "continuar aguardando") não oferece "Ativar notificação do navegador" nem aponta para `/conta/notificacoes` | baixa | S18 | aberta |
 | D-085 | ledger-comercio S11 T3 escopo | `ClaimTokenSender` (S06) ainda não usa o `ResendEmailTransport` da S11: o link de reivindicação por e-mail continua sem envio real até o humano fornecer conta/credencial (`EMAIL_NOTIFICATIONS_ENABLED`, `EMAIL_API_KEY`, `EMAIL_FROM`) e a S16/S19 ligar o transporte | média | Humano / S16 | aberta |
@@ -188,13 +188,16 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-137 | reverificação de segurança S25 (PR #42) | Cotas de reenvio de webhook (5 por entrega, 20/h por parceiro) sem lock: reenvios concorrentes podem passar um pouco do limite | baixa | S19 | aberta |
 | D-138 | reverificação de segurança S25 (PR #42) | Entrega em `sending` com lease vencida fica em `sending` para sempre se o endpoint for desativado depois (a varredura de dead letter só pega `attempts >= 10` e o claim a exclui); entregas `queued` de parceiro suspenso nunca são purgadas | média | S19 | aberta |
 | D-139 | reverificação de segurança S25 (PR #42) | Rate limit do widget ainda chaveado por `ip:partnerId` (`features/widget/route-helpers.ts:25`): UUIDs aleatórios contornam o limite por IP; chavear só por IP e validar o parceiro antes de contar | média | S19 | aberta |
-| D-140 | ledger-comercio S26 Task 1 (Ruling de escopo) | `b2b_statements` é imutável por desenho: não há caminho para reemitir/corrigir um extrato de período já gerado (nem retificação, nem novo extrato para o MESMO período — a chave `(partner_id, period_start, period_end)` é única). Se o admin errar `payment_instruction` ou gerar um período antes da hora, a única saída hoje é gerar um extrato para um período diferente | baixa | S26 (B2B) | aberta |
-| D-141 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns` inteira (`order by random()`) para achar campanhas elegíveis; em volume alto de listas publicadas servidas simultaneamente pode custar caro (mesmo racional de N+1/cota de outras fatias B2B, ex. D-113). Sem medição real de tráfego ainda | média | S19 | aberta |
-| D-142 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaigns.target_cities` usa `ibge_code` (texto validado contra `municipalities` na criação), mas não há endpoint nem tela para o parceiro buscar o código pelo NOME da cidade — a Nova Campanha (B2B07, Task 3) precisa de um seletor de município, hoje só aceitaria o código cru | baixa | S26 (B2B) | aberta |
-| D-143 | ledger-comercio S26 Task 3 (Ruling de escopo) | Não há tela de admin para gerar o extrato B2B sob demanda (`b2b_statement_generate`) — nesta fatia a geração só acontece via chamada direta (script/seed do E2E). Falta uma Server Action + botão no admin (ou um cron mensal) para gerar o extrato de cada parceiro no fechamento do período | média | S26 (B2B) / futura fatia | aberta |
-| D-144 | ledger-comercio S26 Task 3 (fidelidade ao design vs. escopo) | `NovaCampanhaForm` (B2B07) só permite escolher UMA série por campanha (`<select>` simples), embora o schema (`targetGradeStages`) e a migration aceitem até 3 — cortado do MVP desta fatia por tempo; trocar por um grupo de checkboxes depois não muda a API | baixa | S26 (B2B) | aberta |
-| D-145 | reverificação de segurança S26, rodada 2 (`1e35153`) | O limite de eventos por (IP /24, campanha) de `features/campaigns/tracking-service.ts` é um balde em memória POR INSTÂNCIA — um invasor distribuindo requisições entre múltiplas instâncias/lambdas da Vercel contorna o teto. Um teto diário de verdade precisa de armazenamento COMPARTILHADO (tabela/contador no Postgres, ou Redis). Ruling: **obrigatório resolver antes de ligar este rastreamento a qualquer rota pública** — não é opcional para depois, ao contrário do racional "primeira camada" aceito para o widget/API B2B (D-001/D-113/D-139), porque aqui o abuso infla diretamente a cobrança informativa de um parceiro terceiro, não só o tráfego da própria plataforma | média | S26 (B2B) / obrigatório antes de wiring com rota pública | aberta |
-| D-146 | reverificação de segurança S26, rodada 2 (`1e35153`) | O agregado anônimo "outras" dos insights (`features/campaigns/insights-service.ts`) é seguro numa consulta ISOLADA, mas repetir a mesma consulta ao longo do tempo (conforme escolas publicam/removem listas) pode permitir um ataque de diferenciação: comparar dois retornos em momentos diferentes pode isolar a contribuição de uma escola que entrou ou saiu do agregado. Sem solução simples nesta fatia (exigiria limitar frequência de consulta por combinação categoria/série, ou uma técnica de privacidade diferencial); registrada como dívida | baixa | S19 | aberta |
+| D-140 | ledger.md S15 (achado do E2E, renumerado de D-123 por colisão com a S23/S25) | `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, `list_reader_get`/0601), não o id de `school_lists`; a página pública de uma lista oficial (`/escolas/[inep]/[serie]`) não tem hoje NENHUM link para "montar carrinho" — só a cópia do pai (`ParentCopyEditor`) linka para `/carrinho/novo?lista=`. Uma família que navega até a lista oficial não acha como montar o carrinho a partir dela pela UI | média | futura fatia de UX do carrinho (S18/S19) | aberta |
+| D-141 | ledger.md S15 (renumerado de D-124) | App19-Histórico (mapeada para a S15 em `SCREENS.md`) não foi construída como tela dedicada: o hub (`/conta`) e `/conta/carrinhos`/`/conta/listas-salvas` cobrem estudantes/listas salvas/carrinhos, mas não a vista cronológica combinada e filtrável por aluno que o design mostra | baixa | futura fatia de melhoria | aberta |
+| D-142 | ledger.md S15 (renumerado de D-125) | App16-HubPais mostra "% da lista resolvida" por aluno (barra de progresso); não implementado nesta fatia por falta de um sinal real de "resolvido" (nenhuma tabela liga item de carrinho/lista a "comprado"/"resolvido" por aluno hoje) — mostrar um número inventado violaria "nada inventado" (regra de produto) | baixa | futura fatia (definir o sinal de "resolvido" antes de mostrar progresso) | aberta |
+| D-143 | ledger-comercio S26 Task 1 (Ruling de escopo, renumerado de D-140 por colisão com a S15) | `b2b_statements` é imutável por desenho: não há caminho para reemitir/corrigir um extrato de período já gerado (nem retificação, nem novo extrato para o MESMO período — a chave `(partner_id, period_start, period_end)` é única). Se o admin errar `payment_instruction` ou gerar um período antes da hora, a única saída hoje é gerar um extrato para um período diferente | baixa | S26 (B2B) | aberta |
+| D-144 | ledger-comercio S26 Task 1 (planejamento, renumerado de D-141) | `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns` inteira (`order by random()`) para achar campanhas elegíveis; em volume alto de listas publicadas servidas simultaneamente pode custar caro (mesmo racional de N+1/cota de outras fatias B2B, ex. D-113). Sem medição real de tráfego ainda | média | S19 | aberta |
+| D-145 | ledger-comercio S26 Task 1 (planejamento, renumerado de D-142) | `b2b_campaigns.target_cities` usa `ibge_code` (texto validado contra `municipalities` na criação), mas não há endpoint nem tela para o parceiro buscar o código pelo NOME da cidade — a Nova Campanha (B2B07, Task 3) precisa de um seletor de município, hoje só aceitaria o código cru | baixa | S26 (B2B) | aberta |
+| D-146 | ledger-comercio S26 Task 3 (Ruling de escopo, renumerado de D-143) | Não há tela de admin para gerar o extrato B2B sob demanda (`b2b_statement_generate`) — nesta fatia a geração só acontece via chamada direta (script/seed do E2E). Falta uma Server Action + botão no admin (ou um cron mensal) para gerar o extrato de cada parceiro no fechamento do período | média | S26 (B2B) / futura fatia | aberta |
+| D-147 | ledger-comercio S26 Task 3 (fidelidade ao design vs. escopo, renumerado de D-144) | `NovaCampanhaForm` (B2B07) só permite escolher UMA série por campanha (`<select>` simples), embora o schema (`targetGradeStages`) e a migration aceitem até 3 — cortado do MVP desta fatia por tempo; trocar por um grupo de checkboxes depois não muda a API | baixa | S26 (B2B) | aberta |
+| D-148 | reverificação de segurança S26, rodada 2 (`1e35153`, renumerado de D-145) | O limite de eventos por (IP /24, campanha) de `features/campaigns/tracking-service.ts` é um balde em memória POR INSTÂNCIA — um invasor distribuindo requisições entre múltiplas instâncias/lambdas da Vercel contorna o teto. Um teto diário de verdade precisa de armazenamento COMPARTILHADO (tabela/contador no Postgres, ou Redis). Ruling: **obrigatório resolver antes de ligar este rastreamento a qualquer rota pública** — não é opcional para depois, ao contrário do racional "primeira camada" aceito para o widget/API B2B (D-001/D-113/D-139), porque aqui o abuso infla diretamente a cobrança informativa de um parceiro terceiro, não só o tráfego da própria plataforma | média | S26 (B2B) / obrigatório antes de wiring com rota pública | aberta |
+| D-149 | reverificação de segurança S26, rodada 2 (`1e35153`, renumerado de D-146) | O agregado anônimo "outras" dos insights (`features/campaigns/insights-service.ts`) é seguro numa consulta ISOLADA, mas repetir a mesma consulta ao longo do tempo (conforme escolas publicam/removem listas) pode permitir um ataque de diferenciação: comparar dois retornos em momentos diferentes pode isolar a contribuição de uma escola que entrou ou saiu do agregado. Sem solução simples nesta fatia (exigiria limitar frequência de consulta por combinação categoria/série, ou uma técnica de privacidade diferencial); registrada como dívida | baixa | S19 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -208,33 +211,34 @@ Nota (numeração): D-120–D-127 pertencem à S23 (mesclada em `main` primeiro)
 IDs (originalmente também D-120–D-126, escritos numa branch que ainda não via a S23) foram renumerados para
 D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudou.
 
-Nota (numeração): D-135–D-139 pertencem à S25 (mesclada em `main` primeiro, PR #42/#43); os itens da S26 que
-colidiam com esses IDs (originalmente também D-135–D-137, escritos nesta branch antes de ver o merge da S25) foram
-renumerados para D-140–D-144 na resolução deste merge — mesmo conteúdo, só o número mudou (D-143 e D-144 são
-achados novos da Task 3, sem número anterior). D-145 e D-146 são achados da reverificação de segurança (rodada 2,
-`1e35153`), sem colisão de numeração (origin/main não teve commit novo desde o merge anterior).
+Nota (numeração): D-135–D-139 pertencem à S25 (mesclada em `main` primeiro, PR #42/#43). D-140–D-142 pertencem à
+S15 (mesclada em seguida, PR #45; renumerados nessa resolução a partir de D-123–D-125, que já colidiam com a
+S23/S25). Os itens da S26 (escritos nesta branch como D-135–D-137, depois D-140–D-146, sempre antes de ver os
+merges acima) foram renumerados de novo, agora para D-143–D-149, na resolução deste merge com `origin/main` —
+mesmo conteúdo, só o número mudou (D-146 e D-147 são achados novos da Task 3; D-148 e D-149 são achados da
+reverificação de segurança, rodada 2, `1e35153`, sem número anterior).
 
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 44 | 9 | 53 |
-| baixa | 67 | 10 | 77 |
-| **Total** | **121** | **24** | **145** |
+| média | 45 | 9 | 54 |
+| baixa | 69 | 10 | 79 |
+| **Total** | **124** | **24** | **148** |
 
-Contagem atualizada em 2026-09-27 (merge de `origin/main`, PR #43 — S25 soma D-135–D-139, todos baixa/média
-abertos — com a S26 desta branch: D-140–D-144, renumerados a partir de D-140 por colisão com os IDs da S25 já
-mesclada; D-141 e D-143 média/abertas — cota/cache de `b2b_campaign_serve` e falta de tela para gerar o extrato
-sob demanda —, as demais baixa/abertas). Estado anterior desta linha (merge de `main` — S23,
-Comissão/repasses/inadimplência — com a rodada de
-correções da revisão de segurança da S25 nesta branch). D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23
-(7 baixa + 3 média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais
-baixa/abertas); a rodada de correções da S25 sobre esta branch resolve D-120 (renumerada D-128 nesta resolução de
-merge — auditoria de revelar/rotacionar/criar segredo implementada) e soma D-129–D-134 (D-129 média/aberta —
-chave de cifra do servidor sem caminho de recifra em lote —, as demais baixa/abertas). Estado anterior a este
-merge, só no lado `main` (2026-09-26): mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas
-baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a
-D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e
-reforça D-104; a S24 (Portal B2B) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de
-parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas.
+Contagem atualizada em 2026-09-27 (merge de `origin/main`, PR #45 — S15 soma D-140–D-142 e revisita D-029/D-082
+sem resolvê-las — com a S26 desta branch: D-143–D-149, renumerados a partir de D-143 por colisão com os IDs da
+S15 já mesclada; D-144, D-146 e D-148 média/abertas — cota/cache de `b2b_campaign_serve`, falta de tela para gerar
+o extrato sob demanda, e teto por instância do rastreamento de campanha —, as demais baixa/abertas). Estado
+anterior desta linha (merge de `origin/main`, PR #43 — S25 soma D-135–D-139 — com a S26 desta branch, então
+D-140–D-146): D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23 (7 baixa + 3 média viram resolvida); S23
+soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais baixa/abertas); a rodada de correções da S25 sobre
+esta branch resolve D-120 (renumerada D-128 — auditoria de revelar/rotacionar/criar segredo implementada) e soma
+D-129–D-134 (D-129 média/aberta — chave de cifra do servidor sem caminho de recifra em lote —, as demais
+baixa/abertas). Estado anterior a isso, só no lado `main` (2026-09-26): mesclado com `main` após a S11; S21 Task 3
+soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de
+`main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma
+D-107 (média/aberta) e reforça D-104; a S24 (Portal B2B) soma D-112 a D-119: D-116 média/aberta (falta transição
+para editar limites de parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais
+baixa/abertas.

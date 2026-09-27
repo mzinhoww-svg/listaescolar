@@ -3,17 +3,20 @@ import { notFound } from "next/navigation";
 
 import { ItemsTable } from "@/components/lists/ItemsTable";
 import { ListHeader } from "@/components/lists/ListHeader";
+import { SaveListButton } from "@/components/lists/SaveListButton";
 import { UnpublishedState } from "@/components/lists/UnpublishedState";
 import { VersionHistory } from "@/components/lists/VersionHistory";
 import { WatchButton } from "@/components/notifications/WatchButton";
 import { ShareListCard } from "@/components/share/ShareListCard";
 import { getSessionActor } from "@/features/auth/actor";
 import { unwatchListAction, watchListAction } from "@/app/conta/notificacoes/actions";
+import { saveListAction } from "@/app/conta/listas-salvas/actions";
 import { channelAvailability } from "@/features/notifications/preferences";
 import { isWatching } from "@/features/notifications/queries";
 import { defaultAcademicYear, findGrade, parseGradeSelection } from "@/features/grades/catalog";
 import { getPublishedList, listVersionHistory } from "@/features/lists/queries";
 import { loadSchool } from "@/features/schools/search/load-school";
+import { listMyStudents } from "@/features/students/queries";
 import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
 import { siteBase } from "@/lib/site-base";
 
@@ -63,8 +66,11 @@ export default async function ListPage({ params, searchParams }: Props) {
   const version = list?.version;
   const shareOrigin = version ? siteBase() : null;
   // App24: sem lista publicada, oferece "Me avise" (com login; sem login, leva ao /entrar?next=)
-  const actor = version ? null : await getSessionActor().catch(() => null);
-  const watching = actor ? await isWatching(actor, { inep: school.inep, gradeSlug: grade.slug, year }).catch(() => false) : false;
+  const watchActor = version ? null : await getSessionActor().catch(() => null);
+  const watching = watchActor ? await isWatching(watchActor, { inep: school.inep, gradeSlug: grade.slug, year }).catch(() => false) : false;
+  // S15: lista publicada oferece "Salvar lista" para um aluno da família.
+  const saveActor = version ? await getSessionActor().catch(() => null) : null;
+  const myStudents = saveActor ? await listMyStudents(saveActor).catch(() => []) : [];
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -85,9 +91,16 @@ export default async function ListPage({ params, searchParams }: Props) {
         }
       />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
-        {version ? (
+        {version && list ? (
           <>
             <ItemsTable items={version.items} />
+            <SaveListButton
+              listId={list.id}
+              students={myStudents.map((s) => ({ id: s.id, nickname: s.nickname }))}
+              loggedIn={saveActor !== null}
+              nextPath={`/escolas/${school.inep}/${grade.slug}?ano=${year}`}
+              save={saveListAction}
+            />
             <VersionHistory versions={history} />
             {shareOrigin ? <ShareListCard inep={school.inep} gradeSlug={grade.slug} origin={shareOrigin} /> : null}
           </>
@@ -101,7 +114,7 @@ export default async function ListPage({ params, searchParams }: Props) {
                 inep={school.inep}
                 gradeSlug={grade.slug}
                 year={year}
-                loggedIn={actor !== null}
+                loggedIn={watchActor !== null}
                 watching={watching}
                 nextPath={`/escolas/${school.inep}/${grade.slug}?ano=${year}`}
                 watch={watchListAction}

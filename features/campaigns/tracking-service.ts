@@ -26,7 +26,7 @@ import { CampaignServiceError } from "./errors";
 //   controla sem passar pela borda da Vercel.
 //
 // Nada aqui é chamado por nenhuma tela ou rota ainda (Ruling do ledger): é a infraestrutura pronta para quando a
-// página pública da lista ganhar o slot de campanha patrocinada, fora do escopo desta fatia. D-145 (média,
+// página pública da lista ganhar o slot de campanha patrocinada, fora do escopo desta fatia. D-148 (média,
 // registrada no DEBT): o balde em memória é por INSTÂNCIA — um invasor distribuindo requisições entre múltiplas
 // instâncias/lambdas da Vercel contorna o limite por IP/24×campanha; um teto diário de verdade precisa de
 // armazenamento COMPARTILHADO (ex.: uma tabela/contador no Postgres, ou Redis) — obrigatório resolver antes de

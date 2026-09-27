@@ -151,6 +151,11 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-100 | reverificação de segurança S21 (PR #34) | Duplo clique em "comprar pacote/passe" reaproveita a fatura mas sempre chama `createCharge`, trocando uma cobrança Pix ainda válida: o histórico evita perder pagamento, mas o pagador pode pagar as duas cobranças (precisa de estorno manual) | média | S23 | aberta |
 | D-101 | reverificação de segurança S21 (PR #34) | Pagamento recebido por um txid antigo depois de a fatura já estar paga é ignorado sem alerta (`findOpenInvoiceByChargeId` exige fatura aberta): registrar e alertar o admin para estorno (tela de inadimplência/conciliação da S23) | média | S23 | aberta |
 | D-102 | ledger-comercio S21 | Staging sem plano de cobrança publicado: todo lead para papelaria real cai em `billing_unavailable` até o humano (ou o orquestrador, com Ruling) publicar um plano provisório por `billing_plan_publish`; o adapter Pix ainda não foi validado contra o PSP real (D-076) | alta | Humano (valores do plano e PSP) / S20 | aberta |
+| D-103 | ledger-comercio S22 | Pap07-Desempenho (funil, conversão declarada x confirmada por escola/bairro) não foi construída na S22 (Ruling 4 do ledger); os dados brutos já existem em `lead_conversion_signals`/`listAuditRows` | baixa | S23 | aberta |
+| D-104 | ledger-comercio S22 (reforçada na revisão de segurança) | Heurística de "dado pessoal" no comentário da avaliação (`lead_review_contains_personal_data`) é regex — mesmo reforçada (colapso de separador até estabilizar, número por extenso, "arroba" ofuscado) — não é um validador de PII completo; a fila de moderação humana (`lead_review_hide`, admin, motivo de lista fechada) cobre o que passar, mas depende de alguém revisar | baixa | S22/S23 (se o volume de avaliações justificar automação) | aberta |
+| D-105 | ledger-comercio S22 | Sinal "Pix pela plataforma" sempre ausente (`pix_confirmed = false`); a regra de 2 de 3 nunca vê esse terceiro sinal até a S23 acrescentar a fonte real do pagamento do pai à papelaria | baixa | S23 | aberta |
+| D-106 | ledger-comercio S22 | `/conta/compras` lista até 30 pedidos do pai sem paginação; sem impacto hoje (poucos leads por pai no piloto), cresce sem paginar se o produto pegar tração | baixa | S22/S23 (se crescer) | aberta |
+| D-107 | ledger-comercio S22 · correções da revisão de segurança | `lead_create` (0303/S14, já aplicada) não recusa um solicitante que é membro (`stationery_members`) da PRÓPRIA papelaria escolhida — a S22 bloqueou só as consequências (autoconfirmação e autoavaliação), não a criação do lead em si; corrigir exigiria editar uma migration já aplicada (fora do escopo desta fatia) | média | S23 (migration nova, aditiva) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -159,8 +164,8 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 36 | 6 | 42 |
-| baixa | 42 | 2 | 44 |
-| **Total** | **88** | **13** | **101** |
+| média | 37 | 6 | 43 |
+| baixa | 46 | 2 | 48 |
+| **Total** | **93** | **13** | **106** |
 
-Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`).
+Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104).

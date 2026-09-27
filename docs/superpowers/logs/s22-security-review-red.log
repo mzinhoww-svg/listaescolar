@@ -1,0 +1,32 @@
+Vermelho real, rodada única de correções da revisão de segurança (Opus) da S22, sobre 93f78e7.
+Capturado ao rodar `pnpm db:reset && pnpm test:db` depois de editar a 0402_lead_conversions.sql e os testes
+(TDD: testes junto com as regras novas, gate rodado antes de qualquer commit desta rodada).
+
+1) tests/db/lead-conversion.test.ts > lead_review_create > "o solicitante avalia..." e "comentário com e-mail..."
+   AssertionError: expected 'compra não confirmada' to be null
+   Causa: os testes antigos criavam a avaliação sem confirmar a compra nem declarar a venda; a regra nova
+   (purchase_not_confirmed) passou a recusar, corretamente. Corrigido adicionando confirmPurchase()/status
+   'converted' antes de createReview() nesses testes, e um teste novo dedicado à regra.
+
+2) tests/conversion/repository.test.ts > "confirmação do pai (1 sinal) + declaração da papelaria (2 sinais)..."
+   AssertionError: expected [] to have a length of 1 but got +0 (listPublishedReviews)
+   Causa real (não do teste): a stationery do teste é REAL (is_demo=false) mas o lead usava o padrão is_demo=true
+   de seedLead — o filtro novo "avaliação demo nunca aparece em papelaria real" escondeu a avaliação, como devia.
+   Corrigido com overrides: { is_demo: false } no seedLead do teste (cenário de compra real de verdade).
+
+3) Todo o `pnpm test:db` (68 arquivos) > `cleanupUsers` falhando em ~15 arquivos não relacionados à S22
+   error: lead_reviews é imutável (só a transição published -> hidden, pela função lead_review_hide)
+   Causa: o novo guard trigger de lead_reviews bloqueava a própria UPDATE que `ON DELETE SET NULL` (FK
+   actor_id -> profiles) dispara ao apagar um usuário de teste — quebrava a exclusão de conta de QUALQUER teste
+   que usasse lead_reviews.actor_id apontando para um perfil de teste. Corrigido acrescentando ao guard uma
+   segunda transição permitida: actor_id virando NULL com todo o resto igual (o cascade da FK).
+
+4) tests/db/lead-conversion.test.ts > "avaliação oculta some da leitura pública mas continua visível ao admin..."
+   AssertionError: expected +0 to be 1 (asMember.rowCount)
+   Causa: `withClaims` aninhado dentro de outro `withClaims` abre uma conexão/transação SEPARADA, que não vê os
+   dados ainda não commitados da transação externa — bug do teste, não do produto. Corrigido trocando de papel
+   (`set local role` + `set_config('request.jwt.claims', ...)`) na MESMA conexão, como `asOwner` já faz em
+   tests/db/helpers.ts.
+
+Depois dessas 4 correções: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`
+todos verdes (2971 testes unitários; 1567 de banco, 3 skipped pré-existentes).

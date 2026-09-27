@@ -9,10 +9,20 @@ const NAV = [
   { href: "/admin/revisao", label: "Revisão" },
   { href: "/admin/papelarias", label: "Papelarias" },
   { href: "/admin/planos", label: "Planos e preços" },
+  { href: "/admin/auditoria", label: "Auditoria de conversão" },
+  { href: "/admin/contestacoes", label: "Contestações" },
 ] as const;
 
 type Props = {
-  active: "/admin" | "/admin/importacoes" | "/admin/papelarias" | "/admin/reivindicacoes" | "/admin/revisao" | "/admin/planos";
+  active:
+    | "/admin"
+    | "/admin/importacoes"
+    | "/admin/papelarias"
+    | "/admin/reivindicacoes"
+    | "/admin/revisao"
+    | "/admin/planos"
+    | "/admin/auditoria"
+    | "/admin/contestacoes";
   /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
   email: string | null | undefined;
   breadcrumb: string;

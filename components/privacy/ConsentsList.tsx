@@ -11,7 +11,10 @@ const PURPOSE_LABEL: Record<string, string> = {
 /** Efeito real de revogar, por finalidade (Revisão de segurança/privacidade, S17: nunca afirmar um efeito que a
  * revogação não tem — cada envio grava seu próprio consentimento; revogar um não desfaz nem bloqueia envios). */
 const REVOKE_EFFECT_NOTE: Record<string, string> = {
-  list_upload: "Revogar não desfaz o envio já feito nem impede novos envios: cada envio novo grava seu próprio consentimento.",
+  // Frase não começa com "Revogar" de propósito: um roteiro de E2E que busca o texto do botão "Revogar" por
+  // substring pegaria esta nota em vez do botão, se a nota começasse com a mesma palavra (achado real desta
+  // rodada de correções).
+  list_upload: "Isto não desfaz o envio já feito nem impede novos envios: cada envio novo grava seu próprio consentimento.",
 };
 
 const revocable = (purpose: string): boolean => (REVOCABLE_CONSENT_PURPOSES as readonly string[]).includes(purpose);

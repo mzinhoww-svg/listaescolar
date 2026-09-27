@@ -63,6 +63,13 @@ expect_text p "Revogado em" "2e: consentimento aparece revogado após o clique"
 REVOKED=$(sql "select count(*) from public.consents where profile_id = '00000000-0000-4000-8000-0000000000a2' and purpose = 'list_upload' and revoked_at is not null;")
 [ "$REVOKED" = "1" ] && ok "2f: revoked_at gravado no banco" || bad "2f: revoked_at gravado no banco" "contagem=$REVOKED"
 
+echo "== 2f-bis) consentimento contratual (billing_terms) nunca mostra Revogar"
+sql "insert into public.consents (profile_id, purpose, text_version) values ('00000000-0000-4000-8000-0000000000a2', 'billing_terms', 'e2e-s17') on conflict do nothing;" >/dev/null
+ab p open "$BASE/conta/privacidade" >/dev/null
+sleep 1
+expect_text p "Termos de cobrança" "2f-1: consentimento contratual listado"
+expect_text p "Aceite contratual: para revogar, encerre o contrato correspondente." "2f-2: sem botão Revogar para finalidade contratual"
+
 echo "== 2g) exportação: JSON só com os próprios dados"
 EXPORT_JSON=$(fetch_export p)
 if grep -q 'perfil' <<<"$EXPORT_JSON" && grep -q '00000000-0000-4000-8000-0000000000a2' <<<"$EXPORT_JSON"; then
@@ -105,6 +112,18 @@ NEWID=$(sql "select id::text from auth.users where email = '$NEWMAIL';")
 if [ -n "$NEWID" ]; then ok "4a: conta nova criada pelo link mágico"; else bad "4a: conta nova criada pelo link mágico" "sem id"; fi
 ab n open "$BASE/conta/privacidade" >/dev/null
 sleep 1
+
+echo "== 4a-bis) sessão velha (login há mais de 15 min): recusa excluir, mesmo com confirmação certa"
+sql "update auth.users set last_sign_in_at = now() - interval '20 minutes' where id = '$NEWID';" >/dev/null
+set_confirmation n "excluir"
+submit_form n
+sleep 2
+shot n "$OUT/S17-05b-sessao-velha.png"
+expect_text n "sessão precisa ser recente" "4a-bis: sessão velha recusa a exclusão"
+STILL_NEW=$(sql "select count(*) from auth.users where id = '$NEWID';")
+[ "$STILL_NEW" = "1" ] && ok "4a-ter: conta nova não foi excluída com sessão velha" || bad "4a-ter: conta nova não foi excluída com sessão velha" "count=$STILL_NEW"
+sql "update auth.users set last_sign_in_at = now() where id = '$NEWID';" >/dev/null
+
 set_confirmation n "excluir"
 submit_form n
 sleep 3

@@ -8,13 +8,15 @@ import type { B2bPartnerStatus } from "@/features/b2b/states";
 import { PARTNER_STATUS_LABEL, PartnerStatusBadge } from "./StatusBadge";
 
 // Casca do portal B2B (`/b2b`), no padrão de `components/stationeries/PanelShell.tsx`: barra lateral Tinta, área
-// de conteúdo Papel. Nav SÓ com o que existe nesta fatia (Ruling S24 · Planejamento): Widget/Webhooks (S25) e
-// Campanhas/Insights/Faturamento (S26) entram com as fatias delas, nunca antes.
+// de conteúdo Papel. Nav SÓ com o que existe nesta fatia (Ruling S24 · Planejamento): Widget/Webhooks entraram na
+// S25; Campanhas/Insights/Faturamento (S26) entram com a fatia delas, nunca antes.
 
 export const B2B_NAV: readonly NavItem[] = [
   { href: "/b2b", label: "Visão geral" },
   { href: "/b2b/api", label: "API e chaves" },
   { href: "/b2b/docs", label: "Documentação" },
+  { href: "/b2b/widget", label: "Widget" },
+  { href: "/b2b/webhooks", label: "Webhooks" },
   { href: "/b2b/conta", label: "Conta" },
 ];
 

@@ -180,6 +180,20 @@ describe("S14 lead_create", () => {
     });
   });
 
+  // D-107 (S23, reforço/regressão): verificado empiricamente que esta regra já vale desde a S14 para o DONO
+  // (teste acima); faltava um teste direto para um membro NÃO-owner (staff) — mesma checagem em
+  // `stationery_members`, sem filtrar por `member_role`, então já cobria este caso também.
+  it("D-107: recusa também um membro NÃO-owner (staff) da papelaria, não só o dono", async () => {
+    await withClaims("system", async (c) => {
+      const stationery = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+      await c.query("insert into public.stationery_members (stationery_id, profile_id, member_role) values ($1, $2, 'staff')", [stationery, IDS.parent]);
+      const cart = await seedCart(c, IDS.parent);
+      const r = await create(c, { stationery, cart, requester: IDS.parent });
+      expect(r.code).toBe("42501");
+      expect(r.hint).toBe("forbidden");
+    });
+  });
+
   it("recusa carrinho alheio, inexistente ou ausente", async () => {
     await withClaims("system", async (c) => {
       const { stationery } = await fixture(c);

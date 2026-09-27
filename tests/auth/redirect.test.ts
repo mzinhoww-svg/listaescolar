@@ -33,4 +33,10 @@ describe("safeNextPath", () => {
   it.each([["/conta"], ["/escola/turmas"], ["/admin/importacoes?x=1"], ["/escolas/123#topo"], ["/admin/importacoes?x=1#a"], ["/"]])("aceita %s", (input) => {
     expect(safeNextPath(input)).toBe(input);
   });
+
+  it("usa o fallback informado (S23: confirmSaleAction) em vez de /conta", () => {
+    expect(safeNextPath("https://evil.com", "/papelaria/leads")).toBe("/papelaria/leads");
+    expect(safeNextPath("//evil.com", "/papelaria/leads")).toBe("/papelaria/leads");
+    expect(safeNextPath("/papelaria/leads/LC-1234", "/papelaria/leads")).toBe("/papelaria/leads/LC-1234");
+  });
 });

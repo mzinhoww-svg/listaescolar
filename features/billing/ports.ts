@@ -72,6 +72,19 @@ export type InvoiceView = {
   createdAt: Date;
 };
 
+/** D-101 (S23): pagamento recebido para uma fatura que já não está aberta (paga ou cancelada). */
+export type PaymentAlertView = {
+  id: string;
+  invoiceId: string;
+  provider: InvoiceProvider;
+  providerChargeId: string;
+  amountCents: number;
+  invoiceStatusAtDetection: "paid" | "cancelled";
+  detectedAt: Date;
+  resolvedAt: Date | null;
+  resolutionNote: string | null;
+};
+
 export type SeasonPassStatus = "pending_payment" | "active" | "cancelled";
 export type SeasonPassView = {
   id: string;
@@ -145,8 +158,16 @@ export interface BillingStore {
   getStationeryBillingInfo(stationeryId: string): Promise<{ isDemo: boolean; cnpj: string; tradeName: string } | null>;
   /** Fatura Pix ABERTA com este `provider_charge_id` (webhook/cron; sem `SessionActor`, chamado pelo sistema). */
   findOpenInvoiceByChargeId(chargeId: string): Promise<{ invoiceId: string; amountCents: number } | null>;
+  /** D-101 (S23): igual acima, mas por QUALQUER status — para decidir se um pagamento tardio vira alerta. */
+  findAnyInvoiceByChargeId(chargeId: string): Promise<{ invoiceId: string; status: InvoiceStatus } | null>;
+  /** D-101 (S23): registra o alerta de pagamento recebido numa fatura já paga/cancelada (idempotente). */
+  flagLatePayment(input: { invoiceId: string; provider: InvoiceProvider; providerChargeId: string; amountCents: number }): Promise<string>;
   /** `provider_charge_id` de toda fatura Pix ainda aberta com cobrança anexada (cron diário de reconciliação). */
   listOpenPixChargeIds(limit: number): Promise<string[]>;
+
+  /** D-101 (S23): fila de alertas para a conciliação do Admin13 (admin only). */
+  listPaymentAlerts(actor: SessionActor): Promise<PaymentAlertView[]>;
+  resolvePaymentAlert(actor: SessionActor, input: { alertId: string; note: string | null }): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------

@@ -100,7 +100,11 @@ function makeStore(over: Partial<BillingStore> = {}): BillingStore {
     reverseEntry: async () => randomUUID(),
     getStationeryBillingInfo: async () => ({ isDemo: false, cnpj: "00000000000000", tradeName: "Papelaria Teste" }),
     findOpenInvoiceByChargeId: async () => null,
+    findAnyInvoiceByChargeId: async () => null,
+    flagLatePayment: async () => randomUUID(),
     listOpenPixChargeIds: async () => [],
+    listPaymentAlerts: async () => [],
+    resolvePaymentAlert: async () => randomUUID(),
   };
   return { ...base, ...over };
 }
@@ -167,6 +171,53 @@ describe("BillingService.buyPackage", () => {
   it("dados inválidos são recusados antes de tocar o repositório", async () => {
     const service = makeService();
     await expect(service.buyPackage(MEMBER, { stationeryId: "não-é-uuid" })).rejects.toBeInstanceOf(BillingError);
+  });
+
+  it("D-100: duplo clique (mesma fatura por idempotência) reaproveita a cobrança Pix ainda pendente, sem gerar uma segunda", async () => {
+    let createCalls = 0;
+    const invoiceId = randomUUID();
+    let invoice: InvoiceView = {
+      id: invoiceId,
+      kind: "credit_package",
+      seasonPassId: null,
+      installmentNo: null,
+      amountCents: 5000,
+      dueDate: "2026-06-10",
+      status: "open",
+      provider: "pix",
+      isDemo: false,
+      providerChargeId: null,
+      pixCopyPaste: null,
+      chargeExpiresAt: null,
+      paidAt: null,
+      paidAmountCents: null,
+      createdAt: new Date(),
+    };
+    const provider: PaymentProvider = {
+      id: "pix",
+      createCharge: async () => {
+        createCalls++;
+        return { chargeId: "charge-1", copyPaste: "copia-1", expiresAt: new Date("2026-07-01T00:00:00Z") };
+      },
+      getCharge: async () => ({ status: "pending", paidAmountCents: null, paidAt: null }),
+    };
+    const service = makeService(
+      {
+        createPackageInvoice: async () => invoiceId, // idempotência do banco: mesma chave -> mesma fatura já existente
+        getInvoice: async () => invoice,
+        attachCharge: async (input) => {
+          invoice = { ...invoice, providerChargeId: input.providerChargeId, pixCopyPaste: input.pixCopyPaste, chargeExpiresAt: input.chargeExpiresAt };
+          return { providerChargeId: input.providerChargeId, pixCopyPaste: input.pixCopyPaste, chargeExpiresAt: input.chargeExpiresAt };
+        },
+      },
+      () => provider,
+    );
+    const key = randomUUID();
+    const first = await service.buyPackage(MEMBER, { stationeryId: STATIONERY_ID, packageId: PACKAGE_ID, idempotencyKey: key, termsAccepted: true });
+    const second = await service.buyPackage(MEMBER, { stationeryId: STATIONERY_ID, packageId: PACKAGE_ID, idempotencyKey: key, termsAccepted: true });
+    expect(createCalls).toBe(1); // a 2ª chamada reconsultou o PSP (pending) e reaproveitou a cobrança, sem criar outra
+    expect(second.pixCopyPaste).toBe(first.pixCopyPaste);
+    expect(second.pixCopyPaste).toBe("copia-1");
   });
 });
 
@@ -355,9 +406,47 @@ describe("BillingService.reconcileInvoiceByChargeId", () => {
     expect(confirmed).toBe(false);
   });
 
-  it("cobrança desconhecida -> null", async () => {
-    const service = makeService({ findOpenInvoiceByChargeId: async () => null });
+  it("cobrança nunca vista (sem histórico) -> null, sem tentar reconsultar nem alertar", async () => {
+    let flagged = false;
+    const service = makeService({
+      findOpenInvoiceByChargeId: async () => null,
+      findAnyInvoiceByChargeId: async () => null,
+      flagLatePayment: async () => ((flagged = true), randomUUID()),
+    });
     await expect(service.reconcileInvoiceByChargeId("nunca")).resolves.toBeNull();
+    expect(flagged).toBe(false);
+  });
+
+  it("D-101: txid de fatura JÁ paga, PSP confirma pagamento -> registra alerta (nunca recredita)", async () => {
+    const invoiceId = randomUUID();
+    let flaggedWith: { invoiceId: string; providerChargeId: string; amountCents: number } | null = null;
+    const provider: PaymentProvider = { id: "pix", createCharge: vi.fn(), getCharge: async () => ({ status: "paid", paidAmountCents: 5000, paidAt: new Date() }) };
+    const service = makeService(
+      {
+        findOpenInvoiceByChargeId: async () => null, // fatura não está mais aberta
+        findAnyInvoiceByChargeId: async () => ({ invoiceId, status: "paid" }),
+        flagLatePayment: async (input) => ((flaggedWith = { invoiceId: input.invoiceId, providerChargeId: input.providerChargeId, amountCents: input.amountCents }), randomUUID()),
+      },
+      () => provider,
+    );
+    await expect(service.reconcileInvoiceByChargeId("txid-velho")).resolves.toBeNull();
+    expect(flaggedWith).toEqual({ invoiceId, providerChargeId: "txid-velho", amountCents: 5000 });
+  });
+
+  it("D-101: txid de fatura já paga, mas o PSP diz que NÃO está pago -> nada de alerta (nunca inventa)", async () => {
+    const invoiceId = randomUUID();
+    let flagged = false;
+    const provider: PaymentProvider = { id: "pix", createCharge: vi.fn(), getCharge: async () => ({ status: "pending", paidAmountCents: null, paidAt: null }) };
+    const service = makeService(
+      {
+        findOpenInvoiceByChargeId: async () => null,
+        findAnyInvoiceByChargeId: async () => ({ invoiceId, status: "paid" }),
+        flagLatePayment: async () => ((flagged = true), randomUUID()),
+      },
+      () => provider,
+    );
+    await expect(service.reconcileInvoiceByChargeId("txid-x")).resolves.toBeNull();
+    expect(flagged).toBe(false);
   });
 });
 

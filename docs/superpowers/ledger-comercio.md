@@ -900,6 +900,265 @@ correções antes de prosseguir.
 - Ruling (S24 correções segurança independente, item D): o achado 3 (rodada 1) corrigiu só `lookupKey`/`consumeRate` para usar `AbortSignal` de verdade; o `impl` de cada endpoint (`features/b2b/api/endpoints/*.ts`) faz suas PRÓPRIAS chamadas `admin.rpc(...)` e continuava com o `withTimeout` antigo (sem abort), deixando essas consultas reais (a maioria das requisições da API) rodando em segundo plano depois de um 503 por timeout. Corrigido: `ApiRequestContext` (`features/b2b/api/contract.ts`) ganhou `signal?: AbortSignal`; `runApiPipeline` (`handler.ts`) troca `withTimeout` por `withAbortTimeout` na chamada do `impl`, passando `{ ...baseCtx, signal }`; cada uma das 8 chamadas `admin.rpc(...)` nos 6 arquivos de endpoint (`schools.ts`, `school.ts` — 1 cada; `school-lists.ts`, `list-items.ts`, `carts-match.ts` — 2 cada; `list.ts` — 1) agora encadeia `.abortSignal(ctx.signal)` quando presente, mesmo padrão de `realLookupKey`/`realConsumeRate`. `withTimeout` (a versão antiga, sem abort) ficou sem nenhum uso e foi removida do arquivo (achado do lint, não do revisor). Escopo mantido só nas chamadas `.rpc(...)` explicitamente citadas pelo revisor — as duas chamadas `.from(...).select(...)` auxiliares (`normalizedNameOfSchool` em `schools.ts`, `sortOrderOfGrade` em `school-lists.ts`, usadas só para resolver o cursor de paginação, nunca a busca principal) ficaram de fora por não estarem no escopo pedido; podem ganhar o mesmo tratamento depois, se importar. Testado: um `impl` falso que demora mais que o timeout confirma que `ctx.signal` chega abortado quando o pipeline responde `503`. Custo se errada: baixo (é cancelamento aditivo; nenhuma mudança de comportamento fora do caminho de timeout).
 - Estado: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes. Suíte unitária **3228/3228** (+6: os testes novos de `tests/b2b/handler.test.ts` para os achados A/B/C/D, líquido de uma reescrita do teste antigo de limite por IP em dois). Banco **1677/1680** (3 pulados = baseline, sem mudança de schema nesta rodada). E2E: `scripts/e2e-s24.sh` rodado do zero após `pnpm db:reset` + reseed — **41/41 verificações verdes**, sem regressão de nenhuma rodada anterior.
 
+## S23 · Comissão, repasses e inadimplência
+
+Plano: `docs/superpowers/plans/2026-09-26-s23-repasses.md`. Migration `0403_repasses.sql` (aditiva sobre 0401/0402,
+ambas já no staging), `features/payouts/**`, telas `/admin/repasses` (Admin13), `/admin/inadimplencia` (Admin14),
+`/papelaria/desempenho` (Pap07) e a seção "Pix pela plataforma" em Pap03.
+
+**Ruling 1 — "Pix pela plataforma" não custodia dinheiro; é um registro declarativo.** O adapter Pix da S21 coleta
+para UMA conta (a da plataforma), sem split de pagamento; não existe hoje uma forma real de a plataforma receber o
+Pix do pai e repassar automaticamente à papelaria. `payout_confirm_sale` registra a venda (`sale_payments`) como
+CONFIRMADA por quem chama (papelaria ao declarar "Vendi" com escola opcional, ou admin) — não cria cobrança nem
+reconsulta PSP nenhum. Isso também fecha D-105 (S22): `lead_conversion_signals.pix_confirmed` passa a refletir
+`sale_payments` de verdade em vez de `false` fixo. Custo se errado: se a S23+ um dia tiver um PSP real com split,
+essa função vira o ponto único a trocar (confirmação passa a vir de um webhook, não de um clique).
+
+**Ruling 2 — comissão é uma COBRANÇA separada da papelaria, nunca uma dedução de um pagamento custodiado.**
+`payout_confirm_sale` grava `commission` (o que a plataforma tem a cobrar) e, se houver config de escola/APM ativa,
+`repasse_due` (saído da própria comissão, nunca mais que ela — `least(...)` defensivo). Nenhum dos dois toca
+`stationery_wallets`/`credit_ledger` (S21): a papelaria continua com 100% do que o pai pagou direto a ela; a
+comissão apurada fica só registrada, sem instrumento de cobrança nesta fatia (D-122, nova, renumerada por colisão com a S24). Decisão deliberada: um
+instrumento de cobrança automática da comissão (nova fatura, ou débito do saldo) é escopo maior que "gerar
+registros/instruções" pedido pelo PLAN, e misturaria dois razões (comissão E crédito pré-pago) que hoje são
+propositalmente separados.
+
+**Ruling 3 — escola do lead não é resolvida automaticamente.** `leads.list_id` não tem FK para `schools`
+(0600 marca isso "fora do escopo, polimórfica"); tentar casar por `school_name`/`municipality_id` seria uma
+adivinhação, não uma fonte. `sale_payments.school_id` só é preenchido se quem confirma escolher explicitamente —
+Pap03 ganhou um seletor de escola (`listSchoolOptions`, relaxado para qualquer ator autenticado: nome/id de escola
+já é público em `/escolas/[inep]`, S04, não é dado sensível). Sem escolha, fica nulo e não há repasse — nunca
+inventa.
+
+**Ruling 4 — inadimplência é uma régua de 3 estágios sobre `invoices` (S21), nunca um saldo em cache.**
+`payout_settings` guarda `grace_days`/`block_days`; `payout_delinquency_status` classifica `em_dia` (≤ grace_days de
+atraso) / `atraso` (entre os dois) / `pausado` (> block_days) a partir da fatura aberta mais antiga — sempre
+calculado, nunca armazenado. Sem `payout_settings` publicado, todo mundo fica `em_dia` (falha ABERTA, mesmo
+espírito de D-102: não pausar ninguém por falta de configuração). `pausado` é aplicado via `create or replace` em
+`billing_can_receive_lead` e `billing_charge_lead_delivery` (0401, já no staging) — aditivo, sem editar o arquivo;
+preserva 100% do comportamento de saldo já existente (suíte inteira da S21 continua verde). Sem override manual de
+"pausar"/"reativar" nesta fatia (D-121, nova, renumerada por colisão com a S24): menos um estado que pode divergir do calculado.
+
+**Ruling 5 — D-100/D-101 (S21) corrigidos sem tocar SQL.** D-100: `attachPixChargeIfNeeded`
+(`features/billing/service.ts`) SEMPRE criava uma cobrança nova, mesmo com uma pendente ainda válida no PSP; a
+lógica de "reconsultar antes de decidir" que `payInvoice` já tinha foi extraída para dentro dessa mesma função
+(único lugar agora), e `buyPackage`/`buyPass`/`payInvoice` passaram a chamá-la com a fatura inteira (não só o
+`providerChargeId`). D-101: `findAnyInvoiceByChargeId` (por qualquer status) + `billing_flag_late_payment`
+(idempotente por fatura+txid) — o webhook/cron, quando não acha fatura ABERTA para um txid, reconsulta o PSP e,
+só se ele confirmar `paid`, registra o alerta (nunca por confiar no corpo do webhook). Fila de alertas exposta em
+Admin13 (D-101 pedia "tela de inadimplência/conciliação"; entrou em Repasses, que já é a tela de conciliação de
+dinheiro).
+
+**Ruling 6 — D-107 (S22) era um falso positivo, verificado por teste, não por migration.** A revisão de segurança
+da S22 registrou D-107 assumindo que `lead_create` (0303) não recusava um solicitante membro da PRÓPRIA papelaria
+escolhida. Rodando `tests/db/lead-create.test.ts` isolado (`"recusa o solicitante que é membro da papelaria"`)
+ANTES de qualquer mudança, o teste já passava — a checagem (`exists (select 1 from stationery_members ...)`) está
+na 0303 desde a S14, para QUALQUER `member_role` (não filtra por 'owner'), cobrindo dono e staff. Em vez de uma
+`create or replace` sem necessidade (risco de transcrição num corpo de ~150 linhas para uma mudança de
+comportamento zero), adicionei só o teste de regressão que faltava (membro NÃO-owner, `tests/db/lead-create.test.ts`)
+e fechei D-107 como "verificado, não bug". Custo se errado: nenhum — o comportamento correto já existia; o único
+risco seria um FUTURO reviewer reabrir a mesma dúvida sem achar este registro.
+
+**Achado durante o Task 2 (fora do pedido, corrigido).** `listConfirmableLeadsForStationery` checava só
+`actor.role in ('admin', 'stationery_member')`, sem conferir que o `stationery_member` era vínculo DA papelaria
+pedida — qualquer dono de papelaria podia listar os leads confirmáveis de OUTRA papelaria trocando o
+`stationeryId`. Corrigido com `requireStationeryAccess` (mesmo predicado de `requireMemberOrAdmin` da S21).
+Achado por leitura de código ao escrever `getPerformanceSummary` (que precisava do mesmo helper), não por um
+teste vermelho específico — sem CVE real conhecido (nenhuma tela desta fatia expõe esse parâmetro ao cliente ainda),
+mas corrigido antes de qualquer tela usar.
+
+**Ruling 7 — Pap07 fica sem "respondido em 1h" nem comparação de bairro (D-120, nova, renumerada por colisão com a S24).** O funil, o ticket médio
+(só vendas com Pix pela plataforma confirmado — nunca inventa valor de venda fora dela) e "declarado × confirmado"
+(reaproveita `lead_conversion_signals` da S22) entraram; tempo de resposta agregado (`lead_events`) e comparação
+anônima de bairro com k-anonimato ≥ 3 papelarias ficaram de fora por tempo da fatia.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos
+verdes. `pnpm test`: 2994 (2971 + 23 novos: schemas/service do payouts + D-100/D-101 em `tests/billing/
+service.test.ts`). `pnpm test:db`: 70 arquivos (1 skip), 1597 testes, 3 skipped (1567 + 30 novos: 19 em
+`tests/db/payouts.test.ts`, 6 de regressão D-108–D-111/D-099/D-107, 5 em `tests/payouts/repository.test.ts`). E2E
+(`scripts/e2e-s23.sh`): 25/25, ver `docs/superpowers/e2e/S23.md`.
+
+## S23 · Dívida (bloco pronto para o DEBT.md; IDs já atribuídos)
+
+- (baixa) D-120: Pap07 sem "respondido em até 1h" (agregação de `lead_events`) nem comparação anônima de bairro
+  (k-anonimato ≥ 3). Dona: futura fatia de melhoria.
+- (baixa) D-121: Admin14 sem "Cobrar"/"Pausar leads"/"Reativar" manuais do design de referência — a régua é 100%
+  automática. Dona: futura fatia de melhoria.
+- (média) D-122: comissão apurada em `payout_ledger` não tem instrumento de cobrança da papelaria (nem debita
+  `credit_ledger`, nem gera fatura) — só registro para o admin cobrar manualmente fora do sistema. Dona: futura
+  fatia (cobrança automática da comissão).
+
+## S23 · correções da revisão de segurança (Opus, rodada única sobre `a51b62b`)
+
+Migration `0403_repasses.sql` EDITADA NO LUGAR (ainda não aplicada em nenhum ambiente além do local desta sessão —
+sem PR, sem apply em staging). Um Ruling por item pedido na revisão. Vermelho antes do fix: para os dois
+BLOQUEANTES, capturado por verificação direta no Postgres local (`has_function_privilege` antes/depois do `revoke`;
+um `insert`+`select` em `audit_log` antes/depois do `audit_row_change('pix_key','beneficiary_name')`) e, em seguida,
+codificado como teste permanente em `tests/db/payouts.test.ts` (describe `"S23 · correções da revisão de segurança
+(Opus, rodada única)"`) — os testes novos falhavam contra o código anterior à correção e passam depois; não há um
+log de terminal separado para esta rodada porque a verificação foi feita consulta a consulta contra o banco real,
+não só lendo o SQL.
+
+**BLOQUEANTE 1 — EXECUTE aberto para anon/authenticated em 8 funções `SECURITY DEFINER` novas.** Causa raiz: no
+Postgres, toda função nova recebe `EXECUTE` para `PUBLIC` por padrão; o padrão já estabelecido nas migrations 0401
+e 0402 (`revoke execute ... from public, anon, authenticated, service_role; grant execute ... to service_role;`
+logo após cada função) não tinha sido replicado nas 8 funções principais da 0403 nem nas 5 funções de gatilho.
+Corrigido função a função (revoke total, grant só a `service_role`; funções de gatilho ficam só com o revoke, sem
+grant, porque só o mecanismo de trigger as chama). `payout_check_admin` ganhou o mesmo cotejo de `sub` do JWT contra
+o ator informado que `billing_check_admin` (0401) já tinha — sem isso, um `stationery_member` autenticado poderia
+chamar a RPC informando o UUID de outro ator. Teste novo varre `has_function_privilege` para anon/authenticated/
+service_role nas 9 funções principais (as 8 + `payout_reverse_entry`, criada nesta mesma rodada) e nas 5 de
+gatilho. Custo se o revoke tivesse ficado incompleto: qualquer usuário autenticado (ou anônimo, se a chave
+publicável vazasse) poderia confirmar vendas, publicar configuração de repasse ou gerar lotes diretamente via RPC,
+contornando toda a UI e as Server Actions.
+
+**BLOQUEANTE 2 — `audit_log` guardando `pix_key` e `beneficiary_name`.** O gatilho `school_payout_settings_audit`
+usava `audit_row_change()` sem excluir nenhuma coluna, gravando a chave Pix e o nome do beneficiário em texto
+simples num log que é append-only e nunca é apagado. Corrigido para `audit_row_change('pix_key',
+'beneficiary_name')`, mesmo padrão já usado em outras tabelas sensíveis (ex.: `pix_copy_paste`,
+`idempotency_key` em 0401). Teste novo insere/atualiza `school_payout_settings` e confirma, por leitura direta do
+JSONB de `audit_log`, que nenhuma das duas chaves aparece em nenhuma linha. Custo se não corrigido: qualquer leitor
+do `audit_log` (hoje só `service_role`/admin via ferramenta de banco, mas o log é pensado para retenção longa e
+possível exportação futura) teria acesso a uma chave Pix de terceiro (escola/APM) que não é nem papelaria nem
+plataforma.
+
+**IMPORTANTE 3 — régua de inadimplência contando recarga de crédito abandonada.** `payout_delinquency_status`
+contava qualquer `invoices` aberta e vencida; uma recarga de crédito pré-paga (`credit_package`) nunca entregue
+(cliente desistiu antes de pagar) não é uma dívida — ninguém deve nada a ninguém nesse caso, ao contrário de uma
+parcela de passe de temporada não paga. Corrigido: a régua agora filtra `kind = 'season_pass_installment' and
+is_demo = false`. Também corrigido, no mesmo function body, o cálculo de "hoje" para `(p_at at time zone
+'America/Cuiaba')::date` (era um `::date` cru, dependente do fuso da sessão — normalmente UTC — o que podia
+classificar errado uma fatura vencida há exatamente N dias perto da virada de meia-noite em Cuiabá). Dois testes
+negativos novos confirmam que uma recarga de crédito vencida e uma parcela de passe de DEMONSTRAÇÃO vencida NUNCA
+entram na régua (`status === "em_dia"` mesmo com centenas de dias de atraso). O roteiro de E2E trocou a fatura de
+teste por uma parcela de passe real e ganhou um controle negativo com uma recarga vencida há 400 dias. Custo se não
+corrigido: uma papelaria com um cliente que desistiu de recarregar crédito ficaria pausada sem dever nada, perdendo
+leads novos sem motivo.
+
+**IMPORTANTE 4 — sinal "Pix pela plataforma" contável só pela própria declaração.** `lead_conversion_signals`
+contava `pix_confirmed` para QUALQUER linha em `sale_payments`, inclusive uma confirmada só pela própria papelaria
+(`confirmed_role = 'stationery_member'`) — o mesmo ator que já contribui o sinal "declarou venda". Isso deixava a
+regra de "2 de 3 sinais" praticamente refém de um único ator mal-intencionado (declarar a venda E confirmar o Pix
+sozinho, sem nenhuma confirmação externa). Corrigido: `pix_confirmed` só conta quando existe uma linha com
+`confirmed_role in ('admin', 'system')`. Teste novo confirma que uma confirmação só da papelaria não move
+`pix_confirmed` para `true`. Custo se não corrigido: uma papelaria poderia inflar sozinha a conversão de um lead
+(e, por consequência, seu histórico de "declarado × confirmado" em Pap07) sem nenhuma verificação externa.
+
+**IMPORTANTE 5 — conluio: repasse por qualquer confirmação que escolhesse uma escola.** Era possível a própria
+papelaria, ao confirmar "Pix pela plataforma", escolher a escola do repasse — um combinado entre papelaria e
+alguém na escola/APM (declarar uma escola fictícia ou usar informação privilegiada) geraria `repasse_due` sem
+nenhuma revisão. Ruling: **repasse só nasce quando quem confirma é `admin` ou `system`** — nunca por confirmação
+direta da papelaria, mesmo que ela informe a escola certa. Implementado na PRÓPRIA função `payout_confirm_sale`
+(defesa na fonte da verdade, não só na UI): a inserção em `payout_ledger` com `entry_type = 'repasse_due'` só
+acontece quando `p_actor_role in ('admin', 'system')`. Isso obrigou a redesenhar a UX: o seletor de escola SAIU do
+formulário de confirmação da papelaria (Pap03/`ConfirmSaleForm`) — mantê-lo lá seria enganoso, já que nunca gera
+repasse — e uma tela NOVA (`ConfirmSalesAdminList`, dentro do Admin13) lista as vendas confirmáveis de TODAS as
+papelarias para o admin revisar e confirmar com a escola correta antes de qualquer repasse existir. Sobre o teto de
+`declared_sale_cents`: já existe e é coerente — `sale_payments.amount_cents` e `leads.declared_sale_cents` têm o
+MESMO `check (... between 1 and 10000000)` (R$ 100.000,00), não precisou de mudança. Teste novo confirma que uma
+papelaria confirmando sozinha (mesmo com escola) produz `repasseCents: 0` e `repasseTarget: null`; um teste
+positivo confirma que a confirmação do admin com escola produz `commission` E `repasse_due` normalmente. Custo se
+não corrigido: um esquema de conluio papelaria+escola desviaria repasse de dinheiro real sem nenhuma revisão
+humana — o pior cenário de todos os achados desta rodada.
+
+**IMPORTANTE 6 — sem função de estorno.** `payout_ledger` é append-only por design (gatilho `payout_ledger_no_truncate`
+com `enable always`), mas não existia nenhum caminho para corrigir um lançamento errado (comissão ou repasse
+lançados por engano, ou depois anulados por uma contestação de venda). Criada `payout_reverse_entry(p_entry_id,
+p_actor_id, p_reason)`: só admin (`payout_check_admin`), busca o lançamento original com `for update`, aceita só
+`entry_type in ('commission', 'repasse_due')`, é idempotente (uma segunda chamada com o mesmo `p_entry_id` devolve
+o MESMO id de estorno em vez de duplicar, checado por `reverses_entry_id = p_entry_id`), e insere uma linha
+compensatória com o valor negativo e o novo `entry_type` (`commission_reversed`/`repasse_reversed` — dois valores
+novos no `check` de `entry_type`). O comentário de cabeçalho da migration (linha ~102, que já citava
+`repasse_reversed`/`commission_reversed` como conceito futuro) foi atualizado para apontar para esta função
+implementada. Teste novo cobre: recusa para não-admin, `not_found` para id inexistente, idempotência na segunda
+chamada, e soma líquida zero em `payout_ledger` (comissão + estorno = 0; repasse + estorno = 0) para os dois tipos.
+Custo se não corrigido: qualquer erro humano de confirmação, ou uma disputa aceita depois do fato, ficaria sem
+correção possível no ledger — só um novo lançamento manual fora do padrão, quebrando a auditabilidade.
+
+**Menores (todos aplicados):**
+- `actor_role` gravado em `payout_ledger` agora vem sempre do papel REAL do ator que confirmou (`p_actor_role`,
+  já validado contra `stationery_member`/`admin`/`system` no corpo da função), nunca um valor fixo — o `check`
+  de `actor_role` foi alargado para aceitar os três valores.
+- `back` recebido de `formData` em `confirmSaleAction` passa por `safeNextPath` (extraída de `features/auth/
+  redirect.ts`, agora com um `fallback` opcional em vez do fixo `/conta`) antes de qualquer `redirect()` —
+  recusa qualquer caminho que não comece com `/` ou que contenha `//` (open redirect).
+- `getSaleForLead` ganhou `requireStationeryAccess` (busca a `stationery_id` do lead primeiro): antes, qualquer
+  ator com acesso a QUALQUER papelaria conseguia ler o `sale_payments` de um lead de OUTRA papelaria pelo id.
+- `payout_confirm_sale` recusa (`stationery_unavailable`) uma papelaria com `status = 'suspended'`, mesmo que o
+  lead e o ator sejam válidos.
+- Pap07 (`getPerformanceSummary`) trocou o `.limit(500)` (que cortava silenciosamente o funil de uma papelaria com
+  mais de 500 leads) por 4 contagens `count: "exact", head: true` em paralelo — sem limite, e sem baixar linha
+  nenhuma para contar.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos
+verdes (3252 testes unitários; 1721 de banco, 3 skipped pré-existentes — as duas rodadas de `db:reset`+`test:db`
+concorrentes que rodaram por engano numa tentativa anterior foram descartadas e refeitas em sequência, uma de cada
+vez, depois de identificado que a colisão de duas suítes de banco simultâneas contra o mesmo Postgres local é que
+causava falhas espúrias em testes sem relação nenhuma com esta fatia). E2E (`scripts/e2e-s23.sh`) refeito do zero
+(`pnpm db:reset` + reseed + `pnpm build` + `PORT=3003 pnpm start` novo): 26/26 (era 25/25 antes da rodada; o
+roteiro ganhou uma etapa extra para confirmar a venda 1 pelo admin, com escola, separada da venda 2 pela própria
+papelaria, sem escola). Achado e corrigido no meio do processo: o próprio roteiro tinha um bug (login redundante
+do admin já autenticado na etapa 3, causando `Element not found: #email`) — não era uma falha da aplicação; trocado
+por uma navegação simples (`ab admin open`), já que a sessão do admin seguia válida desde a etapa 1.
+
+## S23 · correções da revisão de segurança (rodada 2, Opus, sobre `28f93b5`)
+
+Reverificação da rodada 1 achou 0 bloqueantes, 1 importante funcional e 1 menor funcional. Migration
+`0403_repasses.sql` editada NO LUGAR de novo (ainda só local). Vermelho real antes do fix: revertida temporariamente
+só `supabase/migrations/0403_repasses.sql` para o conteúdo de `28f93b5` (com os testes novos já escritos por cima),
+`pnpm db:reset` + rodada dos testes novos — as 5 asserções nova falharam exatamente como esperado (função
+`payout_admin_validate_sale` inexistente; `payout_reverse_entry` sem recusar lote já criado), log salvo em
+`docs/superpowers/logs/s23-security-round2-red.log`; migration restaurada e `pnpm db:reset` de novo antes de
+qualquer verificação verde.
+
+**1) Repasse perdido: papelaria confirma antes do admin.** Causa raiz: `payout_confirm_sale` é idempotente por
+design (`unique(sale_payments.lead_id)`, 2ª chamada devolve o id existente sem tocar em nada) — bom contra corrida
+concorrente da MESMA confirmação, ruim quando é uma confirmação DIFERENTE (papelaria primeiro, admin depois): a
+venda sumia de `listConfirmableSalesForAdmin` (que excluía qualquer lead com `sale_payments` já existente,
+independente de quem confirmou) e nunca virava repasse nem contava o sinal Pix. Ruling: criei
+`payout_admin_validate_sale(p_actor_id, p_lead_id, p_school_id)` como o ÚNICO ponto de entrada do admin (a
+`confirmSale` do repositório TS agora despacha para ela sempre que `actor.role === 'admin'`, nunca mais chama
+`payout_confirm_sale` diretamente para admin) — ela cobre os dois casos com uma função: lead sem `sale_payments`
+nenhum delega para `payout_confirm_sale('admin', ...)` (comportamento idêntico ao de antes, cobre "ordem inversa");
+lead já confirmado só pela papelaria (`confirmed_role = 'stationery_member'`) é uma VALIDAÇÃO — sem duplicar a
+comissão (só lê o `payout_ledger` já existente para aplicar o mesmo teto `least(declarado × bps, comissão já
+apurada)`), grava um repasse_due novo se houver escola/config, e registra a validação numa tabela nova,
+`sale_payment_admin_validations` (append-only, `unique(sale_payment_id)`, mesma imutabilidade de `sale_payments`/
+`payout_ledger`), que também passou a alimentar `pix_confirmed` em `lead_conversion_signals` — a validação do admin
+é a mesma verificação externa que uma confirmação direta dele já dava. `listConfirmableSalesForAdmin` deixou de
+excluir vendas confirmadas só pela papelaria e ainda não validadas (agora só sai da fila quando plenamente
+processada: admin/system direto, OU papelaria + validação); o campo novo `awaitingValidation` rotula esse caso na
+tela (Admin13: "Confirmada pela papelaria · aguardando validação", botão "Validar" em vez de "Confirmar" — mesma
+`<form>`, mesma ação, o banco decide sozinho). Custo se não corrigido: toda venda que a papelaria confirmasse antes
+do admin olhar a fila perderia o repasse PARA SEMPRE (sem repasse, sem sinal Pix, sem jeito de recuperar depois) —
+o pior tipo de bug funcional aqui, porque é silencioso (nada dá erro, o dinheiro simplesmente nunca é repassado).
+
+**2) Estorno de repasse já liquidado (num lote).** `payout_reverse_entry` (rodada 1) só checava `entry_type in
+('commission', 'repasse_due')`, sem considerar que um `repasse_due` pode já ter sido somado a um LOTE
+(`payout_batches`, via um lançamento `repasse_settled` que soma TUDO que existir para a escola/APM até aquele
+momento, sem ligação por linha a cada `repasse_due` coberto). Ruling: recusar (hint `already_settled`) estornar um
+`repasse_due` quando existe um `repasse_settled` posterior para a MESMA escola/APM — MAIS ESTRITO do que só "lote
+executado" (a redação original do pedido): mesmo um lote ainda `pending` (dinheiro nenhum moveu) já tem
+`total_cents` fixo e foi mostrado ao admin como uma instrução a executar; estornar por baixo dele não corrige o
+lote (imutável) e só desconta o total FUTURO — podendo até deixá-lo negativo, exatamente o "pendente negativo
+descontado em silêncio" que o pedido queria evitar. Optei por RECUSAR (não por um ajuste de lote automático): a
+correção de um repasse já batido em lote precisa da decisão de um humano sobre o que fazer com o lote em si
+(cancelar? gerar um lote negativo manual?), fora do escopo de uma função de estorno de UM lançamento. Comissão
+nunca cai nessa checagem (não tem conceito de lote — D-122, cobrança manual). Custo se a checagem tivesse ficado só
+em "executado" (a redação literal do pedido): um repasse ainda `pending` estornado deixaria o "Repasse pendente" da
+tela incoerente com o `total_cents` já fixado do lote, até compensar sozinho com repasses futuros — um bug sutil
+que só apareceria numa janela de tempo específica (lote gerado mas ainda não executado).
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos
+verdes (3252 unitários; 1729 de banco, 3 skipped pré-existentes — 8 testes novos: 6 em `tests/db/payouts.test.ts`
+["S23 · correções da revisão de segurança (Opus, rodada 2)"] + 1 de imutabilidade da tabela nova + 1 em
+`tests/payouts/repository.test.ts`). E2E (`scripts/e2e-s23.sh`) refeito do zero, com uma etapa nova exercitando
+exatamente a ordem "papelaria confirma primeiro, admin valida depois": 30/30 (era 26/26 na rodada 1). Achado no
+processo (ambiental, não da aplicação): outra trilha (S25, worktree T2) rodou `agent-browser close --all` no meio
+de uma tentativa de E2E, derrubando as sessões `t3s23-*` desta trilha a meio caminho (uma delas chegou a mostrar uma
+página de bloqueio de segurança de terceiros, sinal claro de sessão de browser corrompida por outro processo) —
+refeito do zero numa janela sem colisão; registrado como lembrete (não dívida): fechar sessões do agent-browser só
+pelo nome exato, nunca com `--all`, quando várias trilhas rodam em paralelo no mesmo host.
 ## S25
 
 ### Task 1 (migration 0502 e testes de banco)
@@ -925,7 +1184,7 @@ correções antes de prosseguir.
 ### Task 3 (telas B2B04/B2B05 + E2E)
 
 - Ruling: `B2B_FEATURES.widget`/`.webhooks` viram `true` nesta task (nav do `PortalShell` ganha os dois itens); Campanhas/Insights/Faturamento continuam `false` (S26). O selo "Em breve" de `/parceiros` some sozinho para widget/webhooks (já condicionado à flag desde a S24).
-- Ruling: até 3 endpoints por parceiro na UI (`EndpointsSection.tsx`), refletindo o limite já decidido na Task 1; sem ação de excluir endpoint nesta fatia (D-122).
+- Ruling: até 3 endpoints por parceiro na UI (`EndpointsSection.tsx`), refletindo o limite já decidido na Task 1; sem ação de excluir endpoint nesta fatia (D-130).
 - Ruling (achado real do E2E, não hipotético): "Rotacionar" usava `window.confirm` — um diálogo nativo do navegador que a automação de teste (e qualquer harness baseado em CDP) não consegue confirmar de forma confiável sem um handler dedicado. Trocado por confirmação inline de dois cliques ("Rotacionar" → "Confirmar rotação (invalida o segredo atual)" → "Cancelar"), sem `window.confirm`. Custo se errada: baixo (é só a forma da confirmação; a ação continua exigindo dois cliques deliberados).
 - Ruling (achado real do E2E): criar um endpoint chamava `onSaved()` imediatamente após o sucesso, o que desmontava o próprio formulário (via `EndpointsSection` trocando `showNew` para `false` e chamando `router.refresh()`) ANTES de o dono ver o segredo em claro — quebrava por completo o "copie agora" (o PLAN e o SPEC-2 não têm exceção para isso). Corrigido: o segredo criado fica visível até um "Já copiei" explícito; só então a lista atualiza. Custo de não ter pego no E2E: alto (o dono nunca veria a única chance de copiar o segredo em produção) — só apareceu rodando o roteiro de ponta a ponta contra o app real, não nos testes unitários dos Server Actions (que testam o retorno da action, não a árvore de componentes React).
 - Ruling (achado real do E2E): "Revelar" e "Rotacionar" eram mutuamente exclusivos no layout (um escondia o outro) — corrigido para os dois ficarem sempre visíveis juntos quando o segredo está mascarado ou revelado.
@@ -995,7 +1254,7 @@ ainda sem a correção — ver histórico desta sessão).
   SSRF.
 - Ruling (Menor): HTTPS restrito à porta 443 (`lib/net/safe-fetch.ts`) — reduz o uso do envio de webhook como
   sonda de porta contra um host público arbitrário. Sem suporte a 8443 nesta fatia (ninguém pediu); registrado
-  como comentário no código para não crescer por engano, e como dívida (D-126) o fato de a checagem valer só no
+  como comentário no código para não crescer por engano, e como dívida (D-134) o fato de a checagem valer só no
   ENVIO, não na criação/atualização do endpoint (Zod e o CHECK do banco continuam aceitando qualquer porta).
 - Ruling (Menor): `lib/rate-limit/memory-bucket.ts` fazia `buckets.clear()` (zerar TUDO) ao atingir o teto de
   10 000 chaves rastreadas — descartava a cota em andamento de todo mundo, inclusive quem nem estava perto do
@@ -1007,11 +1266,11 @@ ainda sem a correção — ver histórico desta sessão).
   em staging, criada `b2b_webhook_secret_events` (tabela irmã, imutável, `partner_id` com `on delete cascade` —
   ao contrário de `b2b_partner_events`, que usa `restrict` — para não travar a exclusão de um parceiro, Importante
   2 acima). `actor_id` fora do grant de `authenticated` (mesmo padrão de `decided_by`/`created_by` na 0501). Isto
-  RESOLVE o D-120 (registrado na Task 1 desta mesma fatia).
+  RESOLVE o D-128 (registrado na Task 1 desta mesma fatia).
 - Ruling (Menor): `b2b_webhook_endpoint_create` ganhou `pg_advisory_xact_lock` por parceiro (mesmo padrão de
   `b2b_partner_apply`, 0501) para duas criações concorrentes não passarem as duas pela checagem do limite de 3
   endpoints antes de qualquer uma inserir.
-- Dívida nova (D-125, baixa): `app/api/widget/**` responde `access-control-allow-origin: *` para qualquer
+- Dívida nova (D-133, baixa): `app/api/widget/**` responde `access-control-allow-origin: *` para qualquer
   origem — correto para o DADO (público, sem cookie), mas sem allowlist do domínio cadastrado do parceiro, o
   widget de um parceiro pode ser embutido em site de terceiro não autorizado. Registrada para quando o portal
   ganhar um campo de "domínios autorizados".

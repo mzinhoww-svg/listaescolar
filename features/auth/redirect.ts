@@ -12,23 +12,23 @@ function hasDotSegment(value: string): boolean {
 }
 
 /**
- * Aceita só caminho relativo interno; qualquer outra coisa vira `/conta`.
+ * Aceita só caminho relativo interno; qualquer outra coisa vira o `fallback` (padrão `/conta`).
  * Devolve a entrada original quando aprovada (sem reescrever).
  */
-export function safeNextPath(input: unknown): string {
-  if (typeof input !== "string" || !input.startsWith("/") || isUnsafe(input)) return FALLBACK;
+export function safeNextPath(input: unknown, fallback: string = FALLBACK): string {
+  if (typeof input !== "string" || !input.startsWith("/") || isUnsafe(input)) return fallback;
   let decoded: string;
   try {
     decoded = decodeURIComponent(input);
   } catch {
-    return FALLBACK;
+    return fallback;
   }
-  if (isUnsafe(decoded) || hasDotSegment(input) || hasDotSegment(decoded)) return FALLBACK;
+  if (isUnsafe(decoded) || hasDotSegment(input) || hasDotSegment(decoded)) return fallback;
   try {
     const u = new URL(input, PROBE_ORIGIN);
-    if (u.origin !== PROBE_ORIGIN || u.pathname.startsWith("//")) return FALLBACK;
+    if (u.origin !== PROBE_ORIGIN || u.pathname.startsWith("//")) return fallback;
   } catch {
-    return FALLBACK;
+    return fallback;
   }
   return input;
 }

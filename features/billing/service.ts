@@ -100,25 +100,51 @@ export class BillingService {
   }
 
   /**
-   * `expectedCurrentChargeId`: a cobrança que o CHAMADOR leu antes de pedir esta nova ao PSP (`null` numa fatura
-   * nova). O repositório faz compare-and-swap: se ninguém trocou a cobrança da fatura no meio tempo, a nossa vira a
-   * oficial; senão, devolve a de quem ganhou a corrida — o retorno é SEMPRE a cobrança realmente vinculada agora,
-   * nunca necessariamente a que acabamos de criar (revisão de segurança: evita mostrar um BR Code que já perdeu).
+   * Gera (ou reaproveita) a cobrança Pix de uma fatura. D-100 (S23, revisão de segurança da S21): quando já existe
+   * uma cobrança atual (`invoice.providerChargeId`), SEMPRE reconsulta o PSP antes de decidir — nunca gera uma
+   * SEGUNDA cobrança por cima de uma ainda válida (duplo clique em "comprar pacote"/"comprar passe" reaproveitava a
+   * FATURA pela idempotência, mas chamava esta função de novo, trocando uma cobrança Pix que o pagador podia já ter
+   * em mãos por uma nova — os dois BR Codes ficavam pagáveis, risco de pagamento em dobro). Mesma lógica que
+   * `payInvoice` já usava (extraída para cá, único lugar): `paid` com valor batendo confirma direto; `pending` com
+   * `pixCopyPaste` ainda salvo devolve a cobrança atual tal como o PSP diz que vale; `unknown` nunca regenera às
+   * cegas (falha visível); só sem cobrança nenhuma ou `expired` (já reconsultada) segue para gerar uma nova —
+   * compare-and-swap (`attachCharge`) garante que o retorno é sempre a cobrança REALMENTE vinculada, mesmo com
+   * corrida (revisão de segurança da S21).
    */
   private async attachPixChargeIfNeeded(
     provider: PaymentProvider,
-    invoiceId: string,
-    amountCents: number,
+    invoice: { id: string; amountCents: number; providerChargeId: string | null; pixCopyPaste: string | null; chargeExpiresAt: Date | null },
     description: string,
     payer: { cnpj: string; name: string },
-    expectedCurrentChargeId: string | null,
   ): Promise<{ pixCopyPaste: string | null; chargeExpiresAt: Date | null }> {
     if (provider.id !== "pix") return { pixCopyPaste: null, chargeExpiresAt: null };
-    const charge = await provider.createCharge({ invoiceId, amountCents, description, payer });
+    if (invoice.providerChargeId) {
+      const status = await provider.getCharge(invoice.providerChargeId);
+      if (status.status === "paid" && status.paidAmountCents !== null) {
+        if (status.paidAmountCents === invoice.amountCents) {
+          await this.deps.store.confirmInvoicePayment({
+            invoiceId: invoice.id,
+            provider: provider.id,
+            providerRef: invoice.providerChargeId,
+            amountCents: status.paidAmountCents,
+            paidAt: status.paidAt ?? this.deps.now(),
+          });
+        }
+        return { pixCopyPaste: null, chargeExpiresAt: null };
+      }
+      if (status.status === "pending" && invoice.pixCopyPaste) {
+        return { pixCopyPaste: invoice.pixCopyPaste, chargeExpiresAt: invoice.chargeExpiresAt };
+      }
+      if (status.status === "unknown") {
+        throw new BillingError("não foi possível confirmar o status da cobrança no PSP", "payments_unavailable");
+      }
+      // 'expired' (já reconsultada, nada de dinheiro perdido) ou 'pending' sem copyPaste salvo: segue e gera nova.
+    }
+    const charge = await provider.createCharge({ invoiceId: invoice.id, amountCents: invoice.amountCents, description, payer });
     const attached = await this.deps.store.attachCharge({
-      invoiceId,
+      invoiceId: invoice.id,
       provider: provider.id,
-      expectedCurrentChargeId,
+      expectedCurrentChargeId: invoice.providerChargeId,
       providerChargeId: charge.chargeId,
       pixCopyPaste: charge.copyPaste,
       chargeExpiresAt: charge.expiresAt,
@@ -144,7 +170,7 @@ export class BillingService {
     });
     const invoice = await this.deps.store.getInvoice(actor, input.stationeryId, invoiceId);
     if (!invoice) throw new BillingError("fatura não encontrada", "not_found");
-    const attached = await this.attachPixChargeIfNeeded(provider, invoiceId, invoice.amountCents, "Recarga de créditos ListaCerta", { cnpj, name: tradeName }, invoice.providerChargeId);
+    const attached = await this.attachPixChargeIfNeeded(provider, invoice, "Recarga de créditos ListaCerta", { cnpj, name: tradeName });
     return { invoiceId, provider: provider.id, ...attached };
   }
 
@@ -166,7 +192,7 @@ export class BillingService {
     const passInvoices = invoices.filter((i) => i.kind === "season_pass_installment" && i.seasonPassId === passId).sort((a, b) => (a.installmentNo ?? 0) - (b.installmentNo ?? 0));
     const first = passInvoices.find((i) => i.installmentNo === 1);
     if (!first) throw new BillingError("1ª parcela não encontrada", "database");
-    const attached = await this.attachPixChargeIfNeeded(provider, first.id, first.amountCents, "1ª parcela do passe de temporada ListaCerta", { cnpj, name: tradeName }, first.providerChargeId);
+    const attached = await this.attachPixChargeIfNeeded(provider, first, "1ª parcela do passe de temporada ListaCerta", { cnpj, name: tradeName });
     return {
       invoiceId: first.id,
       provider: provider.id,
@@ -175,12 +201,10 @@ export class BillingService {
     };
   }
 
-  /** "Pagar com Pix" numa fatura já existente (regenera a cobrança se vencida). */
   /**
-   * Revisão de segurança (S21): antes de decidir gerar (ou regenerar) uma cobrança, SEMPRE reconsulta o PSP sobre a
-   * cobrança ANTERIOR (quando existe) — nunca decide só pela expiração local. Sem isso, um pagamento feito no BR
-   * Code antigo entre a expiração local e o clique em "Pagar com Pix" seria perdido: a fatura ganharia uma cobrança
-   * NOVA e ninguém jamais reconsultaria a antiga para confirmar o pagamento que já aconteceu.
+   * "Pagar com Pix" numa fatura já existente. Delega a `attachPixChargeIfNeeded` (D-100/S21: reconsulta o PSP antes
+   * de decidir gerar ou reaproveitar a cobrança atual — nunca regenera às cegas nem perde um pagamento feito no
+   * meio-tempo).
    */
   async payInvoice(actor: SessionActor, raw: unknown): Promise<{ pixCopyPaste: string | null; chargeExpiresAt: Date | null }> {
     const parsed = payInvoiceInputSchema.safeParse(raw);
@@ -191,33 +215,7 @@ export class BillingService {
     if (invoice.status !== "open") throw new BillingError("fatura não está aberta", "invalid_state");
     const { provider, cnpj, tradeName } = await this.resolveProviderOrThrow(input.stationeryId);
     if (provider.id !== invoice.provider) throw new BillingError("provedor não bate com a fatura", "provider_invalid");
-
-    if (invoice.providerChargeId) {
-      const status = await provider.getCharge(invoice.providerChargeId);
-      if (status.status === "paid" && status.paidAmountCents !== null) {
-        if (status.paidAmountCents === invoice.amountCents) {
-          await this.deps.store.confirmInvoicePayment({
-            invoiceId: invoice.id,
-            provider: provider.id,
-            providerRef: invoice.providerChargeId,
-            amountCents: status.paidAmountCents,
-            paidAt: status.paidAt ?? this.deps.now(),
-          });
-        }
-        return { pixCopyPaste: null, chargeExpiresAt: null };
-      }
-      if (status.status === "pending" && invoice.pixCopyPaste) {
-        // o PSP (não o relógio local) diz que a cobrança anterior ainda vale: devolve ela, sem regenerar.
-        return { pixCopyPaste: invoice.pixCopyPaste, chargeExpiresAt: invoice.chargeExpiresAt };
-      }
-      if (status.status === "unknown") {
-        // revisão de segurança: status que não reconhecemos NUNCA regenera às cegas (poderia estar paga de um jeito
-        // que a leitura não capturou); melhor falhar visivelmente do que arriscar uma segunda cobrança indevida.
-        throw new BillingError("não foi possível confirmar o status da cobrança no PSP", "payments_unavailable");
-      }
-      // 'expired': a cobrança anterior não serve mais, mas já foi reconsultada (nada de dinheiro perdido) — regenera.
-    }
-    return this.attachPixChargeIfNeeded(provider, invoice.id, invoice.amountCents, "Fatura ListaCerta", { cnpj, name: tradeName }, invoice.providerChargeId);
+    return this.attachPixChargeIfNeeded(provider, invoice, "Fatura ListaCerta", { cnpj, name: tradeName });
   }
 
   /** "Simular pagamento (demonstração)": confirma direto, sem depender de status de PSP (não há PSP real na demo). */
@@ -239,7 +237,10 @@ export class BillingService {
   /** Reconsulta o PSP e SÓ confirma com `CONCLUIDA` e valor igual (nunca pelo corpo do webhook nem do cron). */
   async reconcileInvoiceByChargeId(chargeId: string): Promise<{ invoiceId: string; confirmed: boolean } | null> {
     const info = await this.findInvoiceByChargeIdInternal(chargeId);
-    if (!info) return null;
+    if (!info) {
+      await this.flagLateChargeIfActuallyPaid(chargeId);
+      return null;
+    }
     const provider = this.deps.providerFor({ isDemo: false });
     if (!provider || provider.id !== "pix") return null;
     const status = await provider.getCharge(chargeId);
@@ -253,6 +254,28 @@ export class BillingService {
       paidAt: status.paidAt ?? this.deps.now(),
     });
     return { invoiceId: info.invoiceId, confirmed };
+  }
+
+  /**
+   * D-101 (revisão de segurança da S21): o txid não bateu em nenhuma fatura ABERTA — pode ser um pagamento
+   * recebido depois que a fatura já foi paga (ou cancelada) por outro caminho. Só registra o alerta se o PSP
+   * CONFIRMAR que o valor foi mesmo pago (nunca pelo corpo do webhook); idempotente por (fatura, txid), então uma
+   * redelivery do mesmo webhook não duplica o alerta. Nunca recredita: é só o registro para o admin decidir na
+   * conciliação (Admin13).
+   */
+  private async flagLateChargeIfActuallyPaid(chargeId: string): Promise<void> {
+    const any = await this.deps.store.findAnyInvoiceByChargeId(chargeId);
+    if (!any || any.status === "open") return;
+    const provider = this.deps.providerFor({ isDemo: false });
+    if (!provider || provider.id !== "pix") return;
+    const status = await provider.getCharge(chargeId);
+    if (status.status !== "paid" || status.paidAmountCents === null) return;
+    await this.deps.store.flagLatePayment({
+      invoiceId: any.invoiceId,
+      provider: "pix",
+      providerChargeId: chargeId,
+      amountCents: status.paidAmountCents,
+    });
   }
 
   /** Só para uso interno do webhook/cron; contorna a checagem de posse (chamado sem `actor` de sessão). */
@@ -290,6 +313,15 @@ export class BillingService {
   /** Estorno (usado pela S22, contestação aceita). */
   async reverseEntry(input: { entryId: string; actorId: string | null; actorRole: "admin" | "system"; reason: string | null }): Promise<string> {
     return this.deps.store.reverseEntry(input);
+  }
+
+  /** D-101 (S23): fila de alertas de pagamento tardio para a conciliação do Admin13. */
+  async listPaymentAlerts(actor: SessionActor) {
+    return this.deps.store.listPaymentAlerts(actor);
+  }
+
+  async resolvePaymentAlert(actor: SessionActor, input: { alertId: string; note: string | null }): Promise<string> {
+    return this.deps.store.resolvePaymentAlert(actor, input);
   }
 
   tierForItemCount(plan: ActivePlan, itemCount: number) {

@@ -171,9 +171,26 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-120 | ledger-comercio S23 | Pap07-Desempenho não tem "respondido em até 1h" (agregação de `lead_events`) nem comparação anônima de bairro (k-anonimato ≥ 3 papelarias); ambos ficaram fora por tempo da fatia (Ruling do plano) | baixa | futura fatia de melhoria | aberta |
 | D-121 | ledger-comercio S23 | Admin14-Inadimplência não tem "Cobrar"/"Pausar leads"/"Reativar" manuais do design de referência; a régua é 100% automática sobre `payout_delinquency_status` (Ruling: menos superfície de estado divergente do calculado) | baixa | futura fatia de melhoria | aberta |
 | D-122 | ledger-comercio S23 | A comissão apurada em `payout_ledger` (entry_type `commission`) não tem nenhum instrumento de COBRANÇA da papelaria (nem debita `credit_ledger`, nem gera fatura): hoje é só um registro para o admin cobrar manualmente fora do sistema, sem tela nem lembrete para isso | média | futura fatia (cobrança automática da comissão) | aberta |
-| D-123 | ledger.md S15 (achado do E2E) | `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, `list_reader_get`/0601), não o id de `school_lists`; a página pública de uma lista oficial (`/escolas/[inep]/[serie]`) não tem hoje NENHUM link para "montar carrinho" — só a cópia do pai (`ParentCopyEditor`) linka para `/carrinho/novo?lista=`. Uma família que navega até a lista oficial não acha como montar o carrinho a partir dela pela UI | média | futura fatia de UX do carrinho (S18/S19) | aberta |
-| D-124 | ledger.md S15 | App19-Histórico (mapeada para a S15 em `SCREENS.md`) não foi construída como tela dedicada: o hub (`/conta`) e `/conta/carrinhos`/`/conta/listas-salvas` cobrem estudantes/listas salvas/carrinhos, mas não a vista cronológica combinada e filtrável por aluno que o design mostra | baixa | futura fatia de melhoria | aberta |
-| D-125 | ledger.md S15 | App16-HubPais mostra "% da lista resolvida" por aluno (barra de progresso); não implementado nesta fatia por falta de um sinal real de "resolvido" (nenhuma tabela liga item de carrinho/lista a "comprado"/"resolvido" por aluno hoje) — mostrar um número inventado violaria "nada inventado" (CLAUDE.md) | baixa | futura fatia (definir o sinal de "resolvido" antes de mostrar progresso) | aberta |
+| D-123 | reverificação de segurança S23 (PR #40) | Teto do repasse em `payout_admin_validate_sale` (0403 ~l.646) soma só `commission` e ignora `commission_reversed`: com a comissão já estornada, a validação ainda gera repasse | média | S19 | aberta |
+| D-124 | reverificação de segurança S23 (PR #40) | Venda demo confirmada pela papelaria sai de `payout_admin_validate_sale` sem gravar validação e fica para sempre como "aguardando validação" na fila do Admin13 (0403 ~l.635, `listConfirmableSalesForAdmin`) | baixa | S18 | aberta |
+| D-125 | reverificação de segurança S23 (PR #40) | `already_settled` em `payout_reverse_entry` compara `created_at`: `repasse_due` gravado antes de um lote mas confirmado depois é tratado como liquidado (só recusa o estorno) | baixa | S19 | aberta |
+| D-126 | reverificação de segurança S23 (PR #40) | O valor do repasse é o declarado pela papelaria; o admin vê na fila de validação mas não informa nem corrige o valor — documentar ou permitir ajuste do admin | média | S19 | aberta |
+| D-127 | reverificação de segurança S23 (PR #40) | `sale_payment_admin_validations` sem gatilho de truncate nem de auditoria, ao contrário de `payout_ledger` (ninguém tem grant de truncate; é consistência) | baixa | S19 | aberta |
+| D-128 | ledger-comercio S25 Task 1 (planejamento vs. implementação) | ~~`b2b_webhook_secret_reveal` (0502) confere posse (dono/admin) mas não grava nenhum evento de auditoria de quem revelou o segredo e quando~~ | baixa | S26 (B2B) | resolvida na rodada de correções da revisão de segurança (`b2b_webhook_secret_events`, tabela imutável com created/rotated/revealed, actor_id fora do grant de `authenticated`) |
+| D-129 | ledger-comercio S25 Task 2 (revisão própria) | Rotação de `B2B_WEBHOOK_ENCRYPTION_KEY` (troca da chave de cifra do servidor, não do segredo do endpoint) não tem caminho de recifra em lote: um segredo cifrado com uma versão antiga da chave fica permanentemente indecifrável (`secret_undecryptable`, `dead` na hora, sem alerta ao dono nem ao admin) até o parceiro rotacionar manualmente pelo portal. Sem impacto hoje (só existe uma chave, gerada uma vez); vira risco real se a chave precisar girar por vazamento | média | S26 (B2B) / Humano decide o processo de rotação antes de girar em produção | aberta |
+| D-130 | ledger-comercio S25 Task 3 (fidelidade ao design vs. escopo) | Não há ação de excluir/desativar um endpoint de webhook no portal (só criar e atualizar URL/eventos, até 3 por parceiro) — um parceiro não consegue decomissionar de vez um endpoint indesejado, só parar de usá-lo (ele continua recebendo eventos assinados). `status` da tabela já suporta `disabled`; falta a Server Action e o botão | baixa | S26 (B2B) | aberta |
+| D-131 | ledger-comercio S25 Task 3 (E2E) | `public/widget.js` foi validado ponta a ponta via `curl` contra as rotas que ele consome (`/api/widget/**`) e por leitura de código, mas o SCRIPT em si (busca de escola, seleção de série/ano, "Adicionar tudo ao carrinho" abrindo a URL do carrinho) não foi exercitado num navegador de verdade dentro de uma página hospedeira de terceiro pelo E2E — só a tela de configuração (B2B04) e a API pública foram cobertas por `agent-browser`/`curl`. Escrever um roteiro com uma página HTML de teste embutindo o `<script>` real | baixa | S26 (B2B) | aberta |
+| D-132 | ledger-comercio S25 Task 2/3 (Ruling de escopo) | A pré-visualização do widget (B2B04) e o `widget.js` real não têm seleção individual de item por checkbox (como no design, que mostra cada item marcável) — hoje é tudo-ou-nada ("Adicionar tudo ao carrinho"). Ruling S25: cortado do MVP desta fatia por tempo; o contrato de dados (`/api/widget/lists/{id}/items`) já traz item a item, então a UI pode ganhar isso depois sem mudar a API | baixa | S26 (B2B) | aberta |
+| D-133 | ledger-comercio S25 · correções da revisão de segurança (Menor) | `app/api/widget/**` responde com `access-control-allow-origin: *` para qualquer origem — correto hoje (dado público, sem cookie, sem credencial), mas sem allowlist do domínio cadastrado do parceiro (`cart_target_domain`) o widget pode ser embutido em QUALQUER site, não só no do parceiro que o configurou (não é uma falha de confidencialidade — o dado já é público —, mas permite uso não autorizado do widget de um parceiro em site de terceiro). Considerar restringir `Access-Control-Allow-Origin` ao(s) domínio(s) cadastrados quando o portal ganhar um campo de "domínios autorizados" | baixa | S26 (B2B) | aberta |
+| D-134 | ledger-comercio S25 · correções da revisão de segurança (Menor) | A restrição de porta 443 para HTTPS (revisão de segurança, `lib/net/safe-fetch.ts`) só é aplicada no ENVIO (`postWebhookSafely`); o CHECK de `b2b_webhook_endpoints.url` (0502) e o Zod de `SaveEndpointInputSchema` continuam aceitando `https://host:8443/...` na criação/atualização do endpoint — o parceiro só descobre que a porta não é aceita quando a primeira entrega vira `dead` (`invalid_url_port_not_allowed`). Validar a porta também na criação evitaria essa surpresa | baixa | S26 (B2B) | aberta |
+| D-135 | reverificação de segurança S25 (PR #42) | `list.archived` pode sair para lista que nunca foi pública (publicada com município desabilitado, habilitado depois e arquivada): o gate da 0502 (~l.533) não exige "já foi visível"; e só `schools.is_demo` é considerado, não `claims.is_demo` | baixa | S19 | aberta |
+| D-136 | reverificação de segurança S25 (PR #42) | `pg_trigger_depth() > 1` em `b2b_webhook_delivery_attempts` libera qualquer DELETE feito de dentro de um gatilho, não só a cascata de FK: acrescentar comentário de guarda e revisar em fatias futuras que criem gatilhos de DELETE | baixa | S19 | aberta |
+| D-137 | reverificação de segurança S25 (PR #42) | Cotas de reenvio de webhook (5 por entrega, 20/h por parceiro) sem lock: reenvios concorrentes podem passar um pouco do limite | baixa | S19 | aberta |
+| D-138 | reverificação de segurança S25 (PR #42) | Entrega em `sending` com lease vencida fica em `sending` para sempre se o endpoint for desativado depois (a varredura de dead letter só pega `attempts >= 10` e o claim a exclui); entregas `queued` de parceiro suspenso nunca são purgadas | média | S19 | aberta |
+| D-139 | reverificação de segurança S25 (PR #42) | Rate limit do widget ainda chaveado por `ip:partnerId` (`features/widget/route-helpers.ts:25`): UUIDs aleatórios contornam o limite por IP; chavear só por IP e validar o parceiro antes de contar | média | S19 | aberta |
+| D-140 | ledger.md S15 (achado do E2E, renumerado de D-123 por colisão com a S23/S25) | `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, `list_reader_get`/0601), não o id de `school_lists`; a página pública de uma lista oficial (`/escolas/[inep]/[serie]`) não tem hoje NENHUM link para "montar carrinho" — só a cópia do pai (`ParentCopyEditor`) linka para `/carrinho/novo?lista=`. Uma família que navega até a lista oficial não acha como montar o carrinho a partir dela pela UI | média | futura fatia de UX do carrinho (S18/S19) | aberta |
+| D-141 | ledger.md S15 (renumerado de D-124) | App19-Histórico (mapeada para a S15 em `SCREENS.md`) não foi construída como tela dedicada: o hub (`/conta`) e `/conta/carrinhos`/`/conta/listas-salvas` cobrem estudantes/listas salvas/carrinhos, mas não a vista cronológica combinada e filtrável por aluno que o design mostra | baixa | futura fatia de melhoria | aberta |
+| D-142 | ledger.md S15 (renumerado de D-125) | App16-HubPais mostra "% da lista resolvida" por aluno (barra de progresso); não implementado nesta fatia por falta de um sinal real de "resolvido" (nenhuma tabela liga item de carrinho/lista a "comprado"/"resolvido" por aluno hoje) — mostrar um número inventado violaria "nada inventado" (regra de produto) | baixa | futura fatia (definir o sinal de "resolvido" antes de mostrar progresso) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -183,19 +200,28 @@ descritas — nenhum dos 2 bloqueantes/4 importantes/5 menores desta rodada toca
 diretamente no código (nenhum ficou como dívida nova); ver `docs/superpowers/ledger-comercio.md`, seção "S23 ·
 correções da revisão de segurança".
 
+Nota (numeração): D-120–D-127 pertencem à S23 (mesclada em `main` primeiro); os itens da S25 que colidiam com esses
+IDs (originalmente também D-120–D-126, escritos numa branch que ainda não via a S23) foram renumerados para
+D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudou. D-140–D-142 (S15) colidiam com
+D-123–D-125, já ocupados por achados da S23/S25 quando esta branch mesclou `origin/main`; renumerados na mesma
+resolução, mesmo conteúdo.
+
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 37 | 9 | 46 |
-| baixa | 54 | 9 | 63 |
-| **Total** | **101** | **23** | **124** |
+| média | 42 | 9 | 51 |
+| baixa | 65 | 10 | 75 |
+| **Total** | **117** | **24** | **141** |
 
-Contagem atualizada em 2026-09-27 (S15, área da família, worktree T3, fora de trilha): soma D-123 (média/aberta,
-achado do E2E — `/carrinho/novo?lista=` sem link nenhum a partir da lista oficial pública) e D-124/D-125
-(baixa/abertas — Histórico App19 não construído como tela dedicada; "% da lista resolvida" do App16 não mostrado
-por falta de sinal real de "resolvido"); D-029 e D-082 (dono S15/S18) revisitados e não resolvidos nesta fatia,
-dono passa integralmente para S18 (registrado no ledger.md, seção S15).
-
-Contagem anterior, 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104; a S24 (Portal B2B, mesclada nesta rodada) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas; a S23 fecha D-099–D-101, D-103, D-105, D-107–D-111 (7 baixa + 3 média viram resolvida) e soma D-120–D-121 (baixa/abertas, renumeradas de D-112/D-113 por colisão com a S24) e D-122 (média/aberta, renumerada de D-114)).
+Contagem atualizada em 2026-09-27 (merge de `origin/main` — S23 e S25, com a reverificação de segurança de ambas —
+na `slice/S15-area-familia`). Lado `main`: D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23 (7 baixa + 3
+média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais baixa/abertas); a rodada
+de correções da S25 resolve D-120 (renumerada D-128 — auditoria de revelar/rotacionar/criar segredo implementada) e
+soma D-129–D-134 (D-129 média/aberta), depois D-135–D-139 da reverificação de segurança do PR #42 (D-138/D-139
+média/abertas, as demais baixa/abertas). Lado desta branch (S15, área da família): soma D-140 (média/aberta, achado
+do E2E — `/carrinho/novo?lista=` sem link nenhum a partir da lista oficial pública) e D-141/D-142 (baixa/abertas —
+Histórico App19 não construído como tela dedicada; "% da lista resolvida" do App16 não mostrado por falta de sinal
+real de "resolvido"); D-029 e D-082 (dono S15/S18) revisitados e não resolvidos nesta fatia, dono passa
+integralmente para S18 (registrado no `ledger.md`, seção S15).

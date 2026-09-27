@@ -6,8 +6,8 @@ export const B2B_FEATURE_FLAGS = ["widget", "webhooks", "campaigns", "insights",
 export type B2bFeatureFlag = (typeof B2B_FEATURE_FLAGS)[number];
 
 export const B2B_FEATURES: Readonly<Record<B2bFeatureFlag, boolean>> = {
-  widget: false,
-  webhooks: false,
+  widget: true, // S25
+  webhooks: true, // S25
   campaigns: false,
   insights: false,
   billing: false,

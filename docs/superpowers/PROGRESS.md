@@ -55,6 +55,8 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S21 Cobrança da papelaria (Comércio) | #34 | b7c6229 | 2026-09-26 | ✓ | ✓ | 2959 | 1539 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 17 verificações, 0 falhas (`e2e/S21.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | #36 | 0ee3771 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
+| S23 Comissão, repasses e inadimplência (Comércio) | #40 | d30849f | 2026-09-27 | ✓ | ✓ | 3252 | 1729 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 30 verificações, 0 falhas (`e2e/S23.md`) |
+| S25 Widget e webhooks (B2B) | #42 | 634c9f2 | 2026-09-27 | ✓ | ✓ | 3303 | 1759 (3 skipped) | ✓ | verify ✓ db ✓ (concluídos depois do merge; ver Ruling) | ✓ | build local + receptor de webhook, 22 verificações, 0 falhas (`e2e/S25.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 | S15 Área da família (fora de trilha) | — (sem PR, por instrução) | 90a1ad5 | 2026-09-27 | ✓ | ✓ | 3257 | 1750 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
@@ -63,7 +65,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-21 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+23 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -84,6 +86,8 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0401_billing.sql | S21 | billing | 20260926232215 (uma chamada transacional; fidelidade conferida contra o banco local: md5 das 23 funções, RLS das 8 tabelas, 22 gatilhos e privilégios idênticos; SEM plano publicado: staging em `billing_unavailable` até decisão) |
 | 0402_lead_conversions.sql | S22 | lead_conversions | 20260927010517 (uma chamada transacional; md5 das 10 funções, RLS, gatilhos e privilégios idênticos ao banco local; sem advisor novo) |
 | 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
+| 0403_repasses.sql | S23 | repasses | 20260927044636 (uma chamada transacional; substitui 4 funções da 0401/0402 com md5 anterior registrado; 22 funções, RLS das 7 tabelas, 13 gatilhos e privilégios idênticos ao banco local; auditoria de `school_payout_settings` sem `pix_key`/`beneficiary_name`; sem configuração de comissão/repasse inserida) |
+| 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
@@ -100,6 +104,8 @@ mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/070
 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização
 escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir
 na revisão de segurança da S19.
+
+Pendente de staging: `0502_b2b_widget_webhooks.sql` (S25 — widget embutível e webhooks assinados: `b2b_widget_configs`, `b2b_webhook_endpoints`/`_deliveries`/`_delivery_attempts`, gatilhos sobre `list_status_events`/`claims` já existentes), só local (`pnpm db:reset` + `pnpm test:db` verdes: 1699/1702, 3 pulados = baseline); não aplicada porque a tarefa da S25 marcou staging/Vercel como invioláveis para este implementador. `0501_b2b_partners_api.sql` (S24) já está no staging (linha acima, aplicada em `main` #38); `0502` depende dela (mesma faixa 05xx) e pode ser aplicada na sequência normal.
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -131,8 +137,8 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (branch `slice/S23-repasses`, sem PR ainda)] ∥ [S24 ✓ (#38), S25 (em andamento), S26].
-4. S15 ✓ (branch `slice/S15-area-familia`, sem PR ainda; migration `0603` só local). S16.
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (branch `slice/S25-widget-webhooks`, sem PR ainda — ver abaixo), S26 (próxima)].
+4. S15 ✓ (branch `slice/S15-area-familia`, antecipada no worktree T3 — ver Ruling; sem PR ainda; migration `0603` só local). S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
@@ -150,7 +156,8 @@ Ambiente e deploy:
 - Pepper do IP de auditoria: FEITO na 0601 (`audit_row_change` lê o Vault quando o GUC não existe; D-059 resolvida); na produção, gerar outro segredo `audit_ip_pepper` no Vault.
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
 - Vercel (S24, Portal B2B): `B2B_API_KEY_PEPPER` (≥ 32 caracteres, gerado aleatoriamente, **diferente por ambiente**, nunca commitado) em Production/Preview/Development — sem ele a API `/v1` responde 503 e o portal não emite chaves. Atenção: um valor com menos de 32 caracteres (ou qualquer outra variável do `serverSchema` de `lib/env.ts` ausente/inválida, ex. `OPENROUTER_KEY`/`AI_MODEL_*`) quebra `getServerEnv()` inteiro e derruba TODA a API B2B com 503 silencioso (sem log — revisão final do branch, corrigido para logar só o nome do erro). Cron diário `/api/cron/b2b-maintenance` (mesmo `CRON_SECRET` já usado por `leads-expire`) precisa do aceite no plano da conta, igual ao S14.
-- Vercel Firewall: rate limit global por IP em `/v1` — o limite em memória por instância do código (S24, revisão de segurança independente, achado 1b: 60 req/min por IP, `features/b2b/api/handler.ts`) é só a primeira camada; o limite de verdade entre todas as instâncias precisa ser configurado no Firewall/WAF da Vercel pelo humano (regra de rate limit por IP no projeto `listaescolar`, escopo `/v1/*`). Sem isso, um invasor distribuindo requisições entre múltiplas instâncias/lambdas contorna o limite por instância.
+- Vercel Firewall: rate limit global por IP em `/v1` — o limite em memória por instância do código (S24, revisão de segurança independente, achado 1b: 60 req/min por IP, `features/b2b/api/handler.ts`) é só a primeira camada; o limite de verdade entre todas as instâncias precisa ser configurado no Firewall/WAF da Vercel pelo humano (regra de rate limit por IP no projeto `listaescolar`, escopo `/v1/*`). Sem isso, um invasor distribuindo requisições entre múltiplas instâncias/lambdas contorna o limite por instância. A partir da S25, a mesma lacuna vale para `/api/widget/*` (balde em memória por IP+parceiro, `lib/rate-limit/memory-bucket.ts`, primeira camada só).
+- Vercel (S25, Widget e webhooks): `B2B_WEBHOOK_ENCRYPTION_KEY` (32 bytes em hex, ex. `openssl rand -hex 32`, diferente por ambiente, nunca commitado) em Production/Preview/Development — sem ele criar/rotacionar/revelar segredo de webhook e o despacho respondem "indisponível" (nunca enviam sem poder assinar). `WEBHOOKS_DISPATCH_SECRET` (ou reaproveitar `CRON_SECRET`, já existente) para `/api/webhooks/dispatch`; cron de 1 min (pg_cron ou Vercel Cron) precisa do aceite no plano da conta, mesmo modelo do despacho de notificações da S11 — sem ele, webhooks ficam só na fila (`queued`), nunca entregues.
 
 Credenciais e contas:
 - Provedor real de e-mail (S11) e credencial de WhatsApp (tokens de reivindicação da S06 e notificações).

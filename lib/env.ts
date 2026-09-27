@@ -62,6 +62,13 @@ const serverSchema = z.object({
   /** Pepper do HMAC das chaves de API B2B (`x-listacerta-key`, S24). Nunca vai ao banco; sem ele a API `/v1`
    * responde `503 service_unavailable` e o portal mostra "Emissão de chaves indisponível no momento". */
   B2B_API_KEY_PEPPER: z.string().min(32).optional(),
+  /** Chave de cifra AES-256-GCM do segredo de assinatura dos webhooks B2B (S25): 32 bytes em hex (64 caracteres).
+   * O segredo em claro nunca vai ao banco (só cifrado); sem esta chave, criar/rotacionar/revelar segredo e o
+   * despacho de webhooks respondem "indisponível" (nunca enviam sem poder assinar). */
+  B2B_WEBHOOK_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, "precisa ter 64 caracteres hexadecimais (32 bytes)")
+    .optional(),
   ...pipelineShape,
 });
 
@@ -94,6 +101,7 @@ export function getServerEnv(): ServerEnv {
       PESQUISA_RESULTS_PASSWORD: process.env.PESQUISA_RESULTS_PASSWORD,
       IP_HASH_SALT: process.env.IP_HASH_SALT,
       B2B_API_KEY_PEPPER: process.env.B2B_API_KEY_PEPPER,
+      B2B_WEBHOOK_ENCRYPTION_KEY: process.env.B2B_WEBHOOK_ENCRYPTION_KEY,
       ...readPipelineFlags(),
     }),
   );

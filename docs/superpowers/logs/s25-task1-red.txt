@@ -1,0 +1,27 @@
+S25 · Task 1 — vermelho antes da migration 0502
+
+Comando: pnpm exec vitest run -c vitest.db.config.ts tests/db/webhook-events.test.ts tests/db/webhooks-schema.test.ts
+(escrito ANTES de supabase/migrations/0502_b2b_widget_webhooks.sql existir)
+
+Resultado esperado e observado: falha de coleta/execução — as tabelas, tipos e funções
+(b2b_widget_configs, b2b_webhook_endpoints, b2b_webhook_deliveries, b2b_webhook_delivery_attempts,
+b2b_webhook_emit_errors, b2b_widget_config_save/public, b2b_webhook_endpoint_create/update,
+b2b_webhook_secret_rotate/reveal, b2b_webhook_enqueue, webhook_on_list_status_event,
+webhook_on_claim_approved, b2b_webhook_claim_deliveries, b2b_webhook_mark_delivery, b2b_webhook_resend,
+b2b_webhook_purge_old) não existem no banco:
+
+error: relation "public.b2b_webhook_endpoints" does not exist (42P01)
+error: function public.b2b_widget_config_save(uuid, uuid, text, text, boolean) does not exist (42883)
+
+Depois de escrever supabase/migrations/0502_b2b_widget_webhooks.sql e rodar `pnpm db:reset`, a mesma
+suíte (20 testes: 7 em webhook-events.test.ts, 13 em webhooks-schema.test.ts) passou 20/20, junto com o
+restante de `pnpm test:db` (1697 passados, 3 pulados = baseline, nenhuma regressão).
+
+Durante o TDD, dois bugs reais foram pegos pelos próprios testes (não são falso-vermelho de ambiente):
+1. `b2b_webhook_mark_delivery`/attempts: CASE com todos os branches em texto puro resolve para `text` e
+   falha ao ser atribuído a uma coluna enum sem cast explícito (42804: "column is of type ... but
+   expression is of type text"). Corrigido com `(case ...)::public.b2b_webhook_delivery_status` e
+   `::public.b2b_webhook_attempt_outcome`.
+2. `p_key_version smallint` como parâmetro de função RPC: um literal inteiro passado por `pg`/PostgREST
+   não resolve implicitamente para `smallint` na resolução de sobrecarga (42883: function does not
+   exist). Trocado para `p_key_version integer`, com cast para `smallint` só na gravação.

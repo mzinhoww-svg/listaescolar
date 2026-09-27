@@ -132,6 +132,40 @@ export async function createCart(client: SupabaseClient, input: NewCartInput): P
   return cartId;
 }
 
+export type CartSummaryRow = {
+  id: string;
+  isDemo: boolean;
+  strategy: CartStrategy;
+  itemCount: number;
+  createdAt: Date;
+};
+
+const cartSummaryRow = z.object({
+  id: z.uuid(),
+  is_demo: z.boolean(),
+  strategy: z.enum(CART_STRATEGIES),
+  created_at: z.coerce.date(),
+  cart_items: z.array(z.object({ id: z.uuid() })),
+});
+
+/**
+ * Carrinhos do dono (S15, hub da família), mais recentes primeiro. `list_id` é polimórfico (oficial, cópia do pai
+ * ou demonstração, sem FK — S12/S11) e por isso não é resolvido aqui: a tela linka para `/carrinho/{id}`.
+ */
+export async function listCartsForOwner(client: SupabaseClient, ownerId: string, limit = 20): Promise<CartSummaryRow[]> {
+  const { data, error } = await client
+    .from("carts")
+    .select("id, is_demo, strategy, created_at, cart_items(id)")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) fail("listar carrinhos", error);
+  return z
+    .array(cartSummaryRow)
+    .parse(data ?? [])
+    .map((r) => ({ id: r.id, isDemo: r.is_demo, strategy: r.strategy, itemCount: r.cart_items.length, createdAt: r.created_at }));
+}
+
 /** Carrinho com itens; sem acesso (RLS) ou inexistente → null (não distingue os dois casos). */
 export async function getCart(client: SupabaseClient, cartId: string): Promise<CartRow | null> {
   const { data, error } = await client

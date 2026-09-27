@@ -1,0 +1,14 @@
+$ npx vitest run tests/health/thresholds.test.ts tests/health/service.test.ts tests/health/route.test.ts
+$ npx vitest run -c vitest.db.config.ts tests/db/system-alerts.test.ts
+(antes da migration 0606_system_alerts.sql, features/health/{thresholds,repository,service}.ts e
+app/api/cron/health-check/route.ts)
+
+FAIL tests/health/thresholds.test.ts — Cannot find module '@/features/health/thresholds'
+FAIL tests/health/service.test.ts — Cannot find module '@/features/health/service'
+FAIL tests/health/route.test.ts — Cannot find module '@/app/api/cron/health-check/route'
+FAIL tests/db/system-alerts.test.ts — function public.system_alert_notify(text, integer) does not exist;
+     coluna alert_kind/alert_count recusada por notification_params_valid (chave fora da lista fechada);
+     event_type 'system_alert' recusado por notifications_event_type_valid (23514)
+
+Depois da implementação: suíte completa verde, migration 0606 aplicada e testada localmente (pnpm db:reset &&
+pnpm test:db), rota /api/cron/health-check no build de produção (ver relatório final, gate da Task 4).

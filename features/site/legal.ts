@@ -17,8 +17,11 @@ export const LEGAL: Legal = {
   cnpj: null,
   dpoEmail: null,
   contactEmail: null,
-  retention: null,
-  claimRetention: null,
+  // S17: valores técnicos provisórios de `retention_policies` (migration 0605), editáveis sem mudança de código;
+  // revisão jurídica pendente, como o resto desta página. `auditRetention` fica placeholder: esta fatia não criou
+  // rotina de exclusão para `audit_log` (é imutável por desenho; só o job de retenção de evidência/token roda).
+  retention: "enquanto sua conta existir. Você pode excluir sua conta e os dados pessoais quando quiser, em \"Privacidade e dados\" na sua conta; o registro que mantemos (cotações e reivindicações de escola) continua, mas anonimizado",
+  claimRetention: "um prazo técnico definido internamente a partir da decisão da reivindicação, ajustável sem mudança de código; revisão jurídica pendente",
   auditRetention: null,
   legalBasis: null,
   operators: null,
@@ -77,7 +80,11 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   },
   {
     title: "Dados de crianças",
-    paragraphs: [["Hoje a plataforma não tem campo de estudante. Se passar a ter, será só apelido e série, informados pelo responsável para montar a lista escolar."]],
+    paragraphs: [
+      [
+        "Quem tem conta pode cadastrar um estudante para salvar listas por aluno. O cadastro pede só apelido e série, informados pelo responsável — nunca nome completo, documento, foto nem outro dado do estudante. Esse cadastro nunca chega à papelaria nem a terceiros.",
+      ],
+    ],
   },
   {
     title: "Com quem os dados passam",
@@ -97,6 +104,11 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   },
   {
     title: "Seus direitos",
-    paragraphs: [["Para pedir acesso, correção ou exclusão dos seus dados, fale com o encarregado: ", dpo, "."]],
+    paragraphs: [
+      [
+        "Quem tem conta pode baixar uma cópia dos próprios dados e revogar um consentimento em \"Privacidade e dados\", dentro da conta. A exclusão da conta também fica lá: apaga de verdade o que é pessoal e anonimiza o registro que mantemos.",
+      ],
+      ["Para qualquer outro pedido de acesso, correção ou exclusão, fale com o encarregado: ", dpo, "."],
+    ],
   },
 ];

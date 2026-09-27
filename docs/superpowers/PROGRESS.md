@@ -60,6 +60,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S15 Área da família | #45 | ccd4c54 | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
 | S26 Campanhas de marca, insights e faturamento B2B | #47 | 3f28fb5 | 2026-09-27 | ✓ | ✓ | 3365 | 1805 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 20 verificações, 0 falhas (`e2e/S26.md`) |
 | S16 Admin (dashboard, auditoria filtrável, denúncias, ai_settings, arquivar lista) | — (sem PR, por instrução) | 466a724 (+ merge com `origin/main`/S26) | 2026-09-27 | ✓ | ✓ | 3402 (árvore mesclada) | 1813 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 31 verificações, 0 falhas (`e2e/S16.md`) |
+| S17 LGPD e dados demonstrativos | — (sem PR, por instrução) | `2120e13` (+ correções da revisão, ver ledger; renumeração de D-150–D-153 no merge com a S16) | 2026-09-27 | ✓ | ✓ | 3392 | 1829 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 22 verificações, 0 falhas (`e2e/S17.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -90,10 +91,10 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
 | 0403_repasses.sql | S23 | repasses | 20260927044636 (uma chamada transacional; substitui 4 funções da 0401/0402 com md5 anterior registrado; 22 funções, RLS das 7 tabelas, 13 gatilhos e privilégios idênticos ao banco local; auditoria de `school_payout_settings` sem `pix_key`/`beneficiary_name`; sem configuração de comissão/repasse inserida) |
 | 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
-| 0503_b2b_campaigns.sql | S26 | — | **ainda não aplicada** (ver "Pendente de staging" abaixo) |
-| 0603_family_area.sql | S15 | family_area | aplicada em 2026-09-27 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
 | 0503_b2b_campaigns.sql | S26 | b2b_campaigns | 20260927131850 (arquivo aplicado sem alteração; md5 das 16 funções, políticas, gatilhos e privilégios idênticos ao banco local; `authenticated` sem nenhum acesso a eventos e livro-razão de campanha) |
+| 0603_family_area.sql | S15 | family_area | aplicada em 2026-09-27 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
 | 0604_admin_reports.sql | S16 | — | **ainda não aplicada** (ver "Pendente de staging" abaixo) |
+| 0605_lgpd_privacy.sql | S17 | — | **ainda não aplicada** (só local; tarefa marcou staging como inviolável para este implementador; ver "Pendente de staging") |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
@@ -108,10 +109,20 @@ para este implementador. Depende de `0501`/`0502` (S24/S25, já no staging) e de
 nova para a faixa 04xx (Cobrança). Aplicar via Supabase MCP na sequência normal (0403 e 0603 já foram aplicadas
 por outras sessões — ver a tabela de migrations acima).
 
-Pendente de staging: `0604_admin_reports.sql` (S16 — tabela `reports`/denúncias, aditiva, faixa pós-trilhas `06xx`,
+Também pendente de staging: `0604_admin_reports.sql` (S16 — tabela `reports`/denúncias, aditiva, faixa pós-trilhas `06xx`,
 sem FK cruzando com `0503`/`0603`), só local (`pnpm db:reset` + `pnpm test:db` verdes: 1813/1816, 3 pulados =
 baseline, depois do merge com a S26); não aplicada porque a tarefa da S16 marcou staging/Vercel como invioláveis
 para este implementador. Aplicar via Supabase MCP na sequência normal (depois de `0503`, já pendente).
+
+Também pendente de staging: `0605_lgpd_privacy.sql` (S17 — `retention_policies`, `retention_candidates`/
+`retention_purge`, `profiles_lgpd_erase`, `account_export`, `account_deletion_blockers`; `claims.claimant_id`/
+`claim_evidence.uploaded_by` passam de `on delete restrict` para `on delete set null`), só local (`pnpm db:reset`
+×2 + `pnpm test:db` completo: 1844/1849 (3 pulados = baseline; 2 falhas isoladas de testes pré-existentes não
+relacionados — `tests/db/orphan-reconcile.test.ts`, `tests/leads/repository.test.ts` —, confirmadas passando
+100% quando rodadas isoladas, ver D-157), depois do merge com a S16, com `0604` aplicado antes de `0605`); não
+aplicada porque a tarefa da S17 marcou staging como inviolável para este implementador. Depende de `0104` (S06,
+claims — já no staging); sem dependência de `0604` (faixas `06xx` distintas, sem FK cruzada). Aplicar via
+Supabase MCP na sequência normal (depois de `0604`, já pendente).
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -124,7 +135,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
 | Comércio e cobrança | S12, S13, S14, S27, S21, S22, S23 | **Completa** (S21 #34, S22 #36, S23 #40; migrations 0401–0403 no staging) |
 | B2B | S24, S25, S26 | **Completa** (S24 #38, S25 #42, S26 #47; migrations 0501–0503 no staging) |
-| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 ✓** (worktree T3, `466a724` + merge com `origin/main`; sem PR, por instrução; `0604` só local); **S17 em andamento** (worktree T2, em paralelo — ver Ruling) |
+| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 ✓** (worktree T3, `466a724` + merge com `origin/main`; sem PR, por instrução; `0604` só local); **S17 ✓** (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local, ver "Migrations") |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -146,8 +157,8 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas; migration `0503` só local)].
-4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 ✓ (worktree T3; dashboard, auditoria filtrável, denúncias, edição de `ai_settings`, arquivar lista; `0604` só local; falta revisão humana/de segurança e o merge). S17 (em andamento no worktree T2, em paralelo).
-5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`). Proposta pendente de aprovação: instrumentação de produto com PostHog na S19 (ADR-007, `docs/tracking-plan.md`); só entra no PLAN se o humano aprovar.
+4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 ✓ (#50, `c2e8ee6`; worktree T3; dashboard, auditoria filtrável, denúncias, edição de `ai_settings`, arquivar lista; `0604` só local; revisão de segurança aplicada, ver ledger). S17 ✓ (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local, aplicada depois de `0604` no merge com a S16).
+5. S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`). Proposta pendente de aprovação: instrumentação de produto com PostHog na S19 (ADR-007, `docs/tracking-plan.md`); só entra no PLAN se o humano aprovar.
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
@@ -166,6 +177,7 @@ Ambiente e deploy:
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
 - Vercel (S24, Portal B2B): `B2B_API_KEY_PEPPER` (≥ 32 caracteres, gerado aleatoriamente, **diferente por ambiente**, nunca commitado) em Production/Preview/Development — sem ele a API `/v1` responde 503 e o portal não emite chaves. Atenção: um valor com menos de 32 caracteres (ou qualquer outra variável do `serverSchema` de `lib/env.ts` ausente/inválida, ex. `OPENROUTER_KEY`/`AI_MODEL_*`) quebra `getServerEnv()` inteiro e derruba TODA a API B2B com 503 silencioso (sem log — revisão final do branch, corrigido para logar só o nome do erro). Cron diário `/api/cron/b2b-maintenance` (mesmo `CRON_SECRET` já usado por `leads-expire`) precisa do aceite no plano da conta, igual ao S14.
 - Vercel Firewall: rate limit global por IP em `/v1` — o limite em memória por instância do código (S24, revisão de segurança independente, achado 1b: 60 req/min por IP, `features/b2b/api/handler.ts`) é só a primeira camada; o limite de verdade entre todas as instâncias precisa ser configurado no Firewall/WAF da Vercel pelo humano (regra de rate limit por IP no projeto `listaescolar`, escopo `/v1/*`). Sem isso, um invasor distribuindo requisições entre múltiplas instâncias/lambdas contorna o limite por instância. A partir da S25, a mesma lacuna vale para `/api/widget/*` (balde em memória por IP+parceiro, `lib/rate-limit/memory-bucket.ts`, primeira camada só).
+- Vercel (S17, LGPD): `/api/cron/retention-purge` agendado em `vercel.json` (diário, `0 11 * * *`), mesmo `CRON_SECRET` já usado pelos outros crons — precisa do aceite no plano da conta, igual ao S14/S24; sem isso o job de retenção (D-012) só roda manual/local.
 - Vercel (S25, Widget e webhooks): `B2B_WEBHOOK_ENCRYPTION_KEY` (32 bytes em hex, ex. `openssl rand -hex 32`, diferente por ambiente, nunca commitado) em Production/Preview/Development — sem ele criar/rotacionar/revelar segredo de webhook e o despacho respondem "indisponível" (nunca enviam sem poder assinar). `WEBHOOKS_DISPATCH_SECRET` (ou reaproveitar `CRON_SECRET`, já existente) para `/api/webhooks/dispatch`; cron de 1 min (pg_cron ou Vercel Cron) precisa do aceite no plano da conta, mesmo modelo do despacho de notificações da S11 — sem ele, webhooks ficam só na fila (`queued`), nunca entregues.
 
 Credenciais e contas:
@@ -175,7 +187,7 @@ Credenciais e contas:
 
 Conteúdo e dados:
 - CSV oficial do INEP (importação na S20, com a contagem real registrada).
-- Textos jurídicos finais: razão social, CNPJ, DPO/contato, prazos de retenção (reivindicação, auditoria) (páginas de termos e privacidade da S27 e S17 usam placeholders).
+- Textos jurídicos finais: razão social, CNPJ, DPO/contato, base legal, operadores/contratos, data da última atualização (páginas de termos e privacidade da S27 continuam com placeholder `[a definir: ...]`, revisão jurídica pendente). Prazo de retenção de evidência/token e o prazo geral (`LEGAL.retention`/`claimRetention`) já foram preenchidos pela S17 (texto técnico, sem número com unidade, sem afirmar conformidade); prazo de guarda de `audit_log` (`LEGAL.auditRetention`) continua placeholder — decisão pendente do humano/jurídico (D-150), já que `audit_log` é imutável por desenho e não tem rotina de exclusão.
 - Promessa "Famílias e escolas não pagam" (texto do site público da S27): promessa de preço a validar com o modelo de preço antes de publicar.
 
 ## Notas operacionais

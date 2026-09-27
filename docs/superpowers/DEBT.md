@@ -171,6 +171,11 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-120 | ledger-comercio S23 | Pap07-Desempenho não tem "respondido em até 1h" (agregação de `lead_events`) nem comparação anônima de bairro (k-anonimato ≥ 3 papelarias); ambos ficaram fora por tempo da fatia (Ruling do plano) | baixa | futura fatia de melhoria | aberta |
 | D-121 | ledger-comercio S23 | Admin14-Inadimplência não tem "Cobrar"/"Pausar leads"/"Reativar" manuais do design de referência; a régua é 100% automática sobre `payout_delinquency_status` (Ruling: menos superfície de estado divergente do calculado) | baixa | futura fatia de melhoria | aberta |
 | D-122 | ledger-comercio S23 | A comissão apurada em `payout_ledger` (entry_type `commission`) não tem nenhum instrumento de COBRANÇA da papelaria (nem debita `credit_ledger`, nem gera fatura): hoje é só um registro para o admin cobrar manualmente fora do sistema, sem tela nem lembrete para isso | média | futura fatia (cobrança automática da comissão) | aberta |
+| D-123 | reverificação de segurança S23 (PR #40) | Teto do repasse em `payout_admin_validate_sale` (0403 ~l.646) soma só `commission` e ignora `commission_reversed`: com a comissão já estornada, a validação ainda gera repasse | média | S19 | aberta |
+| D-124 | reverificação de segurança S23 (PR #40) | Venda demo confirmada pela papelaria sai de `payout_admin_validate_sale` sem gravar validação e fica para sempre como "aguardando validação" na fila do Admin13 (0403 ~l.635, `listConfirmableSalesForAdmin`) | baixa | S18 | aberta |
+| D-125 | reverificação de segurança S23 (PR #40) | `already_settled` em `payout_reverse_entry` compara `created_at`: `repasse_due` gravado antes de um lote mas confirmado depois é tratado como liquidado (só recusa o estorno) | baixa | S19 | aberta |
+| D-126 | reverificação de segurança S23 (PR #40) | O valor do repasse é o declarado pela papelaria; o admin vê na fila de validação mas não informa nem corrige o valor — documentar ou permitir ajuste do admin | média | S19 | aberta |
+| D-127 | reverificação de segurança S23 (PR #40) | `sale_payment_admin_validations` sem gatilho de truncate nem de auditoria, ao contrário de `payout_ledger` (ninguém tem grant de truncate; é consistência) | baixa | S19 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -185,8 +190,8 @@ correções da revisão de segurança".
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 36 | 9 | 45 |
-| baixa | 52 | 9 | 61 |
-| **Total** | **98** | **23** | **121** |
+| média | 38 | 9 | 47 |
+| baixa | 55 | 9 | 64 |
+| **Total** | **103** | **23** | **126** |
 
 Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104; a S24 (Portal B2B, mesclada nesta rodada) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas; a S23 fecha D-099–D-101, D-103, D-105, D-107–D-111 (7 baixa + 3 média viram resolvida) e soma D-120–D-121 (baixa/abertas, renumeradas de D-112/D-113 por colisão com a S24) e D-122 (média/aberta, renumerada de D-114)).

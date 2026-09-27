@@ -83,7 +83,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-045 | ledger.md (ADR-004); ledger-comercio S12 T3 e S14 plano | Portas sem implementação real: leitor de lista (carrinho nasce `is_demo`), contexto do lead (escola/série/município), cotação local ligada ao carrinho; FKs entre trilhas na `0600_cross_track_fks` | alta | S11 | aberta |
 | D-046 | ledger-dados S06 plano | `SessionActor` duplicado em `features/auth/actor.ts` e `features/stationeries/actor.ts` | baixa | S11 | aberta |
 | D-047 | ledger-dados S06 (dívida) | Expiração de tokens de reivindicação só preguiçosa; falta cron | baixa | S11 | aberta |
-| D-048 | ledger.md (Ruling de ledgers por trilha) | Consolidar os Rulings de `ledger-dados.md`, `ledger-pipeline.md` e `ledger-comercio.md` em `ledger.md` | baixa | S18 (a S11 não consolidou; Ruling) | aberta |
+| D-048 | ledger.md (Ruling de ledgers por trilha) | Consolidar os Rulings de `ledger-dados.md`, `ledger-pipeline.md` e `ledger-comercio.md` em `ledger.md` | baixa | S18 (a S11 não consolidou; Ruling) | resolvida em `slice/S18-estados-a11y` (S18): conteúdo movido para `ledger.md` (seções "Trilha Dados/Pipeline/Comércio"), fidelidade conferida por diff; os três arquivos de trilha ficam só com um ponteiro |
 
 ## Testes e cobertura de E2E
 

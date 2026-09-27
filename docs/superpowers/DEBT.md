@@ -156,6 +156,10 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-105 | ledger-comercio S22 | Sinal "Pix pela plataforma" sempre ausente (`pix_confirmed = false`); a regra de 2 de 3 nunca vê esse terceiro sinal até a S23 acrescentar a fonte real do pagamento do pai à papelaria | baixa | S23 | aberta |
 | D-106 | ledger-comercio S22 | `/conta/compras` lista até 30 pedidos do pai sem paginação; sem impacto hoje (poucos leads por pai no piloto), cresce sem paginar se o produto pegar tração | baixa | S22/S23 (se crescer) | aberta |
 | D-107 | ledger-comercio S22 · correções da revisão de segurança | `lead_create` (0303/S14, já aplicada) não recusa um solicitante que é membro (`stationery_members`) da PRÓPRIA papelaria escolhida — a S22 bloqueou só as consequências (autoconfirmação e autoavaliação), não a criação do lead em si; corrigir exigiria editar uma migration já aplicada (fora do escopo desta fatia) | média | S23 (migration nova, aditiva) | aberta |
+| D-108 | reverificação de segurança S22 (PR #36) | `authenticated` ainda lê `lead_id` de qualquer avaliação publicada (0402 ~l.571-602): tirar a coluna do grant de `authenticated` e expor só o necessário ao perfil público | baixa | S23 | aberta |
+| D-109 | reverificação de segurança S22 (PR #36) | A lógica do guard de `lead_reviews` (inclusive a exceção do `ON DELETE SET NULL` de `actor_id`) não tem teste direto: o teste atual roda como service_role e bate no 42501 do grant, não no gatilho | baixa | S23 | aberta |
+| D-110 | reverificação de segurança S22 (PR #36) | `lead_review_hide` com `p_reason` nulo passa pelo `NOT IN` e cai num erro de CHECK sem hint (o Zod do servidor barra antes) | baixa | S23 | aberta |
+| D-111 | reverificação de segurança S22 (PR #36) | `lead_review_hide` não confere o `sub` do JWT contra o ator, como as outras funções fazem | baixa | S23 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -165,7 +169,7 @@ Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no p
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
 | média | 37 | 6 | 43 |
-| baixa | 46 | 2 | 48 |
-| **Total** | **93** | **13** | **106** |
+| baixa | 50 | 2 | 52 |
+| **Total** | **97** | **13** | **110** |
 
 Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104).

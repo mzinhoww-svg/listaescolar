@@ -140,7 +140,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas; migration `0503` só local)].
 4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 (em andamento no worktree T3). S17 (em andamento no worktree T2, em paralelo).
-5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
+5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`). Proposta pendente de aprovação: instrumentação de produto com PostHog na S19 (ADR-007, `docs/tracking-plan.md`); só entra no PLAN se o humano aprovar.
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
@@ -189,6 +189,7 @@ Conteúdo e dados:
 ## Aguardando humano
 Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
 
+- **ADR-007 (PostHog) aguardando aprovação.** Proposta de instrumentação de produto com PostHog Cloud (Supabase segue fonte de verdade), plano de eventos em `docs/tracking-plan.md` e encaixe na S19. Ação do humano: aprovar (ou ajustar) o ADR; se aprovado, criar os dois projetos PostHog (staging e produção) e cadastrar `NEXT_PUBLIC_POSTHOG_KEY`/`NEXT_PUBLIC_POSTHOG_HOST` na Vercel; o plano pago é gasto e fica com o humano.
 - **Skills da S28 no repositório.** O pedido de 2026-09-27 diz que `impeccable`, `tripled-ui` e `design-intelligence` estão em `.claude/skills/` por commit do humano, mas esse commit não está em `origin/main` nem nos worktrees (conferido em 2026-09-27). Não bloqueia agora: a S28 só começa depois da S19, e as três skills já estão disponíveis nesta sessão pelos plugins instalados. Ação do humano: dar push do commit (ou confirmar que devem vir dos plugins).
 
 - **Plano de cobrança no staging (D-102).** Desde a 0401 (S21) o staging não tem plano ativo: todo lead para papelaria REAL é recusado com `billing_unavailable` (papelarias e carrinhos de demonstração seguem funcionando). O orquestrador não publica plano porque os valores (leads grátis, faixas de preço por quantidade de itens, pacotes de crédito, preço e parcelas do passe, meses da temporada) são preço de produto e não podem ser inventados. Ação do humano: informar os valores (ou pedir um plano provisório "de teste" explicitamente) e o orquestrador publica pela tela `/admin/planos` ou por `billing_plan_publish`.

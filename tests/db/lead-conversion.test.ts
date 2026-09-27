@@ -14,7 +14,7 @@ import {
   plan,
   publishPlanOk,
 } from "./billing-fixtures";
-import { attemptH, cleanupUsers, IDS, seedCart, seedLead, seedStationery, seedUsers, withClaims } from "./helpers";
+import { attemptH, cleanupUsers, IDS, inTx, seedCart, seedLead, seedStationery, seedUsers, withClaims } from "./helpers";
 
 /** Recarrega uma carteira REAL (provedor pix, já que fake/demo são só para is_demo) e devolve o valor creditado. */
 async function topUpReal(c: Client, o: { actor: string; stationery: string; pkg: string }): Promise<number> {
@@ -492,6 +492,75 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
           expect(r.code).toBe("42501");
         }
       });
+    });
+  });
+});
+
+// S23: correções aditivas de segurança sobre a 0402 (já no staging; nada aqui edita esse arquivo, só cobre com
+// teste o que a 0403 corrigiu via revoke/create or replace).
+describe("S23 · correções aditivas de segurança sobre a 0402 (D-108–D-111)", () => {
+  beforeAll(seedUsers);
+  afterAll(cleanupUsers);
+
+  it("D-108: authenticated não lê mais lead_id de avaliação publicada (só campos agregados/próprios)", async () => {
+    await withClaims("system", async (c) => {
+      const st = await seedStationery(c, { status: "active" });
+      const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+      const reviewId = (await createReview(c, { lead: lead.id })).rows[0]!.id as string;
+
+      await c.query("set local role authenticated");
+      await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: IDS.school_member })]);
+      const leadIdRead = await attemptH(c, "select lead_id from public.lead_reviews where id = $1", [reviewId]);
+      expect(leadIdRead.error).toMatch(/permission denied/);
+      const otherColsRead = await attemptH(c, "select id, stationery_id, rating, tags, status from public.lead_reviews where id = $1", [reviewId]);
+      expect(otherColsRead.error).toBeNull();
+      await c.query("set local role service_role");
+    });
+  });
+
+  it("D-109: o guard de lead_reviews recusa update fora da transição publicada->oculta, mesmo para o dono do banco (não é só o grant negado)", async () => {
+    await inTx(async (c) => {
+      const st = await seedStationery(c, { status: "active" });
+      const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+      const reviewId = (await createReview(c, { lead: lead.id })).rows[0]!.id as string;
+      // Postgres superuser: não há grant para checar aqui (postgres é dono da tabela); o 42501 só pode vir do gatilho.
+      const bad = await attemptH(c, "update public.lead_reviews set rating = 1 where id = $1", [reviewId]);
+      expect(bad.code).toBe("42501");
+      expect(bad.error).toMatch(/imutável/);
+    });
+  });
+
+  it("D-109: o guard aceita a exceção do ON DELETE SET NULL (exclusão de conta do autor) sem bloquear", async () => {
+    await inTx(async (c) => {
+      const st = await seedStationery(c, { status: "active" });
+      const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+      const reviewId = (await createReview(c, { lead: lead.id, actor: IDS.parent })).rows[0]!.id as string;
+      await c.query("delete from public.profiles where id = $1", [IDS.parent]);
+      const row = await c.query("select actor_id from public.lead_reviews where id = $1", [reviewId]);
+      expect(row.rows[0].actor_id).toBeNull();
+    });
+  });
+
+  it("D-110: lead_review_hide com p_reason nulo devolve hint invalid_input (não um erro de CHECK cru)", async () => {
+    await withClaims("system", async (c) => {
+      const st = await seedStationery(c, { status: "active" });
+      const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+      const reviewId = (await createReview(c, { lead: lead.id })).rows[0]!.id as string;
+      const r = await attemptH(c, "select public.lead_review_hide($1::uuid, $2::uuid, null::text) as id", [reviewId, IDS.admin]);
+      expect(r.hint).toBe("invalid_input");
+    });
+  });
+
+  it("D-111: lead_review_hide recusa quando o sub do JWT difere do ator informado", async () => {
+    await withClaims("system", async (c) => {
+      const st = await seedStationery(c, { status: "active" });
+      const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+      const reviewId = (await createReview(c, { lead: lead.id })).rows[0]!.id as string;
+      // service_role de verdade (a EXECUTE grant continua valendo), mas com um `sub` de JWT diferente do ator
+      // informado — a mesma checagem que as demais funções de escrita desta trilha já fazem.
+      await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role", sub: IDS.school_member })]);
+      const r = await hideReview(c, { review: reviewId, actor: IDS.admin });
+      expect(r.hint).toBe("forbidden");
     });
   });
 });

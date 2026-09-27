@@ -1,22 +1,29 @@
 import { z } from "zod";
 
-import { academicYears, findGrade } from "@/features/grades/catalog";
+import { findGrade } from "@/features/grades/catalog";
 
 export const NICKNAME_MIN = 2;
 export const NICKNAME_MAX = 30;
 
+// Só um apóstrofo interno (reto ou curvo), no máximo, entre dois grupos de letras — cobre nomes como "D'Alva".
+const LETTERS_ONLY = /^\p{L}+(['’]\p{L}+)?$/u;
+
 /**
- * Só apelido: nunca sobrenome (regra de produto, SPEC §5). O espaço é o sinal prático de "nome e sobrenome" — a
- * mesma regra do CHECK do banco (`student_nickname_valid`, 0603), na mesma ordem, para a mensagem bater com a recusa.
+ * Só apelido, sem sobrenome (regra de produto, SPEC §5) e só letras Unicode (correção da revisão de segurança:
+ * hífen, ponto, sublinhado, arroba, dígito e caractere invisível/formatação — ex.: zero-width space — são
+ * recusados, porque nenhum deles é letra). NFC normaliza antes de validar e grava sempre a forma composta (é, não
+ * e + acento combinante); o apóstrofo curvo (’) vira reto (') antes de gravar, para bater com o CHECK do banco
+ * (`student_nickname_valid`, 0603), que só aceita o reto.
  */
 export const nicknameSchema = z
   .string()
-  .transform((v) => v.trim())
+  .transform((v) => v.normalize("NFC").trim())
   .superRefine((v, ctx) => {
     if (v.length === 0) {
       ctx.addIssue({ code: "custom", message: "Informe o apelido do aluno.", params: { code: "nickname_required" } });
       return;
     }
+    // Espaço de verdade (não os invisíveis de formatação, tratados abaixo): sinal prático de "nome e sobrenome".
     if (/\s/.test(v)) {
       ctx.addIssue({ code: "custom", message: "Use só um apelido, sem sobrenome.", params: { code: "nickname_has_surname" } });
       return;
@@ -29,33 +36,21 @@ export const nicknameSchema = z
       });
       return;
     }
-    if (/[0-9]/.test(v)) {
-      ctx.addIssue({ code: "custom", message: "O apelido não pode ter número.", params: { code: "nickname_digits" } });
-      return;
+    if (!LETTERS_ONLY.test(v)) {
+      ctx.addIssue({ code: "custom", message: "Use só letras, sem número, símbolo ou pontuação.", params: { code: "nickname_invalid" } });
     }
-    if (/[\x00-\x1f\x7f]/.test(v)) {
-      ctx.addIssue({ code: "custom", message: "Apelido inválido.", params: { code: "nickname_invalid" } });
-    }
-  });
+  })
+  .transform((v) => v.replace(/’/g, "'"));
 
 /** Slug de `features/grades/catalog.ts` (espelha `public.grades`, S05). */
 export const gradeSlugSchema = z.string().refine((v) => findGrade(v) !== null, { message: "Escolha uma série." });
 
-/** Ano letivo: só o corrente ou o seguinte (mesma janela do envio de lista, S07), calculado a partir de `now`. */
-export function schoolYearSchema(now: Date) {
-  const years = academicYears(now);
-  return z.coerce.number().int().refine((v) => years.includes(v), { message: "Escolha um ano letivo válido." });
-}
+/** Só apelido e série (SPEC §5) — nenhum outro dado do aluno. Escola e ano letivo vivem na lista salva. */
+export const studentFieldsSchema = z.object({
+  nickname: nicknameSchema,
+  gradeSlug: gradeSlugSchema,
+});
 
-export function studentFieldsSchema(now: Date) {
-  return z.object({
-    nickname: nicknameSchema,
-    schoolId: z.uuid({ message: "Escolha a escola do aluno." }),
-    gradeSlug: gradeSlugSchema,
-    schoolYear: schoolYearSchema(now),
-  });
-}
-
-export type StudentFields = z.infer<ReturnType<typeof studentFieldsSchema>>;
+export type StudentFields = z.infer<typeof studentFieldsSchema>;
 
 export const studentIdSchema = z.uuid();

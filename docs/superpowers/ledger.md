@@ -137,3 +137,60 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Achado de roteiro (`docs/superpowers/e2e/S15.md`): `clicktext` por `.click()` via `eval` falhou silenciosamente
   para o botão "Salvar aluno"; substituído por `agent-browser find text "..." click` (clique real do Playwright) —
   candidato a atualizar o padrão `PAT-002` do Segundo Cérebro.
+
+## S15 · correções da revisão de segurança (rodada única sobre 5951fb1, worktree T3)
+
+- Ruling: migration `0603_family_area.sql` editada NO LUGAR (não aplicada em nenhum ambiente além do local desta
+  sessão) — as 5 correções pedidas: (1) `students` perde `school_id`/`school_year` (SPEC §5: só apelido e série;
+  escola/ano vivem na lista salva, via `school_lists`); (2) `student_nickname_valid` fica só-letras Unicode (um
+  apóstrofo interno no máximo), rejeitando hífen, ponto, sublinhado, arroba, dígito e invisível/formatação (Zod
+  espelha a mesma regra, com NFC e apóstrofo curvo→reto antes de gravar); (3) `students_check_limit`/
+  `saved_lists_check_limit`/`saved_lists_guard` passam de `SECURITY DEFINER` para `SECURITY INVOKER` — a RLS já
+  escopa as consultas internas ao dono de quem chama, fechando o oráculo de antes (um `owner_id` forjado no INSERT
+  não revela mais, pela mensagem de erro, se um aluno/dono alheio existe ou se o teto de outra família já foi
+  atingido); (4) `grant update` em `students` só nas colunas editáveis (`nickname`, `grade_id`); (5) os dois tetos
+  (10 alunos, 50 listas salvas) tomam `pg_advisory_xact_lock(hashtextextended('namespace:'||owner_id, 0))` antes de
+  contar, fechando a corrida de duas inserções concorrentes passando do teto (mesmo padrão de
+  `claim_create`/`lead_create`/`stationery_register`). Custo se alguma estiver errada: a migration ainda não foi
+  aplicada em lugar nenhum além do local, então corrigir de novo é só editar o arquivo outra vez.
+- Ruling: "torná-los SECURITY INVOKER onde bastar" (opção dada pela revisão) escolhida em vez de checar
+  `owner_id = auth.uid()` no início de cada gatilho — motivo: a contagem/existência já roda sob a RLS de quem
+  chama, então o resultado (0 linhas para um `owner_id` alheio, real ou forjado) é sempre o mesmo,
+  independentemente de o alvo existir de verdade; um `if ... raise 42501` explícito seria redundante com o que a
+  RLS já garante, e ficaria mais uma checagem para manter sincronizada se a política mudar — custo se estiver
+  errada: reintroduzir o `if` explícito é aditivo, não quebra nada.
+- Ruling: apelido aceita um apóstrofo interno no máximo (`D'Alva`) — "se quiser" da revisão; decidido incluir por
+  realismo de nome brasileiro/lusófono, mesmo raro; sem isso a regra ficaria estritamente `^[[:alpha:]]+$` — custo
+  se estiver errada: remover o segundo ramo do `CHECK` e do regex do Zod, sem migração de dado (nenhum aluno com
+  apóstrofo existe em produção, que nem existe ainda).
+- Ruling: teste de corrida real (`pg_advisory_xact_lock`) usa conexões `pg.Client` separadas com
+  `Promise.all` (padrão PAT-003) contra o teto de `students`; não repetido para `saved_lists` por seguir exatamente
+  a mesma implementação (mesma função, mesmo padrão de lock) — custo se estiver errada: replicar o teste é
+  mecânico, a implementação já está testada indiretamente pela simetria de código.
+- Achado de produto (React 19, real, corrigido em `StudentForm.tsx`/`GradeSelect.tsx`): depois de QUALQUER
+  conclusão de uma `<form action={...}>` (sucesso ou erro), o `form.reset()` nativo que o React 19 dispara reseta
+  `<select>` controlado de volta à primeira opção, mesmo com `value`/`onChange` corretos — o `<input type=text>`
+  escapa disso porque tem um rastreador de valor (`_valueTracker`) próprio que o protege de mutação externa do
+  DOM; `<select>` não tem o mesmo rastreador, então o reset nativo "ganha" da última renderização do React sem
+  disparar novo render. Corrigido com `ref` + `useEffect` que reaplica `select.value` a cada conclusão da action
+  (efeitos rodam depois do commit e depois do reset síncrono do navegador, então sempre "ganham" a corrida
+  seguinte). O mesmo `ref`+`useEffect` foi aplicado também ao checkbox de consentimento por defesa, mas o
+  checkbox não chegou a ser reproduzido como bug real do produto (ver achado de roteiro abaixo) — manter o
+  reforço ali é seguro e não custa nada.
+- Achados de roteiro (E2E, não são bugs de produto): (1) a técnica usada para simular a marcação do checkbox de
+  consentimento — setar `.checked` pelo setter nativo do protótipo e disparar um `change` sintético (o mesmo
+  truque que funciona para `<input type=text>`/`<select>`) — nunca chegou a marcar o estado do React: o
+  `ChangeEventPlugin` do React para `input[type=checkbox]` escuta o evento `click`, não `change`; isso fez
+  parecer, por várias rodadas de diagnóstico manual, que havia um segundo bug de reset (idêntico ao do
+  `<select>`) no checkbox — não havia; o checkbox nunca chegou a ficar `true` de verdade nesses testes. Corrigido
+  trocando a simulação por `checkbox.click()` (alterna o estado de verdade e dispara o `onChange` real) em
+  `set_new_student_fields` do `scripts/e2e-s15.sh`. (2) Com isso corrigido, a falha ficou isolada nas duas
+  primeiras submissões do App13: o roteiro usava `wait_text "sem sobrenome"`/`wait_text "letras"` para esperar a
+  mensagem de erro, mas o AVISO ESTÁTICO abaixo do campo ("Só letras, sem sobrenome nem documento.") já contém os
+  dois trechos — o `wait_text` casava na página em repouso, ANTES de a action resolver, e o `expect_text` seguinte
+  rodava cedo demais, vendo o formulário limpo sem nenhum erro ainda. Corrigido esperando a mensagem de erro
+  COMPLETA e única ("Use só um apelido, sem sobrenome"/"Use só letras, sem número"), nunca um trecho que também
+  exista em texto estático da tela. Lição para o PAT-002 do Segundo Cérebro: (a) simular clique/marcação de
+  checkbox via `eval` precisa de `.click()`, não `set value + dispatch('change')`; (b) `wait_text` deve sempre
+  esperar por um texto que só exista no estado-alvo, nunca um substring presente também no estado de repouso da
+  tela.

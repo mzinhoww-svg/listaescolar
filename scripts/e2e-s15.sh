@@ -29,6 +29,22 @@ clicktext() { # sessão, texto de <a>/<button>/<label>
   # não disparou o submit do botão "Salvar aluno" nesta fatia (achado novo desta E2E, registrado no relatório).
   ab "$1" find text "$2" click >/dev/null
 }
+# Achado desta E2E: `fill`/`select`/`check` do agent-browser em sequência rápida logo após uma navegação por
+# clique perderam o valor no clique de submit seguinte, de forma repetível nesta sessão (mesmo com sleeps de até
+# 5 s). Um ÚNICO `eval` que usa o SETTER NATIVO do protótipo (o mesmo truque de "setNativeValue" para inputs
+# controlados por React) e dispara o evento — tudo síncrono, sem round-trips intermediários — é confiável.
+set_nickname() { # sessão, apelido
+  ab "$1" eval "(() => { function sn(el,p,v){Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),p).set.call(el,v);} const n=document.querySelector('#nickname'); sn(n,'value','$2'); n.dispatchEvent(new Event('input',{bubbles:true})); return 'ok'; })()" >/dev/null
+}
+set_new_student_fields() { # sessão, apelido, slug da série
+  # Checkbox: React detecta troca de estado de <input type=checkbox> pelo evento `click`, não por um `change`
+  # sintético após setar `.checked` via setter nativo (funciona para <select>/<input type=text>, não para
+  # checkbox — achado desta E2E). `.click()` alterna o estado e dispara o `onChange` de verdade.
+  ab "$1" eval "(() => { function sn(el,p,v){Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),p).set.call(el,v);} const n=document.querySelector('#nickname'); sn(n,'value','$2'); n.dispatchEvent(new Event('input',{bubbles:true})); const g=document.querySelector('#gradeSlug'); sn(g,'value','$3'); g.dispatchEvent(new Event('change',{bubbles:true})); const c=document.querySelector('input[name=consent]'); if (!c.checked) c.click(); return 'ok'; })()" >/dev/null
+}
+submit_form() { # sessão
+  ab "$1" eval "document.querySelector('form').requestSubmit(); 'ok'" >/dev/null
+}
 login() { # sessão, e-mail, next
   local s=$1 email=$2 next=$3 before after id link
   before=$(curl -s "$MAILPIT/api/v1/search?query=to:$email" | python3 -c "import sys,json;print(json.load(sys.stdin)['messages_count'])")
@@ -74,50 +90,56 @@ expect_text parent "Nenhuma lista salva ainda" "hub sem lista salva mostra o vaz
 expect_text parent "Nenhum carrinho ainda" "hub sem carrinho mostra o vazio certo"
 shot parent "$OUT/S15-conta-vazio.png"
 
-echo "== 2) Novo aluno (App13): apelido com sobrenome é recusado com a mensagem certa"
+echo "== 2) Novo aluno (App13): só apelido e série (SPEC §5, correção da revisão de segurança); apelido com sobrenome é recusado"
 clicktext parent "Adicionar"
-wait_text parent "Novo aluno" 15
-ab parent fill '#nickname' "Maria Silva" >/dev/null
-ab parent fill 'input[aria-label="Buscar escola por nome ou INEP"]' "Escola E2E S15" >/dev/null
-clicktext parent "Buscar"
-wait_text parent "Escola E2E S15" 15
-clicktext parent "Escola E2E S15"
-ab parent select '#gradeSlug' 'ef-5' >/dev/null
-ab parent check 'input[name=consent]' >/dev/null
-clicktext parent "Salvar aluno"
-wait_text parent "sem sobrenome" 15
+wait_text parent "Novo aluno" 30
+sleep 2 # hidratação do client component (GradeSelect/consent são controlados) antes de interagir
+set_new_student_fields parent "Maria Silva" "ef-5"
+submit_form parent
+# Achado desta E2E: o AVISO estático abaixo do campo ("Só letras, sem sobrenome nem documento.") já contém
+# "sem sobrenome"/"letras" — um `wait_text` com esses termos casava na página em repouso, ANTES da action
+# resolver, e o `expect_text` seguinte rodava cedo demais. Espera-se a mensagem de erro completa (só aparece
+# depois da resposta da action), nunca um trecho que também exista no aviso estático.
+wait_text parent "Use só um apelido, sem sobrenome" 30
 expect_text parent "Use só um apelido, sem sobrenome" "apelido com espaço é recusado com a mensagem certa"
 shot parent "$OUT/S15-app13-apelido-recusado.png"
 
-echo "== 3) corrige o apelido e salva: aluno aparece no hub"
-ab parent fill '#nickname' "Maria" >/dev/null
-clicktext parent "Salvar aluno"
-wait_text parent "Maria" 15
+echo "== 2b) apelido com pontuação (achado da revisão de segurança) também é recusado"
+set_nickname parent "Maria.Silva"
+submit_form parent
+wait_text parent "Use só letras, sem número" 30
+expect_text parent "Use só letras" "apelido com ponto é recusado (só letras)"
+
+echo "== 3) corrige o apelido e salva: aluno aparece no hub, só com a série (sem escola/ano — vivem na lista salva)"
+set_nickname parent "Maria"
+submit_form parent
+wait_text parent "Maria" 30
 expect_text parent "Maria" "aluno salvo aparece no hub"
-expect_text parent "Escola E2E S15" "escola do aluno aparece no hub"
 expect_text parent "5º ano" "série do aluno aparece no hub"
 shot parent "$OUT/S15-conta-com-aluno.png"
 
 echo "== 4) editar aluno: troca o apelido"
 clicktext parent "Maria"
-wait_text parent "Editar aluno" 15
-ab parent fill '#nickname' "Mari" >/dev/null
-clicktext parent "Salvar alterações"
-wait_text parent "Mari" 15
+wait_text parent "Editar aluno" 30
+sleep 2 # hidratação do client component antes de interagir
+set_nickname parent "Mari"
+submit_form parent
+wait_text parent "Mari" 30
 expect_text parent "Mari" "apelido editado aparece no hub"
 expect_no_text parent "Maria Silva" "nunca grava nome com sobrenome (recusado antes de chegar ao banco)"
 shot parent "$OUT/S15-conta-editado.png"
 
 echo "== 5) salvar a lista publicada para a aluna (App13/S15) na página pública da lista"
 ab parent open "$BASE/escolas/$INEP/ef-5?ano=2027" >/dev/null
-wait_text parent "Escola E2E S15" 15
+wait_text parent "Escola E2E S15" 30
+sleep 2 # hidratação do SaveListButton (client component) antes de clicar
 expect_text parent "Caderno 96 folhas" "itens da lista publicada aparecem"
-clicktext parent "Salvar lista"
-wait_text parent "Lista salva" 15
+ab parent eval "(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.textContent||'').includes('Salvar lista')); if (!b) return 'sem-elemento'; b.click(); return 'ok'; })()"
+wait_text parent "Lista salva" 30
 expect_text parent "Lista salva" "botão confirma o salvamento"
 shot parent "$OUT/S15-salvar-lista.png"
 ab parent open "$BASE/conta" >/dev/null
-wait_text parent "Listas salvas" 15
+wait_text parent "Listas salvas" 30
 expect_text parent "Escola E2E S15" "lista salva aparece no hub"
 expect_text parent "Para Mari" "lista salva mostra o aluno certo"
 
@@ -127,34 +149,35 @@ echo "== 6) carrinho a partir da lista: aparece no hub e em /conta/carrinhos"
 # lugar nenhum hoje (só a cópia do pai, via ParentCopyEditor, tem esse link); registrado como dívida no fechamento.
 VERSION_ID=$(sql "select current_version_id from public.school_lists where school_id = (select id from public.schools where inep = '$INEP');")
 ab parent open "$BASE/carrinho/novo?lista=$VERSION_ID" >/dev/null
-wait_text parent "Caderno" 15
+wait_text parent "Caderno" 30
 clicktext parent "Comparar opções"
-wait_text parent "carrinho" 15
+wait_text parent "carrinho" 30
 ab parent open "$BASE/conta" >/dev/null
 wait_text parent "2 itens" 8 || ab parent open "$BASE/conta" >/dev/null # 2ª navegação: contorna um instantâneo preso visto 1x nesta sessão longa (achado de roteiro, não do produto — confirmado em sessão nova)
-wait_text parent "2 itens" 15
+wait_text parent "2 itens" 30
 expect_text parent "2 itens" "carrinho recente aparece no hub com a contagem certa"
 ab parent open "$BASE/conta/carrinhos" >/dev/null
-wait_text parent "Seus carrinhos" 15
+wait_text parent "Seus carrinhos" 30
 expect_text parent "2 itens" "carrinho aparece na lista completa"
 shot parent "$OUT/S15-carrinhos.png"
 
 echo "== 7) cotações: link do hub leva a /cotacao (S14/S22, já pronto)"
 ab parent open "$BASE/conta" >/dev/null
-wait_text parent "Cotações" 15
+wait_text parent "Cotações" 30
 clicktext parent "Ver suas cotações"
-wait_text parent "cotaç" 15
+wait_text parent "cotaç" 30
 expect_text parent "cotaç" "hub leva a /cotacao"
 
 echo "== 8) excluir a aluna (LGPD): apaga o aluno e a lista salva junto (cascade)"
 ab parent open "$BASE/conta" >/dev/null
-wait_text parent "Mari" 15
+wait_text parent "Mari" 30
 clicktext parent "Mari"
-wait_text parent "Editar aluno" 15
-clicktext parent "Excluir aluno"
+wait_text parent "Editar aluno" 30
+sleep 2 # hidratação do DeleteStudentButton (dialog) antes de clicar
+ab parent eval "(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Excluir aluno'); b.click(); return b ? 'ok' : 'sem-elemento'; })()" >/dev/null
 sleep 1
-clicktext parent "Excluir agora"
-wait_text parent "Minha conta" 15
+ab parent eval "document.querySelector('dialog[open] form').requestSubmit(); 'ok'" >/dev/null
+wait_text parent "Minha conta" 30
 expect_text parent "Nenhum aluno cadastrado ainda" "aluna excluída some do hub"
 expect_text parent "Nenhuma lista salva ainda" "lista salva some junto (cascade)"
 shot parent "$OUT/S15-apos-exclusao.png"

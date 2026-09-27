@@ -5,7 +5,6 @@ export const STUDENT_ERROR_CODES = [
   "invalid_input",
   "nickname_has_surname",
   "nickname_invalid",
-  "school_not_found",
   "grade_not_found",
   "limit",
   "database",

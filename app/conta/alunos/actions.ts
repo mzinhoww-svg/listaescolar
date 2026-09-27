@@ -22,9 +22,7 @@ async function actorOrLogin(next: string): Promise<SessionActor> {
 function fieldsFromForm(formData: FormData) {
   return {
     nickname: formData.get("nickname"),
-    schoolId: formData.get("schoolId"),
     gradeSlug: formData.get("gradeSlug"),
-    schoolYear: formData.get("schoolYear"),
   };
 }
 
@@ -32,11 +30,11 @@ function dbErrorMessage(e: unknown): string {
   return e instanceof StudentError ? studentErrorMessage(e.code) : studentErrorMessage("database");
 }
 
-/** App13 "Novo aluno": só apelido, escola, série e ano; consentimento explícito antes de gravar. */
+/** App13 "Novo aluno": só apelido e série (SPEC §5); consentimento explícito antes de gravar. */
 export async function createStudentAction(_prev: StudentActionResult, formData: FormData): Promise<StudentActionResult> {
   const actor = await actorOrLogin("/conta/alunos/novo");
   if (formData.get("consent") !== "on") return { status: "error", message: "Marque o consentimento para salvar o aluno." };
-  const parsed = studentFieldsSchema(new Date()).safeParse(fieldsFromForm(formData));
+  const parsed = studentFieldsSchema.safeParse(fieldsFromForm(formData));
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Confira os dados do aluno." };
   try {
     await createStudent(await createClient(), actor.userId, parsed.data);
@@ -52,7 +50,7 @@ export async function updateStudentAction(_prev: StudentActionResult, formData: 
   const idParsed = studentIdSchema.safeParse(formData.get("id"));
   if (!idParsed.success) return { status: "error", message: studentErrorMessage("not_found") };
   await actorOrLogin(`/conta/alunos/${idParsed.data}/editar`);
-  const parsed = studentFieldsSchema(new Date()).safeParse(fieldsFromForm(formData));
+  const parsed = studentFieldsSchema.safeParse(fieldsFromForm(formData));
   if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Confira os dados do aluno." };
   try {
     await updateStudent(await createClient(), idParsed.data, parsed.data);

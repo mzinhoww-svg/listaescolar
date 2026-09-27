@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gradeSlugSchema, nicknameSchema, schoolYearSchema, studentFieldsSchema } from "@/features/students/schemas";
+import { gradeSlugSchema, nicknameSchema, studentFieldsSchema } from "@/features/students/schemas";
 
 const codeOf = (r: ReturnType<typeof nicknameSchema.safeParse>): string | undefined => {
   if (r.success) return undefined;
@@ -9,19 +9,28 @@ const codeOf = (r: ReturnType<typeof nicknameSchema.safeParse>): string | undefi
 };
 
 describe("nicknameSchema", () => {
-  it("aceita apelido único sem sobrenome nem dígito, aparado", () => {
+  it("aceita apelido só com letras, aparado e normalizado (NFC); apóstrofo curvo vira reto", () => {
     expect(nicknameSchema.safeParse("Maria").success).toBe(true);
-    expect(nicknameSchema.parse("  Ana-Clara  ")).toBe("Ana-Clara");
+    expect(nicknameSchema.parse("  Maria  ")).toBe("Maria");
+    expect(nicknameSchema.parse("D’Alva")).toBe("D'Alva"); // apóstrofo curvo -> reto
+    expect(nicknameSchema.safeParse("D'Alva").success).toBe(true); // apóstrofo reto direto
+    expect(nicknameSchema.parse("Zé")).toBe("Zé"); // NFD (e + acento combinante) -> NFC
   });
 
-  it("recusa vazio, sobrenome (espaço), dígito, tamanho e controle — cada um com o código certo", () => {
+  it("recusa vazio, sobrenome (espaço), tamanho, hífen, ponto, sublinhado, arroba, dígito e invisível — código certo", () => {
     expect(codeOf(nicknameSchema.safeParse(""))).toBe("nickname_required");
     expect(codeOf(nicknameSchema.safeParse("   "))).toBe("nickname_required");
     expect(codeOf(nicknameSchema.safeParse("Maria Silva"))).toBe("nickname_has_surname");
     expect(codeOf(nicknameSchema.safeParse("a"))).toBe("nickname_length");
     expect(codeOf(nicknameSchema.safeParse("x".repeat(31)))).toBe("nickname_length");
-    expect(codeOf(nicknameSchema.safeParse("Aluno123"))).toBe("nickname_digits");
-    expect(codeOf(nicknameSchema.safeParse("Maria\u0007"))).toBe("nickname_invalid");
+    // achados da revisão de segurança: só letras, nada de hífen/ponto/sublinhado/arroba/dígito/invisível
+    expect(codeOf(nicknameSchema.safeParse("Maria-Silva"))).toBe("nickname_invalid");
+    expect(codeOf(nicknameSchema.safeParse("Maria.Silva"))).toBe("nickname_invalid");
+    expect(codeOf(nicknameSchema.safeParse("Maria_Silva"))).toBe("nickname_invalid");
+    expect(codeOf(nicknameSchema.safeParse("joao@gmail.com"))).toBe("nickname_invalid");
+    expect(codeOf(nicknameSchema.safeParse("Aluno123"))).toBe("nickname_invalid");
+    expect(codeOf(nicknameSchema.safeParse("Maria\u0007Silva"))).toBe("nickname_invalid"); // controle
+    expect(codeOf(nicknameSchema.safeParse("Maria​Silva"))).toBe("nickname_invalid"); // zero-width space, sem espaço visível
   });
 });
 
@@ -32,23 +41,11 @@ describe("gradeSlugSchema", () => {
   });
 });
 
-describe("schoolYearSchema", () => {
-  it("só aceita o ano corrente ou o seguinte (fuso de Cuiabá)", () => {
-    const now = new Date("2026-09-27T12:00:00-04:00");
-    const schema = schoolYearSchema(now);
-    expect(schema.safeParse(2026).success).toBe(true);
-    expect(schema.safeParse(2027).success).toBe(true);
-    expect(schema.safeParse(2028).success).toBe(false);
-    expect(schema.safeParse(2025).success).toBe(false);
-  });
-});
-
 describe("studentFieldsSchema", () => {
-  it("valida o conjunto completo", () => {
-    const now = new Date("2026-09-27T12:00:00-04:00");
-    const schema = studentFieldsSchema(now);
-    const ok = schema.safeParse({ nickname: "Maria", schoolId: "00000000-0000-4000-8000-000000000001", gradeSlug: "ef-1", schoolYear: 2027 });
+  it("valida só apelido e série (SPEC §5) — nenhum outro campo", () => {
+    const ok = studentFieldsSchema.safeParse({ nickname: "Maria", gradeSlug: "ef-1" });
     expect(ok.success).toBe(true);
-    expect(schema.safeParse({ nickname: "Maria Silva", schoolId: "x", gradeSlug: "ef-1", schoolYear: 2027 }).success).toBe(false);
+    expect(studentFieldsSchema.safeParse({ nickname: "Maria Silva", gradeSlug: "ef-1" }).success).toBe(false);
+    expect(studentFieldsSchema.safeParse({ nickname: "Maria", gradeSlug: "nao-existe" }).success).toBe(false);
   });
 });

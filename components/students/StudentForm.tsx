@@ -1,10 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
-import { SchoolSearchPicker, type SchoolHit } from "@/components/submissions/SchoolPicker";
 import { GradeSelect } from "@/components/students/GradeSelect";
-import { SchoolYearSelect } from "@/components/students/SchoolYearSelect";
 import type { StudentActionResult } from "@/features/students/form-state";
 
 const field =
@@ -14,42 +12,55 @@ const primary = "bg-tinta text-papel flex h-14 w-full items-center justify-cente
 export type StudentFormDefaults = {
   id?: string;
   nickname?: string;
-  school?: SchoolHit | null;
   gradeSlug?: string;
-  schoolYear?: number;
 };
 
-/** App13 "Novo aluno", reaproveitado para editar (App13/S15). Só apelido, escola, série e ano letivo. */
+/**
+ * App13 "Novo aluno", reaproveitado para editar (App13/S15). Só apelido e série (SPEC §5, correção da revisão de
+ * segurança) — escola e ano letivo vivem na lista salva, nunca no aluno.
+ */
 export function StudentForm({
   action,
   defaults,
-  years,
-  defaultYear,
   submitLabel,
   consent = true,
 }: {
   action: (prev: StudentActionResult, formData: FormData) => Promise<StudentActionResult>;
   defaults?: StudentFormDefaults;
-  years: readonly number[];
-  defaultYear: number;
   submitLabel: string;
   /** Edição não pede consentimento de novo (já foi dado ao criar); só o cadastro novo pede. */
   consent?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, { status: "idle" } as StudentActionResult);
-  // Controlados de propósito (ver GradeSelect/SchoolYearSelect): um `<form action>` reinicializa campos NÃO
-  // controlados depois de QUALQUER conclusão da action, mesmo em erro (achado do E2E da S15).
+  // Controlados de propósito (ver GradeSelect): um `<form action>` reinicializa campos NÃO controlados depois de
+  // QUALQUER conclusão da action, mesmo em erro (achado do E2E da S15). Isso não basta para <select>/checkbox: o
+  // reset nativo do `<form>` troca o DOM por fora do React (o `<input>` de texto escapa disso por ter um
+  // rastreador de valor próprio; select/checkbox não têm o mesmo rastreador — segundo achado do E2E, mais sutil
+  // que o primeiro, e uma `key` que remonta o nó não basta porque o reset nativo pode disparar DEPOIS do commit
+  // do React). Corrigido reaplicando o valor controlado por `ref` num `useEffect` que roda a cada conclusão da
+  // action — efeitos rodam depois do commit e depois de qualquer reset síncrono do navegador, então sempre
+  // "ganham" a corrida.
   const [nickname, setNickname] = useState(defaults?.nickname ?? "");
   const [gradeSlug, setGradeSlug] = useState(defaults?.gradeSlug ?? "");
-  const [schoolYear, setSchoolYear] = useState(defaults?.schoolYear ?? defaultYear);
   const [consentChecked, setConsentChecked] = useState(false);
+  const gradeRef = useRef<HTMLSelectElement>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // O reset nativo do checkbox observou-se um instante mais tarde que o do <select> nesta correção: um
+    // `setTimeout(0)` empurra a reaplicação para depois de qualquer reset assíncrono, não só o síncrono.
+    const id = setTimeout(() => {
+      if (gradeRef.current && gradeRef.current.value !== gradeSlug) gradeRef.current.value = gradeSlug;
+      if (consentRef.current && consentRef.current.checked !== consentChecked) consentRef.current.checked = consentChecked;
+    }, 0);
+    return () => clearTimeout(id);
+  }, [state, gradeSlug, consentChecked]);
 
   return (
     <form action={formAction} className="flex flex-1 flex-col gap-4">
       {defaults?.id ? <input type="hidden" name="id" value={defaults.id} /> : null}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="nickname" className="text-[13px] font-extrabold">
-          Nome ou apelido do aluno
+          Apelido do aluno
         </label>
         <input
           id="nickname"
@@ -62,16 +73,15 @@ export function StudentForm({
           onChange={(e) => setNickname(e.target.value)}
           className={field}
         />
-        <p className="text-verde-fundo text-[12px] font-semibold">Não pedimos sobrenome nem documento.</p>
+        <p className="text-verde-fundo text-[12px] font-semibold">Só letras, sem sobrenome nem documento.</p>
       </div>
 
-      <SchoolSearchPicker optional={false} label="Escola" initial={defaults?.school} />
-      <GradeSelect value={gradeSlug} onChange={setGradeSlug} />
-      <SchoolYearSelect years={years} value={schoolYear} onChange={setSchoolYear} />
+      <GradeSelect selectRef={gradeRef} value={gradeSlug} onChange={setGradeSlug} />
 
       {consent ? (
         <label className="bg-campo flex cursor-pointer items-start gap-3 rounded-2xl p-3.5">
           <input
+            ref={consentRef}
             type="checkbox"
             name="consent"
             checked={consentChecked}

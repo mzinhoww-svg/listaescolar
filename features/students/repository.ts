@@ -14,11 +14,7 @@ const HINT_CODES: ReadonlySet<string> = new Set<StudentErrorCode>(["limit"]);
 function dbErrorCode(error: { code?: string; hint?: string | null; message: string }): StudentErrorCode {
   if (error.hint && HINT_CODES.has(error.hint)) return error.hint as StudentErrorCode;
   if (error.code === "23514") return "nickname_invalid"; // CHECK do apelido (defesa em profundidade; o Zod já barrou antes)
-  if (error.code === "23503") {
-    if (/school_id_fkey/.test(error.message)) return "school_not_found";
-    if (/grade_id_fkey/.test(error.message)) return "grade_not_found";
-    return "invalid_input";
-  }
+  if (error.code === "23503") return "grade_not_found"; // única FK restante em students, além de owner_id
   if (error.code === "42501") return "forbidden";
   return "database";
 }
@@ -30,39 +26,29 @@ function fail(what: string, error: { message: string; code?: string; hint?: stri
 const studentRow = z.object({
   id: z.uuid(),
   nickname: z.string(),
-  school_id: z.uuid(),
   grade_id: z.uuid(),
-  school_year: z.number().int(),
   created_at: z.coerce.date(),
-  schools: z.object({ name: z.string(), inep: z.string() }).nullable(),
   grades: z.object({ slug: z.string(), name: z.string() }).nullable(),
 });
 
+/** Só apelido e série (SPEC §5) — nenhum outro dado do aluno. Escola/ano vivem na lista salva, não aqui. */
 export type StudentRow = {
   id: string;
   nickname: string;
-  schoolId: string;
-  schoolName: string | null;
-  schoolInep: string | null;
   gradeSlug: string | null;
   gradeLabel: string | null;
-  schoolYear: number;
   createdAt: Date;
 };
 
-const SELECT_COLUMNS = "id, nickname, school_id, grade_id, school_year, created_at, schools(name, inep), grades(slug, name)";
+const SELECT_COLUMNS = "id, nickname, grade_id, created_at, grades(slug, name)";
 
 function mapRow(raw: unknown): StudentRow {
   const r = studentRow.parse(raw);
   return {
     id: r.id,
     nickname: r.nickname,
-    schoolId: r.school_id,
-    schoolName: r.schools?.name ?? null,
-    schoolInep: r.schools?.inep ?? null,
     gradeSlug: r.grades?.slug ?? null,
     gradeLabel: r.grades?.name ?? null,
-    schoolYear: r.school_year,
     createdAt: r.created_at,
   };
 }
@@ -96,7 +82,7 @@ export async function createStudent(client: SupabaseClient, ownerId: string, fie
   const gradeId = await resolveGradeId(client, fields.gradeSlug);
   const { data, error } = await client
     .from("students")
-    .insert({ owner_id: ownerId, nickname: fields.nickname, school_id: fields.schoolId, grade_id: gradeId, school_year: fields.schoolYear })
+    .insert({ owner_id: ownerId, nickname: fields.nickname, grade_id: gradeId })
     .select("id")
     .single();
   if (error) fail("criar aluno", error);
@@ -107,7 +93,7 @@ export async function updateStudent(client: SupabaseClient, id: string, fields: 
   const gradeId = await resolveGradeId(client, fields.gradeSlug);
   const { data, error } = await client
     .from("students")
-    .update({ nickname: fields.nickname, school_id: fields.schoolId, grade_id: gradeId, school_year: fields.schoolYear })
+    .update({ nickname: fields.nickname, grade_id: gradeId })
     .eq("id", id)
     .select("id")
     .maybeSingle();

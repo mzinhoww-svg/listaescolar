@@ -1,3 +1,5 @@
+import type { Ref } from "react";
+
 import { GRADES, STAGE_LABEL, type GradeStage } from "@/features/grades/catalog";
 
 const field =
@@ -11,13 +13,22 @@ const STAGES: readonly GradeStage[] = ["ei", "ef", "em"];
  * QUALQUER conclusão da action, inclusive quando ela devolve erro (achado do E2E da S15) — só campo controlado
  * sobrevive a essa reinicialização.
  */
-export function GradeSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function GradeSelect({
+  value,
+  onChange,
+  selectRef,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  /** Para reaplicar o valor no DOM depois de um reset nativo (ver StudentForm). */
+  selectRef?: Ref<HTMLSelectElement>;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor="gradeSlug" className="text-[13px] font-extrabold">
         Série
       </label>
-      <select id="gradeSlug" name="gradeSlug" required value={value} onChange={(e) => onChange(e.target.value)} className={field}>
+      <select ref={selectRef} id="gradeSlug" name="gradeSlug" required value={value} onChange={(e) => onChange(e.target.value)} className={field}>
         <option value="" disabled>
           Escolha a série
         </option>

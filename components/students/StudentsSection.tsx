@@ -24,9 +24,7 @@ export function StudentsSection({ students }: { students: readonly StudentRow[] 
                 </span>
                 <span className="flex flex-col">
                   <span className="text-[15px] font-extrabold">{s.nickname}</span>
-                  <span className="text-texto-2 text-[13px] font-semibold">
-                    {s.schoolName ?? "Escola indisponível"} · {s.gradeLabel ?? "Série indisponível"} · {s.schoolYear}
-                  </span>
+                  <span className="text-texto-2 text-[13px] font-semibold">{s.gradeLabel ?? "Série indisponível"}</span>
                 </span>
               </Link>
             </li>

@@ -44,7 +44,7 @@ async function makeUser(label: string): Promise<Actor> {
 }
 
 async function studentFor(actor: Actor, nickname: string): Promise<string> {
-  return createStudent(actor.client, actor.id, { nickname, schoolId: SCHOOL_ID, gradeSlug: "ef-1", schoolYear: 2027 });
+  return createStudent(actor.client, actor.id, { nickname, gradeSlug: "ef-1" });
 }
 
 beforeAll(async () => {
@@ -99,5 +99,19 @@ describe("features/saved-lists/repository (Postgres local, RLS)", () => {
     expect((await listSavedLists(bob.client, bob.id)).some((r) => r.id === id)).toBe(false);
     expect(await removeSavedList(bob.client, id)).toBe(false);
     expect((await listSavedLists(alice.client, alice.id)).some((r) => r.id === id)).toBe(true);
+  });
+
+  // Correção da revisão de segurança (SECURITY INVOKER): mesmo conhecendo (ou adivinhando) um student_id real de
+  // outra família, bob recebe a MESMA recusa de um id totalmente inventado — nenhuma distinção de erro revela se
+  // aquele id pertence a alguém (fecha o oráculo que a versão SECURITY DEFINER anterior tinha).
+  it("aluno real de outro dono e aluno inventado dão a MESMA recusa (sem oráculo)", async () => {
+    const { listId } = await withSuperuser((c) => seedInState(c, "published", { schoolId: SCHOOL_ID, slug: "ef-6", year: 2027 }));
+    const aliceStudentId = await studentFor(alice, "Enzo");
+    const realForeign = await saveList(bob.client, bob.id, aliceStudentId, listId).catch((e) => e as SavedListError);
+    const fake = await saveList(bob.client, bob.id, "00000000-0000-4000-8000-000000000000", listId).catch((e) => e as SavedListError);
+    expect(realForeign).toBeInstanceOf(SavedListError);
+    expect(fake).toBeInstanceOf(SavedListError);
+    expect((realForeign as SavedListError).code).toBe("forbidden");
+    expect((fake as SavedListError).code).toBe((realForeign as SavedListError).code);
   });
 });

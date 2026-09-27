@@ -5,7 +5,6 @@ import { DeleteStudentButton } from "@/components/students/DeleteStudentButton";
 import { StudentForm } from "@/components/students/StudentForm";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
-import { academicYears, defaultAcademicYear } from "@/features/grades/catalog";
 import { getMyStudent } from "@/features/students/queries";
 import { studentIdSchema } from "@/features/students/schemas";
 
@@ -23,21 +22,12 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
   const student = actor ? await getMyStudent(actor, parsedId.data) : null;
   if (!student) notFound();
 
-  const now = new Date();
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
       <BackHeader href="/conta" title="Editar aluno" />
       <StudentForm
         action={updateStudentAction}
-        defaults={{
-          id: student.id,
-          nickname: student.nickname,
-          school: student.schoolInep ? { id: student.schoolId, name: student.schoolName ?? "", inep: student.schoolInep, neighborhood: null, municipalityName: "" } : null,
-          gradeSlug: student.gradeSlug ?? undefined,
-          schoolYear: student.schoolYear,
-        }}
-        years={academicYears(now)}
-        defaultYear={defaultAcademicYear(now)}
+        defaults={{ id: student.id, nickname: student.nickname, gradeSlug: student.gradeSlug ?? undefined }}
         submitLabel="Salvar alterações"
         consent={false}
       />

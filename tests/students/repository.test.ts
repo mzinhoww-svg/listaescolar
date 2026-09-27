@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { StudentError } from "@/features/students/errors";
 import { createStudent, deleteStudent, getOwnedStudent, listStudents, updateStudent } from "@/features/students/repository";
 
-import { ensureSchool, withSuperuser } from "../db/helpers";
+import { withSuperuser } from "../db/helpers";
 
 // Roda em `pnpm test:db` (Postgres/Supabase local). Mesmo padrão de tests/cart/repository.test.ts.
 function localEnv(): { url: string; publishable: string; secret: string } {
@@ -21,7 +21,6 @@ function localEnv(): { url: string; publishable: string; secret: string } {
 }
 
 const PASSWORD = "senha-de-teste-local-123";
-const SCHOOL_ID = "00000000-0000-4000-8000-0000000f1001";
 
 type Actor = { id: string; client: SupabaseClient };
 let env: ReturnType<typeof localEnv>;
@@ -46,44 +45,39 @@ beforeAll(async () => {
   admin = createClient(env.url, env.secret, { auth: { persistSession: false, autoRefreshToken: false } });
   alice = await makeUser("alice");
   bob = await makeUser("bob");
-  await withSuperuser((c) => ensureSchool(c, SCHOOL_ID));
 });
 
 afterAll(async () => {
-  await withSuperuser((c) => c.query("delete from public.schools where id = $1", [SCHOOL_ID]));
   for (const actor of [alice, bob]) if (actor) await admin.auth.admin.deleteUser(actor.id);
 });
 
 describe("features/students/repository (Postgres local, RLS)", () => {
-  it("cria, lista (com escola/série) e edita o próprio aluno", async () => {
-    const id = await createStudent(alice.client, alice.id, { nickname: "Maria", schoolId: SCHOOL_ID, gradeSlug: "ef-1", schoolYear: 2027 });
+  it("cria, lista (só apelido e série) e edita o próprio aluno", async () => {
+    const id = await createStudent(alice.client, alice.id, { nickname: "Maria", gradeSlug: "ef-1" });
     const rows = await listStudents(alice.client, alice.id);
-    expect(rows.find((r) => r.id === id)).toMatchObject({ nickname: "Maria", schoolYear: 2027, gradeSlug: "ef-1", schoolInep: expect.any(String) });
-    await updateStudent(alice.client, id, { nickname: "Mari", schoolId: SCHOOL_ID, gradeSlug: "ef-2", schoolYear: 2027 });
+    expect(rows.find((r) => r.id === id)).toMatchObject({ nickname: "Maria", gradeSlug: "ef-1" });
+    await updateStudent(alice.client, id, { nickname: "Mari", gradeSlug: "ef-2" });
     const after = await getOwnedStudent(alice.client, id);
     expect(after).toMatchObject({ nickname: "Mari", gradeSlug: "ef-2" });
     expect(await deleteStudent(alice.client, id)).toBe(true);
     expect(await getOwnedStudent(alice.client, id)).toBeNull();
   });
 
-  it("escola inexistente vira school_not_found; série inexistente vira grade_not_found", async () => {
+  it("série inexistente vira grade_not_found", async () => {
     await expect(
-      createStudent(alice.client, alice.id, { nickname: "Joao", schoolId: "00000000-0000-4000-8000-000000000000", gradeSlug: "ef-1", schoolYear: 2027 }),
-    ).rejects.toMatchObject({ code: "school_not_found" } satisfies Partial<StudentError>);
-    await expect(
-      createStudent(alice.client, alice.id, { nickname: "Joao", schoolId: SCHOOL_ID, gradeSlug: "serie-fantasma", schoolYear: 2027 }),
+      createStudent(alice.client, alice.id, { nickname: "Joao", gradeSlug: "serie-fantasma" }),
     ).rejects.toMatchObject({ code: "grade_not_found" } satisfies Partial<StudentError>);
   });
 
   it("editar/apagar aluno inexistente ou alheio: not_found/false; bob não vê nem edita o aluno da alice", async () => {
-    const id = await createStudent(alice.client, alice.id, { nickname: "Rita", schoolId: SCHOOL_ID, gradeSlug: "ef-1", schoolYear: 2027 });
+    const id = await createStudent(alice.client, alice.id, { nickname: "Rita", gradeSlug: "ef-1" });
     try {
       expect(await getOwnedStudent(bob.client, id)).toBeNull();
       await expect(
-        updateStudent(bob.client, id, { nickname: "Hackeado", schoolId: SCHOOL_ID, gradeSlug: "ef-1", schoolYear: 2027 }),
+        updateStudent(bob.client, id, { nickname: "Hackeado", gradeSlug: "ef-1" }),
       ).rejects.toMatchObject({ code: "not_found" } satisfies Partial<StudentError>);
       await expect(
-        updateStudent(alice.client, "00000000-0000-4000-8000-0000000000ff", { nickname: "X", schoolId: SCHOOL_ID, gradeSlug: "ef-1", schoolYear: 2027 }),
+        updateStudent(alice.client, "00000000-0000-4000-8000-0000000000ff", { nickname: "X", gradeSlug: "ef-1" }),
       ).rejects.toMatchObject({ code: "not_found" } satisfies Partial<StudentError>);
       expect(await deleteStudent(bob.client, id)).toBe(false);
     } finally {

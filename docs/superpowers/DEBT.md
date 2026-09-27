@@ -183,9 +183,16 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-132 | ledger-comercio S25 Task 2/3 (Ruling de escopo) | A pré-visualização do widget (B2B04) e o `widget.js` real não têm seleção individual de item por checkbox (como no design, que mostra cada item marcável) — hoje é tudo-ou-nada ("Adicionar tudo ao carrinho"). Ruling S25: cortado do MVP desta fatia por tempo; o contrato de dados (`/api/widget/lists/{id}/items`) já traz item a item, então a UI pode ganhar isso depois sem mudar a API | baixa | S26 (B2B) | aberta |
 | D-133 | ledger-comercio S25 · correções da revisão de segurança (Menor) | `app/api/widget/**` responde com `access-control-allow-origin: *` para qualquer origem — correto hoje (dado público, sem cookie, sem credencial), mas sem allowlist do domínio cadastrado do parceiro (`cart_target_domain`) o widget pode ser embutido em QUALQUER site, não só no do parceiro que o configurou (não é uma falha de confidencialidade — o dado já é público —, mas permite uso não autorizado do widget de um parceiro em site de terceiro). Considerar restringir `Access-Control-Allow-Origin` ao(s) domínio(s) cadastrados quando o portal ganhar um campo de "domínios autorizados" | baixa | S26 (B2B) | aberta |
 | D-134 | ledger-comercio S25 · correções da revisão de segurança (Menor) | A restrição de porta 443 para HTTPS (revisão de segurança, `lib/net/safe-fetch.ts`) só é aplicada no ENVIO (`postWebhookSafely`); o CHECK de `b2b_webhook_endpoints.url` (0502) e o Zod de `SaveEndpointInputSchema` continuam aceitando `https://host:8443/...` na criação/atualização do endpoint — o parceiro só descobre que a porta não é aceita quando a primeira entrega vira `dead` (`invalid_url_port_not_allowed`). Validar a porta também na criação evitaria essa surpresa | baixa | S26 (B2B) | aberta |
-| D-135 | ledger-comercio S26 Task 1 (Ruling de escopo) | `b2b_statements` é imutável por desenho: não há caminho para reemitir/corrigir um extrato de período já gerado (nem retificação, nem novo extrato para o MESMO período — a chave `(partner_id, period_start, period_end)` é única). Se o admin errar `payment_instruction` ou gerar um período antes da hora, a única saída hoje é gerar um extrato para um período diferente | baixa | S26 (B2B) | aberta |
-| D-136 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns` inteira (`order by random()`) para achar campanhas elegíveis; em volume alto de listas publicadas servidas simultaneamente pode custar caro (mesmo racional de N+1/cota de outras fatias B2B, ex. D-113). Sem medição real de tráfego ainda | média | S19 | aberta |
-| D-137 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaigns.target_cities` usa `ibge_code` (texto validado contra `municipalities` na criação), mas não há endpoint nem tela para o parceiro buscar o código pelo NOME da cidade — a Nova Campanha (B2B07, Task 3) precisa de um seletor de município, hoje só aceitaria o código cru | baixa | S26 (B2B) | aberta |
+| D-135 | reverificação de segurança S25 (PR #42) | `list.archived` pode sair para lista que nunca foi pública (publicada com município desabilitado, habilitado depois e arquivada): o gate da 0502 (~l.533) não exige "já foi visível"; e só `schools.is_demo` é considerado, não `claims.is_demo` | baixa | S19 | aberta |
+| D-136 | reverificação de segurança S25 (PR #42) | `pg_trigger_depth() > 1` em `b2b_webhook_delivery_attempts` libera qualquer DELETE feito de dentro de um gatilho, não só a cascata de FK: acrescentar comentário de guarda e revisar em fatias futuras que criem gatilhos de DELETE | baixa | S19 | aberta |
+| D-137 | reverificação de segurança S25 (PR #42) | Cotas de reenvio de webhook (5 por entrega, 20/h por parceiro) sem lock: reenvios concorrentes podem passar um pouco do limite | baixa | S19 | aberta |
+| D-138 | reverificação de segurança S25 (PR #42) | Entrega em `sending` com lease vencida fica em `sending` para sempre se o endpoint for desativado depois (a varredura de dead letter só pega `attempts >= 10` e o claim a exclui); entregas `queued` de parceiro suspenso nunca são purgadas | média | S19 | aberta |
+| D-139 | reverificação de segurança S25 (PR #42) | Rate limit do widget ainda chaveado por `ip:partnerId` (`features/widget/route-helpers.ts:25`): UUIDs aleatórios contornam o limite por IP; chavear só por IP e validar o parceiro antes de contar | média | S19 | aberta |
+| D-140 | ledger-comercio S26 Task 1 (Ruling de escopo) | `b2b_statements` é imutável por desenho: não há caminho para reemitir/corrigir um extrato de período já gerado (nem retificação, nem novo extrato para o MESMO período — a chave `(partner_id, period_start, period_end)` é única). Se o admin errar `payment_instruction` ou gerar um período antes da hora, a única saída hoje é gerar um extrato para um período diferente | baixa | S26 (B2B) | aberta |
+| D-141 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns` inteira (`order by random()`) para achar campanhas elegíveis; em volume alto de listas publicadas servidas simultaneamente pode custar caro (mesmo racional de N+1/cota de outras fatias B2B, ex. D-113). Sem medição real de tráfego ainda | média | S19 | aberta |
+| D-142 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaigns.target_cities` usa `ibge_code` (texto validado contra `municipalities` na criação), mas não há endpoint nem tela para o parceiro buscar o código pelo NOME da cidade — a Nova Campanha (B2B07, Task 3) precisa de um seletor de município, hoje só aceitaria o código cru | baixa | S26 (B2B) | aberta |
+| D-143 | ledger-comercio S26 Task 3 (Ruling de escopo) | Não há tela de admin para gerar o extrato B2B sob demanda (`b2b_statement_generate`) — nesta fatia a geração só acontece via chamada direta (script/seed do E2E). Falta uma Server Action + botão no admin (ou um cron mensal) para gerar o extrato de cada parceiro no fechamento do período | média | S26 (B2B) / futura fatia | aberta |
+| D-144 | ledger-comercio S26 Task 3 (fidelidade ao design vs. escopo) | `NovaCampanhaForm` (B2B07) só permite escolher UMA série por campanha (`<select>` simples), embora o schema (`targetGradeStages`) e a migration aceitem até 3 — cortado do MVP desta fatia por tempo; trocar por um grupo de checkboxes depois não muda a API | baixa | S26 (B2B) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -199,17 +206,24 @@ Nota (numeração): D-120–D-127 pertencem à S23 (mesclada em `main` primeiro)
 IDs (originalmente também D-120–D-126, escritos numa branch que ainda não via a S23) foram renumerados para
 D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudou.
 
+Nota (numeração): D-135–D-139 pertencem à S25 (mesclada em `main` primeiro, PR #42/#43); os itens da S26 que
+colidiam com esses IDs (originalmente também D-135–D-137, escritos nesta branch antes de ver o merge da S25) foram
+renumerados para D-140–D-144 na resolução deste merge — mesmo conteúdo, só o número mudou (D-143 e D-144 são
+achados novos da Task 3, sem número anterior).
+
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 40 | 9 | 49 |
-| baixa | 62 | 10 | 72 |
-| **Total** | **112** | **24** | **136** |
+| média | 43 | 9 | 52 |
+| baixa | 66 | 10 | 76 |
+| **Total** | **119** | **24** | **143** |
 
-Contagem atualizada em 2026-09-27 (S26 Task 1 soma D-135–D-137: 1 média/aberta — D-136, cota/cache de
-`b2b_campaign_serve` —, as demais baixa/abertas). Estado anterior desta linha (merge de `main` — S23,
+Contagem atualizada em 2026-09-27 (merge de `origin/main`, PR #43 — S25 soma D-135–D-139, todos baixa/média
+abertos — com a S26 desta branch: D-140–D-144, renumerados a partir de D-140 por colisão com os IDs da S25 já
+mesclada; D-141 e D-143 média/abertas — cota/cache de `b2b_campaign_serve` e falta de tela para gerar o extrato
+sob demanda —, as demais baixa/abertas). Estado anterior desta linha (merge de `main` — S23,
 Comissão/repasses/inadimplência — com a rodada de
 correções da revisão de segurança da S25 nesta branch). D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23
 (7 baixa + 3 média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais

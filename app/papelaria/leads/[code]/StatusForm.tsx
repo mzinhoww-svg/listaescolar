@@ -51,7 +51,7 @@ export function StatusForm({ code, status }: { code: string; status: LeadStatus 
         </form>
       ) : null}
       <p className="text-texto-3 text-[12px] font-semibold">
-        “Vendi” registra uma venda declarada por você; a ListaCerta não a confirma. Contestação, confirmação do responsável e créditos ainda não existem nesta fase.
+        “Vendi” registra uma venda declarada por você. A conversão só é confirmada com pelo menos 2 dos 3 sinais (você, o responsável e o Pix pela plataforma, quando existir); veja abaixo como contestar em até 72 h.
       </p>
     </section>
   );

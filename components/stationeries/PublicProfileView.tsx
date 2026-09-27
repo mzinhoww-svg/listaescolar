@@ -1,4 +1,5 @@
 import { formatBRL } from "@/features/cart/money";
+import type { ReviewView } from "@/features/conversion/ports";
 import type { PublicProfile } from "@/features/stationeries/repository";
 import { PAYMENT_METHODS } from "@/features/stationeries/schemas";
 import { WHATSAPP_ORDER_MESSAGE, whatsappLink } from "@/features/stationeries/whatsapp";
@@ -22,8 +23,9 @@ const initials = (name: string): string =>
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("") || name.slice(0, 2).toUpperCase();
 
-/** Perfil público (Pap08, mobile): só dados que a papelaria informou; sem avaliações, selos ou prazos. */
-export function PublicProfileView({ profile }: { profile: PublicProfile }) {
+/** Perfil público (Pap08, mobile): dados que a papelaria informou, mais avaliações publicadas (S22, App23). */
+export function PublicProfileView({ profile, reviews = [] }: { profile: PublicProfile; reviews?: ReviewView[] }) {
+  const avg = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
   const wa = profile.whatsapp ? whatsappLink(profile.whatsapp, WHATSAPP_ORDER_MESSAGE) : null;
   const payments = profile.paymentMethods.filter((m) => (PAYMENT_METHODS as readonly string[]).includes(m)).map((m) => PAYMENT_LABEL[m] ?? m);
   const delivery = [profile.offersPickup ? "Retirada na loja" : null, profile.offersDelivery ? "Entrega no bairro" : null].filter(Boolean);
@@ -92,6 +94,24 @@ export function PublicProfileView({ profile }: { profile: PublicProfile }) {
             </ul>
           )}
           <p className="text-texto-3 mt-2 text-[12px] font-semibold">Preço e estoque podem mudar. Confirme com a papelaria.</p>
+        </section>
+
+        <section aria-labelledby="avaliacoes-publicas">
+          <h2 id="avaliacoes-publicas" className="mt-2 mb-2 text-[17px] font-extrabold">
+            Avaliações{avg !== null ? ` · [${avg.toFixed(1)}]` : ""}
+          </h2>
+          {reviews.length === 0 ? (
+            <p className="rounded-[18px] bg-white p-4 text-[14px] font-bold">Ainda sem avaliações de quem comprou aqui.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {reviews.slice(0, 10).map((r) => (
+                <li key={r.id} className="rounded-[18px] bg-white p-4">
+                  <p className="text-[14px] font-extrabold">[{r.rating}/5]{r.tags.length > 0 ? ` · ${r.tags.join(", ")}` : ""}</p>
+                  {r.comment ? <p className="text-texto-2 mt-1 text-[13px] font-semibold">{r.comment}</p> : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
 

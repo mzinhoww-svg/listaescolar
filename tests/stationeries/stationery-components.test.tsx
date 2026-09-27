@@ -156,14 +156,22 @@ describe("PublicProfileView", () => {
     serviceRadiusKm: 0, openingHours: null, paymentMethods: ["pix"], whatsapp: "+5565999991234", isDemo: false, updatedAt: new Date(), areas: ["Centro"],
     catalog: [{ id: "1", name: "Lápis", itemKey: "lapis", priceCents: 150, priceSource: "informed_by_stationery", stock: "unknown" as const, isActive: true, priceUpdatedAt: new Date("2026-09-20T15:00:00Z") }],
   };
-  it("só dados públicos, sem avaliações, selos ou prazos; CTA WhatsApp", () => {
+  it("só dados públicos, sem selo de parceria, CNPJ ou prazo; CTA WhatsApp; sem avaliação pendura estado vazio (S22)", () => {
     const { container } = render(<PublicProfileView profile={profile} />);
     expect(screen.getByRole("heading", { level: 1, name: "Papelaria Boa" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Pedir lista pelo WhatsApp" }).getAttribute("href")).toContain("wa.me/5565999991234");
     expect(screen.getByText(/Informado pela papelaria · 20\/09\/2026/)).toBeInTheDocument();
+    expect(screen.getByText("Ainda sem avaliações de quem comprou aqui.")).toBeInTheDocument();
     const text = container.textContent ?? "";
-    expect(text).not.toMatch(/avalia|estrela|parceira|cnpj|prazo/i);
+    expect(text).not.toMatch(/estrela|parceira|cnpj|prazo/i);
     expect(text).not.toContain("Demonstração");
+  });
+  it("avaliações publicadas (S22): nota entre colchetes (Ruling SPEC-2), etiquetas e comentário", () => {
+    const reviews = [{ id: "r1", leadId: "l1", stationeryId: "a", rating: 5, tags: ["bom_atendimento"], comment: "Atendimento ótimo", status: "published" as const, createdAt: new Date() }];
+    render(<PublicProfileView profile={profile} reviews={reviews} />);
+    expect(screen.getByText("Avaliações · [5.0]")).toBeInTheDocument();
+    expect(screen.getByText("[5/5] · bom_atendimento")).toBeInTheDocument();
+    expect(screen.getByText("Atendimento ótimo")).toBeInTheDocument();
   });
   it("demo tem selo; sem preços e sem WhatsApp: estados vazios honestos", () => {
     render(<PublicProfileView profile={{ ...profile, isDemo: true, catalog: [], whatsapp: null, paymentMethods: [] }} />);

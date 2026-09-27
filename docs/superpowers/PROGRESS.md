@@ -57,9 +57,9 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
 | S23 Comissão, repasses e inadimplência (Comércio) | #40 | d30849f | 2026-09-27 | ✓ | ✓ | 3252 | 1729 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 30 verificações, 0 falhas (`e2e/S23.md`) |
 | S25 Widget e webhooks (B2B) | #42 | 634c9f2 | 2026-09-27 | ✓ | ✓ | 3303 | 1759 (3 skipped) | ✓ | verify ✓ db ✓ (concluídos depois do merge; ver Ruling) | ✓ | build local + receptor de webhook, 22 verificações, 0 falhas (`e2e/S25.md`) |
-| S26 Campanhas de marca, insights e faturamento B2B | — (sem PR, por instrução) | 738500e | 2026-09-27 | ✓ | ✓ | 3365 | 1805 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 20 verificações, 0 falhas (`e2e/S26.md`); 3 rodadas de reverificação de segurança aplicadas |
 | S15 Área da família | #45 | ccd4c54 | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
-| S17 LGPD e dados demonstrativos | — (sem PR, por instrução) | `8754b82` (+ commit da Task 4) | 2026-09-27 | ✓ | ✓ | 3374 | 1820 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 18 verificações, 0 falhas (`e2e/S17.md`) |
+| S26 Campanhas de marca, insights e faturamento B2B | #47 | 3f28fb5 | 2026-09-27 | ✓ | ✓ | 3365 | 1805 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 20 verificações, 0 falhas (`e2e/S26.md`) |
+| S17 LGPD e dados demonstrativos | — (sem PR, por instrução) | `b0a6fa4` | 2026-09-27 | ✓ | ✓ | 3374 | 1820 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 18 verificações, 0 falhas (`e2e/S17.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -67,7 +67,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-24 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+25 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -90,7 +90,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
 | 0403_repasses.sql | S23 | repasses | 20260927044636 (uma chamada transacional; substitui 4 funções da 0401/0402 com md5 anterior registrado; 22 funções, RLS das 7 tabelas, 13 gatilhos e privilégios idênticos ao banco local; auditoria de `school_payout_settings` sem `pix_key`/`beneficiary_name`; sem configuração de comissão/repasse inserida) |
 | 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
-| 0503_b2b_campaigns.sql | S26 | — | **ainda não aplicada** (ver "Pendente de staging" abaixo) |
+| 0503_b2b_campaigns.sql | S26 | b2b_campaigns | 20260927131850 (arquivo aplicado sem alteração; md5 das 16 funções, políticas, gatilhos e privilégios idênticos ao banco local; `authenticated` sem nenhum acesso a eventos e livro-razão de campanha) |
 | 0603_family_area.sql | S15 | family_area | aplicada em 2026-09-27 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
 | 0605_lgpd_privacy.sql | S17 | — | **ainda não aplicada** (só local; tarefa marcou staging como inviolável para este implementador; ver "Pendente de staging") |
 
@@ -99,7 +99,6 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0601_integration.sql | S11 | integration | aplicada em 2026-09-25 (perfil `system` criado; `auth.users` do hospedado conferido antes) |
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
 
-Pendente de staging: `0503_b2b_campaigns.sql` (S26 — campanhas de marca CPM/CPC, insights com k-anonimato e
 faturamento B2B: `b2b_campaigns`, `b2b_campaign_events`/`_ledger` imutáveis — sem NENHUM select para
 `authenticated`, nem por coluna, desde a 3ª rodada de reverificação de segurança —, `b2b_insights_settings`,
 `b2b_statements`/`_line_items` imutáveis), só local (`pnpm db:reset` + `pnpm test:db` verdes: 1805/1808, 3 pulados
@@ -125,7 +124,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Pipeline | S07, S08, S09, S10 | **Completa** (S07–S10) |
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
 | Comércio e cobrança | S12, S13, S14, S27, S21, S22, S23 | **Completa** (S21 #34, S22 #36, S23 #40; migrations 0401–0403 no staging) |
-| B2B | S24, S25, S26 | **Completa**: S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (branch `slice/S26-campanhas`, sem PR por instrução; 3 rodadas de reverificação de segurança; migration `0503` só local, ver "Pendente de staging") |
+| B2B | S24, S25, S26 | **Completa** (S24 #38, S25 #42, S26 #47; migrations 0501–0503 no staging) |
 | Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 em andamento** (worktree T3); **S17 ✓** (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local, ver "Migrations") |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
@@ -149,7 +148,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas; migration `0503` só local)].
 4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 (em andamento no worktree T3).
-5. S17 ✓ (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local). S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
+5. S17 ✓ (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local). S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`). Proposta pendente de aprovação: instrumentação de produto com PostHog na S19 (ADR-007, `docs/tracking-plan.md`); só entra no PLAN se o humano aprovar.
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
@@ -198,6 +197,7 @@ Conteúdo e dados:
 ## Aguardando humano
 Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
 
+- **ADR-007 (PostHog) aguardando aprovação.** Proposta de instrumentação de produto com PostHog Cloud (Supabase segue fonte de verdade), plano de eventos em `docs/tracking-plan.md` e encaixe na S19. Ação do humano: aprovar (ou ajustar) o ADR; se aprovado, criar os dois projetos PostHog (staging e produção) e cadastrar `NEXT_PUBLIC_POSTHOG_KEY`/`NEXT_PUBLIC_POSTHOG_HOST` na Vercel; o plano pago é gasto e fica com o humano.
 - **Skills da S28 no repositório.** O pedido de 2026-09-27 diz que `impeccable`, `tripled-ui` e `design-intelligence` estão em `.claude/skills/` por commit do humano, mas esse commit não está em `origin/main` nem nos worktrees (conferido em 2026-09-27). Não bloqueia agora: a S28 só começa depois da S19, e as três skills já estão disponíveis nesta sessão pelos plugins instalados. Ação do humano: dar push do commit (ou confirmar que devem vir dos plugins).
 
 - **Plano de cobrança no staging (D-102).** Desde a 0401 (S21) o staging não tem plano ativo: todo lead para papelaria REAL é recusado com `billing_unavailable` (papelarias e carrinhos de demonstração seguem funcionando). O orquestrador não publica plano porque os valores (leads grátis, faixas de preço por quantidade de itens, pacotes de crédito, preço e parcelas do passe, meses da temporada) são preço de produto e não podem ser inventados. Ação do humano: informar os valores (ou pedir um plano provisório "de teste" explicitamente) e o orquestrador publica pela tela `/admin/planos` ou por `billing_plan_publish`.

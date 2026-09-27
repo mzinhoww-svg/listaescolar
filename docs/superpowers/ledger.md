@@ -214,6 +214,8 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
   `"MariaㅤSilva"` (e os demais códigos U+FFA0/U+115F/U+1160/U+02BC/cirílico) — `\p{L}`/`[[:alpha:]]`
   aceitavam, confirmando o achado da revisão antes de qualquer correção no arquivo.
 - Ruling: a S28 (ADR-006) entra no PLAN entre a S19 e a S20 e passa a ser pré-requisito do go-live; o brainstorming dela roda em modo autônomo (o orquestrador responde às perguntas da skill com SPEC, PLAN, `docs/design`, a pesquisa do ADR-005 e dados do staging) e o spec resultante vira Ruling — pedido explícito do humano em 2026-09-27 — custo se estiver errada: uma fatia a mais no caminho crítico antes do go-live
+- Ruling: a S17 (LGPD e dados demonstrativos) roda no worktree T2 em paralelo com a S16 (Admin, worktree T3), logo após o fim da trilha B2B — as duas fatias quase não se tocam (S16: telas e funções do admin; S17: consentimento, retenção, exportação/exclusão de conta) e os worktrees ficariam ociosos; migrations na faixa 06xx com números distintos e renumeração no merge se colidirem — custo se estiver errada: conflitos de merge em ledgers/PROGRESS/DEBT e, no pior caso, renumerar uma migration antes de aplicar no staging
+- Ruling: a proposta de instrumentação com PostHog vira ADR-007 (o pedido citou "ADR-004", número já usado pelas trilhas paralelas) com status "proposta"; não entra no PLAN nem vira código até o humano aprovar; `identify` usa só o uuid do perfil (o telefone dispara o identify mas nunca é enviado), para cumprir "sem PII nos eventos" — custo se estiver errada: renumerar o ADR ou mover o identificador, sem código afetado
 
 ## S17 · LGPD e dados demonstrativos (fora de trilha, worktree T2, 2026-09-27)
 

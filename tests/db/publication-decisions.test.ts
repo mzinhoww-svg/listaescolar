@@ -75,16 +75,22 @@ describe("0203: ai_settings.auto_publish_enabled", () => {
   beforeAll(seedUsers);
   afterAll(cleanupUsers);
 
-  it("default false, not null, e a mudança é auditada", async () => {
+  it("default false, not null; admin não liga mais direto (revisão de segurança S16, 0604); service_role (pipeline) continua podendo, e a mudança é auditada", async () => {
     const col = await withSuperuser(async (c) =>
       (await c.query("select is_nullable, column_default, data_type from information_schema.columns where table_name = 'ai_settings' and column_name = 'auto_publish_enabled'")).rows[0],
     );
     expect(col).toEqual({ is_nullable: "NO", column_default: "false", data_type: "boolean" });
     await withClaims("admin", async (c) => {
       expect((await c.query("select auto_publish_enabled from public.ai_settings where scope = 'default'")).rows[0].auto_publish_enabled).toBe(false);
+      // 0604 (revisão de segurança): auto_publish_enabled só muda por Ruling humano explícito, nunca por uma
+      // Server Action comum nem por qualquer sessão authenticated direto pelo PostgREST — mesmo sendo admin.
+      const blocked = await attempt(c, "update public.ai_settings set auto_publish_enabled = true where scope = 'default'");
+      expect(blocked.error).not.toBeNull();
+    });
+    await withClaims("system", async (c) => {
       await c.query("update public.ai_settings set auto_publish_enabled = true where scope = 'default'");
       const r = await c.query("select actor_role, before, after from public.audit_log where entity_table = 'ai_settings' order by created_at desc, id desc limit 1");
-      expect(r.rows[0].actor_role).toBe("admin");
+      expect(r.rows[0].actor_role).toBe("system");
       expect(JSON.stringify(r.rows[0].after)).toContain("\"auto_publish_enabled\":true");
       expect((await attempt(c, "update public.ai_settings set auto_publish_enabled = null where scope = 'default'")).error).not.toBeNull();
     });

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { searchAuditLog, type AuditRow } from "@/features/admin/audit";
+import { auditFilterSchema, searchAuditLog, type AuditRow } from "@/features/admin/audit";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 
@@ -27,37 +27,48 @@ type SP = { acao?: string | string[]; entidade?: string | string[]; entidadeId?:
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   const { user } = await requireAccess("/admin/eventos");
   const sp = await searchParams;
-  const filter = {
-    action: one(sp.acao),
-    entityTable: one(sp.entidade),
-    entityId: one(sp.entidadeId),
-    actorId: one(sp.ator),
-    since: one(sp.de),
-    until: one(sp.ate),
+  const rawFilter = {
+    action: one(sp.acao) || undefined,
+    entityTable: one(sp.entidade) || undefined,
+    entityId: one(sp.entidadeId) || undefined,
+    actorId: one(sp.ator) || undefined,
+    since: one(sp.de) || undefined,
+    until: one(sp.ate) || undefined,
   };
+  const parsedFilter = auditFilterSchema.safeParse(rawFilter);
   const actor = await getSessionActor();
   let rows: AuditRow[] = [];
   let failed = false;
-  try {
-    if (actor) rows = await searchAuditLog(actor, filter);
-  } catch (error) {
-    console.error("auditoria (admin08-eventos)", error instanceof Error ? error.message : "erro");
-    failed = true;
+  let invalidFilter = false;
+  if (!parsedFilter.success) {
+    // Filtro inválido (ex.: "Id da entidade" que não é uuid): mensagem clara, sem nem chamar o banco com dado ruim.
+    invalidFilter = true;
+  } else {
+    try {
+      if (actor) rows = await searchAuditLog(actor, parsedFilter.data);
+    } catch (error) {
+      console.error("auditoria (admin08-eventos)", error instanceof Error ? error.message : "erro");
+      failed = true;
+    }
   }
   return (
     <AdminShell active="/admin/eventos" email={user.email} breadcrumb="Admin / Eventos" title="Eventos (auditoria)">
       <form className="mb-4 grid gap-3 rounded-[20px] bg-white p-4 sm:grid-cols-3 lg:grid-cols-6" aria-label="Filtrar eventos">
-        <Field label="Ação" name="acao" defaultValue={filter.action} placeholder="UPDATE" />
-        <Field label="Tabela" name="entidade" defaultValue={filter.entityTable} placeholder="school_lists" />
-        <Field label="Id da entidade" name="entidadeId" defaultValue={filter.entityId} />
-        <Field label="Ator (id)" name="ator" defaultValue={filter.actorId} />
-        <Field label="De" name="de" type="date" defaultValue={filter.since} />
-        <Field label="Até" name="ate" type="date" defaultValue={filter.until} />
+        <Field label="Ação" name="acao" defaultValue={rawFilter.action} placeholder="UPDATE" />
+        <Field label="Tabela" name="entidade" defaultValue={rawFilter.entityTable} placeholder="school_lists" />
+        <Field label="Id da entidade" name="entidadeId" defaultValue={rawFilter.entityId} />
+        <Field label="Ator (id)" name="ator" defaultValue={rawFilter.actorId} />
+        <Field label="De" name="de" type="date" defaultValue={rawFilter.since} />
+        <Field label="Até" name="ate" type="date" defaultValue={rawFilter.until} />
         <button type="submit" className="bg-tinta text-papel rounded-botao col-span-full h-11 w-fit px-6 text-[14px] font-extrabold sm:col-span-1">
           Filtrar
         </button>
       </form>
-      {failed ? (
+      {invalidFilter ? (
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
+          Filtro inválido: confira o formato de &quot;Id da entidade&quot; (uuid), &quot;Ator&quot; (uuid) e as datas.
+        </p>
+      ) : failed ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível carregar.</p>
       ) : (
         <div className="rounded-card overflow-x-auto bg-white">

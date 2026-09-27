@@ -200,7 +200,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-149 | reverificação de segurança S26, rodada 2 (`1e35153`, renumerado de D-146) | O agregado anônimo "outras" dos insights (`features/campaigns/insights-service.ts`) é seguro numa consulta ISOLADA, mas repetir a mesma consulta ao longo do tempo (conforme escolas publicam/removem listas) pode permitir um ataque de diferenciação: comparar dois retornos em momentos diferentes pode isolar a contribuição de uma escola que entrou ou saiu do agregado. Sem solução simples nesta fatia (exigiria limitar frequência de consulta por combinação categoria/série, ou uma técnica de privacidade diferencial); registrada como dívida | baixa | S19 | aberta |
 | D-150 | ledger.md S16 (Ruling de escopo) | Denúncia pública (`reports`) só tem ponto de entrada na tela para `target_type = 'school_list'` (página da escola); a tabela já suporta `stationery` e `catalog_item`, mas não há tela pública para denunciar papelaria ou item de catálogo | baixa | S17/S27 | aberta |
 | D-151 | ledger.md S16 (Ruling de escopo) | Não há índice navegável de todas as listas publicadas para o admin arquivar; a entrada é só por id direto (`/admin/listas/[id]`, alcançada pela fila de denúncias) | baixa | S18 | aberta |
-| D-152 | ledger.md S16 (Ruling de escopo) | Edição de `ai_settings.routes` (roteamento de modelo por provedor) e de `auto_publish_enabled` fica de fora da tela `/admin/ia`; ambos ficam só leitura por decisão desta fatia (routes é JSON heterogêneo sem cobertura de teste proporcional ao tempo disponível; `auto_publish_enabled` exige Ruling explícito antes de ligar) | média | futura fatia (com Ruling explícito para `auto_publish_enabled`) | aberta |
+| D-152 | ledger.md S16 (Ruling de escopo); parcialmente resolvida na revisão de segurança da S16 (0604) | Edição de `ai_settings.routes` (roteamento de modelo por provedor) e de `auto_publish_enabled` fica de fora da tela `/admin/ia`; a revisão de segurança fechou o buraco de fundo (o GRANT de tabela da 0202 deixava `authenticated` gravar as duas colunas direto via PostgREST, sem passar pela Server Action — agora bloqueado por gatilho, `ai_settings_lock_sensitive_fields`, só `service_role`/dono passa); falta só a TELA de edição de `routes` (JSON heterogêneo, sem cobertura de teste proporcional ao tempo disponível) — `auto_publish_enabled` continua exigindo Ruling humano explícito antes de qualquer tela | baixa | futura fatia (com Ruling explícito para `auto_publish_enabled`) | aberta (rebaixada de média: o risco de segurança já foi corrigido, falta só a tela) |
 | D-153 | ledger.md S16 (achado do E2E) | O clique em "Colocar em análise" (`/admin/denuncias/[id]`) submete o `<select name=resolution>` na mesma tela mesmo sem o admin ter escolhido nada; o servidor já ignora esse valor quando `status=reviewing` (`features/reports/actions.ts`), mas o `<select>` deveria ficar desabilitado enquanto não houver uma transição para resolver, por clareza de UI | baixa | S18 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
@@ -227,9 +227,14 @@ reverificação de segurança, rodada 2, `1e35153`, sem número anterior).
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 45 | 10 | 55 |
-| baixa | 72 | 10 | 82 |
+| média | 44 | 10 | 54 |
+| baixa | 73 | 10 | 83 |
 | **Total** | **127** | **25** | **152** |
+
+Contagem atualizada em 2026-09-27 (revisão de segurança da S16, rodada única sobre `682ab71`): D-152 rebaixada de
+média para baixa (o risco de segurança em si foi corrigido nesta rodada — gatilho `ai_settings_lock_sensitive_fields`
+—, falta só a tela de `routes`). Totais por severidade mudam; total geral não muda (não fechou nem abriu item,
+só reclassificou um).
 
 Contagem atualizada em 2026-09-27 (merge de `origin/main`, S26, com esta branch, S16): base pós-S15
 (117/24/141) + S26 (D-143–D-149: 3 média + 4 baixa, todas abertas → 124/24/148, como já estava em `origin/main`)

@@ -148,9 +148,10 @@ echo "== 6) arquivar lista (só published -> archived, com motivo)"
 ab admin open "$BASE/admin/listas/$LIST_ID" >/dev/null
 expect_text admin "Arquivar lista" "tela de lista mostra a ação de arquivar (lista publicada)"
 sleep 1
-ab admin fill 'textarea[name=reason]' "denuncia_procedente_lista_arquivada" >/dev/null
+ab admin select 'select[name=reasonCode]' "denuncia_procedente" >/dev/null
+ab admin fill 'input[name=observation]' "e2e_s16" >/dev/null
 sleep 1
-ab admin scrollintoview 'textarea[name=reason]' >/dev/null
+ab admin scrollintoview 'input[name=observation]' >/dev/null
 ab admin find role button click "Confirmar arquivamento" >/dev/null
 wait_text admin "Lista arquivada" 10 && ok "lista arquivada com sucesso" || bad "arquivar" "sem confirmação"
 STATUS3=$(sql "select status, archived_at is not null as tem_data from public.school_lists where id = '$LIST_ID';")
@@ -163,7 +164,7 @@ shot admin "$OUT/S16-05-lista-arquivada.png"
 
 echo "== 7) motivo do arquivamento fica em list_status_events (máquina de estados, S05; school_lists não tem gatilho de audit_log)"
 REASON_ROW=$(sql "select from_status, to_status, actor_id, reason from public.list_status_events where list_id = '$LIST_ID' and to_status = 'archived';")
-echo "$REASON_ROW" | grep -q "published|archived|$ADMIN_ID|denuncia_procedente_lista_arquivada" && ok "evento de arquivamento registrado com motivo e ator (estado: $REASON_ROW)" || bad "evento de arquivamento" "veio $REASON_ROW"
+echo "$REASON_ROW" | grep -q "published|archived|$ADMIN_ID|denuncia_procedente:e2e_s16" && ok "evento de arquivamento registrado com motivo (código) e ator (estado: $REASON_ROW)" || bad "evento de arquivamento" "veio $REASON_ROW"
 
 echo "== 8) configuração de IA (ai_settings): edição e recusa de campo fora do formulário"
 BEFORE_PV=$(sql "select pipeline_version from public.ai_settings where scope = 'default';")

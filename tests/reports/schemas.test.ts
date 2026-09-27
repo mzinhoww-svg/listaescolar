@@ -26,6 +26,10 @@ describe("createReportSchema", () => {
     expect(createReportSchema.safeParse({ targetType: "student", targetId: LIST_ID, reason: "outro" }).success).toBe(false);
     expect(createReportSchema.safeParse({ targetType: "school_list", targetId: LIST_ID, reason: "livre" }).success).toBe(false);
   });
+  it("revisão de segurança (0604): 'stationery'/'catalog_item' ainda não têm UI/Ruling — recusados, mesmo sendo valores reais do enum do banco", () => {
+    expect(createReportSchema.safeParse({ targetType: "stationery", targetId: LIST_ID, reason: "outro" }).success).toBe(false);
+    expect(createReportSchema.safeParse({ targetType: "catalog_item", targetId: LIST_ID, reason: "outro" }).success).toBe(false);
+  });
   it("recusa targetId que não é uuid", () => {
     expect(createReportSchema.safeParse({ targetType: "school_list", targetId: "abc", reason: "outro" }).success).toBe(false);
   });

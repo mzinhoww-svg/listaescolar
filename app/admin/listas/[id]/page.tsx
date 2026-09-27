@@ -10,6 +10,7 @@ import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { getListSummaryForAdmin } from "@/features/admin/list-lookup";
 import { LIST_STATE_LABEL } from "@/features/admin/labels";
+import { LIST_CLOSE_REASON_LABEL, LIST_CLOSE_REASONS } from "@/features/lists/close-reasons";
 
 import { archiveListAction } from "./actions";
 
@@ -68,8 +69,17 @@ export default async function Page({ params, searchParams }: { params: Promise<{
               <form action={archiveListAction} className="flex flex-col gap-3">
                 <input type="hidden" name="listId" value={list.id} />
                 <label className="flex flex-col gap-1.5 text-[13px] font-bold">
-                  Motivo (obrigatório; sem dado pessoal)
-                  <textarea name="reason" required minLength={3} maxLength={1000} rows={3} className="bg-campo rounded-campo w-full p-3 text-[14px] font-medium" />
+                  Motivo (obrigatório)
+                  <select name="reasonCode" required defaultValue="" className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium">
+                    <option value="" disabled>Escolha</option>
+                    {LIST_CLOSE_REASONS.map((code) => (
+                      <option key={code} value={code}>{LIST_CLOSE_REASON_LABEL[code]}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-[13px] font-bold">
+                  Observação (opcional, código curto, sem dado pessoal)
+                  <input name="observation" maxLength={60} placeholder="denuncia_123" className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium" />
                 </label>
                 <button type="submit" className="border-[1.5px] border-[#8a1c14] bg-transparent text-[#8a1c14] rounded-botao h-11 text-[14px] font-extrabold">
                   Confirmar arquivamento

@@ -9,8 +9,14 @@ import { reportErrorCode } from "./messages";
 import { createReportSchema, resolveReportSchema } from "./schemas";
 import { getReportsService } from "./wiring";
 
+const DEFAULT_NEXT = "/escolas";
+
 /** Denúncia pública (S16): qualquer autenticado, sobre a lista publicada em exibição (app/escolas/[inep]). */
-export async function submitReportAction(next: string, formData: FormData): Promise<void> {
+export async function submitReportAction(rawNext: string, formData: FormData): Promise<void> {
+  // Revisão de segurança: `next` só é seguro se apontar para a própria página da escola — mesmo vindo de um
+  // argumento vinculado pelo servidor (não de formData), nunca confia num redirect fora de /escolas/* (open
+  // redirect). Hoje o único chamador já só passa `/escolas/[inep]?...`; isto é defesa em profundidade.
+  const next = rawNext.startsWith("/escolas/") ? rawNext : DEFAULT_NEXT;
   // `next` pode já ter query string própria (?serie=...&ano=...): o separador do parâmetro de retorno precisa
   // respeitar isso, senão um segundo "?" quebra a leitura de searchParams na página de destino.
   const sep = next.includes("?") ? "&" : "?";

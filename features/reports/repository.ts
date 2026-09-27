@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { ReportError } from "./errors";
+import { ReportError, type ReportErrorCode } from "./errors";
 import {
   REPORT_REASONS,
   REPORT_RESOLUTIONS,
@@ -22,10 +22,21 @@ import {
  * `reports_guard` (0604); este repositório não confia só no Zod da camada de cima.
  */
 
-function mapError(e: { code?: string; message: string }, what: string): ReportError {
+// Hints das mensagens do gatilho reports_check_before_insert/reports_guard (0604): mais precisos que o SQLSTATE.
+const HINT_CODES: Record<string, ReportErrorCode> = {
+  target_not_found: "target_not_found",
+  target_type_not_allowed: "invalid_input",
+  daily_limit: "rate_limited",
+};
+
+function mapError(e: { code?: string; message: string; hint?: string | null }, what: string): ReportError {
+  const byHint = e.hint ? HINT_CODES[e.hint] : undefined;
+  if (byHint) return new ReportError(`${what}: ${e.message}`, byHint, e.code);
   switch (e.code) {
     case "PGRST116": // PostgREST: 0 linhas em .single()
       return new ReportError(`${what}: denúncia não encontrada`, "not_found", e.code);
+    case "23505": // índice único parcial (reports_no_duplicate_open): já existe uma denúncia aberta/em análise
+      return new ReportError(`${what}: já existe uma denúncia sua em análise para este item`, "already_exists", e.code);
     case "23514":
     case "42501":
       return new ReportError(`${what}: transição não permitida`, "invalid_state", e.code);
@@ -37,6 +48,9 @@ function mapError(e: { code?: string; message: string }, what: string): ReportEr
   }
 }
 
+// resolved_by NÃO entra no SELECT (revisão de segurança, 0604): `authenticated` perdeu a leitura dessa coluna —
+// quem resolveu já fica no audit_log (gatilho reports_audit), que é onde presta contas; pedir a coluna aqui
+// quebraria a query inteira (Postgres nega a instrução completa se QUALQUER coluna pedida não for legível).
 const rowSchema = z.object({
   id: z.uuid(),
   target_type: z.enum(REPORT_TARGET_TYPES),
@@ -47,7 +61,6 @@ const rowSchema = z.object({
   status: z.enum(REPORT_STATUSES),
   resolution: z.enum(REPORT_RESOLUTIONS).nullable(),
   resolution_note: z.string().nullable(),
-  resolved_by: z.uuid().nullable(),
   resolved_at: z.string().nullable(),
   created_at: z.string(),
 });
@@ -63,13 +76,13 @@ function toView(r: z.infer<typeof rowSchema>): ReportView {
     status: r.status,
     resolution: r.resolution,
     resolutionNote: r.resolution_note,
-    resolvedBy: r.resolved_by,
+    resolvedBy: null,
     resolvedAt: r.resolved_at ? new Date(r.resolved_at) : null,
     createdAt: new Date(r.created_at),
   };
 }
 
-const SELECT = "id, target_type, target_id, reason, detail_code, reporter_id, status, resolution, resolution_note, resolved_by, resolved_at, created_at";
+const SELECT = "id, target_type, target_id, reason, detail_code, reporter_id, status, resolution, resolution_note, resolved_at, created_at";
 
 export function createReportsRepository(client: SupabaseClient) {
   return {

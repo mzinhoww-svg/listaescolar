@@ -1,0 +1,173 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T3-comercio
+
+ ❯ tests/db/reports.test.ts (16 tests | 9 failed) 592ms
+   ❯ privilégios de EXECUTE (1)
+     × report_transition_allowed, reports_guard e reports_check_before_insert: ninguém tem EXECUTE direto 10ms
+   ❯ revisão de segurança (rodada única sobre a 0604) (8)
+     × só aceita target_type = 'school_list' por enquanto (papelaria/catálogo sem UI ainda) 34ms
+     × recusa alvo inexistente e lista não publicada (draft) 27ms
+     × não deixa duplicar denúncia aberta/em análise do mesmo alvo pelo mesmo denunciante; libera depois de resolvida 35ms
+     × teto diário por denunciante (public.reports_max_per_day) 6ms
+     × resolved_by é sempre o autor da SESSÃO (auth.uid()), mesmo que o cliente informe outro id 43ms
+     × authenticated não lê resolved_by (nem o próprio denunciante, nem o admin) 46ms
+     × authenticated não liga auto_publish_enabled nem edita routes em ai_settings, mesmo como admin 11ms
+     × gatilhos de auditoria de lead_reviews/lead_disputes excluem comment/detail (dado pessoal fora do audit_log) 22ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/db/reports.test.ts > privilégios de EXECUTE > report_transition_allowed, reports_guard e reports_check_before_insert: ninguém tem EXECUTE direto
+error: function "public.reports_check_before_insert()" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/reports.test.ts:204:21
+    202|       for (const sig of sigs) {
+    203|         for (const role of ["anon", "authenticated", "service_role"]) {
+    204|           const r = await c.query<{ ok: boolean }>("select has_functio…
+       |                     ^
+    205|           expect(r.rows[0]!.ok, `${role} × ${sig}`).toBe(false);
+    206|         }
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:195:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > só aceita target_type = 'school_list' por enquanto (papelaria/catálogo sem UI ainda)
+AssertionError: expected null not to be null
+ ❯ tests/db/reports.test.ts:228:29
+    226|           [school.listId, IDS.parent],
+    227|         );
+    228|         expect(r.error).not.toBeNull();
+       |                             ^
+    229|         expect(r.hint).toBe("target_type_not_allowed");
+    230|       });
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:222:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > recusa alvo inexistente e lista não publicada (draft)
+AssertionError: expected null not to be null
+ ❯ tests/db/reports.test.ts:245:35
+    243|           ["00000000-0000-4000-8000-000000000fff", IDS.parent],
+    244|         );
+    245|         expect(missing.error).not.toBeNull();
+       |                                   ^
+    246|         expect(missing.hint).toBe("target_not_found");
+    247|
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:239:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > não deixa duplicar denúncia aberta/em análise do mesmo alvo pelo mesmo denunciante; libera depois de resolvida
+AssertionError: expected null not to be null
+ ❯ tests/db/reports.test.ts:279:31
+    277|           [school.listId, IDS.parent],
+    278|         );
+    279|         expect(dup.error).not.toBeNull();
+       |                               ^
+    280|         expect(dup.code).toBe("23505");
+    281|       });
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:265:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > teto diário por denunciante (public.reports_max_per_day)
+error: function public.reports_max_per_day() does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/reports.test.ts:307:18
+    305|     // DEFINER); o valor de referência do teste vem de dentro do banco…
+    306|     const cap = await withSuperuser(async (c) => {
+    307|       const v = (await c.query<{ v: number }>("select public.reports_m…
+       |                  ^
+    308|       expect(v).toBeGreaterThan(0);
+    309|       return v;
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:306:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > resolved_by é sempre o autor da SESSÃO (auth.uid()), mesmo que o cliente informe outro id
+AssertionError: expected '00000000-0000-4000-8000-000000000001' to be '00000000-0000-4000-8000-000000000003' // Object.is equality
+
+Expected: "00000000-0000-4000-8000-000000000003"
+Received: "00000000-0000-4000-8000-000000000001"
+
+ ❯ tests/db/reports.test.ts:357:42
+    355|         // por authenticated (ver teste seguinte), então a checagem em…
+    356|         const row = await c.query("select resolved_by from public.repo…
+    357|         expect(row.rows[0]?.resolved_by).toBe(IDS.admin);
+       |                                          ^
+    358|       });
+    359|     } finally {
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/reports.test.ts:344:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > authenticated não lê resolved_by (nem o próprio denunciante, nem o admin)
+AssertionError: expected null not to be null
+ ❯ tests/db/reports.test.ts:370:29
+    368|       await withClaims("admin", async (cc) => {
+    369|         const r = await attemptH(cc, "select resolved_by from public.r…
+    370|         expect(r.error).not.toBeNull();
+       |                             ^
+    371|       });
+    372|     } finally {
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:368:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > authenticated não liga auto_publish_enabled nem edita routes em ai_settings, mesmo como admin
+AssertionError: expected null not to be null
+ ❯ tests/db/reports.test.ts:380:28
+    378|     await withClaims("admin", async (cc) => {
+    379|       const r1 = await attemptH(cc, "update public.ai_settings set aut…
+    380|       expect(r1.error).not.toBeNull();
+       |                            ^
+    381|       const r2 = await attemptH(cc, "update public.ai_settings set rou…
+    382|       expect(r2.error).not.toBeNull();
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:378:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/db/reports.test.ts > revisão de segurança (rodada única sobre a 0604) > gatilhos de auditoria de lead_reviews/lead_disputes excluem comment/detail (dado pessoal fora do audit_log)
+AssertionError: expected { …(14) } to not have property "comment"
+
+- Expected:
+undefined
+
++ Received:
+"Atendimento rápido e prestativo, recomendo"
+
+ ❯ tests/db/reports.test.ts:407:46
+    405|         [reviewId],
+    406|       );
+    407|       expect(reviewAudit.rows[0]?.after).not.toHaveProperty("comment");
+       |                                              ^
+    408|
+    409|       const disputedLead = await seedLead(c, { stationeryId });
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/reports.test.ts:390:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 7 passed (16)
+   Start at  13:03:46
+   Duration  767ms (tests 95%, transform 3%, import 2%)
+

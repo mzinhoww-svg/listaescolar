@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 
+import { reportErrorMessage } from "@/features/reports/messages";
 import { REPORT_REASONS, REPORT_REASON_LABEL } from "@/features/reports/ports";
 
 type Act = (formData: FormData) => Promise<void>;
@@ -20,7 +21,7 @@ export function ReportListForm({ listId, action, ok, erro }: { listId: string; a
       <summary className="cursor-pointer font-extrabold">Encontrou um problema nesta lista?</summary>
       <div className="mt-3 flex flex-col gap-3">
         {ok ? <p role="status" className="bg-verde-certo/20 text-verde-fundo rounded-campo px-3 py-2 font-bold">Denúncia enviada. A equipe vai revisar.</p> : null}
-        {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2 font-bold">Não foi possível enviar. Entre e tente de novo.</p> : null}
+        {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2 font-bold">{reportErrorMessage(erro) ?? "Não foi possível enviar. Entre e tente de novo."}</p> : null}
         <form action={action} className="flex flex-col gap-2.5">
           <input type="hidden" name="targetType" value="school_list" />
           <input type="hidden" name="targetId" value={listId} />

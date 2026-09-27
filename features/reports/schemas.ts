@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { REPORT_REASONS, REPORT_RESOLUTIONS, REPORT_TARGET_TYPES } from "./ports";
+import { REPORT_REASONS, REPORT_RESOLUTIONS } from "./ports";
 
 /** Código curto, nunca prosa (mesma regra do banco, ai_decisions.justification): bloqueia dado pessoal por construção. */
 const codeSchema = z
@@ -11,8 +11,11 @@ const codeSchema = z
   .nullish()
   .transform((v) => v ?? null);
 
+// Revisão de segurança (0604): o banco só aceita target_type = 'school_list' por enquanto (CHECK + gatilho);
+// papelaria e item de catálogo ficam reservados para quando existir UI e Ruling para eles (D-150). Espelhado
+// aqui: o Zod público nunca deveria nem tentar os outros dois, mesmo que o banco já recuse.
 export const createReportSchema = z.object({
-  targetType: z.enum(REPORT_TARGET_TYPES),
+  targetType: z.literal("school_list"),
   targetId: z.uuid(),
   reason: z.enum(REPORT_REASONS),
   detailCode: codeSchema,

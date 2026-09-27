@@ -5,8 +5,11 @@ export { REPORT_ERROR_CODES };
 const BY_CODE: Record<ReportErrorCode | "desconhecido", string> = {
   forbidden: "Você não tem acesso a esta ação.",
   not_found: "Denúncia não encontrada.",
+  target_not_found: "Não foi possível denunciar: a lista não existe mais ou não está publicada.",
   invalid_input: "Dados inválidos. Revise e tente de novo.",
   invalid_state: "Esta denúncia não está mais nesse estado.",
+  already_exists: "Você já tem uma denúncia em análise para este item.",
+  rate_limited: "Você atingiu o limite de denúncias por hoje. Tente de novo mais tarde.",
   database: "Não foi possível concluir agora. Tente de novo.",
   desconhecido: "Não foi possível concluir agora. Tente de novo.",
 };

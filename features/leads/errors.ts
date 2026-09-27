@@ -21,6 +21,9 @@ export const LEAD_ERROR_CODES = [
   // plano ativo (billing_unavailable). O pai nunca vê motivo de cobrança — mesma mensagem neutra das duas.
   "billing_required",
   "billing_unavailable",
+  // S23 (inadimplência): papelaria pausada por atraso além de `block_days` (payout_delinquency_status). Mesma
+  // mensagem neutra das duas causas de cobrança acima — o pai nunca vê "papelaria inadimplente".
+  "delinquency_blocked",
 ] as const;
 export type LeadErrorCode = (typeof LEAD_ERROR_CODES)[number];
 

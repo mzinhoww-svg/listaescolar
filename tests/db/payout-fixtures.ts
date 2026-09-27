@@ -152,3 +152,40 @@ export async function pendingFor(c: Client, beneficiaryType: string, beneficiary
 export function randomPixKey(): string {
   return `${randomUUID()}@fixture.invalid`;
 }
+
+/**
+ * Limpa TUDO de comissão/repasse (payout_settings, school_payout_settings, sale_payments, payout_ledger,
+ * payout_batches) de testes que COMMITARAM via cliente REST real (ex.: tests/payouts/repository.test.ts) — sem
+ * isso, linhas reais ficam para sempre no banco local e vazam para outros arquivos do `pnpm test:db` (contam a
+ * mais em "uma versão ativa por vez", e prendem escolas de fixture que o `cleanupUsers()` não consegue apagar).
+ * Só de teste; nunca usar fora de `tests/`.
+ */
+export async function purgeAllPayoutTestData(): Promise<void> {
+  const guarded: [string, string][] = [
+    ["sale_payments", "sale_payments_no_update_delete"],
+    ["payout_ledger", "payout_ledger_no_update_delete"],
+    ["payout_settings", "payout_settings_guard"],
+    ["school_payout_settings", "school_payout_settings_guard"],
+    ["payout_batches", "payout_batches_guard"],
+  ];
+  await withSuperuser(async (c) => {
+    await c.query("begin");
+    try {
+      for (const [table, trigger] of guarded) {
+        await c.query(`alter table public.${table} disable trigger ${trigger}`);
+      }
+      await c.query("delete from public.payout_ledger");
+      await c.query("delete from public.sale_payments");
+      await c.query("delete from public.payout_batches");
+      await c.query("delete from public.school_payout_settings");
+      await c.query("delete from public.payout_settings");
+      for (const [table, trigger] of guarded) {
+        await c.query(`alter table public.${table} enable always trigger ${trigger}`);
+      }
+      await c.query("commit");
+    } catch (e) {
+      await c.query("rollback");
+      throw e;
+    }
+  });
+}

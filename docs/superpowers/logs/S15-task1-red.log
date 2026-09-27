@@ -1,0 +1,272 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T3-comercio
+
+ ❯ tests/db/family-area.test.ts (14 tests | 14 failed) 973ms
+   ❯ student_nickname_valid (1)
+     × aceita apelido único, sem sobrenome nem dígito; recusa o resto 10ms
+   ❯ tabelas: colunas e RLS (2)
+     × students e saved_lists têm id/created_at/updated_at e RLS habilitada 10ms
+     × FKs de students/saved_lists são reais (schools, grades, profiles, school_lists) — pós-S11 6ms
+   ❯ students: CRUD do dono (5)
+     × o dono cria, edita e apaga o próprio aluno; escola/série inválida é recusada 9ms
+     × apelido com espaço (sobrenome) e com dígito são recusados pelo CHECK 8ms
+     × não vê nem edita aluno de outro perfil; update não muda id nem owner_id 20ms
+     × admin e anon não enxergam nenhum aluno (mínimo de dado de menor: sem policy de suporte) 8ms
+     × limite de 10 alunos por família 9ms
+   ❯ saved_lists: só lista publicada, só aluno do mesmo dono (5)
+     × salva lista publicada para o próprio aluno; apaga; unique evita duplicata 33ms
+     × recusa lista não publicada (draft/archived) e sem UPDATE grantado 41ms
+     × recusa aluno que não pertence ao dono da linha, mesmo que a RLS de students o esconda 29ms
+     × apagar o aluno apaga suas listas salvas (cascade) 29ms
+     × limite de 50 listas salvas por família 708ms
+   ❯ privilégios de EXECUTE (1)
+     × gatilhos: ninguém tem EXECUTE direto; student_nickname_valid: authenticated e service_role sim, anon não 5ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/db/family-area.test.ts > student_nickname_valid > aceita apelido único, sem sobrenome nem dígito; recusa o resto
+error: function public.student_nickname_valid(unknown) does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ valid tests/db/family-area.test.ts:16:57
+     14|
+     15| describe("student_nickname_valid", () => {
+     16|   const valid = async (c: Client, p: string | null) => (await c.query(…
+       |                                                         ^
+     17|   it("aceita apelido único, sem sobrenome nem dígito; recusa o resto",…
+     18|     await inTx(async (c) => {
+ ❯ tests/db/family-area.test.ts:19:70
+ ❯ tests/db/helpers.ts:101:7
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ inTx tests/db/helpers.ts:98:3
+ ❯ tests/db/family-area.test.ts:18:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > tabelas: colunas e RLS > students e saved_lists têm id/created_at/updated_at e RLS habilitada
+AssertionError: students: expected [] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   "id",
+-   "created_at",
+-   "updated_at",
+- ]
++ []
+
+ ❯ tests/db/family-area.test.ts:32:56
+     30|       for (const t of ["students", "saved_lists"]) {
+     31|         const cols = await c.query("select column_name from informatio…
+     32|         expect(cols.rows.map((r) => r.column_name), t).toEqual(expect.…
+       |                                                        ^
+     33|         const rls = await c.query("select relrowsecurity from pg_class…
+     34|         expect(rls.rows[0]?.relrowsecurity, t).toBe(true);
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:29:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > tabelas: colunas e RLS > FKs de students/saved_lists são reais (schools, grades, profiles, school_lists) — pós-S11
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:41:17
+     39|   it("FKs de students/saved_lists são reais (schools, grades, profiles…
+     40|     await withSuperuser(async (c) => {
+     41|       const r = await c.query(
+       |                 ^
+     42|         `select conrelid::regclass::text as t, confrelid::regclass::te…
+     43|          where contype = 'f' and conrelid = any(array['public.students…
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:40:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > students: CRUD do dono > o dono cria, edita e apaga o próprio aluno; escola/série inválida é recusada
+error: new row violates row-level security policy for table "schools"
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ ensureSchool tests/db/helpers.ts:475:3
+    473| export async function ensureSchool(client: Client, id: string = crypto…
+    474|   const inep = String(60_000_000 + (Number.parseInt(id.replace(/-/g, "…
+    475|   await client.query(
+       |   ^
+    476|     `insert into public.schools (id, inep, name, normalized_name, netw…
+    477|      select $1, $2, 'Escola Fixture', 'escola fixture', 'municipal', m…
+ ❯ tests/db/family-area.test.ts:54:22
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:53:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > students: CRUD do dono > apelido com espaço (sobrenome) e com dígito são recusados pelo CHECK
+error: new row violates row-level security policy for table "schools"
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ ensureSchool tests/db/helpers.ts:475:3
+    473| export async function ensureSchool(client: Client, id: string = crypto…
+    474|   const inep = String(60_000_000 + (Number.parseInt(id.replace(/-/g, "…
+    475|   await client.query(
+       |   ^
+    476|     `insert into public.schools (id, inep, name, normalized_name, netw…
+    477|      select $1, $2, 'Escola Fixture', 'escola fixture', 'municipal', m…
+ ❯ tests/db/family-area.test.ts:85:22
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:84:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > students: CRUD do dono > não vê nem edita aluno de outro perfil; update não muda id nem owner_id
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:105:9
+    103|     await withClaims("school_member", async (c) => {
+    104|       otherId = (
+    105|         await c.query(
+       |         ^
+    106|           "insert into public.students (owner_id, nickname, school_id,…
+    107|           [IDS.school_member, school, grade],
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:103:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > students: CRUD do dono > admin e anon não enxergam nenhum aluno (mínimo de dado de menor: sem policy de suporte)
+error: new row violates row-level security policy for table "schools"
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ ensureSchool tests/db/helpers.ts:475:3
+    473| export async function ensureSchool(client: Client, id: string = crypto…
+    474|   const inep = String(60_000_000 + (Number.parseInt(id.replace(/-/g, "…
+    475|   await client.query(
+       |   ^
+    476|     `insert into public.schools (id, inep, name, normalized_name, netw…
+    477|      select $1, $2, 'Escola Fixture', 'escola fixture', 'municipal', m…
+ ❯ tests/db/family-area.test.ts:126:22
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:125:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > students: CRUD do dono > limite de 10 alunos por família
+error: new row violates row-level security policy for table "schools"
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ ensureSchool tests/db/helpers.ts:475:3
+    473| export async function ensureSchool(client: Client, id: string = crypto…
+    474|   const inep = String(60_000_000 + (Number.parseInt(id.replace(/-/g, "…
+    475|   await client.query(
+       |   ^
+    476|     `insert into public.schools (id, inep, name, normalized_name, netw…
+    477|      select $1, $2, 'Escola Fixture', 'escola fixture', 'municipal', m…
+ ❯ tests/db/family-area.test.ts:145:22
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:144:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > saved_lists: só lista publicada, só aluno do mesmo dono > salva lista publicada para o próprio aluno; apaga; unique evita duplicata
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:173:9
+    171|       const grade = await gradeId(c);
+    172|       const studentId = (
+    173|         await c.query(
+       |         ^
+    174|           "insert into public.students (owner_id, nickname, school_id,…
+    175|           [IDS.parent, school, grade],
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:170:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > saved_lists: só lista publicada, só aluno do mesmo dono > recusa lista não publicada (draft/archived) e sem UPDATE grantado
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:203:9
+    201|       const grade = await gradeId(c);
+    202|       const studentId = (
+    203|         await c.query(
+       |         ^
+    204|           "insert into public.students (owner_id, nickname, school_id,…
+    205|           [IDS.parent, school, grade],
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:200:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > saved_lists: só lista publicada, só aluno do mesmo dono > recusa aluno que não pertence ao dono da linha, mesmo que a RLS de students o esconda
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:232:9
+    230|       const grade = await gradeId(c);
+    231|       otherStudentId = (
+    232|         await c.query(
+       |         ^
+    233|           "insert into public.students (owner_id, nickname, school_id,…
+    234|           [IDS.school_member, school, grade],
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:229:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > saved_lists: só lista publicada, só aluno do mesmo dono > apagar o aluno apaga suas listas salvas (cascade)
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:258:9
+    256|       const grade = await gradeId(c);
+    257|       const studentId = (
+    258|         await c.query(
+       |         ^
+    259|           "insert into public.students (owner_id, nickname, school_id,…
+    260|           [IDS.parent, school, grade],
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:255:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > saved_lists: só lista publicada, só aluno do mesmo dono > limite de 50 listas salvas por família
+error: relation "public.students" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:281:9
+    279|       const grade = await gradeId(c);
+    280|       const studentId = (
+    281|         await c.query(
+       |         ^
+    282|           "insert into public.students (owner_id, nickname, school_id,…
+    283|           [IDS.parent, school, grade],
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:278:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  tests/db/family-area.test.ts > privilégios de EXECUTE > gatilhos: ninguém tem EXECUTE direto; student_nickname_valid: authenticated e service_role sim, anon não
+error: function "public.students_guard()" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/family-area.test.ts:308:21
+    306|       for (const sig of triggers) {
+    307|         for (const role of ["anon", "authenticated", "service_role"]) {
+    308|           const r = await c.query<{ ok: boolean }>("select has_functio…
+       |                     ^
+    309|           expect(r.rows[0]!.ok, `${role} × ${sig}`).toBe(false);
+    310|         }
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/family-area.test.ts:299:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed (14)
+   Start at  00:58:31
+   Duration  1.13s (tests 97%, transform 1%, import 1%)
+

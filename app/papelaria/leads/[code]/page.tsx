@@ -5,6 +5,7 @@ import { formatWhen, moneyOrUnavailable } from "@/components/leads/format";
 import { ItemsTable } from "@/components/leads/ItemsTable";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
+import { ConfirmSaleForm } from "@/components/payouts/ConfirmSaleForm";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { errorMessageForCode as conversionErrorMessageForCode } from "@/features/conversion/messages";
 import { normalizeLeadCode } from "@/features/leads/code";
@@ -12,6 +13,9 @@ import { LEAD_ERROR_CODES, errorMessageForCode } from "@/features/leads/messages
 import { estimateOwnCatalog, getStationeryLead } from "@/features/leads/queries";
 import { getLeadService } from "@/features/leads/wiring";
 import { CLOSE_REASON_LABEL, isTerminal } from "@/features/leads/state";
+import { PAYOUT_ERROR_CODES } from "@/features/payouts/errors";
+import { errorMessageForCode as payoutErrorMessageForCode } from "@/features/payouts/messages";
+import { getPayoutService } from "@/features/payouts/wiring";
 import { getOwnerContext } from "@/features/stationeries/session";
 import { getConversionService } from "@/features/conversion/wiring";
 
@@ -47,8 +51,20 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
   } catch (error) {
     console.error("ler contestação do pedido", error instanceof Error ? error.message : "erro");
   }
+  let sale = null;
+  let schoolOptions: { id: string; name: string }[] = [];
+  try {
+    const payouts = getPayoutService();
+    [sale, schoolOptions] = await Promise.all([payouts.getSaleForLead(ctx.actor, lead.id), payouts.listSchoolOptions(ctx.actor)]);
+  } catch (error) {
+    console.error("ler confirmação de venda (Pix pela plataforma)", error instanceof Error ? error.message : "erro");
+  }
   const erroCode = one(sp.erro);
-  const erro = erroCode && !(LEAD_ERROR_CODES as readonly string[]).includes(erroCode) ? conversionErrorMessageForCode(erroCode) : errorMessageForCode(erroCode);
+  const erro = (LEAD_ERROR_CODES as readonly string[]).includes(erroCode ?? "")
+    ? errorMessageForCode(erroCode)
+    : (PAYOUT_ERROR_CODES as readonly string[]).includes(erroCode ?? "")
+      ? payoutErrorMessageForCode(erroCode)
+      : conversionErrorMessageForCode(erroCode);
   const frozen = ctx.stationery.status === "suspended";
   const closed = isTerminal(lead.status);
   return (
@@ -90,6 +106,16 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
             <StatusForm code={lead.code} status={lead.status} />
           )}
           {disputeGate ? <DisputeForm code={lead.code} gate={disputeGate} /> : null}
+          {lead.status === "converted" && !frozen ? (
+            <ConfirmSaleForm
+              leadId={lead.id}
+              declaredSaleCents={lead.declaredSaleCents}
+              sale={sale}
+              back={`/papelaria/leads/${lead.code}`}
+              schoolNameHint={lead.schoolName}
+              schools={schoolOptions}
+            />
+          ) : null}
           <Timeline events={events} side="stationery" />
         </div>
       </div>

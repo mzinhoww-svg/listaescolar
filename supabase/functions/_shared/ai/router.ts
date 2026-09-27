@@ -1,13 +1,18 @@
 // Roteador barato-primeiro. Escala no máximo `max_escalations` (a cadeia tem só 2 rotas) e só por erro
 // transitório (Zod inválido, confiança baixa, timeout, erro 5xx/429). Uma decisão por tentativa.
+//
+// D-057 (S18): este arquivo tinha 261 linhas. `record()` (gravação da decisão) foi extraído para
+// `router-record.ts`; `raceAbort`/`closed`/a resolução de rota foram extraídos para `router-helpers.ts` —
+// comportamento idêntico ao original.
 import type { ZodType } from "zod";
 import { AiError } from "./errors.ts";
 import { type EnvLike, isProductionEnv, readProcessEnv } from "./env.ts";
 import { parseJsonLoose } from "./json.ts";
+import { ALERT_CODES, record } from "./router-record.ts";
+import { closed, raceAbort, resolveRoute, type RouteCfg } from "./router-helpers.ts";
 import type {
   AiSettings,
   Clock,
-  DecisionRecord,
   DecisionRecorder,
   LlmProvider,
   LlmRequest,
@@ -19,6 +24,8 @@ import type {
   SettingsProvider,
   Usage,
 } from "./types.ts";
+
+export { ALERT_CODES };
 
 export type Evaluation = { overall: number; items: number[]; alerts: string[] };
 
@@ -62,65 +69,10 @@ export type RouterDeps = {
   env?: EnvLike;
 };
 
-// Códigos de alerta do SPEC (seção de alertas). Qualquer outro código é descartado antes de gravar.
-export const ALERT_CODES: ReadonlySet<string> = new Set([
-  "low_confidence_item",
-  "ambiguous_item",
-  "handwritten",
-  "possible_collective_item",
-  "restrictive_brand_or_spec",
-  "text_document_mismatch",
-  "invalid_school_grade_year",
-]);
-
-const unit = (n: number) => (Number.isFinite(n) ? Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000 : 0);
-
-function raceAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(new AiError("aborted"));
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-    p.then(
-      (v) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(v);
-      },
-      (e) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(e);
-      },
-    );
-  });
-}
-
-type RouteCfg = AiSettings["routes"][Route];
-
-async function closed<V>(fn: () => Promise<V>, detail: string): Promise<V> {
-  try {
-    return await fn();
-  } catch (e) {
-    if (e instanceof AiError) throw e;
-    throw new AiError("provider_error", { transient: true, detail }); // exceção inesperada de infraestrutura: repete
-  }
-}
-
 export function createRouter(deps: RouterDeps) {
   const { clock } = deps;
   const fakeAllowed = () => deps.allowFake === true && !isProductionEnv(deps.env ?? readProcessEnv());
-
-  /** Resolve o provedor da rota (falha fechada, sem rede). */
-  function resolve(settings: AiSettings, route: Route): { provider: LlmProvider; cfg: RouteCfg } {
-    const cfg = settings.routes[route];
-    if (cfg.provider === "fake" && !fakeAllowed()) throw new AiError("ai_not_configured", { detail: "fake_not_allowed" });
-    const factory = deps.providers[cfg.provider];
-    if (!factory) throw new AiError("ai_not_configured", { detail: "provider_unregistered" });
-    try {
-      return { provider: factory(route), cfg };
-    } catch (e) {
-      if (e instanceof AiError) throw e;
-      throw new AiError("ai_not_configured", { detail: "provider_unavailable" }); // nunca repassa e.message
-    }
-  }
+  const resolve = (settings: AiSettings, route: Route) => resolveRoute(deps.providers, fakeAllowed, settings, route);
 
   async function run<T>(task: Task<T>, opts: RunOptions): Promise<RunResult<T>> {
     const external = opts.signal;
@@ -222,40 +174,4 @@ export function createRouter(deps: RouterDeps) {
   }
 
   return { run };
-}
-
-type RecordBase<T> = {
-  deps: RouterDeps;
-  task: Task<T>;
-  settings: AiSettings;
-  prompt: Prompt;
-  provider: { model: string };
-  route: Route;
-  cfgProvider: ProviderName;
-  attempt: number;
-  startedAt: number;
-  finishedAt: number;
-};
-
-async function record<T>(b: RecordBase<T>, decision: DecisionRecord["decision"], justification: string, ev?: Evaluation) {
-  const iso = (ms: number) => new Date(ms).toISOString();
-  await b.deps.recorder.record({
-    entityType: b.task.entityType,
-    entityId: b.task.entityId,
-    kind: "extraction",
-    provider: b.cfgProvider,
-    model: b.provider.model,
-    promptKey: b.prompt.key,
-    promptVersion: b.prompt.version,
-    pipelineVersion: b.settings.pipelineVersion,
-    overallScore: ev ? unit(ev.overall) : null,
-    itemScores: ev ? ev.items.slice(0, 2000).map(unit) : [],
-    alerts: ev ? ev.alerts.filter((a) => ALERT_CODES.has(a)).slice(0, 200) : [],
-    decision,
-    justification,
-    attempt: b.attempt,
-    startedAt: iso(b.startedAt),
-    finishedAt: iso(b.finishedAt),
-    latencyMs: Math.max(0, Math.round(b.finishedAt - b.startedAt)),
-  });
 }

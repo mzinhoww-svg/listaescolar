@@ -573,3 +573,13 @@ para quem só consulta o ledger.
   dívidas S18 foram triadas uma a uma (ver DEBT.md para o resultado de cada uma).
 - Ruling: nenhuma migration nova nesta fatia — D-057, estados e a11y não tocam schema; nenhum achado de
   severidade alta apareceu que exigisse uma.
+- Ruling: `tests/publication/decide-guards.test.ts` ("varreduras da Task 2", S09) precisou de ajuste ao dividir
+  `decide.ts` em `decide.ts` + `decide-publish-stage.ts` (D-057) — duas asserções liam o texto-fonte de `decide.ts`
+  esperando "só este arquivo chama `.publish()`" e "só este arquivo nunca instancia memória"; a etapa de
+  publicação (lease -> porta -> registro, incl. a única chamada a `.publish()`) mudou de arquivo. O INVARIANTE
+  ("só um lugar no serviço chama a porta; nenhum instancia memória fora da composição") continua verdadeiro — só
+  o nome do arquivo mudou. Ajustado para checar `decide.ts` (0 chamadas) + `decide-publish-stage.ts` (1 chamada)
+  e para incluir `decide-publish-stage.ts` na lista de arquivos sem literal decimal/memória direta. Nenhuma
+  asserção de comportamento RUNTIME mudou (os 4 outros testes do arquivo, que exercitam `decideListPublication`/
+  `resumePublication` de verdade, passam sem alteração) — custo se estiver errada: reverter os dois `expect` é uma
+  linha cada.

@@ -16,6 +16,8 @@ type Props = {
   variant?: "primary" | "outline" | "danger";
   className?: string;
   children?: ReactNode;
+  /** D-006: pede confirmação do navegador antes de enviar — para ações terminais e imediatas (ex.: aprovar). */
+  confirmMessage?: string;
 };
 
 const BUTTON: Record<NonNullable<Props["variant"]>, string> = {
@@ -25,10 +27,14 @@ const BUTTON: Record<NonNullable<Props["variant"]>, string> = {
 };
 
 /** Formulário de Server Action com estado (`useActionState`) e mensagem fixa de sucesso/erro. */
-export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, ariaLabel, variant = "primary", className, children }: Props) {
+export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, ariaLabel, variant = "primary", className, children, confirmMessage }: Props) {
   const [state, formAction, pending] = useActionState(action, IDLE);
   return (
-    <form action={formAction} className={className ?? "flex flex-col gap-3"}>
+    <form
+      action={formAction}
+      onSubmit={confirmMessage ? (e) => { if (!window.confirm(confirmMessage)) e.preventDefault(); } : undefined}
+      className={className ?? "flex flex-col gap-3"}
+    >
       {children}
       {state.status === "error" ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">

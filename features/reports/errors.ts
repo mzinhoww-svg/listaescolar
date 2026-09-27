@@ -1,0 +1,14 @@
+/** Códigos estáveis de erro do domínio de denúncias (S16). */
+export const REPORT_ERROR_CODES = ["forbidden", "not_found", "invalid_input", "invalid_state", "database"] as const;
+export type ReportErrorCode = (typeof REPORT_ERROR_CODES)[number];
+
+export class ReportError extends Error {
+  constructor(
+    message: string,
+    readonly code: ReportErrorCode,
+    readonly dbCode?: string,
+  ) {
+    super(message);
+    this.name = "ReportError";
+  }
+}

@@ -214,3 +214,34 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
   `"MariaㅤSilva"` (e os demais códigos U+FFA0/U+115F/U+1160/U+02BC/cirílico) — `\p{L}`/`[[:alpha:]]`
   aceitavam, confirmando o achado da revisão antes de qualquer correção no arquivo.
 - Ruling: a S28 (ADR-006) entra no PLAN entre a S19 e a S20 e passa a ser pré-requisito do go-live; o brainstorming dela roda em modo autônomo (o orquestrador responde às perguntas da skill com SPEC, PLAN, `docs/design`, a pesquisa do ADR-005 e dados do staging) e o spec resultante vira Ruling — pedido explícito do humano em 2026-09-27 — custo se estiver errada: uma fatia a mais no caminho crítico antes do go-live
+
+## S16 · Admin (branch `slice/S16-admin`, worktree T3)
+
+- Ruling: dashboard (Admin01-Visao) e auditoria filtrável (Admin08-Eventos) leem por RLS já existente
+  (`..._select_admin` em `schools`/`school_lists`/`claims`/`stationeries`/`leads`/`audit_log`, desde S01–S14) com o
+  client de sessão, sem função SQL nova — menos superfície nova, mesma garantia (RLS + `getSessionActor` na
+  página) — custo se estiver errada: adicionar a função depois é aditivo, sem migrar dado.
+- Ruling: `reports` (denúncias) é tabela nova em `0604_admin_reports.sql` (faixa pós-trilhas `06xx`, seguinte à
+  `0603`); `reason` é enum, `detail_code`/`resolution_note` são código curto com a mesma regex de
+  `ai_decisions.justification` (nunca prosa/PII); sem coluna de contato do denunciante. Transição de estado por
+  `report_transition_allowed`/`reports_guard` (SECURITY DEFINER, `search_path=''`, EXECUTE revogado de todos);
+  auditoria automática reaproveitando `audit_row_change` (0001) — custo se estiver errado: tabela aditiva, sem FK
+  de terceiros para dentro dela; corrigir é migration nova.
+- Ruling: `ai_settings` (S16) fica com `auto_publish_enabled` e `routes` SÓ LEITURA na UI de edição — nunca liga
+  `auto_publish_enabled` sozinha (regra do CLAUDE.md) e `routes` (JSON heterogêneo de roteamento de modelo) fica
+  fora do formulário por risco/tempo — só os campos com CHECK simples (`confidence_threshold`,
+  `item_confidence_threshold`, `critical_alerts`, `max_escalations`, `pipeline_version`) são editáveis — custo se
+  estiver errado: uma fatia futura abre os dois campos com o próprio Ruling explícito exigido.
+- Ruling: "arquivar lista" reaproveita `list_archive`/`features/lists/repository.ts#archive()`, já existentes
+  desde S05 e sem uso em UI nenhuma — sem função SQL nova. Entrada única: `/admin/denuncias/[id]` (para
+  `target_type = 'school_list'`) e busca direta por id em `/admin/listas/[id]`; sem índice navegável de todas as
+  listas publicadas (fora do prompt da fatia) — custo se estiver errado: adicionar o índice depois é só uma tela
+  nova, sem tocar em banco.
+- Ruling: ponto de entrada público de denúncia nesta fatia é só a página da escola (`app/escolas/[inep]`), só
+  autenticado, só para a lista publicada em exibição (`target_type = 'school_list'`). Denúncia de
+  papelaria/catálogo fica só no schema (sem tela pública ainda) — dívida nova registrada no DEBT.md — custo se
+  estiver errado: a tabela já suporta os dois tipos, é só a tela que falta.
+- Ruling: DEBT D-006 (confirmação antes de aprovar reivindicação) entra nesta fatia (pequena, UX direta, sem
+  migration). D-007, D-035, D-036, D-037 e D-083 continuam abertas com dono reatribuído para S17/S18: nenhuma
+  bloqueia o prompt central da S16 (dashboard/auditoria/denúncias/`ai_settings`/arquivar) — custo se estiver
+  errado: são todas independentes, resolver mais tarde não bloqueia nada desta fatia.

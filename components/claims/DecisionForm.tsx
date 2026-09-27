@@ -24,6 +24,7 @@ export function DecisionForm({ claimId, options, action }: { claimId: string; op
           variant={VARIANT[o.to]}
           disabled={!o.allowed}
           disabledReason={o.reason}
+          confirmMessage={o.to === "approved" ? "Aprovar é definitivo: a escola passa a “verificada” imediatamente. Confirmar?" : undefined}
           className="flex flex-col gap-2.5 rounded-[20px] bg-white p-4"
         >
           <input type="hidden" name="claimId" value={claimId} />

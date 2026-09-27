@@ -15,6 +15,7 @@ function makeRepo(overrides: Partial<CampaignRepository> = {}): CampaignReposito
     listCampaignsForPartner: vi.fn(async () => [] as CampaignRow[]),
     listCampaignsPendingReview: vi.fn(async () => [] as CampaignRow[]),
     getCampaign: vi.fn(async () => null as CampaignRow | null),
+    isPartnerMemberOrAdmin: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -75,5 +76,51 @@ describe("CampaignService.listPendingReview", () => {
     await expect(svc.listPendingReview(actorOf("parent"))).rejects.toMatchObject({ code: "forbidden" });
     await svc.listPendingReview(actorOf("admin"));
     expect(repo.listCampaignsPendingReview).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("CampaignService.getCampaignForActor", () => {
+  const CAMPAIGN: CampaignRow = {
+    id: "22222222-2222-4222-8222-222222222222",
+    partnerId: "33333333-3333-4333-8333-333333333333",
+    name: "X",
+    productLabel: "Y",
+    creativeText: null,
+    pricingModel: "cpm",
+    bidCents: 100,
+    dailyBudgetCents: null,
+    totalBudgetCents: 1000,
+    accruedTotalCents: 0,
+    targetCategory: "papelaria",
+    targetGradeStages: null,
+    targetCities: null,
+    status: "approved",
+    statusReason: null,
+    decidedAt: null,
+    isDemo: false,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
+
+  it("sem posse (nem dono, nem admin) -> forbidden, mesmo existindo a campanha", async () => {
+    const repo = makeRepo({ getCampaign: vi.fn(async () => CAMPAIGN), isPartnerMemberOrAdmin: vi.fn(async () => false) });
+    const svc = new CampaignService({ repo });
+    await expect(svc.getCampaignForActor(actorOf("parent"), CAMPAIGN.id)).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("com posse, devolve a campanha", async () => {
+    const repo = makeRepo({ getCampaign: vi.fn(async () => CAMPAIGN), isPartnerMemberOrAdmin: vi.fn(async () => true) });
+    const svc = new CampaignService({ repo });
+    const r = await svc.getCampaignForActor(actorOf("parent"), CAMPAIGN.id);
+    expect(r).toEqual(CAMPAIGN);
+    expect(repo.isPartnerMemberOrAdmin).toHaveBeenCalledWith(expect.anything(), CAMPAIGN.partnerId);
+  });
+
+  it("campanha inexistente: null, sem nem chegar a checar posse", async () => {
+    const repo = makeRepo({ getCampaign: vi.fn(async () => null) });
+    const svc = new CampaignService({ repo });
+    const r = await svc.getCampaignForActor(actorOf("parent"), "does-not-exist");
+    expect(r).toBeNull();
+    expect(repo.isPartnerMemberOrAdmin).not.toHaveBeenCalled();
   });
 });

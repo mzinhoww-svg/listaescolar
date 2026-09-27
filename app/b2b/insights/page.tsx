@@ -11,8 +11,8 @@ export default function Page() {
     <div className="flex flex-col gap-6">
       <h1 className="text-[30px] leading-[1.1] font-extrabold tracking-[-0.035em]">Insights</h1>
       <p className="text-texto-2 max-w-2xl text-[14px] font-semibold">
-        Demanda agregada por categoria e série, por cidade. Sem dado de menor, de pai, de lead individual ou de papelaria — só a contagem de listas distintas, e só quando esse número não deixa
-        identificar um caso isolado.
+        Demanda agregada por categoria e série, por cidade. Sem dado de menor, de pai, de lead individual ou de papelaria — só a contagem de escolas distintas, e só quando esse número (sozinho ou
+        agrupado com outras cidades pequenas, nunca nomeadas) não deixa identificar um caso isolado.
       </p>
       <InsightsExplorer />
     </div>

@@ -16,6 +16,8 @@ const FUNCTIONS: Array<{ sig: string; svc: boolean }> = [
   { sig: "public.b2b_campaign_transition(uuid, uuid, text, text)", svc: true },
   { sig: "public.b2b_campaign_serve(uuid, integer)", svc: true },
   { sig: "public.b2b_campaign_record_event(uuid, uuid, text, text)", svc: true },
+  { sig: "public.b2b_campaign_list_context(uuid)", svc: false },
+  { sig: "public.b2b_campaign_eligible(uuid, uuid)", svc: false },
   { sig: "public.b2b_insights_raw(text, text, boolean)", svc: true },
   { sig: "public.b2b_insights_settings_set(uuid, integer)", svc: true },
   { sig: "public.b2b_statement_generate(uuid, uuid, date, date, text)", svc: true },
@@ -42,16 +44,16 @@ async function seedCandidateWithItem(c: Client, listId: string, category: string
 
 async function publishListWithItem(
   c: Client,
-  opts: { inep: string; isDemo: boolean; category?: string; alerts?: string[] },
-): Promise<{ listId: string; versionId: string }> {
-  const schoolId = await seedSchool(c, opts.inep);
-  const listId = await seedList(c, schoolId, "ef-1", 2028);
+  opts: { inep: string; isDemo: boolean; category?: string; alerts?: string[]; schoolId?: string; slug?: string; year?: number },
+): Promise<{ listId: string; versionId: string; schoolId: string }> {
+  const schoolId = opts.schoolId ?? (await seedSchool(c, opts.inep));
+  const listId = await seedList(c, schoolId, opts.slug ?? "ef-1", opts.year ?? 2028);
   if (!opts.isDemo) await c.query("update public.school_lists set is_demo = false where id = $1", [listId]);
   const versionId = await seedCandidateWithItem(c, listId, opts.category ?? "papelaria", opts.alerts ?? []);
   for (const s of ["submitted", "processing", "approved"] as const) await transition(c, listId, s);
   await approveVersion(c, listId, versionId);
   await c.query("select public.list_publish_version($1, $2, $3)", [listId, versionId, IDS.admin]);
-  return { listId, versionId };
+  return { listId, versionId, schoolId };
 }
 
 const createCampaign = (c: Client, actorId: string, partnerId: string, overrides: Record<string, unknown> = {}) =>
@@ -136,8 +138,11 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
         expect(del.rowCount === 0 || del.code === "42501").toBe(true);
       }
 
+      const listInep = `70${Date.now().toString().slice(-6)}`;
+      const list = await publishListWithItem(c, { inep: listInep, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep);
       const key = dedupe();
-      await record(c, campaignId, null, "impression", key);
+      await record(c, campaignId, list.versionId, "impression", key);
       const ev = await c.query<{ id: string }>("select id from public.b2b_campaign_events where campaign_id = $1", [campaignId]);
       const evId = ev.rows[0]!.id;
       const upd = await attempt(c, "update public.b2b_campaign_events set dedupe_key = 'ff00ff00ff00ff00' where id = $1", [evId]);
@@ -183,6 +188,58 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
     });
   });
 
+  it("b2b_campaign_record_event revalida a MESMA elegibilidade do serve: recusa em lista bloqueada por Procon", async () => {
+    await inTx(async (c) => {
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+      const campaignId = await createCampaign(c, IDS.parent, partnerId, { target_category: "papelaria" });
+      await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
+      await transitionCampaign(c, IDS.admin, campaignId, "approved");
+
+      const inep = `56${Date.now().toString().slice(-6)}`;
+      const blocked = await publishListWithItem(c, { inep, isDemo: false, category: "papelaria", alerts: ["restrictive_brand_or_spec"] });
+      cleanupIneps.push(inep);
+
+      // o mesmo bloqueio Procon do serve() vale para o record_event: nenhum evento é aceito, nem gravado.
+      expect(await record(c, campaignId, blocked.versionId, "impression", dedupe())).toBe(false);
+      const events = await c.query("select count(*)::int as n from public.b2b_campaign_events where campaign_id = $1", [campaignId]);
+      expect(events.rows[0]!.n).toBe(0);
+    });
+  });
+
+  it("b2b_campaign_record_event revalida is_demo/ambiente: recusa evento de lista real para campanha sandbox e vice-versa", async () => {
+    await inTx(async (c) => {
+      const sandboxPartner = await seedPartner(c, { type: "brand", status: "sandbox" });
+      const sandboxCampaign = await createCampaign(c, IDS.parent, sandboxPartner, { target_category: "papelaria" });
+      await transitionCampaign(c, IDS.parent, sandboxCampaign, "pending_review");
+      await transitionCampaign(c, IDS.admin, sandboxCampaign, "approved");
+
+      const inepReal = `57${Date.now().toString().slice(-6)}`;
+      const realList = await publishListWithItem(c, { inep: inepReal, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(inepReal);
+      expect(await record(c, sandboxCampaign, realList.versionId, "impression", dedupe())).toBe(false);
+
+      const inepDemo = `58${Date.now().toString().slice(-6)}`;
+      const demoList = await publishListWithItem(c, { inep: inepDemo, isDemo: true, category: "papelaria" });
+      cleanupIneps.push(inepDemo);
+      expect(await record(c, sandboxCampaign, demoList.versionId, "impression", dedupe())).toBe(true);
+    });
+  });
+
+  it("b2b_campaign_record_event recusa lista inexistente/não publicada (lista obrigatória, sem exceção nula)", async () => {
+    await inTx(async (c) => {
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+      const campaignId = await createCampaign(c, IDS.parent, partnerId, { target_category: "papelaria" });
+      await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
+      await transitionCampaign(c, IDS.admin, campaignId, "approved");
+
+      const nullList = await attemptH(c, "select public.b2b_campaign_record_event($1, null, 'impression', $2) as r", [campaignId, dedupe()]);
+      expect(nullList.hint).toBe("invalid_input");
+
+      const fake = "00000000-0000-4000-8000-000000000000";
+      expect(await record(c, campaignId, fake, "impression", dedupe())).toBe(false);
+    });
+  });
+
   it("is_demo: parceiro sandbox só serve/mede em lista demo; parceiro ativo só em lista real", async () => {
     await inTx(async (c) => {
       const sandboxPartner = await seedPartner(c, { type: "brand", status: "sandbox" });
@@ -210,16 +267,19 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       const campaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpc", bid_cents: 500, total_budget_cents: 1000000 });
       await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
       await transitionCampaign(c, IDS.admin, campaignId, "approved");
+      const listInep = `71${Date.now().toString().slice(-6)}`;
+      const list = await publishListWithItem(c, { inep: listInep, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep);
 
       const key = dedupe();
-      expect(await record(c, campaignId, null, "impression", key)).toBe(true);
-      expect(await record(c, campaignId, null, "impression", key)).toBe(false); // dedupe
-      const clickOk = await record(c, campaignId, null, "click", key);
+      expect(await record(c, campaignId, list.versionId, "impression", key)).toBe(true);
+      expect(await record(c, campaignId, list.versionId, "impression", key)).toBe(false); // dedupe
+      const clickOk = await record(c, campaignId, list.versionId, "click", key);
       expect(clickOk).toBe(true);
-      expect(await record(c, campaignId, null, "click", key)).toBe(false); // dedupe do clique
+      expect(await record(c, campaignId, list.versionId, "click", key)).toBe(false); // dedupe do clique
 
       const otherKey = dedupe();
-      expect(await record(c, campaignId, null, "click", otherKey)).toBe(false); // sem impressão prévia nesse dia/chave
+      expect(await record(c, campaignId, list.versionId, "click", otherKey)).toBe(false); // sem impressão prévia nesse dia/chave
 
       const events = await c.query("select count(*)::int as n from public.b2b_campaign_events where campaign_id = $1", [campaignId]);
       expect(events.rows[0]!.n).toBe(2); // 1 impressão + 1 clique
@@ -235,37 +295,81 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       const campaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpm", bid_cents: 10000, total_budget_cents: 15 });
       await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
       await transitionCampaign(c, IDS.admin, campaignId, "approved");
+      const listInep = `72${Date.now().toString().slice(-6)}`;
+      const list = await publishListWithItem(c, { inep: listInep, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep);
 
-      expect(await record(c, campaignId, null, "impression", dedupe())).toBe(true);
-      expect(await record(c, campaignId, null, "impression", dedupe())).toBe(true);
-      const status1 = await c.query<{ status: string; accrued_total_cents: number }>("select status, accrued_total_cents from public.b2b_campaigns where id = $1", [campaignId]);
+      expect(await record(c, campaignId, list.versionId, "impression", dedupe())).toBe(true);
+      expect(await record(c, campaignId, list.versionId, "impression", dedupe())).toBe(true);
+      const status1 = await c.query<{ status: string; accrued_total_cents: string }>("select status, accrued_total_cents from public.b2b_campaigns where id = $1", [campaignId]);
       expect(status1.rows[0]!.status).toBe("paused");
-      expect(status1.rows[0]!.accrued_total_cents).toBeGreaterThanOrEqual(15);
+      expect(Number(status1.rows[0]!.accrued_total_cents)).toBeGreaterThanOrEqual(15);
 
       // pausada: novo evento é descartado (silêncio, não erro).
-      expect(await record(c, campaignId, null, "impression", dedupe())).toBe(false);
+      expect(await record(c, campaignId, list.versionId, "impression", dedupe())).toBe(false);
       const pausedLedger = await c.query("select count(*)::int as n from public.b2b_campaign_ledger where campaign_id = $1 and entry_type = 'budget_paused'", [campaignId]);
       expect(pausedLedger.rows[0]!.n).toBe(1);
 
-      // retomar com orçamento esgotado é recusado.
-      const resume = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.admin, campaignId]);
-      expect(resume.hint).toBe("budget_exhausted");
+      // retomar com orçamento esgotado é recusado (dono OU admin).
+      const resumeAsAdmin = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.admin, campaignId]);
+      expect(resumeAsAdmin.hint).toBe("budget_exhausted");
+      const resumeAsOwner = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.parent, campaignId]);
+      expect(resumeAsOwner.hint).toBe("budget_exhausted");
     });
   });
 
-  it("b2b_insights_raw conta listas distintas publicadas por cidade/série/categoria, separando is_demo", async () => {
+  it("o DONO (não só admin) consegue retomar a própria campanha pausada com orçamento disponível; decided_by não muda", async () => {
+    await inTx(async (c) => {
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+      const campaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpc", bid_cents: 100, total_budget_cents: 1000000, daily_budget_cents: 200 });
+      await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
+      await transitionCampaign(c, IDS.admin, campaignId, "approved");
+      const before = await c.query<{ decided_by: string }>("select decided_by from public.b2b_campaigns where id = $1", [campaignId]);
+
+      // dono pausa a própria campanha (permitido) e depois retoma (agora permitido — antes só admin conseguia).
+      await transitionCampaign(c, IDS.parent, campaignId, "paused", "pausa manual do dono");
+      const resume = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.parent, campaignId]);
+      expect(resume.error).toBeNull();
+      const after = await c.query<{ status: string; decided_by: string; status_reason: string | null }>(
+        "select status, decided_by, status_reason from public.b2b_campaigns where id = $1",
+        [campaignId],
+      );
+      expect(after.rows[0]!.status).toBe("approved");
+      expect(after.rows[0]!.status_reason).toBeNull();
+      expect(after.rows[0]!.decided_by).toBe(before.rows[0]!.decided_by); // continua sendo quem aprovou de verdade (admin)
+    });
+  });
+
+  it("b2b_insights_raw conta ESCOLA distinta (não lista) por cidade/série/categoria, separando is_demo", async () => {
     await inTx(async (c) => {
       const ineps = [`60${Date.now().toString().slice(-6)}`, `61${Date.now().toString().slice(-6)}`, `62${Date.now().toString().slice(-6)}`];
       for (const inep of ineps) {
         await publishListWithItem(c, { inep, isDemo: false, category: "papelaria" });
         cleanupIneps.push(inep);
       }
-      const rows = await callAsService<{ city_ibge: string; distinct_lists: number }>(c, "select * from public.b2b_insights_raw($1, $2, $3)", ["papelaria", "ef", false]);
-      const total = rows.reduce((acc, r) => acc + r.distinct_lists, 0);
-      expect(total).toBeGreaterThanOrEqual(3);
+      const rows = await callAsService<{ city_ibge: string; distinct_schools: number }>(c, "select * from public.b2b_insights_raw($1, $2, $3)", ["papelaria", "ef", false]);
+      const totalBefore = rows.reduce((acc, r) => acc + r.distinct_schools, 0);
+      expect(totalBefore).toBeGreaterThanOrEqual(3);
 
-      const demoRows = await callAsService<{ distinct_lists: number }>(c, "select * from public.b2b_insights_raw($1, $2, $3)", ["papelaria", "ef", true]);
-      const demoTotal = demoRows.reduce((acc, r) => acc + r.distinct_lists, 0);
+      // uma escola com 5 "séries" (5 listas na MESMA etapa 'ef', slugs ef-1..ef-5): conta 1 escola, não 5.
+      const inepMulti = `63${Date.now().toString().slice(-6)}`;
+      const { schoolId } = await publishListWithItem(c, { inep: inepMulti, isDemo: false, category: "papelaria", slug: "ef-1", year: 2028 });
+      cleanupIneps.push(inepMulti);
+      for (const [slug, year] of [
+        ["ef-2", 2028],
+        ["ef-3", 2028],
+        ["ef-4", 2028],
+        ["ef-5", 2028],
+      ] as const) {
+        await publishListWithItem(c, { inep: inepMulti, isDemo: false, category: "papelaria", schoolId, slug, year });
+      }
+
+      const rowsAfter = await callAsService<{ city_ibge: string; distinct_schools: number }>(c, "select * from public.b2b_insights_raw($1, $2, $3)", ["papelaria", "ef", false]);
+      const totalAfter = rowsAfter.reduce((acc, r) => acc + r.distinct_schools, 0);
+      expect(totalAfter).toBe(totalBefore + 1); // +1 escola, não +5 listas
+
+      const demoRows = await callAsService<{ distinct_schools: number }>(c, "select * from public.b2b_insights_raw($1, $2, $3)", ["papelaria", "ef", true]);
+      const demoTotal = demoRows.reduce((acc, r) => acc + r.distinct_schools, 0);
       expect(demoTotal).toBe(0); // as listas acima não são demo
     });
   });
@@ -282,9 +386,12 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       const campaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpc", bid_cents: 300, total_budget_cents: 1000000 });
       await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
       await transitionCampaign(c, IDS.admin, campaignId, "approved");
+      const listInep = `73${Date.now().toString().slice(-6)}`;
+      const list = await publishListWithItem(c, { inep: listInep, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep);
       const key = dedupe();
-      await record(c, campaignId, null, "impression", key);
-      await record(c, campaignId, null, "click", key);
+      await record(c, campaignId, list.versionId, "impression", key);
+      await record(c, campaignId, list.versionId, "click", key);
 
       const start = new Date().toISOString().slice(0, 10);
       const stId = await callAsService<{ id: string }>(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [
@@ -300,11 +407,98 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       expect(apiLine?.amount_cents).toBeNull();
       const cpcLine = lines.rows.find((r) => r.source === "campaign_cpc");
       expect(cpcLine?.pricing_status).toBe("priced");
-      expect(cpcLine?.amount_cents).toBe(300);
+      expect(Number(cpcLine?.amount_cents)).toBe(300); // 1 clique x bid de 300 centavos (CPC: valor exato, sem divisão)
       expect(cpcLine?.unit_price_cents).toBe(300);
 
       const dup = await attemptH(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [IDS.admin, partnerId, start, null]);
       expect(dup.hint).toBe("duplicate_period");
+    });
+  });
+
+  it("extrato filtra is_demo: campanha sandbox nunca entra no extrato de um parceiro ativo; uso de chave test nunca conta", async () => {
+    await inTx(async (c) => {
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+      const testKey = await seedKey(c, partnerId, { environment: "test" });
+      await c.query(
+        `insert into public.b2b_usage_daily (key_id, partner_id, day, endpoint, status_class, request_count)
+         values ($1, $2, current_date, '/v1/schools', '2xx', 99)`,
+        [testKey.id, partnerId],
+      );
+      // campanha REAL: entra no extrato.
+      const realCampaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpc", bid_cents: 500, total_budget_cents: 1000000 });
+      await transitionCampaign(c, IDS.parent, realCampaignId, "pending_review");
+      await transitionCampaign(c, IDS.admin, realCampaignId, "approved");
+      const listInep = `74${Date.now().toString().slice(-6)}`;
+      const list = await publishListWithItem(c, { inep: listInep, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep);
+      const key = dedupe();
+      await record(c, realCampaignId, list.versionId, "impression", key);
+      await record(c, realCampaignId, list.versionId, "click", key);
+
+      // campanha marcada como demo (superusuário, direto na tabela — simula um estado sandbox anterior a uma
+      // troca de status do parceiro) NUNCA deveria entrar no extrato real, mesmo com ledger próprio.
+      const demoCampaign = await callAsService<{ id: string }>(c, "select public.b2b_campaign_create($1, $2, $3::jsonb) as id", [
+        IDS.parent,
+        partnerId,
+        JSON.stringify({ name: "Campanha Demo", product_label: "X", pricing_model: "cpc", bid_cents: 700, total_budget_cents: 1000000, target_category: "papelaria" }),
+      ]).then((r) => r[0]!.id);
+      await c.query("update public.b2b_campaigns set is_demo = true where id = $1", [demoCampaign]);
+      await transitionCampaign(c, IDS.parent, demoCampaign, "pending_review");
+      await transitionCampaign(c, IDS.admin, demoCampaign, "approved");
+      const demoListInep = `75${Date.now().toString().slice(-6)}`;
+      const demoList = await publishListWithItem(c, { inep: demoListInep, isDemo: true, category: "papelaria" });
+      cleanupIneps.push(demoListInep);
+      const demoKey = dedupe();
+      await record(c, demoCampaign, demoList.versionId, "impression", demoKey);
+      await record(c, demoCampaign, demoList.versionId, "click", demoKey);
+
+      const start = new Date().toISOString().slice(0, 10);
+      const stId = await callAsService<{ id: string }>(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [IDS.admin, partnerId, start, null]).then(
+        (r) => r[0]!.id,
+      );
+      const lines = await c.query<{ source: string; campaign_id: string | null; quantity: string }>(
+        "select source, campaign_id, quantity from public.b2b_statement_line_items where statement_id = $1",
+        [stId],
+      );
+      expect(lines.rows.find((r) => r.campaign_id === demoCampaign)).toBeUndefined(); // campanha demo nunca aparece
+      expect(lines.rows.find((r) => r.campaign_id === realCampaignId)).toBeDefined();
+      const apiLine = lines.rows.find((r) => r.source === "api_usage");
+      expect(Number(apiLine!.quantity)).toBe(0); // só havia uso de chave `test`, nunca contado no extrato real
+    });
+  });
+
+  it("CPM acumula EXATO (sem arredondar por evento): bid pequeno não infla o total nem o extrato", async () => {
+    await inTx(async (c) => {
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+      // bid de 1 centavo/mil = 0,001 centavo por impressão; arredondar por evento (ceil) daria 1 centavo cada,
+      // inflando 1000x. 3 impressões devem acumular EXATAMENTE 0,003 centavo, nunca 3 centavos.
+      const campaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpm", bid_cents: 1, total_budget_cents: 1000000 });
+      await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
+      await transitionCampaign(c, IDS.admin, campaignId, "approved");
+      const listInep = `76${Date.now().toString().slice(-6)}`;
+      const list = await publishListWithItem(c, { inep: listInep, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep);
+
+      for (let i = 0; i < 3; i++) {
+        expect(await record(c, campaignId, list.versionId, "impression", dedupe())).toBe(true);
+      }
+      const row = await c.query<{ accrued_total_cents: string }>("select accrued_total_cents from public.b2b_campaigns where id = $1", [campaignId]);
+      expect(Number(row.rows[0]!.accrued_total_cents)).toBeCloseTo(0.003, 6);
+
+      const start = new Date().toISOString().slice(0, 10);
+      const stId = await callAsService<{ id: string }>(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [IDS.admin, partnerId, start, null]).then(
+        (r) => r[0]!.id,
+      );
+      const line = await c.query<{ quantity: string; amount_cents: string; unit_price_cents: number }>(
+        "select quantity, amount_cents, unit_price_cents from public.b2b_statement_line_items where statement_id = $1 and source = 'campaign_cpm'",
+        [stId],
+      );
+      const quantity = Number(line.rows[0]!.quantity);
+      const amount = Number(line.rows[0]!.amount_cents);
+      const unitPrice = line.rows[0]!.unit_price_cents;
+      expect(quantity).toBe(3);
+      // invariante coerente (quantidade x bid / 1000 para CPM): nunca um número solto.
+      expect(amount).toBeCloseTo((quantity * unitPrice) / 1000, 6);
     });
   });
 

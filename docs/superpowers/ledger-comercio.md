@@ -1374,3 +1374,109 @@ ainda sem a correção — ver histórico desta sessão).
   isolada, não reprodutível, em `publication-service.test.ts`/`payouts.test.ts` — flutuação já conhecida da suíte
   de banco sob paralelismo, confirmada não relacionada à S26 ao rodar de novo). E2E real com `agent-browser`
   (`scripts/e2e-s26.sh`): **17/17**, sem regressão.
+
+## S26 · correções da revisão de segurança (rodada única, sobre `941ca25`)
+
+Revisão não achou bloqueantes (serve/record ainda não estavam ligados a nenhuma tela/rota — só infraestrutura de
+domínio e banco). Todos os achados corrigidos na PRÓPRIA migration `0503_b2b_campaigns.sql` (editada no lugar,
+nunca aplicada em staging) e no domínio TypeScript correspondente.
+
+- Ruling (Importante 1 — k-anonimato vazava nos limites): o desenho anterior (`features/campaigns/
+  insights-service.ts`) suprimia uma SEGUNDA célula NOMEADA (a de menor contagem entre as visíveis) quando
+  exatamente uma cidade ficava abaixo de `minK`, para evitar `total - visíveis = oculta`. Mas essa segunda célula
+  suprimida vinha do conjunto VISÍVEL (>= k) e a primeira do conjunto PEQUENO (< k) — quando a soma das duas caía
+  exatamente em `k+1`, as únicas contagens inteiras possíveis satisfazendo "uma >= k, a outra < k, soma = k+1" são
+  únicas (`k` e `1`), revelando as DUAS por dedução, não só uma. Provado concretamente rodando a função do commit
+  `941ca25` (`docs/superpowers/logs/s26-security-fix-red-green.txt`): k=5, cidades 100/5/1, soma oculta = 6 = k+1,
+  dedução única = (5, 1). Corrigido por desenho: cidades abaixo de `minK` NUNCA são nomeadas — todas as pequenas
+  somam numa célula ANÔNIMA "outras" (sem id/nome), só mostrada quando a PRÓPRIA soma atinge `minK` (aí é, por
+  definição, um agregado k-anônimo, não importa a composição interna). Se mesmo agregada a soma não chega a
+  `minK`, a célula inteira é omitida (nem número, nem nome) e um flag `partial` avisa que existe dado oculto —
+  SEM revelar quanto. O TOTAL deixou de ser a soma bruta real: agora é sempre a soma só do que já foi exibido
+  (cidades nomeadas + "outras", quando existir) — como nunca referencia um valor não mostrado, não há mais nada
+  para "descontar" por subtração, eliminando a CLASSE inteira de vazamento por limite (não só o caso S=k+1).
+  Também trocada a unidade de contagem de LISTA para ESCOLA distinta (`count(distinct sc.id)`, não `sl.id`, em
+  `b2b_insights_raw`) — uma escola com várias listas na mesma etapa (séries diferentes, anos diferentes) inflava
+  a amostra sem ganhar anonimato de verdade. Testes: 9 cenários de fronteira em `tests/campaigns/
+  insights-service.test.ts` (S=k+1, várias ocultas, cidade com 1 escola sozinha, agregado que não atinge `minK`
+  nem agregado, ordenação determinística) + teste de banco confirmando a contagem por escola (`tests/db/
+  campaigns.test.ts`, "conta ESCOLA distinta... uma escola com 5 séries"). Custo se errada: alto (é o requisito
+  central da tela B2B08 e o motivo de o PLAN pedir "teste de k-anonimato" explicitamente).
+- Ruling (Importante 2 — record_event não revalidava elegibilidade): `b2b_campaign_record_event` só checava
+  `status = 'approved'` da campanha — uma chamada para uma lista bloqueada por Procon, de ambiente errado
+  (is_demo), fora de segmentação ou com orçamento esgotado GRAVARIA o evento mesmo assim, porque só
+  `b2b_campaign_serve` aplicava essas regras. Corrigido extraindo a elegibilidade inteira para UMA função,
+  `b2b_campaign_eligible(p_campaign_id, p_list_version_id)` (que por sua vez usa `b2b_campaign_list_context` para
+  a leitura de lista/escola/categoria bloqueada, também extraída), chamada por `b2b_campaign_serve` E por
+  `b2b_campaign_record_event` — nenhuma das duas reimplementa a regra. `list_version_id` da tabela de eventos
+  virou `not null` (antes aceitava `null`; sem lista não há como revalidar nada). Custo se errada: alto (é
+  exatamente o tipo de furo que a Task 1 desta fatia gastou uma migration inteira evitando no `serve`). Testado:
+  3 cenários novos em `tests/db/campaigns.test.ts` (Procon, is_demo, lista nula/inexistente).
+- Ruling (Importante 3 — dedupe forjável): o `dedupe_key` era escolhido inteiramente pelo chamador (só validado
+  por formato hex) — qualquer cliente podia gerar uma chave nova a cada chamada e inflar impressão/clique sem
+  limite. Corrigido com uma camada nova, `features/campaigns/tracking-service.ts` (ainda não ligada a nenhuma
+  tela/rota — infraestrutura para quando a página pública da lista ganhar o slot patrocinado, fora do escopo desta
+  fatia): a chave é derivada no SERVIDOR por HMAC-SHA256 (segredo `B2B_CAMPAIGN_TRACKING_SECRET`, ≥32 caracteres,
+  lido direto de `process.env` — não faz parte do `serverSchema` de `lib/env.ts` porque nada consome esta camada
+  ainda) sobre IP truncado (privacidade: zera o último octeto IPv4 / mantém só ~/48 IPv6) + user-agent + lista +
+  campanha + dia; a impressão emite um TOKEN assinado que o clique precisa apresentar (verificado em tempo
+  constante, `timingSafeEqual`) — sem token, nem chega a chamar o banco (o banco também exige impressão prévia
+  com a MESMA `dedupe_key`, defesa em profundidade: duas checagens independentes, uma em TS e uma em SQL). Limite
+  de 20 impressões e 10 cliques por minuto por (IP truncado, lista, campanha), mesma camada de balde em memória já
+  usada pelo widget/API B2B (`lib/rate-limit/memory-bucket.ts`) — primeira camada só; o Firewall da Vercel
+  continua sendo a de verdade (mesma ressalva de sempre, D-001/D-113 etc.). Testado: 11 casos (determinismo,
+  sensibilidade a cada insumo, truncagem de IP, token inválido/adulterado/de outra campanha, limite por minuto).
+- Ruling (Importante 4 — CPM arredondava por evento): `ceil(bid_cents::numeric / 1000)` a cada impressão inflava
+  sistematicamente um bid pequeno (ex.: 1 centavo/mil = 0,001 centavo real por impressão virava 1 centavo POR
+  EVENTO — 1000x). Corrigido acumulando EXATO, sem arredondar: `accrued_total_cents` (campanha),
+  `b2b_campaign_ledger.amount_cents`/`balance_after_cents` e `b2b_statement_line_items.amount_cents` viraram
+  `numeric(14,3)` (milésimos de centavo); o arredondamento para reais só acontece na FORMATAÇÃO do extrato
+  (`statement-service.ts`, exibição, nunca no acúmulo). `unit_price_cents` (o bid em si) continua inteiro — é o
+  valor que o parceiro declarou, sempre redondo. Invariante testada: `amount_cents = quantidade × bid / 1000`
+  (CPM) ou `× bid` (CPC), exato, em `tests/db/campaigns.test.ts`. PostgREST devolve `numeric` como string (não
+  float, para não perder precisão) — `features/campaigns/repository.ts` ganhou um `numericAsNumber` (mesmo padrão
+  já usado para `quantity`) aplicado a `accrued_total_cents` e ao `amount_cents` do extrato. Custo se errada: alto
+  (inflar 1000x o "acúmulo informativo" de um parceiro real, mesmo sem ser dinheiro de verdade, é um erro grosseiro
+  de produto que mina a confiança no extrato).
+- Ruling (Importante 5 — extrato sem filtro de ambiente): `b2b_statement_generate` somava QUALQUER campanha do
+  parceiro no período (inclusive uma com `is_demo = true`, sandbox) e QUALQUER uso de chave (inclusive
+  `environment = 'test'`) — um parceiro `active` com uma campanha sandbox residual ou uma chave de teste ativa
+  veria esse uso no extrato REAL. Corrigido com `and c.is_demo = false` no agrupamento de campanhas e
+  `join b2b_api_keys k ... and k.environment = 'live'` na soma de uso de API. Testado: cenário com uma campanha
+  sandbox E uma chave `test` gerando dado que NUNCA aparece no extrato de um parceiro `active`
+  (`tests/db/campaigns.test.ts`, "extrato filtra is_demo").
+- Ruling (Menor): `resumeCampaignAction`/`CampaignService.resumeCampaign` prometiam ao DONO retomar uma campanha
+  pausada, mas `b2b_campaign_transition` só permitia ADMIN mover para `approved`, em qualquer origem — o dono
+  literalmente não conseguia usar o botão "Retomar" da B2B06. Corrigido tornando a checagem de admin ESPECÍFICA
+  da transição real de aprovação (`pending_review -> approved/rejected`); `paused -> approved` (retomar) passou a
+  aceitar dono OU admin. `decided_by`/`decided_at` também pararam de ser reescritos quando o dono retoma (só
+  registram a decisão de admin de verdade). Testado: dono retoma com sucesso sem virar "decisor" no lugar do
+  admin original; dono e admin recusados igualmente quando o orçamento total já se esgotou.
+- Ruling (Menor): `getCampaignById` (queries.ts) lia qualquer campanha por id SEM checar ator nenhum — o
+  repositório usa o cliente de SERVIÇO (ignora RLS), então isto expunha qualquer campanha de qualquer parceiro a
+  quem chamasse a função (hoje sem nenhuma tela chamando, mas exportada e pronta para uso incorreto). Corrigido
+  exigindo `actor` e checando posse (`CampaignService.getCampaignForActor`, mesmo padrão de `StatementService
+  .listForPartner`): sem vínculo com o parceiro dono da campanha (nem admin), `forbidden`.
+- Ruling (Menor): `callerBrandEnvironment`/`isPartnerMemberOrAdmin`/`myPartnerId` (wiring.ts) não filtravam
+  `member_role = 'owner'` explicitamente — corretas hoje só porque `b2b_partner_members` tem `unique(profile_id)`
+  (0501: um perfil pertence a NO MÁXIMO um parceiro, para sempre) e `'owner'` é o único papel que existe. Mesmo
+  assim, o filtro agora é EXPLÍCITO nas três funções, documentando a dependência do invariante do banco em vez de
+  confiar só em "achou uma linha".
+- Ruling (Menor): gatilho `b2b_campaign_events_accrue` não era `enable always` — uma sessão com
+  `session_replication_role = replica` (usada em limpeza de teste de outras fatias) pularia o acúmulo/pausa por
+  orçamento. Corrigido com `alter table ... enable always trigger`, mesmo padrão dos gatilhos de imutabilidade já
+  existentes na mesma migration.
+- Ruling (Menor): guarda documentada para "toda exibição futura precisa do selo Patrocinado" —
+  `features/campaigns/repository.ts::servedSchema` já validava `sponsored: z.literal(true)`; comentário novo
+  explica por que é de propósito (o `.parse()` estoura alto se o banco um dia devolver outra coisa) e
+  `tests/campaigns/serve-guard.test.ts` (3 casos) prova isso explicitamente, incluindo campo ausente.
+- Estado final: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes.
+  Unitária **3354/3354** (+18 desde a Task 3: 9 reescritos de k-anonimato, 11 de tracking-service, 3 de
+  serve-guard, 3 de getCampaignForActor — menos os removidos do desenho antigo). Banco **1775/1778** (3 pulados =
+  baseline; +6: 3 de revalidação de elegibilidade do record_event, 1 de retomada pelo dono, 1 de filtro is_demo do
+  extrato, 1 de acúmulo CPM exato). Duas rodadas de `test:db` tiveram 1 falha isolada cada, em arquivos ALHEIOS a
+  esta fatia (`publication-service.test.ts`, `payouts.test.ts`, `submissions.test.ts`) — confirmada não
+  reprodutível e não ligada à S26 ao rodar de novo (flutuação já conhecida da suíte sob paralelismo). E2E
+  `scripts/e2e-s26.sh` refeito do zero (`pnpm db:reset` + reseed do `scripts/e2e-s26-seed.sql`, atualizado para
+  passar `list_version_id` real — 0503 agora exige não nulo): **20/20**, sem regressão de nenhuma verificação
+  anterior (17 originais + 3 novas sobre o texto atualizado de insights).

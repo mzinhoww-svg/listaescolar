@@ -7,6 +7,7 @@ import * as repo from "./repository";
 import { CampaignService, type CampaignRepository } from "./service";
 import { InsightsService, type InsightsRepo } from "./insights-service";
 import { StatementService, type StatementRepo } from "./statement-service";
+import { TrackingService, type TrackingRepo } from "./tracking-service";
 
 // Composição real dos serviços de campanhas B2B (S26). Cada Server Action chama getCampaignService()/
 // getInsightsService()/getStatementService() e nunca importa repository.ts direto — mesmo padrão de
@@ -20,15 +21,21 @@ function realCampaignRepository(): CampaignRepository {
     listCampaignsForPartner: (partnerId) => repo.listCampaignsForPartner(client, partnerId),
     listCampaignsPendingReview: () => repo.listCampaignsPendingReview(client),
     getCampaign: (campaignId) => repo.getCampaign(client, campaignId),
+    isPartnerMemberOrAdmin,
   };
 }
 
+// `b2b_partner_members` tem `unique(profile_id)` (0501): um perfil pertence a NO MÁXIMO um parceiro, para sempre —
+// "membro de vários parceiros" é impossível por desenho do banco, não por sorte da consulta. Mesmo assim, o filtro
+// de papel abaixo é EXPLÍCITO (`member_role = 'owner'`, o único papel que hoje existe) em vez de confiar apenas em
+// "encontrou uma linha" — revisão de segurança independente.
 async function callerBrandEnvironment(actor: SessionActor): Promise<{ isDemo: boolean } | null> {
   const client = createAdminClient();
   const { data, error } = await client
     .from("b2b_partner_members")
     .select("b2b_partners(partner_type, status)")
     .eq("profile_id", actor.userId)
+    .eq("member_role", "owner")
     .maybeSingle();
   if (error || !data) return null;
   const raw = (data as { b2b_partners: { partner_type: string; status: string } | { partner_type: string; status: string }[] | null }).b2b_partners;
@@ -49,7 +56,13 @@ function realInsightsRepository(): InsightsRepo {
 async function isPartnerMemberOrAdmin(actor: SessionActor, partnerId: string): Promise<boolean> {
   if (actor.role === "admin") return true;
   const client = createAdminClient();
-  const { data } = await client.from("b2b_partner_members").select("partner_id").eq("partner_id", partnerId).eq("profile_id", actor.userId).maybeSingle();
+  const { data } = await client
+    .from("b2b_partner_members")
+    .select("partner_id")
+    .eq("partner_id", partnerId)
+    .eq("profile_id", actor.userId)
+    .eq("member_role", "owner")
+    .maybeSingle();
   return data !== null;
 }
 
@@ -77,13 +90,22 @@ export function getStatementService(): StatementService {
 /** Server Actions de owner/admin que precisam do partnerId a partir do ator (mesmo padrão de features/b2b). */
 export async function myPartnerId(actor: SessionActor): Promise<string | null> {
   const client = createAdminClient();
-  const { data } = await client.from("b2b_partner_members").select("partner_id").eq("profile_id", actor.userId).maybeSingle();
+  const { data } = await client.from("b2b_partner_members").select("partner_id").eq("profile_id", actor.userId).eq("member_role", "owner").maybeSingle();
   return (data as { partner_id: string } | null)?.partner_id ?? null;
 }
 
-export async function recordCampaignEvent(campaignId: string, listVersionId: string | null, eventType: "impression" | "click", dedupeKey: string): Promise<boolean> {
+function realTrackingRepository(): TrackingRepo {
   const client = createAdminClient();
-  return repo.recordCampaignEvent(client, campaignId, listVersionId, eventType, dedupeKey);
+  return {
+    // `listVersionId` não é mais opcional (0503: coluna not null) — quem chama SEMPRE tem uma lista publicada em mãos.
+    recordCampaignEvent: (campaignId, listVersionId, eventType, dedupeKey) => repo.recordCampaignEvent(client, campaignId, listVersionId, eventType, dedupeKey),
+  };
+}
+
+/** Único jeito seguro de registrar impressão/clique — nunca chamar `repository.recordCampaignEvent` direto com um
+ * `dedupe_key` vindo do cliente (ver comentário de topo de tracking-service.ts). */
+export function getTrackingService(): TrackingService {
+  return new TrackingService(realTrackingRepository());
 }
 
 export async function serveCampaigns(listVersionId: string, limit = 3): Promise<repo.ServedCampaign[]> {

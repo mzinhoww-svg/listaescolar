@@ -22,8 +22,9 @@ export async function listMyCampaigns(actor: SessionActor): Promise<CampaignRow[
   return getCampaignService().listMyCampaigns(partnerId);
 }
 
-export async function getCampaignById(campaignId: string): Promise<CampaignRow | null> {
-  return getCampaignService().getCampaign(campaignId);
+/** Exige ator + posse (dono do parceiro dono da campanha, ou admin) — nunca lida sem checar quem está pedindo. */
+export async function getCampaignById(actor: SessionActor, campaignId: string): Promise<CampaignRow | null> {
+  return getCampaignService().getCampaignForActor(actor, campaignId);
 }
 
 /** Admin16: fila de aprovação. */

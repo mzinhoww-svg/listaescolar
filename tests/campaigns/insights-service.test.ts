@@ -4,98 +4,112 @@ import type { SessionActor } from "@/features/auth/actor";
 import { CampaignServiceError } from "@/features/campaigns/errors";
 import { applyKAnonymitySuppression, InsightsService, type InsightsRepo, type RawCell } from "@/features/campaigns/insights-service";
 
-// S26 · aceite do PLAN: "teste de k-anonimato". A supressão mora em TypeScript (a contagem crua do banco não tem
-// k-anonimato nenhum) por desenho — ver comentário de topo de features/campaigns/insights-service.ts.
+// S26 · aceite do PLAN: "teste de k-anonimato". Correções da revisão de segurança independente sobre o desenho
+// anterior (que suprimia uma SEGUNDA célula nomeada para evitar a subtração total-visíveis): esse desenho ainda
+// vazava nos limites — com exatamente 2 células ocultas cuja soma cai numa faixa estreita (ex. soma = k+1), só
+// existe uma forma de dividir a soma em dois valores cada um < k, revelando os dois. O desenho atual nunca nomeia
+// uma cidade abaixo de `minK`: todas as pequenas somam numa célula ANÔNIMA "outras", só mostrada quando a PRÓPRIA
+// soma atinge `minK` (aí é, por definição, um agregado k-anônimo, não importa como as parcelas se dividem). O
+// TOTAL nunca é a soma bruta real — é sempre a soma só do que foi exibido — então não há mais nada para subtrair.
 
 function actorOf(role: SessionActor["role"] = "parent", userId = "11111111-1111-4111-8111-111111111111"): SessionActor {
   return { userId, role } as unknown as SessionActor;
 }
 
 describe("applyKAnonymitySuppression", () => {
-  it("célula abaixo de min_k fica oculta (count null, suppressed true); igual ou acima fica visível", () => {
-    // 3 cidades (não 2): evita que a supressão complementar (testada abaixo) também oculte Cuiabá aqui.
-    const cells: RawCell[] = [
-      { id: "5103403", label: "Cuiabá", count: 10 },
-      { id: "5103700", label: "Rondonópolis", count: 7 },
-      { id: "5108402", label: "Sinop", count: 3 }, // abaixo de 5
-    ];
+  it("cidade com contagem >= minK aparece NOMEADA", () => {
+    const cells: RawCell[] = [{ id: "5103403", label: "Cuiabá", count: 10 }];
     const r = applyKAnonymitySuppression(cells, 5);
-    const cuiaba = r.cells.find((c) => c.id === "5103403")!;
-    const sinop = r.cells.find((c) => c.id === "5108402")!;
-    expect(cuiaba).toMatchObject({ count: 10, suppressed: false });
-    expect(sinop).toMatchObject({ count: null, suppressed: true });
+    expect(r.cities).toEqual([{ id: "5103403", label: "Cuiabá", count: 10 }]);
+    expect(r.others).toBeNull();
+    expect(r.partial).toBe(false);
+    expect(r.total).toBe(10);
   });
 
-  it("célula com contagem EXATAMENTE igual a min_k fica visível (limiar é 'abaixo de', não 'até')", () => {
+  it("contagem EXATAMENTE igual a minK já é nomeada (limiar é 'abaixo de', não 'até')", () => {
     const r = applyKAnonymitySuppression([{ id: "a", label: "A", count: 5 }], 5);
-    expect(r.cells[0]).toMatchObject({ count: 5, suppressed: false });
+    expect(r.cities).toEqual([{ id: "a", label: "A", count: 5 }]);
+    expect(r.total).toBe(5);
   });
 
-  it("0 células suprimidas: nenhuma ação extra, total visível", () => {
-    const r = applyKAnonymitySuppression(
-      [
-        { id: "a", label: "A", count: 10 },
-        { id: "b", label: "B", count: 8 },
-      ],
-      5,
-    );
-    expect(r.cells.every((c) => !c.suppressed)).toBe(true);
-    expect(r.total).toMatchObject({ count: 18, suppressed: false });
-  });
-
-  it("exatamente 1 célula suprimida entre 3+ irmãs + total visível: suprime uma SEGUNDA (a de menor contagem visível)", () => {
+  it("fronteira S=k+1: 2 cidades pequenas cuja soma é k+1 vão para 'outras', SEM nomear nenhuma (correção do vazamento por limite)", () => {
+    // k=5; duas cidades pequenas (2 e 4, soma 6=k+1) — o desenho antigo suprimiria uma NOMEADA (ex. a de 4) e
+    // revelaria a outra (2) por subtração do total, ou vice-versa. Aqui nenhuma das duas é nomeada: viram um
+    // agregado anônimo de 6, k-anônimo por si só.
     const cells: RawCell[] = [
-      { id: "a", label: "A", count: 20 },
-      { id: "b", label: "B", count: 9 }, // menor visível: deve ser a segunda suprimida
-      { id: "c", label: "C", count: 2 }, // abaixo de 5: suprimida primeiro
+      { id: "a", label: "A", count: 20 }, // grande, nomeada
+      { id: "b", label: "B", count: 4 }, // pequena
+      { id: "c", label: "C", count: 2 }, // pequena
     ];
     const r = applyKAnonymitySuppression(cells, 5);
-    const byId = Object.fromEntries(r.cells.map((c) => [c.id, c]));
-    expect(byId.c).toMatchObject({ suppressed: true, count: null }); // original
-    expect(byId.b).toMatchObject({ suppressed: true, count: null }); // complementar (menor visível)
-    expect(byId.a).toMatchObject({ suppressed: false, count: 20 }); // maior: nunca suprimida
-    // subtração não recupera nem "b" nem "c": o total sozinho não isola nenhum dos dois.
-    expect(r.total.suppressed).toBe(false);
-    expect(r.total.count).toBe(31);
+    expect(r.cities).toEqual([{ id: "a", label: "A", count: 20 }]);
+    expect(r.cities.some((x) => x.id === "b" || x.id === "c")).toBe(false); // nem B nem C aparecem nomeadas
+    expect(r.others).toBe(6); // 4 + 2, agregado, sem nome
+    expect(r.partial).toBe(false);
+    expect(r.total).toBe(26); // 20 + 6 — soma só do que é exibido, nunca "descontável"
   });
 
-  it("empate na segunda supressão é resolvido por ordem alfabética do id (determinístico)", () => {
+  it("várias cidades ocultas (3+) somando >= minK: todas viram uma única célula anônima", () => {
     const cells: RawCell[] = [
-      { id: "z-maior", label: "Z", count: 50 },
-      { id: "b-empate", label: "B", count: 8 },
-      { id: "a-empate", label: "A", count: 8 }, // mesmo count de b-empate; "a-empate" < "b-empate"
-      { id: "x-oculta", label: "X", count: 1 },
+      { id: "a", label: "A", count: 1 },
+      { id: "b", label: "B", count: 1 },
+      { id: "c", label: "C", count: 1 },
+      { id: "d", label: "D", count: 2 },
     ];
     const r = applyKAnonymitySuppression(cells, 5);
-    const byId = Object.fromEntries(r.cells.map((c) => [c.id, c]));
-    expect(byId["x-oculta"]!.suppressed).toBe(true);
-    expect(byId["a-empate"]!.suppressed).toBe(true); // vence o empate (ordem alfabética)
-    expect(byId["b-empate"]!.suppressed).toBe(false);
-    expect(byId["z-maior"]!.suppressed).toBe(false);
+    expect(r.cities).toEqual([]);
+    expect(r.others).toBe(5); // 1+1+1+2
+    expect(r.partial).toBe(false);
+    expect(r.total).toBe(5);
   });
 
-  it("2 ou mais células já suprimidas: nenhuma ação extra (ambiguidade da subtração já basta)", () => {
+  it("cidade com uma única escola (count=1), sozinha, sem outra cidade pequena para agrupar: fica INTEIRAMENTE oculta (nem nome, nem no agregado)", () => {
+    const r = applyKAnonymitySuppression([{ id: "a", label: "A", count: 1 }], 5);
+    expect(r.cities).toEqual([]);
+    expect(r.others).toBeNull(); // 1 sozinho não chega a minK nem agregado consigo mesmo
+    expect(r.partial).toBe(true); // existe dado, mas não pode ser mostrado
+    expect(r.total).toBe(0); // nada exibido — nunca um "quase total" que entregue o valor por eliminação
+  });
+
+  it("agregado de pequenas que NÃO atinge minK mesmo somado: omitido por inteiro (nunca um número abaixo do k)", () => {
     const cells: RawCell[] = [
-      { id: "a", label: "A", count: 20 },
+      { id: "a", label: "A", count: 1 },
       { id: "b", label: "B", count: 2 },
-      { id: "c", label: "C", count: 3 },
+    ]; // soma 3 < 5
+    const r = applyKAnonymitySuppression(cells, 5);
+    expect(r.others).toBeNull();
+    expect(r.partial).toBe(true);
+    expect(r.total).toBe(0);
+  });
+
+  it("sem nenhuma cidade: total 0, sem parcial (não há dado nenhum, não é 'oculto')", () => {
+    const r = applyKAnonymitySuppression([], 5);
+    expect(r.cities).toEqual([]);
+    expect(r.others).toBeNull();
+    expect(r.partial).toBe(false);
+    expect(r.total).toBe(0);
+  });
+
+  it("cidades nomeadas vêm ordenadas de forma determinística (por id)", () => {
+    const cells: RawCell[] = [
+      { id: "z", label: "Z", count: 10 },
+      { id: "a", label: "A", count: 20 },
     ];
     const r = applyKAnonymitySuppression(cells, 5);
-    const suppressedCount = r.cells.filter((c) => c.suppressed).length;
-    expect(suppressedCount).toBe(2);
-    expect(r.total).toMatchObject({ count: 25, suppressed: false });
+    expect(r.cities.map((c) => c.id)).toEqual(["a", "z"]);
   });
 
-  it("caso degenerado: só existe UMA cidade no recorte e ela está oculta -> o TOTAL também é suprimido (senão o total a revela sozinho)", () => {
-    const r = applyKAnonymitySuppression([{ id: "a", label: "A", count: 2 }], 5);
-    expect(r.cells[0]).toMatchObject({ suppressed: true, count: null });
-    expect(r.total).toMatchObject({ suppressed: true, count: null });
-  });
-
-  it("sem nenhuma cidade: total 0, sempre oculto (0 < qualquer min_k >= 2)", () => {
-    const r = applyKAnonymitySuppression([], 5);
-    expect(r.cells).toEqual([]);
-    expect(r.total).toMatchObject({ count: null, suppressed: true });
+  it("mistura de grandes e pequenas: total é a soma do que é exibido (grandes + outras), nunca a soma bruta real", () => {
+    const cells: RawCell[] = [
+      { id: "a", label: "A", count: 50 },
+      { id: "b", label: "B", count: 30 },
+      { id: "c", label: "C", count: 3 }, // pequena
+      { id: "d", label: "D", count: 4 }, // pequena
+    ];
+    const r = applyKAnonymitySuppression(cells, 5);
+    expect(r.cities.map((c) => c.id)).toEqual(["a", "b"]);
+    expect(r.others).toBe(7); // 3 + 4
+    expect(r.total).toBe(87); // 50 + 30 + 7
   });
 });
 
@@ -127,5 +141,20 @@ describe("InsightsService.query", () => {
     const repo = makeRepo();
     const svc = new InsightsService(repo);
     await expect(svc.queryAsAdmin(actorOf("parent"), { category: "papelaria", gradeStage: "ef" }, false)).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("resultado final aplica a supressão sobre a contagem crua (contagem por ESCOLA distinta)", async () => {
+    const repo = makeRepo({
+      insightsRaw: vi.fn(async () => [
+        { cityIbge: "5103403", cityName: "Cuiabá", distinctSchools: 10 },
+        { cityIbge: "5108402", cityName: "Sinop", distinctSchools: 1 },
+      ]),
+    });
+    const svc = new InsightsService(repo);
+    const r = await svc.query(actorOf(), { category: "papelaria", gradeStage: "ef" });
+    expect(r.cities).toEqual([{ id: "5103403", label: "Cuiabá", count: 10 }]);
+    expect(r.others).toBeNull();
+    expect(r.partial).toBe(true); // Sinop (1 escola) não pode ser mostrado nem nomeado nem agregado
+    expect(r.total).toBe(10);
   });
 });

@@ -24,6 +24,7 @@ export type CampaignRepository = {
   listCampaignsForPartner: (partnerId: string) => Promise<CampaignRow[]>;
   listCampaignsPendingReview: () => Promise<CampaignRow[]>;
   getCampaign: (campaignId: string) => Promise<CampaignRow | null>;
+  isPartnerMemberOrAdmin: (actor: SessionActor, partnerId: string) => Promise<boolean>;
 };
 
 export type CampaignServiceDeps = { repo: CampaignRepository };
@@ -89,7 +90,13 @@ export class CampaignService {
     return this.deps.repo.listCampaignsPendingReview();
   }
 
-  async getCampaign(campaignId: string): Promise<CampaignRow | null> {
-    return this.deps.repo.getCampaign(campaignId);
+  /** Só o dono do parceiro (ou admin) pode LER uma campanha por id — antes esta função não checava posse nenhuma
+   * (revisão de segurança independente: o repositório usa o cliente de SERVIÇO, que ignora RLS). */
+  async getCampaignForActor(actor: SessionActor, campaignId: string): Promise<CampaignRow | null> {
+    const campaign = await this.deps.repo.getCampaign(campaignId);
+    if (!campaign) return null;
+    const allowed = await this.deps.repo.isPartnerMemberOrAdmin(actor, campaign.partnerId);
+    if (!allowed) throw new CampaignServiceError("sem acesso a esta campanha", "forbidden");
+    return campaign;
   }
 }

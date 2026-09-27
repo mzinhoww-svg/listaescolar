@@ -17,6 +17,7 @@ declare
   v_version uuid;
   v_partner uuid;
   v_seeded_campaign uuid;
+  v_tracking_list_version uuid;
   v_key uuid;
   i int;
 begin
@@ -58,6 +59,14 @@ begin
     end if;
   end loop;
 
+  -- lista real/papelaria para os eventos de rastreamento (0503 exige list_version_id publicado e elegível).
+  select lv.id into v_tracking_list_version
+    from public.list_versions lv
+    join public.school_lists sl on sl.id = lv.list_id
+   where sl.is_demo = false and lv.status = 'published'
+     and exists (select 1 from public.list_items li where li.version_id = lv.id and li.category = 'papelaria')
+   order by lv.created_at desc limit 1;
+
   -- 2 listas reais publicadas com categoria "uniforme" (< 5: fica SUPRIMIDO no insight).
   for i in 1..2 loop
     insert into public.schools (inep, name, normalized_name, network, municipality_id)
@@ -90,8 +99,8 @@ begin
     ));
     perform public.b2b_campaign_transition(v_parent, v_seeded_campaign, 'pending_review', null);
     perform public.b2b_campaign_transition(v_admin, v_seeded_campaign, 'approved', null);
-    perform public.b2b_campaign_record_event(v_seeded_campaign, null, 'impression', encode(sha256('seed-imp-1'::bytea), 'hex'));
-    perform public.b2b_campaign_record_event(v_seeded_campaign, null, 'click', encode(sha256('seed-imp-1'::bytea), 'hex'));
+    perform public.b2b_campaign_record_event(v_seeded_campaign, v_tracking_list_version, 'impression', encode(sha256('seed-imp-1'::bytea), 'hex'));
+    perform public.b2b_campaign_record_event(v_seeded_campaign, v_tracking_list_version, 'click', encode(sha256('seed-imp-1'::bytea), 'hex'));
 
     select k.id into v_key from public.b2b_api_keys k where k.partner_id = v_partner limit 1;
     if v_key is null then

@@ -82,23 +82,26 @@ STATUS_APPROVED=$(sql "select status::text from public.b2b_campaigns where id='$
 expect_eq "$STATUS_APPROVED" "approved" "admin aprova pelo Admin16"
 ab a screenshot "$OUT/S26-admin16-aprovada.png" >/dev/null
 
-echo "== d) B2B08 · insights: papelaria/ef VISÍVEL (6 listas); uniforme/ef SUPRIMIDO (2 < k mínimo)"
+echo "== d) B2B08 · insights: papelaria/ef VISÍVEL (6 escolas, nomeada); uniforme/ef SUPRIMIDO (2 < k mínimo, some por inteiro)"
 ab p open "$BASE/b2b/insights" >/dev/null
 wait_text p "Insights" 15
 ab p fill 'input[name="category"]' "papelaria" >/dev/null
 ab p select 'select[name="gradeStage"]' "ef" >/dev/null
 clicktext p "Buscar"
 sleep 2
-expect_text p "Cuiabá" "insight de papelaria/ef mostra Cuiabá"
+expect_text p "Cuiabá" "insight de papelaria/ef mostra Cuiabá nomeada"
 CUIABA_COUNT=$(ab p eval "[...document.querySelectorAll('tr')].map(r=>r.textContent).find(t=>t.includes('Cuiabá'))||''")
-grep -q "6" <<<"$CUIABA_COUNT" && ok "Cuiabá mostra a contagem real (6 listas)" || bad "contagem visível" "$CUIABA_COUNT"
+grep -q "6" <<<"$CUIABA_COUNT" && ok "Cuiabá mostra a contagem real (6 escolas)" || bad "contagem visível" "$CUIABA_COUNT"
+expect_text p "Total exibido:" "total exibido é a soma do que aparece, nunca a soma bruta"
 shot p "$OUT/S26-b2b08-insights-visivel.png"
 
 ab p fill 'input[name="category"]' "uniforme" >/dev/null
 clicktext p "Buscar"
 sleep 2
-expect_text p "indisponível" "insight de uniforme/ef (2 listas, abaixo do k mínimo) fica indisponível"
+refute_text p "Cuiabá" "cidade pequena sozinha (2 escolas, abaixo do k mínimo) nunca aparece NOMEADA"
 refute_text p "\"count\":2" "contagem crua nunca aparece na tela quando suprimida"
+expect_text p "Nenhum dado disponível" "sem cidade visível nem agregado 'outras' (2 < k, sozinha, nem agregada chega a k)"
+expect_text p "Existem localidades" "avisa que existe dado oculto, sem revelar quanto"
 shot p "$OUT/S26-b2b08-insights-suprimido.png"
 
 echo "== e) B2B09 · faturamento: uso de API sempre indisponível; campanha com o valor que o parceiro declarou"

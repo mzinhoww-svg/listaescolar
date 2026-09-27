@@ -55,36 +55,46 @@ export function InsightsExplorer() {
       {result ? (
         <div className="rounded-[20px] bg-white p-6">
           <p className="text-texto-2 mb-4 text-[13px] font-bold">
-            Ambiente: {result.isDemo ? "demonstração" : "real"} · k mínimo: {result.minK} listas distintas
+            Ambiente: {result.isDemo ? "demonstração" : "real"} · k mínimo: {result.minK} escolas distintas
           </p>
           <div className="mb-4 flex items-baseline gap-2">
-            <span className="text-[13px] font-bold">Total:</span>
-            <span className="text-[20px] font-extrabold">{result.total.suppressed ? "indisponível" : result.total.count}</span>
-            {result.total.suppressed ? <span className="text-texto-3 text-[12px] font-semibold">(abaixo do k mínimo)</span> : null}
+            <span className="text-[13px] font-bold">Total exibido:</span>
+            <span className="text-[20px] font-extrabold">{result.total}</span>
           </div>
           <table className="w-full text-left text-[14px]">
             <thead className="text-texto-3 text-[12px] font-extrabold uppercase">
               <tr>
                 <th className="py-2">Cidade</th>
-                <th className="py-2">Listas distintas</th>
+                <th className="py-2">Escolas distintas</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EFEBE2]">
               {result.cities.map((c) => (
                 <tr key={c.id}>
                   <td className="py-2">{c.label}</td>
-                  <td className="py-2 font-bold">{c.suppressed ? "indisponível" : c.count}</td>
+                  <td className="py-2 font-bold">{c.count}</td>
                 </tr>
               ))}
-              {result.cities.length === 0 ? (
+              {result.others !== null ? (
+                <tr>
+                  <td className="text-texto-2 py-2 italic">Outras localidades (agrupadas por privacidade)</td>
+                  <td className="py-2 font-bold">{result.others}</td>
+                </tr>
+              ) : null}
+              {result.cities.length === 0 && result.others === null ? (
                 <tr>
                   <td colSpan={2} className="text-texto-3 py-4 font-semibold">
-                    Nenhuma cidade com dado nesse recorte.
+                    Nenhum dado disponível nesse recorte.
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
+          {result.partial ? (
+            <p className="text-texto-3 mt-3 text-[12px] font-semibold">
+              Existem localidades com poucas escolas que não aparecem aqui — abaixo do k mínimo, mesmo agrupadas, para não identificar nenhum caso isolado.
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

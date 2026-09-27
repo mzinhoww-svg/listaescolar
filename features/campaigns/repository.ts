@@ -19,6 +19,11 @@ function fail(what: string, error: { message: string; code?: string; hint?: stri
   throw new CampaignServiceError(`${what}: ${error.message}`, code ?? campaignDbErrorCode(error), error.code);
 }
 
+/** Colunas `numeric` (0503: `accrued_total_cents`, livro-razão/extrato em milésimos de centavo para o CPM exato)
+ * chegam do PostgREST como string, nunca como float, para não perder precisão — converte para number aqui, na
+ * borda, depois de já ter passado pelo Postgres com precisão total. */
+const numericAsNumber = z.union([z.number(), z.string()]).transform((v) => Number(v));
+
 export type CampaignRow = {
   id: string;
   partnerId: string;
@@ -52,7 +57,7 @@ const campaignRowSchema = z
     bid_cents: z.number(),
     daily_budget_cents: z.number().nullable(),
     total_budget_cents: z.number(),
-    accrued_total_cents: z.number(),
+    accrued_total_cents: numericAsNumber,
     target_category: z.string(),
     target_grade_stages: z.array(z.string()).nullable(),
     target_cities: z.array(z.string()).nullable(),
@@ -147,18 +152,19 @@ export async function getCampaign(client: SupabaseClient, campaignId: string): P
   return data ? campaignRowSchema.parse(data) : null;
 }
 
-export type RawInsightCell = { cityIbge: string; cityName: string; distinctLists: number };
+export type RawInsightCell = { cityIbge: string; cityName: string; distinctSchools: number };
 
-const rawInsightSchema = z.object({ city_ibge: z.string(), city_name: z.string(), distinct_lists: z.number() });
+const rawInsightSchema = z.object({ city_ibge: z.string(), city_name: z.string(), distinct_schools: z.number() });
 
-/** Contagem CRUA (sem k-anonimato) — service_role only. Chamado só por insights-service, que aplica a supressão. */
+/** Contagem CRUA por ESCOLA distinta (sem k-anonimato) — service_role only. Chamado só por insights-service, que
+ * aplica a supressão. */
 export async function insightsRaw(client: SupabaseClient, category: string, gradeStage: string, isDemo: boolean): Promise<RawInsightCell[]> {
   const { data, error } = await client.rpc("b2b_insights_raw", { p_category: category, p_grade_stage: gradeStage, p_is_demo: isDemo });
   if (error) fail("consultar insights", error);
   return z
     .array(rawInsightSchema)
     .parse(data ?? [])
-    .map((r) => ({ cityIbge: r.city_ibge, cityName: r.city_name, distinctLists: r.distinct_lists }));
+    .map((r) => ({ cityIbge: r.city_ibge, cityName: r.city_name, distinctSchools: r.distinct_schools }));
 }
 
 export async function getMinK(client: SupabaseClient): Promise<number> {
@@ -201,10 +207,10 @@ const lineItemSchema = z.object({
   source: z.enum(["api_usage", "campaign_cpm", "campaign_cpc"]),
   campaign_id: z.uuid().nullable(),
   label: z.string(),
-  quantity: z.union([z.number(), z.string()]).transform((v) => Number(v)),
+  quantity: numericAsNumber,
   unit: z.string(),
   unit_price_cents: z.number().nullable(),
-  amount_cents: z.number().nullable(),
+  amount_cents: numericAsNumber.nullable(),
   pricing_status: z.enum(["priced", "unavailable"]),
 });
 
@@ -255,12 +261,16 @@ export async function listStatementsForPartner(client: SupabaseClient, partnerId
   });
 }
 
-export async function recordCampaignEvent(client: SupabaseClient, campaignId: string, listVersionId: string | null, eventType: "impression" | "click", dedupeKey: string): Promise<boolean> {
+export async function recordCampaignEvent(client: SupabaseClient, campaignId: string, listVersionId: string, eventType: "impression" | "click", dedupeKey: string): Promise<boolean> {
   const { data, error } = await client.rpc("b2b_campaign_record_event", { p_campaign_id: campaignId, p_list_version_id: listVersionId, p_event_type: eventType, p_dedupe_key: dedupeKey });
   if (error) fail("registrar evento de campanha", error);
   return z.boolean().parse(data);
 }
 
+// GUARDA para toda exibição futura (widget, página pública da lista, o que for): `sponsored` é `z.literal(true)`
+// de propósito — nem o tipo (`ServedCampaign.sponsored: true`, não `boolean`) nem o parse aceitam outro valor. Se
+// algum dia o banco parar de mandar `true` (bug de função, campo renomeado etc.), o `.parse()` FALHA alto em vez
+// de deixar uma campanha aparecer sem o selo "Patrocinado" — nunca decidir se mostra o selo na camada de UI.
 export type ServedCampaign = { campaignId: string; partnerId: string; name: string; productLabel: string; creativeText: string | null; pricingModel: "cpm" | "cpc"; sponsored: true };
 
 const servedSchema = z.object({

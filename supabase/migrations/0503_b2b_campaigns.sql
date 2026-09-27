@@ -3,11 +3,13 @@
 -- list_versions, list_items, grades) e 0101 (schools, municipalities). Regras duras:
 -- * bid/orçamento é DECLARADO PELO PRÓPRIO parceiro (não um preço de tabela da plataforma) — nunca dinheiro real:
 --   é só acúmulo informativo (livro-razão) que alimenta o extrato; nenhuma função debita saldo ou chama gateway;
--- * uma campanha NUNCA serve numa lista cuja categoria alvo tem item com alerta `restrictive_brand_or_spec`
---   (Lei 12.886/Procon): o bloqueio é decidido dentro de `b2b_campaign_serve`, fonte única de verdade;
+-- * uma campanha NUNCA serve nem gera evento numa lista cuja categoria alvo tem item com alerta
+--   `restrictive_brand_or_spec` (Lei 12.886/Procon): a elegibilidade (Procon, is_demo, segmentação, orçamento) é
+--   decidida numa ÚNICA função, `b2b_campaign_eligible`, chamada por `b2b_campaign_serve` (o que aparece) E por
+--   `b2b_campaign_record_event` (o que pode virar evento/acúmulo) — nunca reimplementada nos dois lugares;
 -- * toda campanha exige aprovação do admin (`pending_review` -> `approved`/`rejected`) antes de poder servir;
 -- * `is_demo` da campanha é fixado na criação a partir do status do parceiro (sandbox = demo; active = real) e
---   `b2b_campaign_serve` só cruza campanha e lista com o MESMO `is_demo`;
+--   `b2b_campaign_eligible` só casa campanha e lista com o MESMO `is_demo`;
 -- * eventos e livro-razão são imutáveis (append-only); a contagem agregada crua de insights só existe numa função
 --   `service_role`-only (sem k-anonimato embutido: a supressão é do domínio TypeScript, testada por unidade);
 -- * toda escrita passa por função SECURITY DEFINER (inclusive gatilhos), `search_path = ''`, sem EXECUTE para
@@ -30,7 +32,9 @@ create table public.b2b_campaigns (
   bid_cents integer not null check (bid_cents > 0 and bid_cents <= 100000000), -- declarado pelo parceiro: CPM = por mil impressões; CPC = por clique
   daily_budget_cents integer check (daily_budget_cents is null or daily_budget_cents > 0),
   total_budget_cents integer not null check (total_budget_cents > 0),
-  accrued_total_cents integer not null default 0 check (accrued_total_cents >= 0), -- só acúmulo informativo (gatilho); nunca dinheiro real
+  -- numeric(14,3): milésimos de centavo, para o CPM (bid/1000 por impressão) acumular EXATO, sem arredondar a
+  -- cada evento (revisão de segurança independente); só acúmulo informativo (gatilho), nunca dinheiro real.
+  accrued_total_cents numeric(14, 3) not null default 0 check (accrued_total_cents >= 0),
   target_category text not null check (btrim(target_category) <> '' and length(target_category) <= 100), -- mesma taxonomia livre de list_items.category
   target_grade_stages public.grade_stage[] check (target_grade_stages is null or (cardinality(target_grade_stages) between 1 and 3)),
   target_cities text[] check (target_cities is null or (cardinality(target_cities) between 1 and 200)), -- ibge_code; null = nacional
@@ -50,7 +54,9 @@ create table public.b2b_campaign_events (
   id uuid primary key default gen_random_uuid(),
   campaign_id uuid not null references public.b2b_campaigns (id) on delete restrict,
   event_type public.b2b_campaign_event_type not null,
-  list_version_id uuid references public.list_versions (id) on delete restrict,
+  -- not null: b2b_campaign_record_event revalida a MESMA elegibilidade de b2b_campaign_serve para esta lista
+  -- (revisão de segurança independente); sem lista não há como revalidar nada.
+  list_version_id uuid not null references public.list_versions (id) on delete restrict,
   day date not null default ((now() at time zone 'America/Cuiaba')::date),
   dedupe_key text not null check (dedupe_key ~ '^[0-9a-f]{16,128}$'), -- hash anônimo fornecido pelo chamador; nunca dado bruto
   created_at timestamptz not null default clock_timestamp(),
@@ -65,8 +71,8 @@ create table public.b2b_campaign_ledger (
   event_id uuid references public.b2b_campaign_events (id) on delete restrict,
   entry_type text not null check (entry_type in ('impression_accrual', 'click_accrual', 'budget_paused')),
   day date not null,
-  amount_cents integer not null check (amount_cents >= 0),
-  balance_after_cents integer not null check (balance_after_cents >= 0),
+  amount_cents numeric(14, 3) not null check (amount_cents >= 0), -- milésimos de centavo (CPM exato, sem arredondar por evento)
+  balance_after_cents numeric(14, 3) not null check (balance_after_cents >= 0),
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp()
 );
@@ -102,8 +108,8 @@ create table public.b2b_statement_line_items (
   label text not null check (btrim(label) <> '' and length(label) <= 200),
   quantity numeric(14, 2) not null check (quantity >= 0),
   unit text not null check (btrim(unit) <> '' and length(unit) <= 20),
-  unit_price_cents integer check (unit_price_cents is null or unit_price_cents >= 0), -- null = sem preço (nunca inventado)
-  amount_cents integer check (amount_cents is null or amount_cents >= 0),
+  unit_price_cents integer check (unit_price_cents is null or unit_price_cents >= 0), -- null = sem preço (nunca inventado); bid do parceiro, sempre inteiro
+  amount_cents numeric(14, 3) check (amount_cents is null or amount_cents >= 0), -- soma exata do livro-razão (milésimos de centavo no CPM); ver invariante quantidade × bid / 1000 (CPM) ou × bid (CPC)
   pricing_status text not null check (pricing_status in ('priced', 'unavailable')),
   created_at timestamptz not null default clock_timestamp(),
   updated_at timestamptz not null default clock_timestamp(),
@@ -156,7 +162,10 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- Gatilho de acúmulo: dispara depois de gravar um evento; calcula o valor (CPM/CPC, bid do próprio parceiro),
--- grava no livro-razão e pausa a campanha quando o orçamento (diário ou total) se esgota. Nunca move dinheiro real.
+-- grava no livro-razão e pausa a campanha quando o orçamento (diário ou total) se esgota. Nunca move dinheiro
+-- real. CPM acumula EXATO em milésimos de centavo (bid_cents / 1000 por impressão, sem `ceil`/`round`) — arredondar
+-- por evento inflava sistematicamente o acumulado (revisão de segurança independente); o arredondamento para
+-- exibição em reais só acontece na formatação do extrato (`features/campaigns/statement-service.ts`).
 -- ---------------------------------------------------------------------------
 create function public.b2b_campaign_event_accrue() returns trigger
 language plpgsql
@@ -165,9 +174,9 @@ set search_path = ''
 as $$
 declare
   v_campaign public.b2b_campaigns%rowtype;
-  v_amount integer := 0;
-  v_new_total integer;
-  v_day_accrued integer;
+  v_amount numeric(14, 3) := 0;
+  v_new_total numeric(14, 3);
+  v_day_accrued numeric(14, 3);
 begin
   select * into v_campaign from public.b2b_campaigns where id = new.campaign_id for update;
   if not found then
@@ -175,9 +184,9 @@ begin
   end if;
 
   if new.event_type = 'impression' and v_campaign.pricing_model = 'cpm' then
-    v_amount := ceil(v_campaign.bid_cents::numeric / 1000)::integer;
+    v_amount := v_campaign.bid_cents::numeric / 1000;
   elsif new.event_type = 'click' and v_campaign.pricing_model = 'cpc' then
-    v_amount := v_campaign.bid_cents;
+    v_amount := v_campaign.bid_cents::numeric;
   else
     v_amount := 0; -- impressão sob CPC e clique sob CPM não geram acúmulo
   end if;
@@ -347,8 +356,18 @@ begin
     raise exception 'campanha não encontrada' using errcode = 'P0002', hint = 'not_found';
   end if;
 
-  if p_to in ('approved', 'rejected') and not v_is_admin then
+  -- "só admin decide" vale para a decisão de VERDADE (pending_review -> approved/rejected); retomar uma campanha
+  -- já aprovada antes (paused -> approved) é o dono usando o próprio orçamento, não uma nova aprovação — a UI
+  -- promete "Retomar" ao dono (B2B06), e o banco precisa permitir exatamente essa transição para ele (revisão de
+  -- segurança independente: antes só admin conseguia mover para 'approved', em qualquer origem).
+  if p_to = 'rejected' and not v_is_admin then
     raise exception 'só admin decide' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if p_to = 'approved' and v_campaign.status = 'pending_review' and not v_is_admin then
+    raise exception 'só admin decide' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if p_to = 'approved' and v_campaign.status = 'paused' and not (v_is_owner or v_is_admin) then
+    raise exception 'sem permissão' using errcode = '42501', hint = 'forbidden';
   end if;
   if p_to = 'pending_review' and not v_is_owner then
     raise exception 'só o dono envia para aprovação' using errcode = '42501', hint = 'forbidden';
@@ -373,18 +392,106 @@ begin
     raise exception 'orçamento total esgotado' using errcode = '23514', hint = 'budget_exhausted';
   end if;
 
+  -- decided_by/decided_at registram só a decisão de admin de VERDADE (pending_review -> approved/rejected);
+  -- o dono retomando uma campanha pausada (paused -> approved) não reescreve quem decidiu originalmente.
   update public.b2b_campaigns
      set status = p_to::public.b2b_campaign_status,
          status_reason = case when p_to in ('rejected', 'paused') then v_reason else null end,
-         decided_by = case when p_to in ('approved', 'rejected') then p_actor_id else decided_by end,
-         decided_at = case when p_to in ('approved', 'rejected') then now() else decided_at end
+         decided_by = case when v_campaign.status = 'pending_review' and p_to in ('approved', 'rejected') then p_actor_id else decided_by end,
+         decided_at = case when v_campaign.status = 'pending_review' and p_to in ('approved', 'rejected') then now() else decided_at end
    where id = p_campaign_id;
   return p_to;
 end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Serving: única fonte de verdade do bloqueio Procon e do casamento is_demo/segmentação.
+-- Contexto da lista (única leitura de list_versions/school_lists/grades/schools/municipalities/list_items usada
+-- por TODA decisão de elegibilidade). `found = false` quando a lista não existe ou não está publicada.
+-- ---------------------------------------------------------------------------
+create function public.b2b_campaign_list_context(p_list_version_id uuid) returns table (
+  is_demo boolean, stage public.grade_stage, city_ibge text, blocked_categories text[]
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  return query
+    select sl.is_demo, g.stage, m.ibge_code,
+           coalesce((
+             select array_agg(distinct li.category) from public.list_items li
+              where li.version_id = p_list_version_id and li.category is not null
+                and li.alerts @> '["restrictive_brand_or_spec"]'::jsonb
+           ), array[]::text[])
+      from public.list_versions lv
+      join public.school_lists sl on sl.id = lv.list_id
+      join public.grades g on g.id = sl.grade_id
+      join public.schools sc on sc.id = sl.school_id
+      join public.municipalities m on m.id = sc.municipality_id
+     where lv.id = p_list_version_id and lv.status = 'published';
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Elegibilidade: FONTE ÚNICA usada por `b2b_campaign_serve` (o que aparece) E por `b2b_campaign_record_event`
+-- (o que pode gerar evento/acúmulo) — nenhuma outra rotina decide se uma campanha vale para uma lista. Cobre
+-- status aprovado, lista publicada de verdade, bloqueio Procon, segmentação (série/cidade), `is_demo`/ambiente e
+-- orçamento (total e diário) não esgotado.
+-- Custo (revisão de segurança independente, Ruling no ledger): chamada uma vez por campanha candidata em
+-- `b2b_campaign_serve` — cada chamada refaz o `select` de `b2b_campaign_list_context` (5 joins). Aceitável na
+-- escala do piloto (poucas campanhas aprovadas por categoria); documentado como extensão de D-141 (cota/cache de
+-- `b2b_campaign_serve`) em vez de otimizado agora — prioridade foi ter uma única regra, não duplicar a lógica.
+-- ---------------------------------------------------------------------------
+create function public.b2b_campaign_eligible(p_campaign_id uuid, p_list_version_id uuid) returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_campaign public.b2b_campaigns%rowtype;
+  v_ctx record;
+  v_today date := (now() at time zone 'America/Cuiaba')::date;
+  v_day_accrued numeric(14, 3);
+begin
+  select * into v_campaign from public.b2b_campaigns where id = p_campaign_id;
+  if not found or v_campaign.status <> 'approved' then
+    return false;
+  end if;
+
+  select * into v_ctx from public.b2b_campaign_list_context(p_list_version_id);
+  if not found then
+    return false; -- lista não publicada/não encontrada: nada é elegível
+  end if;
+
+  if v_ctx.is_demo <> v_campaign.is_demo then
+    return false;
+  end if;
+  if v_campaign.target_category = any (v_ctx.blocked_categories) then
+    return false; -- bloqueio Procon (Lei 12.886): marca exigida pela escola nesta categoria, nesta lista
+  end if;
+  if v_campaign.target_grade_stages is not null and not (v_ctx.stage = any (v_campaign.target_grade_stages)) then
+    return false;
+  end if;
+  if v_campaign.target_cities is not null and not (v_ctx.city_ibge = any (v_campaign.target_cities)) then
+    return false;
+  end if;
+  if v_campaign.accrued_total_cents >= v_campaign.total_budget_cents then
+    return false;
+  end if;
+  if v_campaign.daily_budget_cents is not null then
+    select coalesce(sum(l.amount_cents), 0) into v_day_accrued
+      from public.b2b_campaign_ledger l where l.campaign_id = p_campaign_id and l.day = v_today;
+    if v_day_accrued >= v_campaign.daily_budget_cents then
+      return false;
+    end if;
+  end if;
+
+  return true;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Serving: só formata o que `b2b_campaign_eligible` decide; nunca reimplementa a regra.
 -- ---------------------------------------------------------------------------
 create function public.b2b_campaign_serve(p_list_version_id uuid, p_limit integer default 3) returns table (
   campaign_id uuid, partner_id uuid, name text, product_label text, creative_text text,
@@ -394,56 +501,30 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  v_list_is_demo boolean;
-  v_stage public.grade_stage;
-  v_city text;
-  v_blocked text[];
-  v_today date := (now() at time zone 'America/Cuiaba')::date;
 begin
   if p_limit is null or p_limit <= 0 or p_limit > 10 then
     p_limit := 3;
   end if;
-
-  select sl.is_demo, g.stage, m.ibge_code
-    into v_list_is_demo, v_stage, v_city
-    from public.list_versions lv
-    join public.school_lists sl on sl.id = lv.list_id
-    join public.grades g on g.id = sl.grade_id
-    join public.schools sc on sc.id = sl.school_id
-    join public.municipalities m on m.id = sc.municipality_id
-   where lv.id = p_list_version_id and lv.status = 'published';
-  if not found then
+  if not exists (select 1 from public.list_versions where id = p_list_version_id and status = 'published') then
     return; -- lista não publicada: nenhuma campanha serve (nada a anunciar)
   end if;
-
-  select coalesce(array_agg(distinct li.category), array[]::text[]) into v_blocked
-    from public.list_items li
-   where li.version_id = p_list_version_id
-     and li.category is not null
-     and li.alerts @> '["restrictive_brand_or_spec"]'::jsonb;
 
   return query
     select c.id, c.partner_id, c.name, c.product_label, c.creative_text, c.pricing_model, true as sponsored
       from public.b2b_campaigns c
      where c.status = 'approved'
-       and c.is_demo = v_list_is_demo
-       and c.target_category <> all (v_blocked)
-       and (c.target_grade_stages is null or v_stage = any (c.target_grade_stages))
-       and (c.target_cities is null or v_city = any (c.target_cities))
-       and c.accrued_total_cents < c.total_budget_cents
-       and (
-         c.daily_budget_cents is null
-         or c.daily_budget_cents > coalesce((select sum(l.amount_cents) from public.b2b_campaign_ledger l where l.campaign_id = c.id and l.day = v_today), 0)
-       )
+       and public.b2b_campaign_eligible(c.id, p_list_version_id)
      order by random()
      limit p_limit;
 end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Registro de evento (impressão/clique). Dedupe por (campanha, tipo, dia, dedupe_key); clique exige impressão
--- prévia no mesmo dia/dedupe_key (reduz inflar clique sem exibição).
+-- Registro de evento (impressão/clique). Revalida a MESMA elegibilidade de `b2b_campaign_serve` (nunca aceita
+-- evento para uma combinação campanha/lista que não seria servida — revisão de segurança independente: antes só
+-- checava o status da campanha). Dedupe por (campanha, tipo, dia, dedupe_key); clique exige impressão prévia no
+-- mesmo dia/chave (reduz inflar clique sem exibição). `p_dedupe_key` é só um hash — quem chama (domínio
+-- TypeScript) é responsável por derivá-lo de um jeito que o cliente não force sozinho (ver Ruling no ledger).
 -- ---------------------------------------------------------------------------
 create function public.b2b_campaign_record_event(p_campaign_id uuid, p_list_version_id uuid, p_event_type text, p_dedupe_key text) returns boolean
 language plpgsql
@@ -451,10 +532,12 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_status public.b2b_campaign_status;
   v_day date := (now() at time zone 'America/Cuiaba')::date;
   v_id uuid;
 begin
+  if p_list_version_id is null then
+    raise exception 'lista obrigatória' using errcode = '22023', hint = 'invalid_input';
+  end if;
   if p_event_type is null or p_event_type not in ('impression', 'click') then
     raise exception 'tipo de evento inválido' using errcode = '22023', hint = 'invalid_input';
   end if;
@@ -462,9 +545,8 @@ begin
     raise exception 'dedupe_key inválido' using errcode = '22023', hint = 'invalid_input';
   end if;
 
-  select status into v_status from public.b2b_campaigns where id = p_campaign_id;
-  if not found or v_status <> 'approved' then
-    return false; -- campanha não elegível: silêncio, não erro (evita revelar estado a quem não deveria ver)
+  if not public.b2b_campaign_eligible(p_campaign_id, p_list_version_id) then
+    return false; -- não elegível (mesma regra do serve): silêncio, não erro (evita revelar estado a quem não deveria ver)
   end if;
 
   if p_event_type = 'click' and not exists (
@@ -487,7 +569,7 @@ $$;
 -- Insights: contagem CRUA (sem k-anonimato) — service_role only; a supressão é do domínio TypeScript.
 -- ---------------------------------------------------------------------------
 create function public.b2b_insights_raw(p_category text, p_grade_stage text, p_is_demo boolean) returns table (
-  city_ibge text, city_name text, distinct_lists integer
+  city_ibge text, city_name text, distinct_schools integer
 )
 language plpgsql
 security definer
@@ -501,8 +583,11 @@ begin
     raise exception 'série (etapa) obrigatória' using errcode = '22023', hint = 'invalid_input';
   end if;
 
+  -- Conta ESCOLA distinta, não lista: uma escola com várias listas na mesma etapa (séries diferentes, anos
+  -- diferentes) só entra uma vez — senão infla a amostra sem ganhar anonimato de verdade (revisão de segurança
+  -- independente, achado "uma escola com 5 séries").
   return query
-    select m.ibge_code, m.name, count(distinct sl.id)::integer
+    select m.ibge_code, m.name, count(distinct sc.id)::integer
       from public.list_items li
       join public.list_versions lv on lv.id = li.version_id and lv.status = 'published'
       join public.school_lists sl on sl.id = lv.list_id and sl.is_demo = coalesce(p_is_demo, false)
@@ -562,17 +647,23 @@ begin
   values (p_partner_id, p_period_start, p_period_end, p_actor_id, nullif(btrim(coalesce(p_payment_instruction, '')), ''))
   returning id into v_statement_id;
 
+  -- só uso de chave `live` (ambiente real): uso de chave `test`/sandbox nunca entra no extrato real.
   select coalesce(sum(u.request_count), 0) into v_api_requests
-    from public.b2b_usage_daily u where u.partner_id = p_partner_id and u.day between p_period_start and p_period_end;
+    from public.b2b_usage_daily u
+    join public.b2b_api_keys k on k.id = u.key_id
+   where u.partner_id = p_partner_id and u.day between p_period_start and p_period_end and k.environment = 'live';
   insert into public.b2b_statement_line_items (statement_id, source, label, quantity, unit, unit_price_cents, amount_cents, pricing_status)
   values (v_statement_id, 'api_usage', 'Uso da API B2B (v1)', v_api_requests, 'requisições', null, null, 'unavailable');
 
+  -- só campanha REAL (is_demo = false): campanha sandbox/demo nunca entra no extrato real (revisão de segurança
+  -- independente — o filtro estava ausente, e uma campanha sandbox contava no extrato de um parceiro active).
   for r in
     select c.id, c.name, c.pricing_model, count(l.id) as n_events, sum(l.amount_cents) as total_cents, c.bid_cents
       from public.b2b_campaign_ledger l
       join public.b2b_campaigns c on c.id = l.campaign_id
      where c.partner_id = p_partner_id and l.day between p_period_start and p_period_end
        and l.entry_type in ('impression_accrual', 'click_accrual')
+       and c.is_demo = false
      group by c.id, c.name, c.pricing_model, c.bid_cents
   loop
     insert into public.b2b_statement_line_items (statement_id, source, campaign_id, label, quantity, unit, unit_price_cents, amount_cents, pricing_status)
@@ -594,6 +685,9 @@ $$;
 create trigger b2b_campaigns_set_updated_at before update on public.b2b_campaigns for each row execute function public.b2b_campaigns_set_updated_at();
 
 create trigger b2b_campaign_events_accrue after insert on public.b2b_campaign_events for each row execute function public.b2b_campaign_event_accrue();
+-- enable always: o acúmulo/pausa por orçamento nunca pode ser pulado, nem por session_replication_role = replica
+-- (usado em limpeza de teste em outras fatias) — revisão de segurança independente.
+alter table public.b2b_campaign_events enable always trigger b2b_campaign_events_accrue;
 
 create trigger b2b_insights_settings_set_updated_at before update on public.b2b_insights_settings for each row execute function public.b2b_campaigns_set_updated_at();
 
@@ -728,6 +822,9 @@ revoke execute on function public.b2b_campaign_create(uuid, uuid, jsonb) from pu
 grant execute on function public.b2b_campaign_create(uuid, uuid, jsonb) to service_role;
 revoke execute on function public.b2b_campaign_transition(uuid, uuid, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.b2b_campaign_transition(uuid, uuid, text, text) to service_role;
+-- internas (chamadas só de dentro de outra SECURITY DEFINER): sem grant, mesmo padrão de b2b_keys_revoke_internal (0501).
+revoke execute on function public.b2b_campaign_list_context(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.b2b_campaign_eligible(uuid, uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.b2b_campaign_serve(uuid, integer) from public, anon, authenticated, service_role;
 grant execute on function public.b2b_campaign_serve(uuid, integer) to service_role;
 revoke execute on function public.b2b_campaign_record_event(uuid, uuid, text, text) from public, anon, authenticated, service_role;
@@ -743,5 +840,6 @@ comment on table public.b2b_campaigns is 'S26: campanhas de sugestão de produto
 comment on table public.b2b_campaign_events is 'S26: impressão/clique, imutável, dedupe por (campanha, tipo, dia, dedupe_key). Sem cookie de terceiro nem dado pessoal.';
 comment on table public.b2b_campaign_ledger is 'S26: acúmulo informativo (nunca dinheiro real) de CPM/CPC, gravado pelo gatilho de b2b_campaign_events.';
 comment on table public.b2b_statements is 'S26: extrato imutável por período. amount_cents null = sem preço configurado (nunca inventado). Sem cobrança automática.';
-comment on function public.b2b_campaign_serve(uuid, integer) is 'S26: fonte única do bloqueio Procon (restrictive_brand_or_spec) e do casamento is_demo; nunca decidir elegibilidade fora daqui.';
+comment on function public.b2b_campaign_eligible(uuid, uuid) is 'S26: fonte única de elegibilidade (Procon, is_demo, segmentação, orçamento) — usada por b2b_campaign_serve E b2b_campaign_record_event; nunca decidir elegibilidade fora daqui.';
+comment on function public.b2b_campaign_serve(uuid, integer) is 'S26: só formata o que b2b_campaign_eligible decide.';
 comment on function public.b2b_insights_raw(text, text, boolean) is 'S26: contagem crua, sem k-anonimato — service_role only. Supressão é do domínio TypeScript (features/campaigns/insights-service.ts).';

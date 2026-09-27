@@ -1340,3 +1340,21 @@ ainda sem a correção — ver histórico desta sessão).
   precisa de um seletor de município (nome → ibge_code) na Nova Campanha (B2B07), hoje só um campo de código.
 - Estado ao final da Task 1: `pnpm typecheck && pnpm lint` verdes; `pnpm db:reset && pnpm test:db`: **1769/1772**
   (3 pulados = baseline; migration 0503 só local, não aplicada em staging — ver PROGRESS.md).
+
+### S26 · Task 2 (domínio: Procon, k-anonimato, cobrança CPM/CPC, extrato)
+
+- Ruling: `features/campaigns/schemas.ts` recebe o formulário em REAIS (`bidReais`, `dailyBudgetReais`,
+  `totalBudgetReais`) e `CampaignService.createCampaign` converte para centavos (`Math.round(reais * 100)`) antes
+  de chamar o repositório — o banco (0503) só conhece centavos; a fronteira do formulário fica em reais, mais
+  natural para o parceiro digitar. Custo se errada: baixo (erro de arredondamento de centavo, não de ordem de
+  grandeza — coberto por teste).
+- Ruling: `InsightsService.query` (uso do próprio parceiro) deriva o `is_demo` do AMBIENTE do parceiro chamador
+  (sandbox → demo; active → real) — o parceiro nunca escolhe qual ambiente consultar; só o admin (`queryAsAdmin`)
+  pode escolher explicitamente, para auditoria/depuração. Isto espelha o mesmo Ruling da Task 1 sobre
+  `b2b_campaign_serve`.
+- Ruling: a formatação do extrato (`formatStatementForDisplay`) soma um "total" só com as linhas `priced` e
+  ACRESCENTA o texto "+ itens indisponíveis" quando há alguma linha sem preço — nunca soma zero silenciosamente
+  no lugar de um valor desconhecido nem omite que falta informação.
+- Estado ao final da Task 2: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
+  verdes. Unitária **3336/3336** (+22 nesta Task: 8 de k-anonimato, 4 de extrato/formatação, 6 de service.ts,
+  4 de schemas.ts). Banco **1769/1772** (sem mudança de migration nesta Task; 3 pulados = baseline).

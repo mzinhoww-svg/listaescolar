@@ -3,11 +3,14 @@
 // depois da S06 (claims) e da S14 (leads).
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { seedPartner } from "./b2b-fixtures";
 import {
   addEvidence,
   createClaim,
   decide,
   docsAwaiting,
+  ensureProfile,
+  schoolStatus,
   seedClaimSchool,
   submit,
 } from "./claim-fixtures";
@@ -16,10 +19,12 @@ import {
   cleanupUsers,
   IDS,
   inTx,
+  seedStationery,
   seedUsers,
   withClaims,
   withSuperuser,
 } from "./helpers";
+import { seedSubmission } from "./review-fixtures";
 
 beforeAll(seedUsers);
 afterAll(cleanupUsers);
@@ -343,6 +348,217 @@ describe("account_export", () => {
       const expOther = other.rows[0]!.account_export as { consentimentos: Array<{ finalidade: string }>; reivindicacoes_de_escola: unknown[] };
       expect(expOther.consentimentos.length).toBe(1);
       expect(expOther.reivindicacoes_de_escola.length).toBe(0); // admin não reivindicou nada
+    });
+  });
+});
+
+describe("claims_guard: is distinct from (revisão de segurança)", () => {
+  it("libera só claimant_id não-nulo -> nulo; bloqueia null->valor, valor->outro valor e outras colunas", async () => {
+    await inTx(async (c) => {
+      const school = await seedClaimSchool(c, { inep: "51999807" });
+      const claimId = await createClaim(c, school, { claimant: IDS.parent });
+
+      // não-nulo -> nulo: liberado
+      const toNull = await attempt(c, "update public.claims set claimant_id = null where id = $1", [claimId]);
+      expect(toNull.error).toBeNull();
+
+      // nulo -> valor: bloqueado
+      const toValue = await attempt(c, "update public.claims set claimant_id = $2 where id = $1", [claimId, IDS.admin]);
+      expect(toValue.code).toBe("23514");
+
+      // valor -> outro valor (claim nova, ainda com claimant_id original): bloqueado
+      const claim2 = await createClaim(c, school, { claimant: IDS.school_member });
+      const swap = await attempt(c, "update public.claims set claimant_id = $2 where id = $1", [claim2, IDS.admin]);
+      expect(swap.code).toBe("23514");
+
+      // outra coluna de identidade (school_id) continua bloqueada
+      const other = await seedClaimSchool(c, { inep: "51999808" });
+      const claim3 = await createClaim(c, school, { claimant: IDS.parent, name: "Outra Pessoa" });
+      const changeSchool = await attempt(c, "update public.claims set school_id = $2 where id = $1", [claim3, other]);
+      expect(changeSchool.code).toBe("23514");
+    });
+  });
+});
+
+describe("claim_decide recusa reivindicação sem claimant_id", () => {
+  it("erro claro (22023, hint claimant_missing), não a tentativa de promover papel de perfil inexistente", async () => {
+    await inTx(async (c) => {
+      const school = await seedClaimSchool(c, { inep: "51999809" });
+      const claimId = await docsAwaiting(c, school, IDS.parent);
+      // Simula "algo escapou da varredura de profiles_lgpd_erase": claimant_id nulo por fora do caminho normal.
+      await c.query("set local session_replication_role = replica");
+      await c.query("update public.claims set claimant_id = null where id = $1", [claimId]);
+      await c.query("set local session_replication_role = default");
+      const r = await attempt(c, "select public.claim_decide($1, 'approved', $2, null)", [claimId, IDS.admin]);
+      expect(r.code).toBe("22023");
+      expect(r.error).toMatch(/sem reivindicante/);
+    });
+  });
+});
+
+describe("retention_candidates: insufficient_evidence nunca é candidata (revisão de segurança)", () => {
+  it("mesmo com decided_at antigo, claim em insufficient_evidence não aparece", async () => {
+    await withSuperuser(async (c) => {
+      const school = await seedClaimSchool(c, { inep: "51999810" });
+      const claimId = await docsAwaiting(c, school, IDS.parent);
+      await decide(c, claimId, "insufficient_evidence", "faltou documento");
+      await c.query("update public.claims set decided_at = now() - interval '200 days' where id = $1", [claimId]);
+      const cand = await c.query<{ id: string }>("select id from public.retention_candidates('claim_evidence', 50)");
+      const evidenceIds = await c.query<{ id: string }>("select id from public.claim_evidence where claim_id = $1", [claimId]);
+      for (const row of evidenceIds.rows) expect(cand.rows.map((r) => r.id)).not.toContain(row.id);
+      // limpeza (fora de transação: withSuperuser não reverte)
+      await c.query("begin");
+      await c.query("set local session_replication_role = replica");
+      await c.query("delete from public.claim_evidence where claim_id = $1", [claimId]);
+      await c.query("delete from public.claim_status_events where claim_id = $1", [claimId]);
+      await c.query("delete from public.claims where id = $1", [claimId]);
+      await c.query("delete from public.schools where id = $1", [school]);
+      await c.query("commit");
+    });
+  });
+});
+
+describe("profiles_lgpd_erase: cancela reivindicações pendentes do titular antes de anonimizar", () => {
+  const SCHOOL = "00000000-0000-4000-8000-0000000e0003";
+  const USER = randomUUID();
+
+  afterAll(async () => {
+    await withSuperuser(async (c) => {
+      await c.query("begin");
+      await c.query("set local session_replication_role = replica");
+      await c.query("delete from public.claim_status_events where claim_id in (select id from public.claims where school_id = $1)", [SCHOOL]);
+      await c.query("delete from public.claim_evidence where claim_id in (select id from public.claims where school_id = $1)", [SCHOOL]);
+      await c.query("delete from public.claims where school_id = $1", [SCHOOL]);
+      await c.query("delete from public.schools where id = $1", [SCHOOL]);
+      await c.query("delete from auth.users where id = $1", [USER]);
+      await c.query("commit");
+    });
+  });
+
+  it("claim awaiting_verification vira rejected com motivo próprio e a escola volta a registered", async () => {
+    let claimId = "";
+    await withSuperuser(async (c) => {
+      await c.query("insert into auth.users (id, aud, role, email) values ($1, 'authenticated', 'authenticated', $2)", [
+        USER,
+        `s17-erase-${USER}@teste.invalid`,
+      ]);
+      await c.query(
+        "insert into public.profiles (id, role, display_name) values ($1, 'parent', 'Titular Pendente') on conflict (id) do update set role = excluded.role",
+        [USER],
+      );
+      const schoolId = await seedClaimSchool(c, { inep: "51999811", status: "registered" });
+      await c.query("update public.schools set id = $1 where id = $2", [SCHOOL, schoolId]);
+      claimId = await docsAwaiting(c, SCHOOL, USER);
+    });
+
+    const before = await withSuperuser((c) => schoolStatus(c, SCHOOL));
+    expect(before).toBe("claimed"); // reivindicação aberta trava a escola em claimed
+
+    await withSuperuser((c) => c.query("delete from auth.users where id = $1", [USER]));
+
+    const claim = await withSuperuser((c) =>
+      c.query<{ status: string; decision_reason: string; decision_code: string; claimant_role_title: string; claimant_id: string | null }>(
+        "select status::text, decision_reason, decision_code, claimant_role_title, claimant_id from public.claims where id = $1",
+        [claimId],
+      ),
+    );
+    expect(claim.rows[0]!.status).toBe("rejected");
+    expect(claim.rows[0]!.decision_reason).toBe("Conta do reivindicante excluída");
+    expect(claim.rows[0]!.decision_code).toBe("claimant_account_deleted");
+    expect(claim.rows[0]!.claimant_role_title).toBe("[conta excluída]");
+    expect(claim.rows[0]!.claimant_id).toBeNull();
+
+    const after = await withSuperuser((c) => schoolStatus(c, SCHOOL));
+    expect(after).toBe("registered"); // sem mais reivindicação aberta: sincronizada de volta
+  });
+});
+
+describe("account_deletion_blockers (revisão de segurança)", () => {
+  const partnerIds: string[] = [];
+  const stationeryIds: string[] = [];
+  const submissionIds: string[] = [];
+
+  afterAll(async () => {
+    await withSuperuser(async (c) => {
+      await c.query("begin");
+      await c.query("set local session_replication_role = replica");
+      for (const id of partnerIds) {
+        await c.query("delete from public.b2b_partner_members where partner_id = $1", [id]);
+        await c.query("delete from public.b2b_partners where id = $1", [id]);
+      }
+      for (const id of stationeryIds) {
+        await c.query("delete from public.stationery_members where stationery_id = $1", [id]);
+        await c.query("delete from public.stationeries where id = $1", [id]);
+      }
+      await c.query("commit");
+    });
+    // review_versions é append-only (DELETE direto bloqueado, inclusive em replica): sai só por cascade da
+    // exclusão do próprio envio (list_submissions on delete cascade) — modo normal (SEM replica, que desliga o
+    // próprio gatilho do cascade e deixaria review_versions/ocr_jobs/jobs órfãos, sem FK, apontando para um envio
+    // que já não existe).
+    await withSuperuser(async (c) => {
+      for (const id of submissionIds) {
+        await c.query("delete from public.list_submissions where id = $1", [id]);
+      }
+    });
+  });
+
+  it("sem vínculo: array vazio", async () => {
+    await withSuperuser(async (c) => {
+      const r = await c.query<{ account_deletion_blockers: string[] }>("select public.account_deletion_blockers($1) as account_deletion_blockers", [
+        IDS.spare,
+      ]);
+      expect(r.rows[0]!.account_deletion_blockers).toEqual([]);
+    });
+  });
+
+  it("dono de papelaria ATIVA: bloqueado; papelaria não ativa: não bloqueado", async () => {
+    await withSuperuser(async (c) => {
+      const active = await seedStationery(c, { status: "active", ownerId: IDS.school_member });
+      stationeryIds.push(active);
+      const r1 = await c.query<{ account_deletion_blockers: string[] }>(
+        "select public.account_deletion_blockers($1) as account_deletion_blockers",
+        [IDS.school_member],
+      );
+      expect(r1.rows[0]!.account_deletion_blockers).toContain("stationery_owner_active");
+
+      const paused = await seedStationery(c, { status: "paused", ownerId: IDS.admin });
+      stationeryIds.push(paused);
+      const r2 = await c.query<{ account_deletion_blockers: string[] }>(
+        "select public.account_deletion_blockers($1) as account_deletion_blockers",
+        [IDS.admin],
+      );
+      expect(r2.rows[0]!.account_deletion_blockers).not.toContain("stationery_owner_active");
+    });
+  });
+
+  it("dono de parceiro B2B: bloqueado", async () => {
+    await withSuperuser(async (c) => {
+      await ensureProfile(c, IDS.spare, "parent"); // spare normalmente fica sem profile (fixture padrão)
+      const partnerId = await seedPartner(c, { ownerId: IDS.spare });
+      partnerIds.push(partnerId);
+      const r = await c.query<{ account_deletion_blockers: string[] }>("select public.account_deletion_blockers($1) as account_deletion_blockers", [
+        IDS.spare,
+      ]);
+      expect(r.rows[0]!.account_deletion_blockers).toContain("b2b_partner_owner");
+    });
+  });
+
+  it("histórico de curadoria administrativa (review_versions.actor_id): bloqueado", async () => {
+    await withSuperuser(async (c) => {
+      const submissionId = await seedSubmission(c, { owner: "parent", source: "parent" });
+      submissionIds.push(submissionId);
+      await c.query("insert into public.review_versions (submission_id, version, items, origin, actor_id) values ($1, 1, '[]'::jsonb, 'extraction', null)", [
+        submissionId,
+      ]);
+      await c.query(
+        "insert into public.review_versions (submission_id, version, items, origin, actor_id) values ($1, 2, '[]'::jsonb, 'admin_edit', $2)",
+        [submissionId, IDS.admin],
+      );
+      const r = await c.query<{ account_deletion_blockers: string[] }>("select public.account_deletion_blockers($1) as account_deletion_blockers", [
+        IDS.admin,
+      ]);
+      expect(r.rows[0]!.account_deletion_blockers).toContain("review_history");
     });
   });
 });

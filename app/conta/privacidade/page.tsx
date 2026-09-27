@@ -51,8 +51,10 @@ export default async function PrivacyPage() {
         <h2 className="text-[15px] font-extrabold">Excluir sua conta</h2>
         <p className="text-texto-2 text-[13px] font-semibold">
           Apagamos de verdade o que é pessoal: perfil, estudantes, listas salvas, carrinhos, assinaturas de aviso e
-          preferências de notificação. O que precisa ficar por obrigação legal (registro de cotações e de
-          reivindicações de escola) continua, mas anonimizado — sem seu nome nem contato. Esta ação não tem volta.
+          preferências de notificação. O registro que mantemos (cotações e reivindicações de escola) continua, mas
+          anonimizado — sem seu nome nem contato. Se você for a única responsável por uma papelaria ativa ou por um
+          parceiro do portal B2B, ou tiver histórico de revisão administrativa de listas, a exclusão é recusada com
+          uma mensagem explicando o motivo. Esta ação não tem volta.
         </p>
         <DeleteAccountForm />
       </section>

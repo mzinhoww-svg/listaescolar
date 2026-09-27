@@ -36,6 +36,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-016 | ledger-dados S06 plano | Aceite de privacidade da reivindicação fica em `claims.privacy_ack_at` e não em `consents` | baixa | S17 | aberta — Ruling 9 (S17): mudar o fluxo de aceite da reivindicação (S06) para gravar em `consents` tem custo de mudar outra fatia; o timestamp e a versão do texto já existem em `claims`, só não centralizados — não bloqueia LGPD, mantido `aberta` |
 | D-017 | ledger-dados S06 revisão final | Falha em `claim_add_evidence` depois do upload deixa objeto órfão no Storage (limpeza best-effort); falta varredura | baixa | S17 | aberta — fora do escopo de D-012: o job de retenção da S17 apaga evidência COM linha em `claim_evidence` vencida, não objetos órfãos SEM linha (upload que sobreviveu a uma falha de INSERT); varredura de órfãos continua pendente |
 | D-018 | ledger-pipeline S07 T3 | Worker com pipeline demo sobre envio de app sem pipeline deixava `is_demo` falso | média | S07 | resolvida em S07 (`jobs_complete` com `p_is_demo`) |
+| D-153 | ledger.md (S17 · correções da revisão de segurança) | `auth.audit_log_entries` (schema `auth`, gerido pelo GoTrue) guarda o e-mail em claro de cada evento de autenticação (login, magic link, etc.), sem prazo de retenção definido; não é alterável por esta fatia (schema de sistema do Supabase Auth, fora de `public`) | média | Humano | aberta |
 | D-150 | ledger.md (S17) | `audit_log` não tem rotina de exclusão/anonimização própria (é append-only por desenho); `LEGAL.auditRetention` fica placeholder — decidir o prazo (e se cabe uma rotina) é uma decisão jurídica/de produto, não técnica, pendente do humano | média | Humano / S19 | aberta |
 
 ## Desempenho e escala
@@ -226,15 +227,17 @@ reverificação de segurança, rodada 2, `1e35153`, sem número anterior).
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 9 | 6 | 15 |
-| média | 44 | 11 | 55 |
+| média | 45 | 11 | 56 |
 | baixa | 71 | 10 | 81 |
-| **Total** | **124** | **27** | **151** |
+| **Total** | **125** | **27** | **152** |
 
-Contagem atualizada em 2026-09-27 (S17, branch `slice/S17-lgpd-demo`, sobre `3f28fb5`): D-012 (alta) e D-013/D-014
-(média) resolvidas; D-015/D-016 mantidas `aberta` com Ruling de que não bloqueiam LGPD; D-017 mantida `aberta`
-(fora do escopo do job de retenção, que cobre evidência com linha vencida, não objeto órfão sem linha); soma
-D-150 (média, `audit_log` sem rotina de retenção própria — decisão do humano/jurídico), D-151 (baixa, flakiness
-pré-existente de suíte grande) e D-152 (baixa, auditoria do selo "Demonstração" por amostragem, não exaustiva).
+Contagem atualizada em 2026-09-27 (S17, branch `slice/S17-lgpd-demo`, sobre `3f28fb5`, com a rodada de correções da
+revisão de segurança/privacidade sobre `d405956`): D-012 (alta) e D-013/D-014 (média) resolvidas; D-015/D-016
+mantidas `aberta` com Ruling de que não bloqueiam LGPD; D-017 mantida `aberta` (fora do escopo do job de retenção,
+que cobre evidência com linha vencida, não objeto órfão sem linha); soma D-150 (média, `audit_log` sem rotina de
+retenção própria — decisão do humano/jurídico), D-151 (baixa, flakiness pré-existente de suíte grande), D-152
+(baixa, auditoria do selo "Demonstração" por amostragem, não exaustiva) e D-153 (média, `auth.audit_log_entries`
+guarda e-mail sem prazo de retenção — schema de sistema do Supabase Auth, fora do alcance desta fatia).
 Estado anterior (merge de `origin/main`, PR #45 — S15 soma D-140–D-142 e revisita D-029/D-082
 sem resolvê-las — com a S26 desta branch: D-143–D-149, renumerados a partir de D-143 por colisão com os IDs da
 S15 já mesclada; D-144, D-146 e D-148 média/abertas — cota/cache de `b2b_campaign_serve`, falta de tela para gerar

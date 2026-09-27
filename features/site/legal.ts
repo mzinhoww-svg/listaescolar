@@ -20,7 +20,7 @@ export const LEGAL: Legal = {
   // S17: valores técnicos provisórios de `retention_policies` (migration 0605), editáveis sem mudança de código;
   // revisão jurídica pendente, como o resto desta página. `auditRetention` fica placeholder: esta fatia não criou
   // rotina de exclusão para `audit_log` (é imutável por desenho; só o job de retenção de evidência/token roda).
-  retention: "enquanto sua conta existir. Você pode excluir sua conta e os dados pessoais quando quiser, em \"Privacidade e dados\" na sua conta; o que precisa ficar por obrigação legal (registro de cotações e de reivindicações de escola) continua, mas anonimizado",
+  retention: "enquanto sua conta existir. Você pode excluir sua conta e os dados pessoais quando quiser, em \"Privacidade e dados\" na sua conta; o registro que mantemos (cotações e reivindicações de escola) continua, mas anonimizado",
   claimRetention: "um prazo técnico definido internamente a partir da decisão da reivindicação, ajustável sem mudança de código; revisão jurídica pendente",
   auditRetention: null,
   legalBasis: null,
@@ -106,7 +106,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     title: "Seus direitos",
     paragraphs: [
       [
-        "Quem tem conta pode baixar uma cópia dos próprios dados e revogar um consentimento em \"Privacidade e dados\", dentro da conta. A exclusão da conta também fica lá: apaga de verdade o que é pessoal e anonimiza o que precisa ficar por obrigação legal.",
+        "Quem tem conta pode baixar uma cópia dos próprios dados e revogar um consentimento em \"Privacidade e dados\", dentro da conta. A exclusão da conta também fica lá: apaga de verdade o que é pessoal e anonimiza o registro que mantemos.",
       ],
       ["Para qualquer outro pedido de acesso, correção ou exclusão, fale com o encarregado: ", dpo, "."],
     ],

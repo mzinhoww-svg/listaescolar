@@ -18,6 +18,7 @@ export async function GET(): Promise<Response> {
         "content-type": "application/json; charset=utf-8",
         "content-disposition": "attachment; filename=\"meus-dados-listacerta.json\"",
         "cache-control": "no-store",
+        "x-content-type-options": "nosniff", // Revisão de segurança: nunca deixar o navegador "adivinhar" o tipo de um JSON com dado pessoal
       },
     });
   } catch (error) {

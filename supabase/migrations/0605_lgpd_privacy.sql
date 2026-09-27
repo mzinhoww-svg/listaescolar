@@ -23,6 +23,27 @@
 --    o resto pelas FKs já existentes); esta migration só garante que o cascade não trava mais em `claims`/
 --    `claim_evidence` e que a anonimização roda antes. Sem função SQL própria para "excluir conta": o DELETE em
 --    `auth.users` já é o contrato (testado aqui como tal).
+--
+-- Correções da revisão de segurança/privacidade (Opus, rodada única sobre d405956 — ver ledger.md "S17 ·
+-- correções da revisão de segurança"):
+-- 6) `profiles_lgpd_erase` cancela ANTES de anonimizar toda reivindicação do titular que ainda não chegou a um
+--    estado final (`submitted`/`awaiting_verification`/`insufficient_evidence`/`token_expired`), como ator
+--    `system`, com motivo próprio (`claimant_account_deleted`), e ressincroniza `schools.verification_status`
+--    (`claim_sync_school`) — nenhuma reivindicação fica "no limbo" sem reivindicante e sem decisão.
+--    `claimant_role_title` também é anonimizado (cargo + outros dados públicos da escola poderiam re-identificar
+--    a pessoa). `claims_guard` passa a usar `is distinct from` (não `<>`, que silencia em NULL por lógica de três
+--    valores) e libera EXPLICITAMENTE só a transição de `claimant_id` de não-nulo para nulo; qualquer outra
+--    mudança de `claimant_id` continua bloqueada. `claim_decide` recusa decidir reivindicação sem `claimant_id`
+--    (conta já excluída) com erro claro, em vez de tentar promover papel de um perfil inexistente.
+-- 7) `retention_candidates('claim_evidence', ...)` só considera `status in ('approved', 'rejected')`: uma
+--    reivindicação em `insufficient_evidence` ainda pode ser retomada pelo reivindicante (`claim_transition_allowed`
+--    permite `insufficient_evidence -> awaiting_verification`), então a evidência dela não é "definitiva" e não
+--    deve entrar no expurgo mesmo que `decided_at` seja antigo.
+-- 8) `account_deletion_blockers(p_profile_id)`: a exclusão de conta é recusada (com mensagem específica, nunca erro
+--    genérico) quando o titular é dono de papelaria ATIVA, dono de parceiro B2B, ou tem histórico de curadoria
+--    administrativa (`review_versions.actor_id`, sem `on delete` explícito = `no action`, e é append-only — nunca
+--    poderia ser apagado nem anonimizado sem quebrar a trilha de auditoria da revisão humana). Chamada por
+--    `features/privacy/repository.ts#deleteAccount` ANTES de tentar `auth.admin.deleteUser`.
 
 -- ---------------------------------------------------------------------------
 -- FKs: claims/claim_evidence deixam de travar a exclusão do perfil
@@ -38,6 +59,104 @@ alter table public.claim_evidence
   add constraint claim_evidence_uploaded_by_fkey foreign key (uploaded_by) references public.profiles (id) on delete set null;
 
 -- ---------------------------------------------------------------------------
+-- claims_guard (0104): trocado `<>` por `is distinct from` (o `<>` original silencia quando um lado é NULL, por
+-- lógica de três valores do SQL — funcionava "por acidente" para liberar a transição a NULL, mas deixaria de
+-- funcionar, sem erro nenhum, se qualquer outra coluna comparada algum dia aceitasse NULL). Libera EXPLICITAMENTE
+-- só `claimant_id`: não-nulo -> nulo (o `SET NULL` da FK acima); qualquer outra mudança de `claimant_id`
+-- (inclusive nulo -> valor, ou valor -> outro valor) continua bloqueada, igual às outras colunas de identidade.
+-- ---------------------------------------------------------------------------
+create or replace function public.claims_guard() returns trigger
+language plpgsql set search_path = ''
+as $$
+begin
+  if new.school_id is distinct from old.school_id
+     or new.method is distinct from old.method
+     or new.privacy_ack_at is distinct from old.privacy_ack_at
+     or new.privacy_text_version is distinct from old.privacy_text_version
+     or (new.claimant_id is distinct from old.claimant_id and new.claimant_id is not null) then
+    raise exception 'escola, reivindicante, método e aceite da reivindicação são imutáveis' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+-- claim_decide (0104): recusa decidir reivindicação sem claimant_id (titular já excluído) com erro claro, em vez
+-- de seguir e tentar promover o papel de um perfil inexistente (erro genérico de NOT NULL em school_members).
+-- Defesa em profundidade: `profiles_lgpd_erase` já cancela toda reivindicação não final do titular antes de
+-- excluir a conta, então este caminho só dispara se algo escapar dessa varredura.
+create or replace function public.claim_decide(p_claim_id uuid, p_to public.claim_status, p_actor_id uuid, p_reason text)
+returns public.claim_status
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_claim public.claims;
+  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+  v_school_status public.verification_status;
+  v_role public.user_role;
+  v_other uuid;
+begin
+  if p_to not in ('approved', 'insufficient_evidence', 'rejected') then
+    raise exception 'decisão inválida: %', p_to using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.profiles p where p.id = p_actor_id and p.role = 'admin') then
+    raise exception 'só admin decide reivindicações' using errcode = '42501';
+  end if;
+  if p_to <> 'approved' and (v_reason is null or length(v_reason) < 3 or length(v_reason) > 500) then
+    raise exception 'motivo de 3 a 500 caracteres é obrigatório' using errcode = '22023';
+  end if;
+
+  v_claim := public.claim_lock(p_claim_id);
+  if v_claim.claimant_id is null then
+    raise exception 'reivindicação sem reivindicante (conta excluída)' using errcode = '22023', hint = 'claimant_missing';
+  end if;
+  if not public.claim_transition_allowed(v_claim.status, p_to, 'admin') then
+    raise exception 'transição de reivindicação inválida: % -> % (admin)', v_claim.status, p_to using errcode = '23514';
+  end if;
+
+  if p_to <> 'approved' then
+    perform public.claim_apply(p_claim_id, p_to, 'admin', p_actor_id, v_reason);
+    perform public.claim_sync_school(v_claim.school_id);
+    return p_to;
+  end if;
+
+  if v_claim.method <> 'documents' and v_claim.channel_confirmed_at is null then
+    raise exception 'aprovar exige canal confirmado' using errcode = '23514';
+  end if;
+  if v_claim.method = 'documents' and not exists (select 1 from public.claim_evidence e where e.claim_id = p_claim_id) then
+    raise exception 'aprovar exige ao menos uma evidência' using errcode = '23514';
+  end if;
+  select s.verification_status into v_school_status from public.schools s where s.id = v_claim.school_id;
+  if v_school_status in ('verified', 'suspended') then
+    raise exception 'escola % não aceita aprovação', v_school_status using errcode = '23514';
+  end if;
+  select p.role into v_role from public.profiles p where p.id = v_claim.claimant_id for no key update;
+  if v_role not in ('parent', 'school_member') then
+    raise exception 'papel do reivindicante não pode ser promovido' using errcode = '23514';
+  end if;
+
+  perform public.claim_apply(p_claim_id, 'approved', 'admin', p_actor_id, v_reason);
+  update public.schools set verification_status = 'verified' where id = v_claim.school_id;
+  insert into public.school_members (school_id, profile_id, member_role, claim_id)
+  values (v_claim.school_id, v_claim.claimant_id, 'owner', p_claim_id);
+  if v_role = 'parent' then
+    update public.profiles set role = 'school_member' where id = v_claim.claimant_id;
+  end if;
+
+  for v_other in
+    select c.id from public.claims c
+     where c.school_id = v_claim.school_id and c.id <> p_claim_id and c.status not in ('approved', 'rejected')
+     order by c.id for no key update
+  loop
+    perform public.claim_apply(v_other, 'rejected', 'system', null,
+      'Outra reivindicação desta escola foi aprovada', 'school_verified_by_other_claim');
+    update public.claim_tokens t set revoked_at = now()
+     where t.claim_id = v_other and t.consumed_at is null and t.revoked_at is null;
+  end loop;
+  return p_to;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Anonimização na exclusão do perfil (BEFORE DELETE; roda ANTES do SET NULL das FKs acima e do cascade de
 -- `lead_events` não ter FK nenhuma). SECURITY DEFINER: só assim alcança linhas de `claims`/`claim_evidence`/
 -- `lead_events` que não pertencem ao dono da sessão que disparou a exclusão (o app chama via service_role de
@@ -48,11 +167,28 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_claim record;
 begin
+  -- Reivindicações do titular ainda sem decisão final: cancela como 'system', com motivo próprio, ANTES de
+  -- anonimizar (para o rastro imutável em claim_status_events registrar o motivo real) e ressincroniza a escola.
+  -- Sem isto, uma reivindicação 'awaiting_verification'/'insufficient_evidence'/'token_expired' ficaria presa: o
+  -- reivindicante nunca mais confirma nem reenviará evidência (a conta não existe mais).
+  for v_claim in
+    select id, school_id from public.claims
+     where claimant_id = old.id and status not in ('approved', 'rejected')
+  loop
+    perform public.claim_apply(v_claim.id, 'rejected', 'system', null,
+      'Conta do reivindicante excluída', 'claimant_account_deleted');
+    perform public.claim_sync_school(v_claim.school_id);
+  end loop;
+
   -- claims: mantém escola/status/datas/decisão (livro-razão de verificação de escola); remove o que é pessoal do
-  -- reivindicante. claimant_role_title fica (cargo institucional, não identifica sozinho).
+  -- reivindicante. `claimant_role_title` também é anonimizado (Ruling da revisão: cargo institucional combinado a
+  -- outros dados públicos da escola poderia re-identificar a pessoa).
   update public.claims
      set claimant_name = '[conta excluída]',
+         claimant_role_title = '[conta excluída]',
          contact_email = 'conta-excluida@invalido.local',
          evidence_note = null
    where claimant_id = old.id;
@@ -128,10 +264,14 @@ begin
 
   if p_resource = 'claim_evidence' then
     return query
+      -- só estado FINAL de verdade: 'insufficient_evidence' tem decided_at mas o reivindicante ainda pode
+      -- retomar (claim_transition_allowed permite insufficient_evidence -> awaiting_verification) — a evidência
+      -- dela não é definitiva e não entra no expurgo (Ruling da revisão).
       select ce.id, ce.storage_path
         from public.claim_evidence ce
         join public.claims c on c.id = ce.claim_id
-       where c.decided_at is not null
+       where c.status in ('approved', 'rejected')
+         and c.decided_at is not null
          and c.decided_at < now() - (v_days || ' days')::interval
        order by c.decided_at
        limit v_limit;
@@ -179,6 +319,36 @@ revoke execute on function public.retention_purge(text, uuid[]) from public, ano
 grant execute on function public.retention_purge(text, uuid[]) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- account_deletion_blockers: recusa a exclusão (com mensagem específica, nunca erro genérico de FK) quando o
+-- titular é dono de papelaria ATIVA, dono de parceiro B2B, ou tem histórico de curadoria administrativa
+-- (`review_versions.actor_id`: sem `on delete` explícito = `no action`, e a tabela é append-only — nunca poderia
+-- ser apagada nem anonimizada sem quebrar a trilha de auditoria da revisão humana). Chamada pelo Server Action
+-- ANTES de `auth.admin.deleteUser`. SECURITY DEFINER, EXECUTE só service_role.
+-- ---------------------------------------------------------------------------
+create function public.account_deletion_blockers(p_profile_id uuid) returns text[]
+language sql
+security definer
+set search_path = ''
+stable
+as $$
+  select array_remove(array[
+    (select 'stationery_owner_active' where exists (
+      select 1 from public.stationery_members sm
+        join public.stationeries s on s.id = sm.stationery_id
+       where sm.profile_id = p_profile_id and sm.member_role = 'owner' and s.status = 'active'
+    )),
+    (select 'b2b_partner_owner' where exists (
+      select 1 from public.b2b_partner_members bm where bm.profile_id = p_profile_id
+    )),
+    (select 'review_history' where exists (
+      select 1 from public.review_versions rv where rv.actor_id = p_profile_id
+    ))
+  ], null);
+$$;
+revoke execute on function public.account_deletion_blockers(uuid) from public, anon, authenticated;
+grant execute on function public.account_deletion_blockers(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
 -- account_export: só os dados do PRÓPRIO p_profile_id (o Server Action sempre passa o id da sessão validada,
 -- nunca um valor de formulário — mesmo modelo de confiança de `consents_revoke`/`notifications_mark_read`).
 -- SECURITY DEFINER ignora RLS: por isso toda subconsulta abaixo filtra manualmente por p_profile_id.
@@ -192,8 +362,10 @@ as $$
   select jsonb_build_object(
     'gerado_em', now(),
     'perfil', (
-      select jsonb_build_object('id', p.id, 'papel', p.role, 'nome_exibicao', p.display_name, 'criado_em', p.created_at)
-        from public.profiles p where p.id = p_profile_id
+      select jsonb_build_object(
+               'id', p.id, 'papel', p.role, 'nome_exibicao', p.display_name, 'e_mail', u.email, 'criado_em', p.created_at
+             )
+        from public.profiles p join auth.users u on u.id = p.id where p.id = p_profile_id
     ),
     'consentimentos', (
       select coalesce(jsonb_agg(jsonb_build_object(
@@ -256,6 +428,42 @@ as $$
                'evento', np.event_type, 'canal', np.channel, 'ativa', np.enabled
              ) order by np.event_type, np.channel), '[]'::jsonb)
         from public.notification_preferences np where np.profile_id = p_profile_id
+    ),
+    'notificacoes', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+               'evento', n.event_type, 'link', n.link_path, 'lida_em', n.read_at, 'criado_em', n.created_at
+             ) order by n.created_at), '[]'::jsonb)
+        from public.notifications n where n.recipient_id = p_profile_id
+    ),
+    'listas_observadas', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+               'escola_id', lw.school_id, 'serie_id', lw.grade_id, 'ano', lw.school_year, 'criado_em', lw.created_at
+             ) order by lw.created_at), '[]'::jsonb)
+        from public.list_watches lw where lw.profile_id = p_profile_id
+    ),
+    'copias_privadas_de_lista', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+               'envio_id', pc.submission_id, 'versao', pc.version, 'itens', pc.items, 'criado_em', pc.created_at
+             ) order by pc.created_at), '[]'::jsonb)
+        from public.parent_list_copies pc where pc.owner_id = p_profile_id
+    ),
+    'cliques_em_loja', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+               'carrinho_id', ac.cart_id, 'clicado_em', ac.clicked_at
+             ) order by ac.clicked_at), '[]'::jsonb)
+        from public.affiliate_clicks ac where ac.profile_id = p_profile_id
+    ),
+    'vinculos', (
+      select coalesce(jsonb_agg(v), '[]'::jsonb) from (
+        select jsonb_build_object('tipo', 'escola', 'entidade_id', sm.school_id, 'papel', sm.member_role, 'criado_em', sm.created_at) as v
+          from public.school_members sm where sm.profile_id = p_profile_id
+        union all
+        select jsonb_build_object('tipo', 'papelaria', 'entidade_id', st.stationery_id, 'papel', st.member_role, 'criado_em', st.created_at)
+          from public.stationery_members st where st.profile_id = p_profile_id
+        union all
+        select jsonb_build_object('tipo', 'parceiro_b2b', 'entidade_id', bm.partner_id, 'papel', bm.member_role, 'criado_em', bm.created_at)
+          from public.b2b_partner_members bm where bm.profile_id = p_profile_id
+      ) x
     )
   );
 $$;

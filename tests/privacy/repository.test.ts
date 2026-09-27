@@ -6,11 +6,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { deleteAccount, exportAccountData } from "@/features/privacy/repository";
+import { deleteAccount, exportAccountData, getDeletionBlockers } from "@/features/privacy/repository";
 import { runRetention } from "@/features/privacy/retention";
 
 import { addEvidence, createClaim, decide, seedClaimSchool, submit } from "../db/claim-fixtures";
-import { cleanupUsers, seedUsers, withSuperuser } from "../db/helpers";
+import { cleanupUsers, seedStationery, seedUsers, withSuperuser } from "../db/helpers";
 
 function localEnv(): { url: string; secret: string } {
   const out = execFileSync("node", ["scripts/supa.mjs", "env"], { encoding: "utf8" });
@@ -130,5 +130,33 @@ describe("exportAccountData / deleteAccount", () => {
 
     // idempotente: excluir de novo (perfil já não existe) não lança (404 é tratado como sucesso)
     await expect(deleteAccount(admin, userId)).resolves.toBeUndefined();
+  });
+
+  it("dono de papelaria ativa: deleteAccount recusa ANTES de tentar qualquer coisa (revisão de segurança)", async () => {
+    const email = `s17-blocked-${Date.now()}@teste.invalid`;
+    const created = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
+    if (created.error || !created.data.user) throw new Error(`createUser: ${created.error?.message}`);
+    const userId = created.data.user.id;
+    let stationeryId = "";
+    try {
+      stationeryId = await withSuperuser((c) => seedStationery(c, { status: "active", ownerId: userId }));
+
+      const blockers = await getDeletionBlockers(admin, userId);
+      expect(blockers).toContain("stationery_owner_active");
+      await expect(deleteAccount(admin, userId)).rejects.toMatchObject({ code: "stationery_owner_active" });
+
+      // não tentou nada: o perfil continua existindo
+      const still = await withSuperuser((c) => c.query("select 1 from auth.users where id = $1", [userId]));
+      expect(still.rowCount).toBe(1);
+    } finally {
+      await withSuperuser(async (c) => {
+        await c.query("begin");
+        await c.query("set local session_replication_role = replica");
+        await c.query("delete from public.stationery_members where stationery_id = $1", [stationeryId]);
+        await c.query("delete from public.stationeries where id = $1", [stationeryId]);
+        await c.query("commit");
+      });
+      await admin.auth.admin.deleteUser(userId).catch(() => undefined);
+    }
   });
 });

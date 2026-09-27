@@ -14,6 +14,11 @@ const consentSchema = z.object({
 });
 export type MyConsent = z.infer<typeof consentSchema>;
 
+/** Finalidades que a família pode revogar por autoatendimento. `billing_terms` e `b2b_api_terms` são aceite
+ * contratual (cobrança e portal B2B): revogar não é uma opção de autoatendimento, precisa encerrar o contrato —
+ * a tela nunca mostra "Revogar" para elas (Revisão de segurança/privacidade, S17). */
+export const REVOCABLE_CONSENT_PURPOSES = ["list_upload"] as const;
+
 /** "Meus consentimentos": lê pela sessão (RLS `consents_select_own_or_admin` já escopa ao próprio dono). */
 export async function listMyConsents(session: SupabaseClient, profileId: string): Promise<MyConsent[]> {
   const { data, error } = await session

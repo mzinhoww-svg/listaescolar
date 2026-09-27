@@ -307,3 +307,74 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
   `tests/submissions/school-picker.test.tsx`), sempre passando 100% quando rodado isolado — flakiness de
   ordem/tempo pré-existente na suíte grande (paralelismo alto de ~1800/~3300 testes), não causada por esta fatia;
   registrado como D-151.
+
+## S17 · correções da revisão de segurança (Opus, rodada única sobre d405956)
+
+Revisão não achou bloqueantes; 7 itens numerados + achados menores. Todos corrigidos nesta rodada, worktree T2.
+
+- Ruling (item 1, Storage órfão): `features/privacy/retention.ts#removeConfirmed` só marca um caminho como
+  "removido" quando o `data` devolvido por `.remove()` confirma o nome, OU quando um `list()` de acompanhamento
+  confirma que o arquivo já não existe (execução anterior que apagou o arquivo mas não chegou a
+  `retention_purge`, ou reentrada). `retention_purge` só recebe os ids confirmados — uma falha real de Storage
+  nunca leva à exclusão da linha (fica candidata de novo, contada em `storageFailed`). Em
+  `features/privacy/repository.ts#deleteAccount`, `ownedStoragePaths` agora LANÇA (não engole) se a leitura
+  falhar, e `removeOrThrow` INTERROMPE a exclusão da conta se a remoção falhar (erro `storage_failed`, "tente
+  excluir de novo") — sem fila de retentativa própria (Ruling: erro claro + nova tentativa manual cobre o caso;
+  uma fila exigiria uma tabela e um worker novos, custo desproporcional ao risco real de uma chamada de Storage
+  falhar bem no meio da exclusão). Custo se estiver errada: trocar por fila é aditivo, sem migração de dado.
+- Ruling (item 2, agendamento): `/api/cron/retention-purge` entra em `vercel.json` (`0 11 * * *`, diário, mesmo
+  `CRON_SECRET` dos outros crons); registrado em PROGRESS.md como pendência humana (aceite do cron no plano da
+  conta Vercel, igual às demais fatias).
+- Ruling (item 3, reivindicações pendentes na exclusão): `profiles_lgpd_erase` cancela (ator `system`, motivo
+  `'Conta do reivindicante excluída'`, código `claimant_account_deleted`) toda reivindicação do titular ainda sem
+  decisão final ANTES de anonimizar, e chama `claim_sync_school` para a escola voltar ao estado certo
+  (`registered` se não houver mais reivindicação aberta). `claim_decide` (via `create or replace`) recusa decidir
+  reivindicação com `claimant_id` nulo (22023, `claimant_missing`) como defesa em profundidade — testado
+  simulando "algo escapou da varredura" (`claimant_id` zerado por fora do caminho normal, com
+  `session_replication_role = replica`).
+- Ruling (item 4, vínculos que bloqueiam a exclusão): `account_deletion_blockers(p_profile_id)` (SECURITY
+  DEFINER, `service_role`) devolve os códigos `stationery_owner_active` (dono de papelaria com `status='active'`),
+  `b2b_partner_owner` (qualquer vínculo em `b2b_partner_members`, que hoje só tem papel `owner`) e
+  `review_history` (qualquer linha em `review_versions.actor_id` — tabela append-only, sem `on delete` explícito
+  = `no action`; nunca poderia ser apagada nem anonimizada sem quebrar a trilha de auditoria da revisão humana).
+  `deleteAccount` chama isto ANTES de tocar em Storage ou em `auth.admin.deleteUser`; o Server Action mapeia cada
+  código para uma mensagem específica ("transfira ou encerre antes" / "fale com o suporte"), nunca um erro
+  genérico. Ruling: não incluí `school_members` (dono de escola verificada) na lista — o pedido da revisão citou
+  só papelaria/B2B/curadoria; dono de escola verificada que se exclui hoje só perde o vínculo (cascade), sem
+  bloqueio — registrado como observação, não como dívida nova (baixo risco: a escola continua verificada, só sem
+  administrador vinculado, e qualquer responsável pode reivindicar de novo se precisar). Custo se estiver errada:
+  adicionar um quarto código à função é aditivo.
+- Ruling (item 5, consentimento): `REVOCABLE_CONSENT_PURPOSES = ['list_upload']` — `billing_terms` e
+  `b2b_api_terms` são aceite contratual (cobrança, portal B2B): a tela nunca mostra "Revogar" para elas, e
+  `revokeConsentAction` recusa mesmo com um id real forjado no formulário (consulta a finalidade antes de
+  chamar `consents_revoke`). Para `list_upload`, a escolha foi honestidade sobre o efeito, não interromper
+  processamento: cada envio de lista já grava o PRÓPRIO consentimento (não reaproveita um antigo), então revogar
+  um consentimento passado não desfaz o envio nem impede um envio novo — a tela agora diz isso explicitamente,
+  em vez de deixar a família supor que "revogar" tem um efeito de bloqueio que não existe.
+- Ruling (item 6, reautenticação recente): `deleteAccountAction` exige `last_sign_in_at` (do `User` validado por
+  `getCurrentUser`/`getUser`, nunca `getSession`) com menos de 15 minutos, além da palavra de confirmação; sessão
+  velha recebe mensagem pedindo novo link mágico, sem tentar excluir nada. Sem senha no produto (login só por
+  link mágico), reautenticar É entrar de novo pelo link — não há "confirmar senha" para pedir em vez disso.
+- Ruling (item 7, `auth.audit_log_entries`): registrado como D-153 (média, dono Humano) — é schema `auth` do
+  GoTrue, gerido pelo Supabase, fora do alcance de uma migration em `public`; guarda e-mail em claro de cada
+  evento de autenticação sem prazo definido. Não alterado (Ruling explícito de não tocar em schema de sistema).
+- Achados menores (todos corrigidos): `claimant_role_title` passa a ser anonimizado em `profiles_lgpd_erase`
+  (antes ficava, achando "cargo institucional não identifica sozinho" — a revisão apontou que cargo + outros
+  dados públicos da escola PODEM re-identificar); `claims_guard` trocado de `<>` para `is distinct from`,
+  liberando EXPLICITAMENTE só a transição de `claimant_id` não-nulo -> nulo (o `<>` antigo "funcionava" só por
+  acidente de lógica de três valores do SQL); `retention_candidates('claim_evidence', ...)` exclui
+  `insufficient_evidence` mesmo com `decided_at` antigo (o reivindicante ainda pode retomar essa reivindicação,
+  então a evidência não é definitiva); `account_export` ganhou `notifications`, `list_watches`,
+  `parent_list_copies`, `affiliate_clicks`, `vinculos` (escola/papelaria/parceiro B2B) e o e-mail da própria conta
+  (via `auth.users`, dentro da mesma função SECURITY DEFINER); `x-content-type-options: nosniff` na resposta de
+  `/api/conta/exportar`; "por obrigação legal" trocado por "registro que mantemos" em `features/site/legal.ts` e
+  na página `/conta/privacidade` (mesmo espírito de "sem afirmar conformidade jurídica" do CLAUDE.md — "obrigação
+  legal" sugere uma certeza jurídica que esta fatia não tem base para afirmar).
+- Achado (confirmado rodando, não só suposto): `review_versions`/`claim_status_events` bloqueiam DELETE direto
+  mesmo sob `session_replication_role = replica` (a tabela tem SEU PRÓPRIO gatilho de bloqueio, que dispara
+  independente do modo de replicação) — só saem por CASCADE de verdade (deletar a linha pai com o gatilho de
+  cascade ATIVO, nunca em modo replica, que desliga o próprio gatilho de cascade e deixaria a linha filha órfã,
+  sem FK, apontando para um pai que já não existe). Descoberto ao debugar um teste próprio que tentou apagar
+  `review_versions` direto no cleanup e, corrigido, quebrou `cleanupUsers()` por deixar uma linha órfã
+  referenciando `profiles.id` de um perfil compartilhado entre arquivos de teste — lição registrada aqui para
+  não repetir: cleanup de tabela append-only É pelo pai, nunca em modo replica quando o pai tem cascade real.

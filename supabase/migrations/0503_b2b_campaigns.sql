@@ -10,8 +10,11 @@
 -- * toda campanha exige aprovação do admin (`pending_review` -> `approved`/`rejected`) antes de poder servir;
 -- * `is_demo` da campanha é fixado na criação a partir do status do parceiro (sandbox = demo; active = real) e
 --   `b2b_campaign_eligible` só casa campanha e lista com o MESMO `is_demo`;
--- * eventos e livro-razão são imutáveis (append-only); a contagem agregada crua de insights só existe numa função
---   `service_role`-only (sem k-anonimato embutido: a supressão é do domínio TypeScript, testada por unidade);
+-- * eventos e livro-razão são imutáveis (append-only) e `authenticated` NÃO tem select nenhum neles (nem por
+--   coluna): ler linha a linha, mesmo sem `list_version_id`/`event_id`, ainda exporia o carimbo de hora de cada
+--   evento e contornaria o k-anonimato; o dono só vê desempenho agregado por dia via `b2b_campaign_performance`;
+-- * a contagem agregada crua de insights só existe numa função `service_role`-only (sem k-anonimato embutido: a
+--   supressão é do domínio TypeScript, testada por unidade);
 -- * toda escrita passa por função SECURITY DEFINER (inclusive gatilhos), `search_path = ''`, sem EXECUTE para
 --   public/anon/authenticated (e sem para service_role nos gatilhos, que não precisam de grant para disparar).
 
@@ -588,9 +591,9 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Desempenho agregado por dia (dono/admin). Ler `b2b_campaign_events`/`b2b_campaign_ledger` linha a linha
--- (mesmo sem `list_version_id`/`event_id`, já fora do grant de `authenticated`) ainda deixaria o dono ver o
--- CARIMBO DE HORA de cada evento — junto com o que ele já sabe (a própria segmentação: cidade, série, categoria),
+-- Desempenho agregado por dia (dono/admin). `authenticated` não tem NENHUM select nestas duas tabelas (nem por
+-- coluna) — mesmo restrito a colunas "inofensivas" como `event_type`/`day`/`created_at`, ler linha a linha ainda
+-- deixaria o dono ver o CARIMBO DE HORA de cada evento — junto com o que ele já sabe (a própria segmentação: cidade, série, categoria),
 -- isso pode bastar para inferir QUAL escola/família gerou um evento isolado, contornando o k-anonimato dos
 -- insights. Esta função é o único jeito pretendido de o dono enxergar desempenho: agregado por DIA, com a MESMA
 -- supressão por k mínimo (escolas distintas) que os insights usam — dia com menos de `min_k` escolas distintas
@@ -844,23 +847,15 @@ create policy b2b_campaigns_select_member_or_admin on public.b2b_campaigns for s
   );
 comment on policy b2b_campaigns_select_member_or_admin on public.b2b_campaigns is 'S26: dono lê a própria campanha; admin lê todas.';
 
-create policy b2b_campaign_events_select_member_or_admin on public.b2b_campaign_events for select to authenticated
-  using (
-    exists (
-      select 1 from public.b2b_campaigns c join public.b2b_partner_members m on m.partner_id = c.partner_id
-       where c.id = b2b_campaign_events.campaign_id and m.profile_id = (select auth.uid())
-    ) or (select public.auth_role()) = 'admin'
-  );
-comment on policy b2b_campaign_events_select_member_or_admin on public.b2b_campaign_events is 'S26: dono/admin veem eventos da própria campanha (sem dedupe_key no grant).';
-
-create policy b2b_campaign_ledger_select_member_or_admin on public.b2b_campaign_ledger for select to authenticated
-  using (
-    exists (
-      select 1 from public.b2b_campaigns c join public.b2b_partner_members m on m.partner_id = c.partner_id
-       where c.id = b2b_campaign_ledger.campaign_id and m.profile_id = (select auth.uid())
-    ) or (select public.auth_role()) = 'admin'
-  );
-comment on policy b2b_campaign_ledger_select_member_or_admin on public.b2b_campaign_ledger is 'S26: dono/admin veem o próprio livro-razão de acúmulo (informativo, sem dinheiro real).';
+-- b2b_campaign_events e b2b_campaign_ledger: SEM política de select para `authenticated` de propósito (revisão
+-- de segurança independente, reverificação sobre a reverificação anterior). Mesmo restrito por coluna
+-- (sem `list_version_id`/`event_id`), ler linha a linha ainda expõe o CARIMBO DE HORA de cada evento — combinado
+-- com a segmentação que o próprio dono já conhece (cidade, série, categoria), isso pode bastar para inferir uma
+-- contagem por escola/dia abaixo de `min_k`, contornando o k-anonimato pensado para os insights E para
+-- `b2b_campaign_performance` (que já agrega por dia com a mesma supressão). O dono/admin só enxergam desempenho
+-- pela função agregada; ninguém lê estas duas tabelas com o cliente de sessão (RLS habilitada, mas SEM policy
+-- nenhuma para `authenticated` — e o grant abaixo também não dá select a `authenticated`, então nem chega a
+-- avaliar RLS). `service_role` continua com a tabela inteira (as funções internas precisam).
 
 create policy b2b_insights_settings_select_brand_or_admin on public.b2b_insights_settings for select to authenticated
   using (
@@ -901,14 +896,13 @@ grant select (
   created_at, updated_at
 ) on public.b2b_campaigns to authenticated;
 grant select on public.b2b_campaigns to service_role;
--- dedupe_key E list_version_id fora do grant de authenticated: list_version_id identifica a ESCOLA/lista exata
--- que gerou o evento — ler linha a linha contornaria o k-anonimato dos insights (revisão de segurança
--- independente, reverificação). O dono só enxerga desempenho agregado por dia via `b2b_campaign_performance`.
-grant select (id, campaign_id, event_type, day, created_at, updated_at) on public.b2b_campaign_events to authenticated;
+-- b2b_campaign_events e b2b_campaign_ledger: NENHUM select para `authenticated`, nem por coluna (revisão de
+-- segurança independente, 3ª rodada — mesmo restrito a colunas "inofensivas" como `event_type`/`day`/`created_at`,
+-- ler linha a linha ainda dá o CARIMBO DE HORA de cada evento, que combinado com a segmentação que o dono já
+-- conhece pode isolar uma contagem por escola/dia abaixo de `min_k`). Único jeito de o dono/admin ver desempenho:
+-- `b2b_campaign_performance`, que já agrega por dia com a mesma supressão k dos insights. `service_role` continua
+-- com a tabela inteira (as funções internas precisam).
 grant select on public.b2b_campaign_events to service_role;
--- event_id fora do grant de authenticated: junto com created_at daria granularidade por evento individual (a
--- mesma correlação escola/família que o agregado por dia evita). Mesma revisão.
-grant select (id, campaign_id, entry_type, day, amount_cents, balance_after_cents, created_at, updated_at) on public.b2b_campaign_ledger to authenticated;
 grant select on public.b2b_campaign_ledger to service_role;
 grant select (min_k) on public.b2b_insights_settings to authenticated, service_role;
 -- `generated_by` fora do grant de authenticated.

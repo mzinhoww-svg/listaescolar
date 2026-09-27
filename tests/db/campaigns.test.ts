@@ -120,20 +120,35 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
     });
   });
 
-  it("authenticated nunca lê list_version_id (events) nem event_id (ledger): contornaria o k-anonimato dos insights", async () => {
+  it("authenticated NÃO tem select nenhum em b2b_campaign_events/b2b_campaign_ledger, nem por coluna (linha a linha contornaria o k-anonimato)", async () => {
     await withSuperuser(async (c) => {
-      const evCol = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_events', 'list_version_id', 'select') as ok");
-      expect(evCol.rows[0]!.ok).toBe(false);
-      const evOther = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_events', 'event_type', 'select') as ok");
-      expect(evOther.rows[0]!.ok).toBe(true); // outras colunas continuam legíveis
-      const ledgerCol = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_ledger', 'event_id', 'select') as ok");
-      expect(ledgerCol.rows[0]!.ok).toBe(false);
-      const ledgerOther = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_ledger', 'amount_cents', 'select') as ok");
-      expect(ledgerOther.rows[0]!.ok).toBe(true);
+      // tabela inteira: sem privilégio nenhum (nem uma coluna sequer) para authenticated.
+      const evTable = await c.query<{ ok: boolean }>("select has_table_privilege('authenticated', 'public.b2b_campaign_events', 'select') as ok");
+      expect(evTable.rows[0]!.ok).toBe(false);
+      const ledgerTable = await c.query<{ ok: boolean }>("select has_table_privilege('authenticated', 'public.b2b_campaign_ledger', 'select') as ok");
+      expect(ledgerTable.rows[0]!.ok).toBe(false);
+      // conferido coluna a coluna, para não deixar nenhuma escapar por um GRANT parcial esquecido.
+      for (const col of ["id", "campaign_id", "event_type", "list_version_id", "day", "dedupe_key", "created_at", "updated_at"]) {
+        const r = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_events', $1, 'select') as ok", [col]);
+        expect(r.rows[0]!.ok, `authenticated x b2b_campaign_events.${col}`).toBe(false);
+      }
+      for (const col of ["id", "campaign_id", "event_id", "entry_type", "day", "amount_cents", "balance_after_cents", "created_at", "updated_at"]) {
+        const r = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_ledger', $1, 'select') as ok", [col]);
+        expect(r.rows[0]!.ok, `authenticated x b2b_campaign_ledger.${col}`).toBe(false);
+      }
+      // nenhuma policy de select sobrou para authenticated (RLS continua ligada, mas sem policy = nada a avaliar).
+      const evPolicies = await c.query<{ n: string }>(
+        "select count(*)::text as n from pg_policies where schemaname = 'public' and tablename = 'b2b_campaign_events' and 'authenticated' = any(roles)",
+      );
+      expect(evPolicies.rows[0]!.n).toBe("0");
+      const ledgerPolicies = await c.query<{ n: string }>(
+        "select count(*)::text as n from pg_policies where schemaname = 'public' and tablename = 'b2b_campaign_ledger' and 'authenticated' = any(roles)",
+      );
+      expect(ledgerPolicies.rows[0]!.n).toBe("0");
       // service_role continua com a tabela inteira (funções internas precisam).
-      const svcEv = await c.query<{ ok: boolean }>("select has_column_privilege('service_role', 'public.b2b_campaign_events', 'list_version_id', 'select') as ok");
+      const svcEv = await c.query<{ ok: boolean }>("select has_table_privilege('service_role', 'public.b2b_campaign_events', 'select') as ok");
       expect(svcEv.rows[0]!.ok).toBe(true);
-      const svcLedger = await c.query<{ ok: boolean }>("select has_column_privilege('service_role', 'public.b2b_campaign_ledger', 'event_id', 'select') as ok");
+      const svcLedger = await c.query<{ ok: boolean }>("select has_table_privilege('service_role', 'public.b2b_campaign_ledger', 'select') as ok");
       expect(svcLedger.rows[0]!.ok).toBe(true);
     });
   });
@@ -640,6 +655,20 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       await withClaims("admin", async (cadm) => {
         const r = await attempt(cadm, "select id from public.b2b_campaigns where id = $1", [campaignId]);
         expect(r.rowCount).toBe(1);
+      });
+      // eventos e livro-razão: NEM o dono, NEM o admin leem com o cliente de sessão — nem via RLS, nem via RPC
+      // direta da tabela; falha por permissão (42501), antes mesmo de a RLS entrar em jogo.
+      await withClaims("parent", async (cp) => {
+        const rEv = await attempt(cp, "select id from public.b2b_campaign_events where campaign_id = $1", [campaignId]);
+        expect(rEv.code).toBe("42501");
+        const rLedger = await attempt(cp, "select id from public.b2b_campaign_ledger where campaign_id = $1", [campaignId]);
+        expect(rLedger.code).toBe("42501");
+      });
+      await withClaims("admin", async (cadm) => {
+        const rEv = await attempt(cadm, "select id from public.b2b_campaign_events where campaign_id = $1", [campaignId]);
+        expect(rEv.code).toBe("42501");
+        const rLedger = await attempt(cadm, "select id from public.b2b_campaign_ledger where campaign_id = $1", [campaignId]);
+        expect(rLedger.code).toBe("42501");
       });
     } finally {
       await withSuperuser(async (c) => {

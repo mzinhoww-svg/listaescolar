@@ -1538,3 +1538,35 @@ em `features/campaigns/tracking-service.ts`; 2 menores resolvidos direto (um vir
   campanha somando listas). Banco **1778/1781** (+3: privilégio por coluna de `list_version_id`/`event_id`, os 3
   casos de `pause_origin`, `b2b_campaign_performance`; 3 pulados = baseline). E2E `scripts/e2e-s26.sh`: **20/20**,
   sem regressão (nada no roteiro pausa/retoma campanha nem lê as tabelas afetadas diretamente).
+
+## S26 · correções da revisão de segurança (rodada 3, reverificação sobre `1d4d0f2`)
+
+- Ruling (Importante — grant por coluna ainda contornava o k-anonimato): a rodada 2 já tinha tirado
+  `list_version_id`/`event_id` do grant de `authenticated`, mas as colunas restantes (`event_type`/`day`/
+  `created_at`/`updated_at` em `b2b_campaign_events`; `entry_type`/`day`/`amount_cents`/`balance_after_cents`/
+  `created_at`/`updated_at` em `b2b_campaign_ledger`) continuavam legíveis linha a linha pelo cliente de sessão.
+  Isso ainda é suficiente: o CARIMBO DE HORA de cada linha, cruzado com a segmentação que o próprio dono já
+  conhece (cidade, série, categoria), pode isolar uma contagem por escola/dia abaixo de `min_k` — exatamente o
+  vazamento que `b2b_campaign_performance` (rodada 2) foi criada para evitar, só que pela porta dos fundos das
+  tabelas em vez da função. Corrigido revogando **todo** select de `authenticated` nas duas tabelas — nenhuma
+  coluna, nenhuma policy de RLS para esse papel (`b2b_campaign_events_select_member_or_admin` e
+  `b2b_campaign_ledger_select_member_or_admin` foram REMOVIDAS, não só esvaziadas: com grant zero a policy nunca
+  seria avaliada mesmo, mas mantê-la seria uma pista falsa numa auditoria futura). Único jeito de o dono/admin
+  verem qualquer coisa sobre eventos/livro-razão: `b2b_campaign_performance` (desempenho agregado por dia,
+  já com a supressão k) e o extrato (`b2b_statements`/`_line_items`, que não referencia lista/escola nenhuma).
+  `service_role` continua com a tabela inteira (as funções internas — inclusive `b2b_campaign_performance`, que é
+  `SECURITY DEFINER` e roda com o dono da função, não com o grant do chamador — precisam). Nenhuma tela ou query
+  da aplicação lia estas tabelas com o cliente de SESSÃO (só a função via cliente de SERVIÇO já era usada); a
+  única mudança de código foi o próprio grant/RLS na migration. Testado: `has_table_privilege('authenticated', ...,
+  'select')` falso nas duas tabelas; `has_column_privilege` falso em TODA coluna de cada uma (loop, não só as duas
+  óbvias); `pg_policies` sem nenhuma linha com `authenticated` no array de `roles` para essas tabelas;
+  `service_role` continua com a tabela inteira; e um teste de sessão real (`withClaims`) confirmando `42501` para
+  dono E admin tentando ler `b2b_campaign_events`/`b2b_campaign_ledger` direto. Custo se errada: alto (3ª vez que a
+  mesma classe de vazamento aparece nesta fatia — cada rodada fechou uma porta e deixou outra aberta; esta rodada
+  fecha a família inteira revogando TUDO em vez de restringir coluna por coluna).
+- Estado final: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes.
+  Unitária **3360/3360** (sem mudança de contagem: só migration e teste de banco mudaram nesta rodada). Banco
+  **1778/1781** (mesma contagem da rodada 2: os testes foram reescritos/ampliados, não somados; 3 pulados =
+  baseline; uma rodada intermediária teve 2 falhas isoladas em `submissions.test.ts`, arquivo alheio a esta fatia,
+  confirmadas não reprodutíveis ao rodar de novo). E2E `scripts/e2e-s26.sh`: **20/20**, sem regressão (nada no
+  roteiro lê `b2b_campaign_events`/`b2b_campaign_ledger` direto).

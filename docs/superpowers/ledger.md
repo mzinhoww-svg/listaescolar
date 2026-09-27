@@ -214,3 +214,94 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
   `"MariaㅤSilva"` (e os demais códigos U+FFA0/U+115F/U+1160/U+02BC/cirílico) — `\p{L}`/`[[:alpha:]]`
   aceitavam, confirmando o achado da revisão antes de qualquer correção no arquivo.
 - Ruling: a S28 (ADR-006) entra no PLAN entre a S19 e a S20 e passa a ser pré-requisito do go-live; o brainstorming dela roda em modo autônomo (o orquestrador responde às perguntas da skill com SPEC, PLAN, `docs/design`, a pesquisa do ADR-005 e dados do staging) e o spec resultante vira Ruling — pedido explícito do humano em 2026-09-27 — custo se estiver errada: uma fatia a mais no caminho crítico antes do go-live
+
+## S17 · LGPD e dados demonstrativos (fora de trilha, worktree T2, 2026-09-27)
+
+- Ruling: memória global do Segundo Cérebro (CLAUDE.md pessoal, fora do repositório) não foi consultada nesta
+  sessão — a tarefa já define seu próprio mecanismo de memória (`docs/superpowers/ledger.md`/`DEBT.md`/
+  `PROGRESS.md`, específico deste projeto) e o cofre Obsidian pessoal não tem contexto relevante para uma fatia de
+  implementação de código; consultá-lo gastaria orçamento sem ganho. Custo se estiver errada: nenhum — o fechamento
+  de memória do CLAUDE.md pessoal também não se aplica (nenhum aprendizado de produto/técnica pessoal a registrar
+  fora deste repositório).
+- Ruling: migration `0605_lgpd_privacy.sql` (não `0604`): `slice/S16-admin` (T3, paralela) já usa `0604_admin_reports.sql`
+  (conferido por `git ls-remote`/pelo worktree). Se colidir no merge (prefixos diferentes, pouco provável),
+  renumerar esta.
+- Ruling (o mais estrutural desta fatia): `claims.claimant_id` e `claim_evidence.uploaded_by` passam de
+  `on delete restrict` para `on delete set null` (nullable). Eram as ÚNICAS FKs para `profiles` com `restrict`
+  em todo o schema (todas as outras já eram `cascade` — dado pessoal — ou `set null` — rastro que sobrevive,
+  vários comentários já diziam "nulo só após exclusão de conta (LGPD), na S17"). Sem essa mudança, excluir a conta
+  de um reivindicante trava com violação de FK e a exclusão real do perfil fica impossível para sempre. O gatilho
+  novo `profiles_lgpd_erase` (BEFORE DELETE em `profiles`, SECURITY DEFINER, `search_path=''`, `enable always`)
+  anonimiza `claims.claimant_name`/`contact_email`/`evidence_note` e `claim_evidence.original_name` (nome do
+  arquivo pode ter PII) ANTES do SET NULL valer, na mesma transação — a escola continua com o registro de decisão
+  (`status`, `decided_at`, `school_id`), só sem dado pessoal do reivindicante. Testado ponta a ponta (reivindicação
+  aprovada, exclusão real do perfil, escola continua `verified`). Custo se estiver errada: reverter para
+  `restrict` é uma migration aditiva; nenhuma conta de produção existe ainda para ter sido afetada.
+- Ruling: `lead_events.actor_id` (D-014) NÃO é zerado por UPDATE — tentei e o próprio gatilho de imutabilidade da
+  tabela bloqueou (`lead_events é imutável`), confirmando que a tabela é append-only por desenho, igual
+  `claim_status_events`/`audit_log`. Como a coluna nunca teve FK (comentário original: "rastro sobrevive à
+  exclusão de conta"), a ausência de FK É a anonimização: depois que o perfil é apagado, o uuid em `actor_id` não
+  resolve a ninguém (nenhum outro perfil nasce com o mesmo id) — vira um valor órfão e não religável. Mesmo
+  raciocínio documentado para `claim_status_events.actor_id`/`invoices.actor_id`/`credit_ledger.actor_id`. D-014
+  fecha por documentação, não por código. Custo se estiver errada: nenhum código a desfazer.
+- Ruling: `retention_policies` (D-012) cobre exatamente `claim_evidence` (180 dias após a decisão final da
+  reivindicação) e `claim_tokens` (90 dias após o vencimento) — os dois recursos citados pelo próprio D-012. Os
+  números são parâmetro de engenharia guardado numa tabela editável por `service_role` (não um fato jurídico
+  inventado — CLAUDE.md proíbe inventar preço/prazo/métrica do PRODUTO, não parâmetro técnico interno), e a
+  cópia pública (`/privacidade`) NÃO cita o número: o `copy-claims.test.tsx` (S27) já tem um guard-rail que recusa
+  qualquer texto de site público com "número + dias/mil/%/..." — achado real ao rodar o teste (falha vermelha
+  antes da correção), corrigido descrevendo o prazo sem dígito ("prazo técnico definido internamente,
+  ajustável..."). `retention_candidates`/`retention_purge` (SECURITY DEFINER, EXECUTE só `service_role`) só
+  conhecem esses dois nomes de tabela por construção — nunca leem/escrevem `survey_*` (ADR-005), testado
+  explicitamente (contagem antes/depois inalterada).
+- Ruling: job de retenção roda em duas camadas, mesmo padrão de `leads-expire`/`b2b-maintenance`: a função SQL
+  devolve candidatos e apaga por id (idempotente); `features/privacy/retention.ts` remove o objeto do Storage
+  ANTES de apagar a linha, best-effort (falha no Storage nunca bloqueia o `retention_purge`, só conta em
+  `storageFailed` — mesmo espírito de D-017) porque o Postgres não pode apagar o byte físico do bucket, só o
+  catálogo; `/api/cron/retention-purge` reaproveita `isAuthorizedCron`/`CRON_SECRET_MIN_LENGTH` de
+  `features/leads/cron-auth.ts` (tempo constante), sem duplicar a lógica.
+- Ruling: `account_export(p_profile_id uuid)` é SECURITY DEFINER (ignora RLS) mas com `p_profile_id` explícito —
+  mesmo modelo de confiança de `consents_revoke`/`notifications_mark_read`: a segurança está em o Server Action
+  sempre passar `actor.userId` da sessão validada (`getSessionActor()`), nunca um id de formulário. Cada
+  subconsulta dentro da função filtra manualmente por `p_profile_id` (obrigatório, já que DEFINER roda como dono
+  da tabela). Testado com dois perfis reais: um nunca vê o `consents`/reivindicação do outro.
+- Ruling: exclusão de conta NÃO tem função SQL própria de "excluir conta" — a exclusão de verdade é
+  `auth.admin.deleteUser`, que a Admin API do Supabase já expõe e que dispara o mesmo `DELETE FROM auth.users`
+  cascateado que os testes de banco verificam diretamente. `features/privacy/repository.ts#deleteAccount` só
+  orquestra: lista os caminhos do Storage do próprio dono (`list_submissions`/`claim_evidence`), remove
+  best-effort, e chama `deleteUser` (idempotente: 404 não é erro). Nenhuma tabela nova, nenhuma função nova para
+  isto além do gatilho/FKs já descritos.
+- Ruling: Tasks 2 e 3 do plano (job de retenção; exportação/exclusão) foram para um commit só
+  (`8754b82`) — os testes de integração de ambas compartilham `tests/privacy/repository.test.ts` (nome exigido
+  pelo glob `tests/**/repository.test.ts` de `vitest.db.config.ts`), então separar o commit por task exigiria
+  separar o arquivo de teste em subpastas só por estética; custo/benefício desfavorável perto do fim da fatia.
+- Ruling: D-015 e D-016 (dono S17 no DEBT, severidade média/baixa) ficam `aberta`, documentadas com Ruling: D-015
+  é ajuste de texto de outra tabela (`leads`, S14), não gap estrutural de LGPD; D-016 (aceite de reivindicação
+  centralizado em `consents`) exigiria mudar o fluxo de outra fatia (S06) por um ganho de organização, não de
+  conformidade (o timestamp e a versão do texto já existem em `claims`). D-017 (Storage órfão sem linha em
+  `claim_evidence`) também fica `aberta`: fora do escopo do job de retenção, que só apaga evidência COM linha
+  vencida.
+- Ruling: `features/site/legal.ts` — `LEGAL.retention`/`claimRetention` preenchidos (texto técnico, sem
+  conformidade jurídica, sem número com unidade); `LEGAL.auditRetention` continua `null` de propósito: esta fatia
+  não criou rotina de exclusão para `audit_log` (é imutável por desenho — só o job de evidência/token roda);
+  decidir se cabe alguma rotina é decisão jurídica/de produto do humano, registrada como D-150. O parágrafo
+  "Dados de crianças" da página pública estava desatualizado desde a S15 (dizia "hoje a plataforma não tem campo
+  de estudante", mas `students` existe desde então) — corrigido para refletir o cadastro real (só apelido e
+  série). `tests/site/legal.test.tsx` reescrito: a asserção antiga "`LEGAL` é todo `null`" não podia mais ser
+  verdadeira (por desenho desta fatia); trocada por uma lista explícita do que continua só do humano/jurídico
+  (razão social, CNPJ, contato, base legal, operadores, data, prazo de auditoria) versus o que a S17 já preencheu.
+- Ruling: auditoria do selo "Demonstração" foi por amostragem dirigida, não exaustiva (D-152): verificado
+  `app/escolas/[inep]/[serie]` (via `StatusBadges`), `PublicProfileView` (papelarias) e a lista de leads da
+  papelaria (`app/papelaria/leads/(lista)/page.tsx` → `LeadTable`/`LeadCards`, que JÁ mostravam `DemoSeal` — não
+  era o gap que pareceu à primeira vista, só estava no componente filho, não na página) — nenhuma lacuna real
+  encontrada nos pontos verificados; uma varredura completa (todo `is_demo` do schema × todo componente que o
+  consome) fica para S18, registrada como dívida.
+- Achado (confirmado rodando o teste, não só suposto): `UPDATE public.lead_events SET actor_id = null` é
+  bloqueado pelo próprio gatilho de imutabilidade da tabela (`lead_events é imutável (UPDATE bloqueado)`) — este
+  achado sustenta o Ruling acima sobre D-014 e está coberto por um teste dedicado em `tests/db/lgpd-privacy.test.ts`
+  que tenta o mesmo UPDATE em `claim_status_events` e espera o erro.
+- Achado: `pnpm test:db`/`pnpm test` completos falharam, em rodadas completas diferentes desta sessão, num teste
+  aleatório não relacionado à S17 (`tests/db/audit.test.ts`, depois `tests/claims/repository.test.ts`, depois
+  `tests/submissions/school-picker.test.tsx`), sempre passando 100% quando rodado isolado — flakiness de
+  ordem/tempo pré-existente na suíte grande (paralelismo alto de ~1800/~3300 testes), não causada por esta fatia;
+  registrado como D-151.

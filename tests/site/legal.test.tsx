@@ -5,20 +5,39 @@ import { LEGAL } from "@/features/site/legal";
 
 import { loadPage, renderInSite } from "./helpers";
 
+/** Só o humano/jurídico preenche estes (razão social, CNPJ, contato, base legal, operadores, data, prazo de
+ * auditoria — nenhuma rotina de exclusão criada para `audit_log`, que é imutável por desenho). */
+const STILL_HUMAN_OWNED = ["companyName", "cnpj", "dpoEmail", "contactEmail", "auditRetention", "legalBasis", "operators", "lastUpdated"] as const;
+/** S17 preencheu com o prazo técnico das próprias regras (retention_policies, migration 0605); ver ledger "S17". */
+const FILLED_BY_S17 = ["retention", "claimRetention"] as const;
+
 describe("textos jurídicos preliminares", () => {
-  it("LEGAL é todo null nesta fatia", () => {
-    expect(Object.values(LEGAL).every((v) => v === null)).toBe(true);
+  it("só o humano/jurídico preenche razão social, CNPJ, contato, base legal, operadores, data e prazo de auditoria; S17 preencheu os prazos técnicos que já existem em código", () => {
+    for (const k of STILL_HUMAN_OWNED) expect(LEGAL[k], k).toBeNull();
+    for (const k of FILLED_BY_S17) expect(LEGAL[k], k).not.toBeNull();
+    expect(Object.keys(LEGAL).sort()).toEqual([...STILL_HUMAN_OWNED, ...FILLED_BY_S17].sort());
   });
 
   it.each([
     ["/termos", ["data da última atualização", "e-mail do encarregado de dados"]],
-    ["/privacidade", ["razão social", "CNPJ", "prazo de retenção", "prazo de guarda dos documentos de reivindicação", "prazo de guarda da trilha de auditoria", "base legal", "operadores e contratos", "data da última atualização", "e-mail do encarregado de dados"]],
-  ] as const)("%s: faixa preliminar e cada placeholder em <mark>", async (route, labels) => {
+    ["/privacidade", ["razão social", "CNPJ", "prazo de guarda da trilha de auditoria", "base legal", "operadores e contratos", "data da última atualização", "e-mail do encarregado de dados"]],
+  ] as const)("%s: faixa preliminar e cada placeholder ainda pendente em <mark>", async (route, labels) => {
     const Page = await loadPage(route);
     const { container } = await renderInSite(Page);
     expect(screen.getByText(/Versão preliminar\. Texto em revisão jurídica\./)).toBeInTheDocument();
     const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
     for (const l of labels) expect(marks).toContain(`[a definir: ${l}]`);
+  });
+
+  it("/privacidade: prazo de retenção e prazo de guarda dos documentos de reivindicação já preenchidos (S17), fora de <mark>", async () => {
+    const Page = await loadPage("/privacidade");
+    const { container } = await renderInSite(Page);
+    const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
+    expect(marks).not.toContain("[a definir: prazo de retenção]");
+    expect(marks).not.toContain("[a definir: prazo de guarda dos documentos de reivindicação]");
+    const t = container.textContent ?? "";
+    expect(t).toMatch(/excluir sua conta/i);
+    expect(t).toMatch(/prazo técnico definido internamente/i);
   });
 
   it("privacidade: apelido e série; sem nome do aluno, sobrenome nem exclusão em Minha conta", async () => {

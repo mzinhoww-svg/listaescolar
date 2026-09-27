@@ -59,6 +59,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S25 Widget e webhooks (B2B) | #42 | 634c9f2 | 2026-09-27 | ✓ | ✓ | 3303 | 1759 (3 skipped) | ✓ | verify ✓ db ✓ (concluídos depois do merge; ver Ruling) | ✓ | build local + receptor de webhook, 22 verificações, 0 falhas (`e2e/S25.md`) |
 | S26 Campanhas de marca, insights e faturamento B2B | — (sem PR, por instrução) | 738500e | 2026-09-27 | ✓ | ✓ | 3365 | 1805 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 20 verificações, 0 falhas (`e2e/S26.md`); 3 rodadas de reverificação de segurança aplicadas |
 | S15 Área da família | #45 | ccd4c54 | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
+| S17 LGPD e dados demonstrativos | — (sem PR, por instrução) | `8754b82` (+ commit da Task 4) | 2026-09-27 | ✓ | ✓ | 3374 | 1820 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 18 verificações, 0 falhas (`e2e/S17.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -91,6 +92,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
 | 0503_b2b_campaigns.sql | S26 | — | **ainda não aplicada** (ver "Pendente de staging" abaixo) |
 | 0603_family_area.sql | S15 | family_area | aplicada em 2026-09-27 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
+| 0605_lgpd_privacy.sql | S17 | — | **ainda não aplicada** (só local; tarefa marcou staging como inviolável para este implementador; ver "Pendente de staging") |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
@@ -106,6 +108,13 @@ para este implementador. Depende de `0501`/`0502` (S24/S25, já no staging) e de
 nova para a faixa 04xx (Cobrança). Aplicar via Supabase MCP na sequência normal (0403 e 0603 já foram aplicadas
 por outras sessões — ver a tabela de migrations acima).
 
+Também pendente de staging: `0605_lgpd_privacy.sql` (S17 — `retention_policies`, `retention_candidates`/
+`retention_purge`, `profiles_lgpd_erase`, `account_export`; `claims.claimant_id`/`claim_evidence.uploaded_by`
+passam de `on delete restrict` para `on delete set null`), só local (`pnpm db:reset` ×2 + `pnpm test:db` completo
+verdes: 1820/1823, 3 pulados = baseline); não aplicada porque a tarefa da S17 marcou staging como inviolável para
+este implementador. Depende só de `0104` (S06, claims — já no staging). Aplicar via Supabase MCP na sequência
+normal.
+
 Produção: nenhuma migration (o projeto não existe).
 
 ## Trilhas
@@ -117,7 +126,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
 | Comércio e cobrança | S12, S13, S14, S27, S21, S22, S23 | **Completa** (S21 #34, S22 #36, S23 #40; migrations 0401–0403 no staging) |
 | B2B | S24, S25, S26 | **Completa**: S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (branch `slice/S26-campanhas`, sem PR por instrução; 3 rodadas de reverificação de segurança; migration `0503` só local, ver "Pendente de staging") |
-| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 em andamento** (worktree T3) |
+| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 em andamento** (worktree T3); **S17 ✓** (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local, ver "Migrations") |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -140,7 +149,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas; migration `0503` só local)].
 4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 (em andamento no worktree T3).
-5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
+5. S17 ✓ (branch `slice/S17-lgpd-demo`, worktree T2, sem PR por instrução; migration `0605` só local). S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
@@ -168,7 +177,7 @@ Credenciais e contas:
 
 Conteúdo e dados:
 - CSV oficial do INEP (importação na S20, com a contagem real registrada).
-- Textos jurídicos finais: razão social, CNPJ, DPO/contato, prazos de retenção (reivindicação, auditoria) (páginas de termos e privacidade da S27 e S17 usam placeholders).
+- Textos jurídicos finais: razão social, CNPJ, DPO/contato, base legal, operadores/contratos, data da última atualização (páginas de termos e privacidade da S27 continuam com placeholder `[a definir: ...]`, revisão jurídica pendente). Prazo de retenção de evidência/token e o prazo geral (`LEGAL.retention`/`claimRetention`) já foram preenchidos pela S17 (texto técnico, sem número com unidade, sem afirmar conformidade); prazo de guarda de `audit_log` (`LEGAL.auditRetention`) continua placeholder — decisão pendente do humano/jurídico (D-150), já que `audit_log` é imutável por desenho e não tem rotina de exclusão.
 - Promessa "Famílias e escolas não pagam" (texto do site público da S27): promessa de preço a validar com o modelo de preço antes de publicar.
 
 ## Notas operacionais

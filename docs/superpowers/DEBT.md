@@ -29,13 +29,14 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 
 | ID | Origem | Descrição | Sev. | Dono | Status |
 |---|---|---|---|---|---|
-| D-012 | ledger-dados S06 (dívida e plano) | Sem exclusão/retenção de evidências e tokens de reivindicação (bucket `claim-evidence`, `claim_tokens`) | alta | S17 | aberta |
-| D-013 | ledger.md (S01) | `audit_log` imutável remove só as colunas sensíveis listadas por tabela; ampliar a lista a cada tabela nova com PII (LGPD) | média | S17 | aberta |
-| D-014 | ledger-comercio S14 plano | `lead_events.actor_id` e dados do solicitante sem rotina de anonimização na exclusão de conta | média | S17 | aberta |
-| D-015 | ledger-comercio S14 revisão final | Texto de consentimento do lead não mostra o bairro que será enviado ("Bairro enviado: X") nem cita o evento `whatsapp_opened` visível à papelaria | média | S17 | aberta |
-| D-016 | ledger-dados S06 plano | Aceite de privacidade da reivindicação fica em `claims.privacy_ack_at` e não em `consents` | baixa | S17 | aberta |
-| D-017 | ledger-dados S06 revisão final | Falha em `claim_add_evidence` depois do upload deixa objeto órfão no Storage (limpeza best-effort); falta varredura | baixa | S17 | aberta |
+| D-012 | ledger-dados S06 (dívida e plano) | Sem exclusão/retenção de evidências e tokens de reivindicação (bucket `claim-evidence`, `claim_tokens`) | alta | S17 | resolvida em `8754b82`/`d30dd32` (S17): `retention_policies` + `retention_candidates`/`retention_purge` (migration 0605) + `features/privacy/retention.ts` + `/api/cron/retention-purge`; `claim_evidence` 180 dias após decisão final, `claim_tokens` 90 dias após vencimento; nunca toca `survey_*` (testado) |
+| D-013 | ledger.md (S01) | `audit_log` imutável remove só as colunas sensíveis listadas por tabela; ampliar a lista a cada tabela nova com PII (LGPD) | média | S17 | resolvida em S17 (conferência, sem gap): `claims`/`claim_evidence`/`profiles` já mascaram as colunas certas desde a própria migration que os criou; `students`/`saved_lists` (S15) deliberadamente SEM gatilho de auditoria (mínimo de dado de menor, Ruling 4 do plano S15) — nada a ampliar |
+| D-014 | ledger-comercio S14 plano | `lead_events.actor_id` e dados do solicitante sem rotina de anonimização na exclusão de conta | média | S17 | resolvida em S17 (Ruling, documentado na migration 0605 e no ledger): `lead_events` é imutável (UPDATE bloqueado pelo próprio gatilho, confirmado na tentativa) — não há UPDATE possível nem necessário; a ausência de FK já É a anonimização (uuid órfão, não religável a um perfil depois que ele é apagado). Mesmo raciocínio vale para `claim_status_events.actor_id`/`invoices.actor_id`/`credit_ledger.actor_id` |
+| D-015 | ledger-comercio S14 revisão final | Texto de consentimento do lead não mostra o bairro que será enviado ("Bairro enviado: X") nem cita o evento `whatsapp_opened` visível à papelaria | média | S17 | aberta — Ruling 9 (S17): é UX/comércio da tabela `leads` (S14), não um gap estrutural de LGPD (o dado já é mostrado ao consentir); não bloqueia esta fatia, rebaixada para ajuste de texto numa fatia de comércio futura |
+| D-016 | ledger-dados S06 plano | Aceite de privacidade da reivindicação fica em `claims.privacy_ack_at` e não em `consents` | baixa | S17 | aberta — Ruling 9 (S17): mudar o fluxo de aceite da reivindicação (S06) para gravar em `consents` tem custo de mudar outra fatia; o timestamp e a versão do texto já existem em `claims`, só não centralizados — não bloqueia LGPD, mantido `aberta` |
+| D-017 | ledger-dados S06 revisão final | Falha em `claim_add_evidence` depois do upload deixa objeto órfão no Storage (limpeza best-effort); falta varredura | baixa | S17 | aberta — fora do escopo de D-012: o job de retenção da S17 apaga evidência COM linha em `claim_evidence` vencida, não objetos órfãos SEM linha (upload que sobreviveu a uma falha de INSERT); varredura de órfãos continua pendente |
 | D-018 | ledger-pipeline S07 T3 | Worker com pipeline demo sobre envio de app sem pipeline deixava `is_demo` falso | média | S07 | resolvida em S07 (`jobs_complete` com `p_is_demo`) |
+| D-150 | ledger.md (S17) | `audit_log` não tem rotina de exclusão/anonimização própria (é append-only por desenho); `LEGAL.auditRetention` fica placeholder — decidir o prazo (e se cabe uma rotina) é uma decisão jurídica/de produto, não técnica, pendente do humano | média | Humano / S19 | aberta |
 
 ## Desempenho e escala
 
@@ -72,6 +73,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-042 | ledger.md (S02) | `/entrar` mostra o link mágico abaixo dos termos (desvio da App02); reorganizar quando o Google OAuth for ativado | baixa | S18 | aberta |
 | D-043 | ledger-dados S04 T3; ledger-dados S05 T3; ledger-comercio S12 T3 e S13; e2e/S04, S05 | Soft-404: `notFound()`/`redirect()` respondiam HTTP 200 por causa dos `loading.tsx` que forçavam streaming | média | chore | resolvida em chore/soft-404 (PR #17) |
 | D-044 | ledger-comercio S13 T3 | Nome do bairro digitado não era preservado (normalizado para minúsculas) | baixa | S13 | resolvida em S13 T2 rodada 2 (`display_name`) |
+| D-152 | ledger.md (S17) | Auditoria do selo "Demonstração" (`DemoBadge`/`DemoSeal`) foi por amostragem dirigida (S17), não exaustiva por todo `is_demo` do schema; nenhuma lacuna encontrada nos pontos verificados (schools/listas, papelarias, leads — inclusive `LeadTable`/`LeadCards` da papelaria), mas uma varredura completa (grep de todo `is_demo` exposto à UI × todo componente que o consome) ainda não foi feita | baixa | S18 | aberta |
 
 ## Integração entre trilhas (S11)
 
@@ -94,6 +96,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-054 | ledger.md (S01); ledger-dados S03 T2 | Testes de RLS usam `pg` direto (não cobrem PostgREST/GoTrue); o gateway supabase-js só é exercitado no E2E | baixa | S20 | aberta |
 | D-055 | ledger-pipeline S08; e2e/S08 | Pipeline de IA nunca rodou com provedor real (`scripts/ai-smoke.ts` tem custo) | média | Humano / S20 | aberta |
 | D-056 | ledger-pipeline S07 (Edge Function) | Teste E2E da Edge Function é ignorado sem `WORKER_URL`/`WORKER_SHARED_SECRET` (não roda no CI) | baixa | S19 | aberta |
+| D-151 | ledger.md (S17) | `pnpm test:db`/`pnpm test` completos (1800+/3300+ testes, `fileParallelism`/paralelismo altos) ocasionalmente falham 1 teste aleatório não relacionado à mudança da sessão (`tests/db/audit.test.ts`, `tests/claims/repository.test.ts`, `tests/submissions/school-picker.test.tsx`, um por vez, em 3 rodadas completas diferentes durante a S17); todos passam 100% quando rodados isolados — flakiness de ordem/tempo pré-existente na suíte grande, não causada pela S17 | baixa | S18 | aberta |
 
 ## Arquivos grandes (limite de 250 linhas)
 
@@ -222,12 +225,17 @@ reverificação de segurança, rodada 2, `1e35153`, sem número anterior).
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 10 | 5 | 15 |
-| média | 45 | 9 | 54 |
-| baixa | 69 | 10 | 79 |
-| **Total** | **124** | **24** | **148** |
+| alta | 9 | 6 | 15 |
+| média | 44 | 11 | 55 |
+| baixa | 71 | 10 | 81 |
+| **Total** | **124** | **27** | **151** |
 
-Contagem atualizada em 2026-09-27 (merge de `origin/main`, PR #45 — S15 soma D-140–D-142 e revisita D-029/D-082
+Contagem atualizada em 2026-09-27 (S17, branch `slice/S17-lgpd-demo`, sobre `3f28fb5`): D-012 (alta) e D-013/D-014
+(média) resolvidas; D-015/D-016 mantidas `aberta` com Ruling de que não bloqueiam LGPD; D-017 mantida `aberta`
+(fora do escopo do job de retenção, que cobre evidência com linha vencida, não objeto órfão sem linha); soma
+D-150 (média, `audit_log` sem rotina de retenção própria — decisão do humano/jurídico), D-151 (baixa, flakiness
+pré-existente de suíte grande) e D-152 (baixa, auditoria do selo "Demonstração" por amostragem, não exaustiva).
+Estado anterior (merge de `origin/main`, PR #45 — S15 soma D-140–D-142 e revisita D-029/D-082
 sem resolvê-las — com a S26 desta branch: D-143–D-149, renumerados a partir de D-143 por colisão com os IDs da
 S15 já mesclada; D-144, D-146 e D-148 média/abertas — cota/cache de `b2b_campaign_serve`, falta de tela para gerar
 o extrato sob demanda, e teto por instância do rastreamento de campanha —, as demais baixa/abertas). Estado

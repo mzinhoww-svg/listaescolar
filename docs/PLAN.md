@@ -243,11 +243,44 @@
 **Prompt:**
 > Landing, como funciona, sobre, termos e privacidade (com placeholders jurídicos, sem afirmar conformidade), link curto da lista com QR, página de redirecionamento para loja, 403 e 404. SEO e Open Graph.
 
+### S28 · Excelência de produto e design
+**Quando:** depois da S19 e antes da S20 (ADR-006).
+
+**Skills obrigatórias, nesta ordem:**
+1. `superpowers:brainstorming`, em modo autônomo. Responda você mesmo às perguntas da skill usando o SPEC, o PLAN, as telas de `docs/design`, os resultados da pesquisa com mães (ADR-005) e os dados do staging. Não espere aprovação humana: registre o spec resultante como Ruling.
+2. `/impeccable`: auditoria e crítica de cada área, e depois polish e harden.
+3. `/design-intelligence`: decisões de sistema visual e o `DESIGN.md` do projeto.
+4. `/tripled-ui`: blocos e microinterações nas telas de marketing e nos momentos-chave.
+
+**Prompt:**
+> **Fase 1 · Diagnóstico (brainstorming):** mapeie os funis da família, da escola, da papelaria e do B2B. Para cada passo, aponte o atrito, o risco de abandono, a clareza do texto e o que a pesquisa com mães sugere. Gere `docs/MELHORIAS.md` com cada item em impacto × esforço, com as áreas afetadas e a métrica que prova o ganho. Escolha o top 15 para implementar nesta fatia e deixe o resto priorizado para depois do piloto.
+>
+> **Fase 2 · Auditoria (impeccable):** rode audit e critique na ordem família (mobile primeiro), papelaria, escola, admin, B2B e site, comparando com `docs/design`. Cubra:
+> - hierarquia e copy;
+> - estados de vazio, carregamento e erro;
+> - acessibilidade WCAG AA: contraste, foco, leitor de tela e alvos de toque;
+> - responsividade;
+> - desempenho: Core Web Vitals.
+>
+> **Fase 3 · Sistema (design-intelligence):** consolide o `DESIGN.md` com tokens, componentes, padrões de formulário, feedback e movimento. Mantenha a marca fechada: logo, paleta Tinta, Papel, Verde Certo e Verde Fundo, e a tipografia Plus Jakarta Sans. Não troque identidade, só refine a aplicação.
+>
+> **Fase 4 · Refinamento (tripled-ui):** aplique blocos e microinterações na landing, no "como funciona" e em momentos-chave (onboarding da família, lista pronta, pedido enviado, estados vazios), sempre adaptados aos tokens `lc-*`. Respeite `prefers-reduced-motion` e não adicione dependência pesada sem Ruling, porque o piloto é celular de pai em 4G.
+>
+> **Fase 5 · Implementação:** implemente o top 15 com o mesmo método das outras fatias (plano, subagentes, TDD onde houver lógica, revisão). Inclua a medição de custo de IA por lista e das consultas lentas do banco, com correção do que passar do orçamento.
+
+**Aceite:**
+- `docs/MELHORIAS.md` e `DESIGN.md` mesclados, e o top 15 implementado ou com Ruling de adiamento.
+- Lighthouse mobile ≥ 90 em performance e acessibilidade nas páginas principais: início, busca, lista, carrinho, login, painel da papelaria e landing.
+- axe sem violações sérias ou críticas nas mesmas páginas.
+- E2E da fatia com screenshots de antes e depois anexados ao PR.
+- Custo de IA por lista medido e registrado no `PROGRESS.md`, abaixo de R$ 0,50.
+- Revisão final com Opus focada em UX e acessibilidade; revisão de segurança só se a fatia tocar em RLS ou dados.
+
 ### S20 · Produção e suíte E2E final
 **Prompt:**
 > Rodar as migrations em staging e depois em produção. Suíte agent-browser completa cobrindo os fluxos pai, escola, admin e papelaria. Checklist de go-live em `docs/GO-LIVE.md`. Importar o CSV oficial em produção e registrar a contagem real.
 
-**Aceite (go-live):** `docs/superpowers/DEBT.md` sem itens de severidade alta abertos, ou cada um com Ruling explícito no `docs/superpowers/ledger.md`.
+**Aceite (go-live):** a S28 mesclada na `main` (ADR-006) e `docs/superpowers/DEBT.md` sem itens de severidade alta abertos, ou cada um com Ruling explícito no `docs/superpowers/ledger.md`.
 
 **Checklist de go-live (obrigatório em `docs/GO-LIVE.md`):** reativar a proteção dos previews da Vercel (Vercel Authentication ou equivalente) ANTES de entrar qualquer dado real (D-074): hoje os previews são públicos, apontam para o staging e só têm `X-Robots-Tag: noindex`. Também: ligar `SITE_INDEXING=1` no ambiente de produção só no go-live (D-075); sem isso o site continua noindex.
 
@@ -258,6 +291,7 @@
 4. Em paralelo: [S21, S22, S23] e [S24, S25, S26].
 5. S15, S16, S27.
 6. S17, S18, S19.
-7. S20 por último.
+7. S28 (excelência de produto e design, ADR-006).
+8. S20 por último.
 
 Toda fatia usa as telas de `docs/design/` como referência visual obrigatória. O mapa está em `docs/design/SCREENS.md`.

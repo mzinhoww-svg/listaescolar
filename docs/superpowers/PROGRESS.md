@@ -134,10 +134,11 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (branch `slice/S25-widget-webhooks`, sem PR ainda — ver abaixo), S26 (próxima)].
-4. S15 (em andamento no worktree T3, antecipada — ver Ruling), S16.
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 (em andamento no worktree T2)].
+4. S15 (implementada no worktree T3, em correções da revisão de segurança; antecipada — ver Ruling), S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
-6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
+6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
+7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
 ## Pendências humanas (consolidadas)
 
@@ -185,5 +186,6 @@ Conteúdo e dados:
 ## Aguardando humano
 Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.
 
+- **Skills da S28 no repositório.** O pedido de 2026-09-27 diz que `impeccable`, `tripled-ui` e `design-intelligence` estão em `.claude/skills/` por commit do humano, mas esse commit não está em `origin/main` nem nos worktrees (conferido em 2026-09-27). Não bloqueia agora: a S28 só começa depois da S19, e as três skills já estão disponíveis nesta sessão pelos plugins instalados. Ação do humano: dar push do commit (ou confirmar que devem vir dos plugins).
 
 - **Plano de cobrança no staging (D-102).** Desde a 0401 (S21) o staging não tem plano ativo: todo lead para papelaria REAL é recusado com `billing_unavailable` (papelarias e carrinhos de demonstração seguem funcionando). O orquestrador não publica plano porque os valores (leads grátis, faixas de preço por quantidade de itens, pacotes de crédito, preço e parcelas do passe, meses da temporada) são preço de produto e não podem ser inventados. Ação do humano: informar os valores (ou pedir um plano provisório "de teste" explicitamente) e o orquestrador publica pela tela `/admin/planos` ou por `billing_plan_publish`.

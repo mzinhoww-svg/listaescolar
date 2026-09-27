@@ -1,0 +1,147 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.db.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.1 /Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T3-comercio
+
+ ❯ tests/db/payouts.test.ts (38 tests | 6 failed | 31 skipped) 359ms
+   ❯ S23 · imutabilidade (sale_payments, payout_ledger) (2)
+     × sale_payment_admin_validations recusa update/delete (correção funcional, rodada 2) 37ms
+   ❯ S23 · correções da revisão de segurança (Opus, rodada 2) (6)
+     × correção funcional 1 (repasse perdido): papelaria confirma primeiro, admin valida depois -> repasse gerado uma vez, sem duplicar comissão 36ms
+     × correção funcional 1: ordem inversa (admin confirma direto, sem a papelaria antes) continua funcionando 32ms
+     × payout_admin_validate_sale: só admin (payout_check_admin) 26ms
+     × payout_admin_validate_sale: venda de demonstração não gera lançamento nem repasse (mesmo padrão de payout_confirm_sale) 34ms
+     × correção funcional 2: payout_reverse_entry recusa estornar repasse_due já incluído num lote, pendente ou executado 40ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/db/payouts.test.ts > S23 · imutabilidade (sale_payments, payout_ledger) > sale_payment_admin_validations recusa update/delete (correção funcional, rodada 2)
+error: relation "public.sale_payment_admin_validations" does not exist
+ ❯ node_modules/.pnpm/pg@8.23.0/node_modules/pg/lib/client.js:694:17
+ ❯ tests/db/payouts.test.ts:535:19
+    533|       const saleId = r1.rows[0]!.id as string;
+    534|       await validateSale(c, { actorId: IDS.admin, leadId: lead.id, sch…
+    535|       const row = await c.query<{ id: string }>("select id from public…
+       |                   ^
+    536|       const id = row.rows[0]!.id;
+    537|
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/payouts.test.ts:528:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/db/payouts.test.ts > S23 · correções da revisão de segurança (Opus, rodada 2) > correção funcional 1 (repasse perdido): papelaria confirma primeiro, admin valida depois -> repasse gerado uma vez, sem duplicar comissão
+AssertionError: expected 'function public.payout_admin_validate…' to be null
+
+- Expected:
+null
+
++ Received:
+"function public.payout_admin_validate_sale(uuid, uuid, uuid) does not exist"
+
+ ❯ tests/db/payouts.test.ts:734:24
+    732|       // admin valida depois, escolhendo a escola.
+    733|       const r2 = await validateSale(c, { actorId: IDS.admin, leadId: l…
+    734|       expect(r2.error).toBeNull();
+       |                        ^
+    735|       expect(r2.rows[0]!.id).toBe(saleId); // mesma venda, nunca dupli…
+    736|
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/payouts.test.ts:716:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/db/payouts.test.ts > S23 · correções da revisão de segurança (Opus, rodada 2) > correção funcional 1: ordem inversa (admin confirma direto, sem a papelaria antes) continua funcionando
+AssertionError: expected 'function public.payout_admin_validate…' to be null
+
+- Expected:
+null
+
++ Received:
+"function public.payout_admin_validate_sale(uuid, uuid, uuid) does not exist"
+
+ ❯ tests/db/payouts.test.ts:758:23
+    756|
+    757|       const r = await validateSale(c, { actorId: IDS.admin, leadId: le…
+    758|       expect(r.error).toBeNull();
+       |                       ^
+    759|       const saleId = r.rows[0]!.id as string;
+    760|       expect((await ledgerFor(c, "platform", null)).filter((x) => x.sa…
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/payouts.test.ts:750:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/db/payouts.test.ts > S23 · correções da revisão de segurança (Opus, rodada 2) > payout_admin_validate_sale: só admin (payout_check_admin)
+AssertionError: expected 'No function matches the given name an…' to be 'forbidden' // Object.is equality
+
+Expected: "forbidden"
+Received: "No function matches the given name and argument types. You might need to add explicit type casts."
+
+ ❯ tests/db/payouts.test.ts:771:22
+    769|       const lead = await leadForSale(c, { stationeryId: st, amountCent…
+    770|       const r = await validateSale(c, { actorId: IDS.stationery_member…
+    771|       expect(r.hint).toBe("forbidden");
+       |                      ^
+    772|     });
+    773|   });
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/payouts.test.ts:766:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/db/payouts.test.ts > S23 · correções da revisão de segurança (Opus, rodada 2) > payout_admin_validate_sale: venda de demonstração não gera lançamento nem repasse (mesmo padrão de payout_confirm_sale)
+AssertionError: expected 'function public.payout_admin_validate…' to be null
+
+- Expected:
+null
+
++ Received:
+"function public.payout_admin_validate_sale(uuid, uuid, uuid) does not exist"
+
+ ❯ tests/db/payouts.test.ts:785:24
+    783|       const saleId = r1.rows[0]!.id as string;
+    784|       const r2 = await validateSale(c, { actorId: IDS.admin, leadId: l…
+    785|       expect(r2.error).toBeNull();
+       |                        ^
+    786|       expect(r2.rows[0]!.id).toBe(saleId);
+    787|       expect((await ledgerFor(c, "apm", school)).filter((x) => x.sale_…
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/payouts.test.ts:776:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  tests/db/payouts.test.ts > S23 · correções da revisão de segurança (Opus, rodada 2) > correção funcional 2: payout_reverse_entry recusa estornar repasse_due já incluído num lote, pendente ou executado
+AssertionError: expected null to be 'already_settled' // Object.is equality
+
+- Expected:
+"already_settled"
+
++ Received:
+null
+
+ ❯ tests/db/payouts.test.ts:808:31
+    806|       // ainda pending (nenhum dinheiro moveu ainda) -> já recusa: o l…
+    807|       const revPending = await attemptH(c, "select public.payout_rever…
+    808|       expect(revPending.hint).toBe("already_settled");
+       |                               ^
+    809|
+    810|       await batchMarkExecuted(c, { actorId: IDS.admin, batchId });
+ ❯ tests/db/helpers.ts:89:14
+ ❯ withSuperuser tests/db/helpers.ts:62:12
+ ❯ tests/db/payouts.test.ts:792:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed | 31 skipped (38)
+   Start at  00:01:29
+   Duration  592ms (tests 85%, transform 9%, import 6%, worker 1%)
+

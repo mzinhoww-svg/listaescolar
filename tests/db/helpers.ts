@@ -149,11 +149,13 @@ export async function seedUsers(): Promise<void> {
 export async function cleanupUsers(): Promise<void> {
   await withSuperuser(async (client) => {
     await client.query("delete from auth.users where id = any($1::uuid[])", [Object.values(IDS)]);
-    // escolas de fixture (ensureSchool) que ficaram sem envio nem lista: a FK da 0600 impede apagar as em uso
+    // escolas de fixture (ensureSchool) que ficaram sem envio, lista nem config de repasse (S23): a FK impede
+    // apagar as em uso.
     await client.query(
       `delete from public.schools s where s.name = 'Escola Fixture'
          and not exists (select 1 from public.list_submissions x where x.school_id = s.id)
-         and not exists (select 1 from public.school_lists l where l.school_id = s.id)`,
+         and not exists (select 1 from public.school_lists l where l.school_id = s.id)
+         and not exists (select 1 from public.school_payout_settings p where p.school_id = s.id)`,
     );
   });
 }

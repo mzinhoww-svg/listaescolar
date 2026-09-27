@@ -43,6 +43,7 @@ export const PANEL_NAV: readonly NavItem[] = [
   { href: "/papelaria/catalogo", label: "Catálogo" },
   { href: "/papelaria/areas", label: "Bairros atendidos" },
   { href: "/papelaria/creditos", label: "Créditos e plano" },
+  { href: "/papelaria/desempenho", label: "Desempenho" },
 ];
 
 export function PageHeader({ crumb, title, children }: { crumb: string; title: string; children?: ReactNode }) {

@@ -253,6 +253,25 @@ describe("S21 · débito só na entrega do lead (gatilho em leads, mesma transa�
     });
   });
 
+  // D-099 (S23): cobre por teste o item 3 da revisão de segurança da S21 ("lead demo criava a carteira REAL antes
+  // de checar is_demo") — antes da correção, `billing_ensure_wallet` rodava ANTES do pulo de débito; hoje roda
+  // depois, então uma papelaria REAL sem carteira nenhuma não ganha carteira (nem lançamento) só por um lead demo.
+  it("D-099: lead de demonstração em papelaria REAL sem carteira NÃO cria stationery_wallets", async () => {
+    await withClaims("system", async (c) => {
+      await publishPlanOk(c, plan({ ...CHARGING_PLAN, free_leads: 0 }));
+      const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member, overrides: { is_demo: false } });
+      const before = await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st]);
+      expect(before.rows[0]!.n).toBe(0); // ninguém criou carteira ainda (sem topUp, sem lead real)
+
+      const cart = await seedCart(c, IDS.parent);
+      const attempt = await leadCreate(c, { cart, stationery: st, itemCount: 2, isDemo: true });
+      expect(attempt.error).toBeNull();
+
+      const after = await c.query("select count(*)::int as n from public.stationery_wallets where stationery_id = $1", [st]);
+      expect(after.rows[0]!.n).toBe(0); // lead de brincadeira não cria carteira real
+    });
+  });
+
   it("lead REAL (não-demo) numa carteira REAL debita normalmente (sem falso positivo do pulo de débito demo)", async () => {
     await withClaims("system", async (c) => {
       await publishPlanOk(c, plan({ ...CHARGING_PLAN, free_leads: 0 }));

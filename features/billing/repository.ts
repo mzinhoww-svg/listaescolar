@@ -12,6 +12,7 @@ import type {
   InvoiceProvider,
   InvoiceView,
   LedgerEntryView,
+  PaymentAlertView,
   PlanDraft,
   SeasonPassView,
   WalletSummary,
@@ -470,6 +471,79 @@ export async function findOpenInvoiceByChargeId(admin: SupabaseClient, chargeId:
 }
 
 /**
+ * D-101 (S23, revisão de segurança da S21): quando o webhook recebe uma notificação para um txid que já pertence a
+ * uma fatura, mas ela NÃO está mais aberta (já paga ou cancelada), `findOpenInvoiceByChargeId` devolve `null` e o
+ * pagamento era ignorado em silêncio. Esta função resolve por QUALQUER status, para o chamador decidir se vale
+ * registrar um alerta (nunca recreditar sozinho).
+ */
+export async function findAnyInvoiceByChargeId(admin: SupabaseClient, chargeId: string): Promise<{ invoiceId: string; status: "open" | "paid" | "cancelled" } | null> {
+  const { data: chargeRow, error: chargeErr } = await admin.from("invoice_charges").select("invoice_id").eq("provider", "pix").eq("provider_charge_id", chargeId).maybeSingle();
+  if (chargeErr) fail("ler histórico de cobranças", chargeErr);
+  if (!chargeRow) return null;
+  const invoiceId = z.object({ invoice_id: z.uuid() }).parse(chargeRow).invoice_id;
+  const { data, error } = await admin.from("invoices").select("id, status").eq("id", invoiceId).maybeSingle();
+  if (error) fail("ler fatura pelo id da cobrança", error);
+  if (!data) return null;
+  const r = z.object({ id: z.uuid(), status: z.enum(["open", "paid", "cancelled"]) }).parse(data);
+  return { invoiceId: r.id, status: r.status };
+}
+
+/** D-101: registra o alerta (idempotente por invoice+provider+charge); admin resolve manualmente pelo Admin13. */
+export async function flagLatePayment(
+  admin: SupabaseClient,
+  input: { invoiceId: string; provider: InvoiceProvider; providerChargeId: string; amountCents: number },
+): Promise<string> {
+  const { data, error } = await admin.rpc("billing_flag_late_payment", {
+    p_invoice_id: input.invoiceId,
+    p_provider: input.provider,
+    p_provider_charge_id: input.providerChargeId,
+    p_amount_cents: input.amountCents,
+    // sempre 'system': só o webhook/cron chama esta função (nenhuma sessão de usuário aciona), revisão de segurança.
+    p_actor_role: "system",
+  });
+  if (error) fail("registrar alerta de pagamento tardio", error);
+  return z.uuid().parse(data);
+}
+
+const paymentAlertRow = z.object({
+  id: z.uuid(),
+  invoice_id: z.uuid(),
+  provider: z.enum(["fake", "demo", "pix"]),
+  provider_charge_id: z.string(),
+  amount_cents: z.number().int(),
+  invoice_status_at_detection: z.enum(["paid", "cancelled"]),
+  detected_at: z.string(),
+  resolved_at: z.string().nullable(),
+  resolved_by: z.uuid().nullable(),
+  resolution_note: z.string().nullable(),
+});
+
+/** Fila de alertas (Admin13, conciliação); admin only. */
+export async function listPaymentAlerts(admin: SupabaseClient, actor: SessionActor): Promise<PaymentAlertView[]> {
+  await requireAdmin(actor);
+  const { data, error } = await admin.from("billing_payment_alerts").select("*").order("detected_at", { ascending: false }).limit(200);
+  if (error) fail("listar alertas de pagamento", error);
+  return z.array(paymentAlertRow).parse(data ?? []).map((r) => ({
+    id: r.id,
+    invoiceId: r.invoice_id,
+    provider: r.provider,
+    providerChargeId: r.provider_charge_id,
+    amountCents: r.amount_cents,
+    invoiceStatusAtDetection: r.invoice_status_at_detection,
+    detectedAt: new Date(r.detected_at),
+    resolvedAt: r.resolved_at ? new Date(r.resolved_at) : null,
+    resolutionNote: r.resolution_note,
+  }));
+}
+
+export async function resolvePaymentAlert(admin: SupabaseClient, actor: SessionActor, input: { alertId: string; note: string | null }): Promise<string> {
+  await requireAdmin(actor);
+  const { data, error } = await admin.rpc("billing_resolve_payment_alert", { p_actor_id: actor.userId, p_alert_id: input.alertId, p_note: input.note });
+  if (error) fail("resolver alerta de pagamento", error);
+  return z.uuid().parse(data);
+}
+
+/**
  * As faturas abertas mais ANTIGAS primeiro (`created_at asc`, até `limit`): um lote que não cabe no orçamento de
  * tempo do cron continua no dia seguinte, sem starvation. Revisão de segurança: devolve TODO txid já emitido para
  * cada uma (via `invoice_charges`), não só o atual — o cron reconcilia cobranças regeneradas/perdidas também.
@@ -520,6 +594,10 @@ export function createBillingStore(admin: SupabaseClient): BillingStore {
     reverseEntry: (input) => reverseEntry(admin, input),
     getStationeryBillingInfo: (stationeryId) => getStationeryBillingInfo(admin, stationeryId),
     findOpenInvoiceByChargeId: (chargeId) => findOpenInvoiceByChargeId(admin, chargeId),
+    findAnyInvoiceByChargeId: (chargeId) => findAnyInvoiceByChargeId(admin, chargeId),
+    flagLatePayment: (input) => flagLatePayment(admin, input),
     listOpenPixChargeIds: (limit) => listOpenPixChargeIds(admin, limit),
+    listPaymentAlerts: (actor) => listPaymentAlerts(admin, actor),
+    resolvePaymentAlert: (actor, input) => resolvePaymentAlert(admin, actor, input),
   };
 }

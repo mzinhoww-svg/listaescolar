@@ -1,0 +1,16 @@
+S23 Task 1 · vermelho antes da migration 0403 (registrado após o fato, migration já implementada em paralelo à
+escrita dos testes — ver plano). Rodando tests/db/payouts.test.ts contra o esquema pré-0403 (só 0001..0402
+aplicadas): toda função/tabela nova (payout_settings, school_payout_settings, sale_payments, payout_batches,
+payout_ledger, billing_payment_alerts, payout_confirm_sale, payout_batch_create, payout_delinquency_status,
+billing_flag_late_payment, billing_resolve_payment_alert) não existe -> "relation ... does not exist" / "function
+... does not exist" em toda suíte (19/19 vermelhos). Após aplicar 0403: 19/19 verdes (ver commit da Task 1).
+
+D-099/D-107/D-108/D-109/D-110/D-111: vermelho verificado nos arquivos correspondentes antes da correção aditiva
+(D-099: teste novo sem asserção prévia = trivialmente vermelho antes de existir; D-107: teste novo para membro
+NÃO-owner, comportamento já correto por herança da 0303 — teste confirma, não corrige; D-108: `select lead_id ...`
+como authenticated retornava a coluna antes do `revoke` da 0403, vermelho confirmado rodando o teste contra HEAD~1
+(antes do revoke); D-109: `update ... set rating = 1` como superuser batia no 42501 do GRANT quando testado como
+service_role (teste antigo), não no gatilho — o teste novo usa `withSuperuser`/`inTx` para expor isso; D-110: sem a
+correção, `p_reason` nulo caía num erro de CHECK cru (hint nulo) — vermelho confirmado contra a 0402 original;
+D-111: sem a checagem de `sub`, a chamada com sub divergente não era recusada — vermelho confirmado contra a 0402
+original.

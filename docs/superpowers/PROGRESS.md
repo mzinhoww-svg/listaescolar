@@ -89,7 +89,14 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0601_integration.sql | S11 | integration | aplicada em 2026-09-25 (perfil `system` criado; `auth.users` do hospedado conferido antes) |
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
 
-Pendente de staging: `0402_lead_conversions.sql` (S22 — confirmação do pai, avaliação e contestação de lead), ainda só local (`pnpm db:reset` verde nesta sessão); não aplicada porque a tarefa da S22 marcou staging/Vercel como invioláveis para este implementador. Aplicar via Supabase MCP na sequência normal (mesmo fluxo das migrations anteriores) antes ou durante a próxima sessão que tiver mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/0701 do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir na revisão de segurança da S19.
+Pendente de staging: `0403_repasses.sql` (S23 — comissão, repasse e inadimplência; aditiva sobre 0401/0402, que já
+estão no staging), ainda só local (`pnpm db:reset` verde nesta sessão, inclusive depois da rodada de correções da
+revisão de segurança — ver abaixo); não aplicada porque a tarefa da S23 marcou staging/Vercel como invioláveis para
+este implementador. Aplicar via Supabase MCP na sequência normal antes ou durante a próxima sessão que tiver
+mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/0701
+do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização
+escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir
+na revisão de segurança da S19.
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -100,7 +107,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Dados | S03, S04, S05, S06 | **Completa** (S03–S06) |
 | Pipeline | S07, S08, S09, S10 | **Completa** (S07–S10) |
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
-| Comércio | S12, S13, S14, S27, S21 | **Completa** (S12–S14, S27 e S21, mesclada em `main` no #34). **S22 concluída** (branch `slice/S22-conversao`, worktree T3: migration `0402_lead_conversions.sql`, `features/conversion/**`, telas (Pap03 contestar, `/conta/compras`, Admin11 auditoria, Admin12 contestações, avaliações no perfil público) e E2E local 21/21 verde; gate completo verde; branch mesclada com `origin/main` e enviada — **sem PR aberto, por instrução da tarefa**; falta revisão e merge) |
+| Comércio | S12, S13, S14, S27, S21, S22 | **Completa** (S12–S14, S27, S21 e S22, mescladas em `main` nos PRs #34 e #36). **S23 concluída, com rodada de correções da revisão de segurança (Opus) já aplicada** (branch `slice/S23-repasses`, worktree T3, criada de `main` em `0ee3771` com S21/S22 dentro: migration `0403_repasses.sql` (aditiva sobre 0401/0402, já no staging), `features/payouts/**`, telas Admin13-Repasses, Admin14-Inadimplência, Pap07-Desempenho e "Pix pela plataforma" em Pap03; fecha D-099–D-101, D-103, D-105, D-107–D-111; abre D-120–D-122 (baixa/média, renumeradas por colisão com os IDs da S24). Revisão sobre `a51b62b` achou 2 bloqueantes (EXECUTE aberto a anon/authenticated em 8 funções novas; `audit_log` guardando `pix_key`/`beneficiary_name`) e 4 importantes (régua de inadimplência contando recarga de crédito; sinal Pix contável só pela própria declaração; conluio papelaria+escola gerando repasse sem revisão; falta de `payout_reverse_entry`), todos corrigidos nesta mesma migration editada no lugar (ver ledger-comercio, seção "S23 · correções da revisão de segurança") — gate completo verde (1721 testes de banco, 3252 unitários) e E2E local refeito 26/26 (`e2e/S23.md`) — **sem PR aberto, por instrução da tarefa**; falta revisão da correção e merge; migration `0403` ainda só local, não aplicada em staging) |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -121,7 +128,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 (em andamento)] ∥ [S24 ✓ (#38), S25 (em andamento), S26].
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (branch `slice/S23-repasses`, sem PR ainda)] ∥ [S24 ✓ (#38), S25 (em andamento), S26].
 4. S15, S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.

@@ -36,6 +36,7 @@ const HINT_CODES: ReadonlySet<string> = new Set<LeadErrorCode>([
   "not_found",
   "billing_required",
   "billing_unavailable",
+  "delinquency_blocked",
 ]);
 
 function dbErrorCode(error: { code?: string; hint?: string | null }): LeadErrorCode {

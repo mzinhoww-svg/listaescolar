@@ -12,6 +12,8 @@ const NAV = [
   { href: "/admin/planos", label: "Planos e preços" },
   { href: "/admin/auditoria", label: "Auditoria de conversão" },
   { href: "/admin/contestacoes", label: "Contestações" },
+  { href: "/admin/repasses", label: "Repasses" },
+  { href: "/admin/inadimplencia", label: "Inadimplência" },
 ] as const;
 
 type Props = {
@@ -24,7 +26,9 @@ type Props = {
     | "/admin/parceiros"
     | "/admin/planos"
     | "/admin/auditoria"
-    | "/admin/contestacoes";
+    | "/admin/contestacoes"
+    | "/admin/repasses"
+    | "/admin/inadimplencia";
   /** `null`: esconde o rodapé de usuário (tela de carregamento, antes de saber quem é). */
   email: string | null | undefined;
   breadcrumb: string;

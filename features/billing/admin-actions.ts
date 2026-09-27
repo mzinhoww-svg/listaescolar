@@ -82,3 +82,19 @@ export async function publishPlanAction(formData: FormData): Promise<void> {
   revalidatePath("/papelaria/creditos");
   redirect("/admin/planos?ok=1");
 }
+
+/** D-101 (S23, Admin13): admin resolve um alerta de pagamento tardio (nota opcional, nunca movimenta dinheiro). */
+export async function resolvePaymentAlertAction(formData: FormData): Promise<void> {
+  const back = "/admin/repasses";
+  const actor = await getSessionActor();
+  if (!actor) redirect(`/entrar?next=${encodeURIComponent(back)}`);
+  if (actor.role !== "admin") redirect("/403");
+  try {
+    await getBillingService().resolvePaymentAlert(actor, { alertId: text(formData, "alertId"), note: text(formData, "note") || null });
+  } catch (error) {
+    console.error("resolver alerta de pagamento", error instanceof Error ? `${error.name}: ${error.message}` : "erro");
+    redirect(`${back}?erro=${billingErrorCode(error)}`);
+  }
+  revalidatePath(back);
+  redirect(`${back}?ok=alerta`);
+}

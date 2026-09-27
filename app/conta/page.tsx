@@ -61,6 +61,12 @@ export default async function AccountHubPage() {
             <dd>{role}</dd>
           </div>
         </dl>
+        <Link
+          href="/conta/privacidade"
+          className="border-tinta text-tinta flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold"
+        >
+          Privacidade e dados
+        </Link>
         <form action={signOutAction}>
           <button type="submit" className="border-tinta text-tinta flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold">
             Sair

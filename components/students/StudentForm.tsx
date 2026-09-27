@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { SchoolSearchPicker, type SchoolHit } from "@/components/submissions/SchoolPicker";
 import { GradeSelect } from "@/components/students/GradeSelect";
@@ -37,6 +37,12 @@ export function StudentForm({
   consent?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, { status: "idle" } as StudentActionResult);
+  // Controlados de propósito (ver GradeSelect/SchoolYearSelect): um `<form action>` reinicializa campos NÃO
+  // controlados depois de QUALQUER conclusão da action, mesmo em erro (achado do E2E da S15).
+  const [nickname, setNickname] = useState(defaults?.nickname ?? "");
+  const [gradeSlug, setGradeSlug] = useState(defaults?.gradeSlug ?? "");
+  const [schoolYear, setSchoolYear] = useState(defaults?.schoolYear ?? defaultYear);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   return (
     <form action={formAction} className="flex flex-1 flex-col gap-4">
@@ -52,19 +58,26 @@ export function StudentForm({
           required
           maxLength={30}
           placeholder="Ex.: Maria"
-          defaultValue={defaults?.nickname}
+          value={nickname}
+          onChange={(e) => setNickname(e.target.value)}
           className={field}
         />
         <p className="text-verde-fundo text-[12px] font-semibold">Não pedimos sobrenome nem documento.</p>
       </div>
 
       <SchoolSearchPicker optional={false} label="Escola" initial={defaults?.school} />
-      <GradeSelect defaultValue={defaults?.gradeSlug} />
-      <SchoolYearSelect years={years} defaultValue={defaults?.schoolYear ?? defaultYear} />
+      <GradeSelect value={gradeSlug} onChange={setGradeSlug} />
+      <SchoolYearSelect years={years} value={schoolYear} onChange={setSchoolYear} />
 
       {consent ? (
         <label className="bg-campo flex cursor-pointer items-start gap-3 rounded-2xl p-3.5">
-          <input type="checkbox" name="consent" className="accent-verde-fundo mt-0.5 size-5 shrink-0" />
+          <input
+            type="checkbox"
+            name="consent"
+            checked={consentChecked}
+            onChange={(e) => setConsentChecked(e.target.checked)}
+            className="accent-verde-fundo mt-0.5 size-5 shrink-0"
+          />
           <span className="text-texto-2 text-[13px] leading-[1.4] font-semibold">
             Sou responsável por este aluno e autorizo o uso destes dados só para montar a lista.
           </span>

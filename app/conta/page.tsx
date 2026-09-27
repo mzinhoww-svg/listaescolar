@@ -42,6 +42,10 @@ export default async function AccountHubPage() {
       <SavedListsSection savedLists={savedLists} />
       <CartsSection carts={carts} />
 
+      <Link href="/escolas" className="bg-tinta text-papel flex h-14 w-full items-center justify-center gap-2 rounded-botao text-base font-extrabold">
+        Buscar lista da escola
+      </Link>
+
       <section aria-label="Cotações" className="flex flex-col gap-3">
         <h2 className="text-[15px] font-extrabold">Cotações</h2>
         <Link href="/cotacao" className="bg-branco-tonal flex items-center justify-between rounded-[20px] p-4">

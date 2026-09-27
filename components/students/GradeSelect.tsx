@@ -5,14 +5,19 @@ const field =
 
 const STAGES: readonly GradeStage[] = ["ei", "ef", "em"];
 
-/** Série do aluno por slug (liga a `public.grades`, S05/S15) — nunca nome de aluno, nunca free-text. */
-export function GradeSelect({ defaultValue }: { defaultValue?: string }) {
+/**
+ * Série do aluno por slug (liga a `public.grades`, S05/S15) — nunca nome de aluno, nunca free-text.
+ * Controlado (não `defaultValue`): React 19 reresseta campos não controlados de um `<form action>` depois de
+ * QUALQUER conclusão da action, inclusive quando ela devolve erro (achado do E2E da S15) — só campo controlado
+ * sobrevive a essa reinicialização.
+ */
+export function GradeSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor="gradeSlug" className="text-[13px] font-extrabold">
         Série
       </label>
-      <select id="gradeSlug" name="gradeSlug" required defaultValue={defaultValue ?? ""} className={field}>
+      <select id="gradeSlug" name="gradeSlug" required value={value} onChange={(e) => onChange(e.target.value)} className={field}>
         <option value="" disabled>
           Escolha a série
         </option>

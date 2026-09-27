@@ -113,6 +113,12 @@ export async function serveCampaigns(listVersionId: string, limit = 3): Promise<
   return repo.serveCampaigns(client, listVersionId, limit);
 }
 
+/** Desempenho agregado por dia (dono/admin), já com a supressão por k mínimo aplicada no banco. */
+export async function getCampaignPerformance(actor: SessionActor, campaignId: string): Promise<repo.CampaignPerformanceDay[]> {
+  const client = createAdminClient();
+  return repo.getCampaignPerformance(client, actor, campaignId);
+}
+
 /** Admin: configura o k mínimo dos insights (padrão 5). Checagem de papel é de quem chama (Server Action). */
 export async function setInsightsMinK(actor: SessionActor, minK: number): Promise<number> {
   const client = createAdminClient();

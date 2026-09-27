@@ -40,12 +40,16 @@ create table public.b2b_campaigns (
   target_cities text[] check (target_cities is null or (cardinality(target_cities) between 1 and 200)), -- ibge_code; null = nacional
   status public.b2b_campaign_status not null default 'draft',
   status_reason text check (status_reason is null or length(status_reason) <= 500),
+  -- quem/o que pausou (revisão de segurança independente): 'admin' só o admin retoma; 'owner'/'budget_auto' o
+  -- dono também retoma. Só preenchido enquanto status = 'paused'; limpo em qualquer outra transição.
+  pause_origin text check (pause_origin is null or pause_origin in ('owner', 'admin', 'budget_auto')),
   decided_by uuid, -- sem FK: histórico sobrevive à exclusão de conta
   decided_at timestamptz,
   is_demo boolean not null default false, -- fixado na criação a partir do status do parceiro
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint b2b_campaigns_budget_order check (daily_budget_cents is null or daily_budget_cents <= total_budget_cents)
+  constraint b2b_campaigns_budget_order check (daily_budget_cents is null or daily_budget_cents <= total_budget_cents),
+  constraint b2b_campaigns_pause_origin_pair check ((status = 'paused') = (pause_origin is not null))
 );
 create index b2b_campaigns_partner_idx on public.b2b_campaigns (partner_id, status);
 create index b2b_campaigns_serve_idx on public.b2b_campaigns (status, is_demo, target_category);
@@ -203,7 +207,7 @@ begin
 
     if v_new_total >= v_campaign.total_budget_cents
        or (v_campaign.daily_budget_cents is not null and v_day_accrued >= v_campaign.daily_budget_cents) then
-      update public.b2b_campaigns set status = 'paused', status_reason = 'orçamento esgotado (automático)' where id = new.campaign_id and status = 'approved';
+      update public.b2b_campaigns set status = 'paused', status_reason = 'orçamento esgotado (automático)', pause_origin = 'budget_auto' where id = new.campaign_id and status = 'approved';
       insert into public.b2b_campaign_ledger (campaign_id, event_id, entry_type, day, amount_cents, balance_after_cents)
       values (new.campaign_id, null, 'budget_paused', new.day, 0, v_new_total);
     end if;
@@ -366,8 +370,16 @@ begin
   if p_to = 'approved' and v_campaign.status = 'pending_review' and not v_is_admin then
     raise exception 'só admin decide' using errcode = '42501', hint = 'forbidden';
   end if;
-  if p_to = 'approved' and v_campaign.status = 'paused' and not (v_is_owner or v_is_admin) then
-    raise exception 'sem permissão' using errcode = '42501', hint = 'forbidden';
+  -- retomar (paused -> approved): pausa do ADMIN só o admin retoma; pausa do dono OU automática por orçamento
+  -- (budget_auto) o dono também retoma (revisão de segurança independente, reverificação — antes qualquer pausa
+  -- podia ser retomada pelo dono, inclusive uma decisão do admin de pausar a campanha por algum motivo próprio).
+  if p_to = 'approved' and v_campaign.status = 'paused' then
+    if v_campaign.pause_origin = 'admin' and not v_is_admin then
+      raise exception 'só admin retoma uma pausa do admin' using errcode = '42501', hint = 'forbidden';
+    end if;
+    if not (v_is_owner or v_is_admin) then
+      raise exception 'sem permissão' using errcode = '42501', hint = 'forbidden';
+    end if;
   end if;
   if p_to = 'pending_review' and not v_is_owner then
     raise exception 'só o dono envia para aprovação' using errcode = '42501', hint = 'forbidden';
@@ -394,9 +406,12 @@ begin
 
   -- decided_by/decided_at registram só a decisão de admin de VERDADE (pending_review -> approved/rejected);
   -- o dono retomando uma campanha pausada (paused -> approved) não reescreve quem decidiu originalmente.
+  -- pause_origin: gravado só quando o DESTINO é 'paused' (quem pediu, entre owner/admin — prioriza admin quando
+  -- o mesmo ator acumula os dois papéis); limpo em qualquer transição para fora de 'paused'.
   update public.b2b_campaigns
      set status = p_to::public.b2b_campaign_status,
          status_reason = case when p_to in ('rejected', 'paused') then v_reason else null end,
+         pause_origin = case when p_to = 'paused' then (case when v_is_admin then 'admin' else 'owner' end) else null end,
          decided_by = case when v_campaign.status = 'pending_review' and p_to in ('approved', 'rejected') then p_actor_id else decided_by end,
          decided_at = case when v_campaign.status = 'pending_review' and p_to in ('approved', 'rejected') then now() else decided_at end
    where id = p_campaign_id;
@@ -545,6 +560,13 @@ begin
     raise exception 'dedupe_key inválido' using errcode = '22023', hint = 'invalid_input';
   end if;
 
+  -- trava a campanha ANTES de checar elegibilidade (que inclui orçamento): sem isto, duas chamadas concorrentes
+  -- perto do teto do orçamento podiam as duas passar pela checagem e as duas inserir, estourando o orçamento por
+  -- mais de um evento (revisão de segurança independente). A trava aqui é barata: `record_event` já é caminho de
+  -- ESCRITA (o gatilho de acúmulo já toma a mesma trava mais adiante, na mesma transação); nunca colocar em
+  -- `b2b_campaign_eligible`, que também é lida por `serve` em volume bem maior (leitura, sem escrita).
+  perform 1 from public.b2b_campaigns where id = p_campaign_id for update;
+
   if not public.b2b_campaign_eligible(p_campaign_id, p_list_version_id) then
     return false; -- não elegível (mesma regra do serve): silêncio, não erro (evita revelar estado a quem não deveria ver)
   end if;
@@ -562,6 +584,84 @@ begin
   returning id into v_id;
 
   return v_id is not null;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Desempenho agregado por dia (dono/admin). Ler `b2b_campaign_events`/`b2b_campaign_ledger` linha a linha
+-- (mesmo sem `list_version_id`/`event_id`, já fora do grant de `authenticated`) ainda deixaria o dono ver o
+-- CARIMBO DE HORA de cada evento — junto com o que ele já sabe (a própria segmentação: cidade, série, categoria),
+-- isso pode bastar para inferir QUAL escola/família gerou um evento isolado, contornando o k-anonimato dos
+-- insights. Esta função é o único jeito pretendido de o dono enxergar desempenho: agregado por DIA, com a MESMA
+-- supressão por k mínimo (escolas distintas) que os insights usam — dia com menos de `min_k` escolas distintas
+-- contribuindo vem com `impressions`/`clicks`/`accrued_cents` nulos e `suppressed = true` (revisão de segurança
+-- independente, reverificação).
+-- ---------------------------------------------------------------------------
+create function public.b2b_campaign_performance(p_actor_id uuid, p_campaign_id uuid) returns table (
+  day date, impressions integer, clicks integer, accrued_cents numeric, suppressed boolean
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_sub text;
+  v_campaign public.b2b_campaigns%rowtype;
+  v_is_owner boolean;
+  v_is_admin boolean;
+  v_min_k integer;
+begin
+  begin
+    v_sub := nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub';
+  exception when others then
+    v_sub := null;
+  end;
+  if v_sub is not null and v_sub is distinct from p_actor_id::text then
+    raise exception 'ator diferente do usuário autenticado' using errcode = '42501';
+  end if;
+
+  select * into v_campaign from public.b2b_campaigns where id = p_campaign_id;
+  if not found then
+    raise exception 'campanha não encontrada' using errcode = 'P0002', hint = 'not_found';
+  end if;
+
+  v_is_owner := p_actor_id is not null and exists (
+    select 1 from public.b2b_partner_members m where m.partner_id = v_campaign.partner_id and m.profile_id = p_actor_id and m.member_role = 'owner'
+  );
+  v_is_admin := p_actor_id is not null and exists (select 1 from public.profiles x where x.id = p_actor_id and x.role = 'admin');
+  if not v_is_owner and not v_is_admin then
+    raise exception 'campanha não encontrada' using errcode = 'P0002', hint = 'not_found';
+  end if;
+
+  select coalesce(s.min_k, 5) into v_min_k from public.b2b_insights_settings s limit 1;
+
+  return query
+    with per_day as (
+      select e.day,
+             count(*) filter (where e.event_type = 'impression')::integer as n_impressions,
+             count(*) filter (where e.event_type = 'click')::integer as n_clicks,
+             count(distinct sc.id)::integer as n_schools
+        from public.b2b_campaign_events e
+        join public.list_versions lv on lv.id = e.list_version_id
+        join public.school_lists sl on sl.id = lv.list_id
+        join public.schools sc on sc.id = sl.school_id
+       where e.campaign_id = p_campaign_id
+       group by e.day
+    ),
+    per_day_amount as (
+      select l.day, sum(l.amount_cents) as accrued
+        from public.b2b_campaign_ledger l
+       where l.campaign_id = p_campaign_id and l.entry_type in ('impression_accrual', 'click_accrual')
+       group by l.day
+    )
+    select d.day,
+           case when d.n_schools >= v_min_k then d.n_impressions else null end,
+           case when d.n_schools >= v_min_k then d.n_clicks else null end,
+           case when d.n_schools >= v_min_k then coalesce(a.accrued, 0) else null end,
+           d.n_schools < v_min_k
+      from per_day d
+      left join per_day_amount a on a.day = d.day
+     order by d.day;
 end;
 $$;
 
@@ -797,14 +897,19 @@ revoke all on public.b2b_campaigns, public.b2b_campaign_events, public.b2b_campa
 -- `decided_by` (UUID de perfil do admin) fica fora do grant de `authenticated`, mesmo padrão de `b2b_partners`.
 grant select (
   id, partner_id, name, product_label, creative_text, pricing_model, bid_cents, daily_budget_cents, total_budget_cents,
-  accrued_total_cents, target_category, target_grade_stages, target_cities, status, status_reason, decided_at, is_demo,
+  accrued_total_cents, target_category, target_grade_stages, target_cities, status, status_reason, pause_origin, decided_at, is_demo,
   created_at, updated_at
 ) on public.b2b_campaigns to authenticated;
 grant select on public.b2b_campaigns to service_role;
--- dedupe_key fora do grant de authenticated (não é PII, mas não precisa vazar o valor de correlação bruto).
-grant select (id, campaign_id, event_type, list_version_id, day, created_at, updated_at) on public.b2b_campaign_events to authenticated;
+-- dedupe_key E list_version_id fora do grant de authenticated: list_version_id identifica a ESCOLA/lista exata
+-- que gerou o evento — ler linha a linha contornaria o k-anonimato dos insights (revisão de segurança
+-- independente, reverificação). O dono só enxerga desempenho agregado por dia via `b2b_campaign_performance`.
+grant select (id, campaign_id, event_type, day, created_at, updated_at) on public.b2b_campaign_events to authenticated;
 grant select on public.b2b_campaign_events to service_role;
-grant select on public.b2b_campaign_ledger to authenticated, service_role;
+-- event_id fora do grant de authenticated: junto com created_at daria granularidade por evento individual (a
+-- mesma correlação escola/família que o agregado por dia evita). Mesma revisão.
+grant select (id, campaign_id, entry_type, day, amount_cents, balance_after_cents, created_at, updated_at) on public.b2b_campaign_ledger to authenticated;
+grant select on public.b2b_campaign_ledger to service_role;
 grant select (min_k) on public.b2b_insights_settings to authenticated, service_role;
 -- `generated_by` fora do grant de authenticated.
 grant select (id, partner_id, period_start, period_end, payment_instruction, created_at, updated_at) on public.b2b_statements to authenticated;
@@ -829,6 +934,8 @@ revoke execute on function public.b2b_campaign_serve(uuid, integer) from public,
 grant execute on function public.b2b_campaign_serve(uuid, integer) to service_role;
 revoke execute on function public.b2b_campaign_record_event(uuid, uuid, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.b2b_campaign_record_event(uuid, uuid, text, text) to service_role;
+revoke execute on function public.b2b_campaign_performance(uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.b2b_campaign_performance(uuid, uuid) to service_role;
 revoke execute on function public.b2b_insights_raw(text, text, boolean) from public, anon, authenticated, service_role;
 grant execute on function public.b2b_insights_raw(text, text, boolean) to service_role;
 revoke execute on function public.b2b_insights_settings_set(uuid, integer) from public, anon, authenticated, service_role;

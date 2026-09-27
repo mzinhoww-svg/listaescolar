@@ -40,6 +40,8 @@ export type CampaignRow = {
   targetCities: readonly string[] | null;
   status: "draft" | "pending_review" | "approved" | "rejected" | "paused" | "completed";
   statusReason: string | null;
+  /** Só preenchido quando `status = 'paused'`: quem pediu a pausa. `admin` = só admin retoma; `owner`/`budget_auto` = dono também retoma. */
+  pauseOrigin: "owner" | "admin" | "budget_auto" | null;
   decidedAt: string | null;
   isDemo: boolean;
   createdAt: string;
@@ -63,6 +65,7 @@ const campaignRowSchema = z
     target_cities: z.array(z.string()).nullable(),
     status: z.enum(["draft", "pending_review", "approved", "rejected", "paused", "completed"]),
     status_reason: z.string().nullable(),
+    pause_origin: z.enum(["owner", "admin", "budget_auto"]).nullable(),
     decided_at: z.string().nullable(),
     is_demo: z.boolean(),
     created_at: z.string(),
@@ -85,6 +88,7 @@ const campaignRowSchema = z
       targetCities: r.target_cities,
       status: r.status,
       statusReason: r.status_reason,
+      pauseOrigin: r.pause_origin,
       decidedAt: r.decided_at,
       isDemo: r.is_demo,
       createdAt: r.created_at,
@@ -265,6 +269,29 @@ export async function recordCampaignEvent(client: SupabaseClient, campaignId: st
   const { data, error } = await client.rpc("b2b_campaign_record_event", { p_campaign_id: campaignId, p_list_version_id: listVersionId, p_event_type: eventType, p_dedupe_key: dedupeKey });
   if (error) fail("registrar evento de campanha", error);
   return z.boolean().parse(data);
+}
+
+export type CampaignPerformanceDay = { day: string; impressions: number | null; clicks: number | null; accruedCents: number | null; suppressed: boolean };
+
+const performanceSchema = z.object({
+  day: z.string(),
+  impressions: z.number().nullable(),
+  clicks: z.number().nullable(),
+  accrued_cents: numericAsNumber.nullable(),
+  suppressed: z.boolean(),
+});
+
+/** Único jeito de o dono/admin ver desempenho: agregado por DIA, com a mesma supressão por k mínimo (escolas
+ * distintas) dos insights — nunca ler `b2b_campaign_events`/`b2b_campaign_ledger` linha a linha (contornaria o
+ * k-anonimato: revelaria o carimbo de hora de cada evento, correlacionável com a segmentação da campanha). */
+export async function getCampaignPerformance(client: SupabaseClient, actor: SessionActor, campaignId: string): Promise<CampaignPerformanceDay[]> {
+  requireActor(actor);
+  const { data, error } = await client.rpc("b2b_campaign_performance", { p_actor_id: actor.userId, p_campaign_id: campaignId });
+  if (error) fail("consultar desempenho da campanha", error);
+  return z
+    .array(performanceSchema)
+    .parse(data ?? [])
+    .map((r) => ({ day: r.day, impressions: r.impressions, clicks: r.clicks, accruedCents: r.accrued_cents, suppressed: r.suppressed }));
 }
 
 // GUARDA para toda exibição futura (widget, página pública da lista, o que for): `sponsored` é `z.literal(true)`

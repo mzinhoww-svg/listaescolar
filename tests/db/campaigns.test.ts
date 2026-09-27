@@ -16,6 +16,7 @@ const FUNCTIONS: Array<{ sig: string; svc: boolean }> = [
   { sig: "public.b2b_campaign_transition(uuid, uuid, text, text)", svc: true },
   { sig: "public.b2b_campaign_serve(uuid, integer)", svc: true },
   { sig: "public.b2b_campaign_record_event(uuid, uuid, text, text)", svc: true },
+  { sig: "public.b2b_campaign_performance(uuid, uuid)", svc: true },
   { sig: "public.b2b_campaign_list_context(uuid)", svc: false },
   { sig: "public.b2b_campaign_eligible(uuid, uuid)", svc: false },
   { sig: "public.b2b_insights_raw(text, text, boolean)", svc: true },
@@ -116,6 +117,24 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
         const svc = await c.query<{ ok: boolean }>("select has_function_privilege('service_role', $1, 'execute') as ok", [f.sig]);
         expect(svc.rows[0]!.ok, `service_role x ${f.sig}`).toBe(f.svc);
       }
+    });
+  });
+
+  it("authenticated nunca lê list_version_id (events) nem event_id (ledger): contornaria o k-anonimato dos insights", async () => {
+    await withSuperuser(async (c) => {
+      const evCol = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_events', 'list_version_id', 'select') as ok");
+      expect(evCol.rows[0]!.ok).toBe(false);
+      const evOther = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_events', 'event_type', 'select') as ok");
+      expect(evOther.rows[0]!.ok).toBe(true); // outras colunas continuam legíveis
+      const ledgerCol = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_ledger', 'event_id', 'select') as ok");
+      expect(ledgerCol.rows[0]!.ok).toBe(false);
+      const ledgerOther = await c.query<{ ok: boolean }>("select has_column_privilege('authenticated', 'public.b2b_campaign_ledger', 'amount_cents', 'select') as ok");
+      expect(ledgerOther.rows[0]!.ok).toBe(true);
+      // service_role continua com a tabela inteira (funções internas precisam).
+      const svcEv = await c.query<{ ok: boolean }>("select has_column_privilege('service_role', 'public.b2b_campaign_events', 'list_version_id', 'select') as ok");
+      expect(svcEv.rows[0]!.ok).toBe(true);
+      const svcLedger = await c.query<{ ok: boolean }>("select has_column_privilege('service_role', 'public.b2b_campaign_ledger', 'event_id', 'select') as ok");
+      expect(svcLedger.rows[0]!.ok).toBe(true);
     });
   });
 
@@ -340,6 +359,51 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
     });
   });
 
+  it("pause_origin: só quem pode pausar de cada jeito pode retomar (3 casos: dono, admin, orçamento automático)", async () => {
+    await inTx(async (c) => {
+      // Um só parceiro (b2b_partner_members tem unique(profile_id): o dono não pode ter 2 parceiros) com 3 campanhas.
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+
+      // Caso 1: dono pausa a própria campanha -> dono retoma.
+      const c1 = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpc", bid_cents: 100, total_budget_cents: 1000000 });
+      await transitionCampaign(c, IDS.parent, c1, "pending_review");
+      await transitionCampaign(c, IDS.admin, c1, "approved");
+      await transitionCampaign(c, IDS.parent, c1, "paused", "pausa do dono");
+      const origin1 = await c.query<{ pause_origin: string }>("select pause_origin from public.b2b_campaigns where id = $1", [c1]);
+      expect(origin1.rows[0]!.pause_origin).toBe("owner");
+      const resume1 = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.parent, c1]);
+      expect(resume1.error).toBeNull();
+
+      // Caso 2: admin pausa -> dono NÃO consegue retomar (forbidden); admin consegue.
+      const c2 = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpc", bid_cents: 100, total_budget_cents: 1000000 });
+      await transitionCampaign(c, IDS.parent, c2, "pending_review");
+      await transitionCampaign(c, IDS.admin, c2, "approved");
+      await transitionCampaign(c, IDS.admin, c2, "paused", "pausa do admin (motivo interno)");
+      const origin2 = await c.query<{ pause_origin: string }>("select pause_origin from public.b2b_campaigns where id = $1", [c2]);
+      expect(origin2.rows[0]!.pause_origin).toBe("admin");
+      const ownerTriesResume2 = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.parent, c2]);
+      expect(ownerTriesResume2.hint).toBe("forbidden");
+      const adminResumes2 = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.admin, c2]);
+      expect(adminResumes2.error).toBeNull();
+
+      // Caso 3: pausa automática por orçamento -> dono TEM permissão de tentar retomar (não é 'forbidden'), mas
+      // esbarra no orçamento esgotado (budget_exhausted) — diferente do caso 2, onde o dono é barrado por permissão.
+      const c3 = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpm", bid_cents: 10000, total_budget_cents: 15 });
+      await transitionCampaign(c, IDS.parent, c3, "pending_review");
+      await transitionCampaign(c, IDS.admin, c3, "approved");
+      const listInep3 = `77${Date.now().toString().slice(-6)}`;
+      const list3 = await publishListWithItem(c, { inep: listInep3, isDemo: false, category: "papelaria" });
+      cleanupIneps.push(listInep3);
+      await record(c, c3, list3.versionId, "impression", dedupe());
+      await record(c, c3, list3.versionId, "impression", dedupe());
+      const origin3 = await c.query<{ pause_origin: string; status: string }>("select pause_origin, status from public.b2b_campaigns where id = $1", [c3]);
+      expect(origin3.rows[0]!.status).toBe("paused");
+      expect(origin3.rows[0]!.pause_origin).toBe("budget_auto");
+      const ownerTriesResume3 = await attemptH(c, "select public.b2b_campaign_transition($1, $2, 'approved', null) as s", [IDS.parent, c3]);
+      expect(ownerTriesResume3.hint).toBe("budget_exhausted"); // não 'forbidden': o dono TEM permissão aqui
+    });
+  });
+
   it("b2b_insights_raw conta ESCOLA distinta (não lista) por cidade/série/categoria, separando is_demo", async () => {
     await inTx(async (c) => {
       const ineps = [`60${Date.now().toString().slice(-6)}`, `61${Date.now().toString().slice(-6)}`, `62${Date.now().toString().slice(-6)}`];
@@ -499,6 +563,56 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       expect(quantity).toBe(3);
       // invariante coerente (quantidade x bid / 1000 para CPM): nunca um número solto.
       expect(amount).toBeCloseTo((quantity * unitPrice) / 1000, 6);
+    });
+  });
+
+  it("b2b_campaign_performance agrega por dia com a mesma supressão k dos insights (por ESCOLA distinta no dia)", async () => {
+    await inTx(async (c) => {
+      const partnerId = await seedPartner(c, { type: "brand", status: "active" });
+      // CPM 1000 centavos/mil = 1 centavo por impressão (exato) — fácil de conferir o acumulado por dia.
+      const campaignId = await createCampaign(c, IDS.parent, partnerId, { pricing_model: "cpm", bid_cents: 1000, total_budget_cents: 1000000 });
+      await transitionCampaign(c, IDS.parent, campaignId, "pending_review");
+      await transitionCampaign(c, IDS.admin, campaignId, "approved");
+
+      // dia VISÍVEL: 5 escolas distintas (>= k padrão de 5).
+      const visibleDay = "2026-01-05";
+      for (let i = 0; i < 5; i++) {
+        const inep = `78${Date.now().toString().slice(-5)}${i}`;
+        const list = await publishListWithItem(c, { inep, isDemo: false, category: "papelaria" });
+        cleanupIneps.push(inep);
+        await c.query(
+          `insert into public.b2b_campaign_events (campaign_id, event_type, list_version_id, day, dedupe_key) values ($1, 'impression', $2, $3, $4)`,
+          [campaignId, list.versionId, visibleDay, dedupe()],
+        );
+      }
+      // dia SUPRIMIDO: só 2 escolas distintas (< 5).
+      const suppressedDay = "2026-01-06";
+      for (let i = 0; i < 2; i++) {
+        const inep = `79${Date.now().toString().slice(-5)}${i}`;
+        const list = await publishListWithItem(c, { inep, isDemo: false, category: "papelaria" });
+        cleanupIneps.push(inep);
+        await c.query(
+          `insert into public.b2b_campaign_events (campaign_id, event_type, list_version_id, day, dedupe_key) values ($1, 'impression', $2, $3, $4)`,
+          [campaignId, list.versionId, suppressedDay, dedupe()],
+        );
+      }
+
+      const rows = await callAsService<{ day: string; impressions: number | null; clicks: number | null; accrued_cents: string | null; suppressed: boolean }>(
+        c,
+        "select day::text as day, impressions, clicks, accrued_cents, suppressed from public.b2b_campaign_performance($1, $2) order by day",
+        [IDS.parent, campaignId],
+      );
+      const visible = rows.find((r) => r.day.startsWith("2026-01-05"));
+      const suppressed = rows.find((r) => r.day.startsWith("2026-01-06"));
+      expect(visible).toMatchObject({ impressions: 5, clicks: 0, suppressed: false });
+      expect(Number(visible!.accrued_cents)).toBe(5); // 5 impressões x 1 centavo exato
+      expect(suppressed).toMatchObject({ impressions: null, clicks: null, accrued_cents: null, suppressed: true });
+
+      // admin também consegue ver; um terceiro (não dono, não admin) não consegue.
+      const asAdmin = await callAsService<{ day: string }>(c, "select * from public.b2b_campaign_performance($1, $2)", [IDS.admin, campaignId]);
+      expect(asAdmin.length).toBe(rows.length);
+      const forbidden = await attemptH(c, "select * from public.b2b_campaign_performance($1, $2)", [IDS.school_member, campaignId]);
+      expect(forbidden.hint).toBe("not_found"); // "campanha não encontrada": nunca revela que existe a quem não tem acesso
     });
   });
 

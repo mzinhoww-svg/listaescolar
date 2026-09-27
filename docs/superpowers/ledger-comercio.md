@@ -1480,3 +1480,61 @@ nunca aplicada em staging) e no domínio TypeScript correspondente.
   `scripts/e2e-s26.sh` refeito do zero (`pnpm db:reset` + reseed do `scripts/e2e-s26-seed.sql`, atualizado para
   passar `list_version_id` real — 0503 agora exige não nulo): **20/20**, sem regressão de nenhuma verificação
   anterior (17 originais + 3 novas sobre o texto atualizado de insights).
+
+## S26 · correções da revisão de segurança (rodada 2, reverificação sobre `1e35153`)
+
+Sem bloqueantes. 3 importantes corrigidos na própria `0503_b2b_campaigns.sql` (editada no lugar, ainda só local) e
+em `features/campaigns/tracking-service.ts`; 2 menores resolvidos direto (um virou correção, o outro dívida).
+
+- Ruling (Importante 1 — eventos contornavam o k-anonimato): mesmo já sem `list_version_id` (events) e sem
+  `event_id` (ledger) no grant de `authenticated` da 1ª rodada, o dono ainda podia ler as tabelas linha a linha
+  (`event_type`/`day`/`created_at` em `b2b_campaign_events`; `entry_type`/`day`/`amount_cents`/`created_at` em
+  `b2b_campaign_ledger`) — o CARIMBO DE HORA de cada evento, combinado com a própria segmentação da campanha
+  (cidade, série, categoria, que o dono já conhece porque ele mesmo definiu), pode bastar para inferir qual
+  escola/família específica gerou um evento isolado, contornando o k-anonimato pensado para os insights. Corrigido
+  criando `b2b_campaign_performance(p_actor_id, p_campaign_id)`, única forma pretendida de o dono/admin ver
+  desempenho: agregado por DIA, com a MESMA supressão por k mínimo (escolas distintas) dos insights — dia com
+  menos de `min_k` escolas contribuindo vem com `impressions`/`clicks`/`accrued_cents` nulos e `suppressed = true`.
+  Testado: dia com 5 escolas (>= k padrão) aparece com os números reais; dia com 2 (< k) some por inteiro; admin
+  também acessa; um terceiro sem vínculo recebe `not_found` (nunca revela que a campanha existe). Custo se errada:
+  alto (é a mesma classe de vazamento do Importante 1 da rodada 1, só que pela porta dos fundos das tabelas em vez
+  dos insights).
+- Ruling (Importante 2 — dedupe ainda fraco): 3 ajustes sobre o desenho da rodada 1. (a) User-agent SAIU do HMAC
+  da `dedupe_key` — é um valor que o PRÓPRIO cliente escolhe e envia, então incluí-lo só dava um jeito grátis de
+  gerar chaves novas trocando o cabeçalho a cada chamada; agora a chave é só IP truncado em /24 + lista + campanha
+  + dia. (b) O limite de eventos por minuto passou a ser chaveado por (IP /24, CAMPANHA) — SEM a lista — somando
+  TODAS as listas daquela campanha; antes, chavear por lista deixava a mesma rede /24 abrir uma cota nova só
+  visitando outra lista da mesma campanha. (c) O token de impressão ganhou timestamp embutido e vida curta de 10
+  minutos, verificado no clique (antes o token nunca expirava). O IP precisa vir de `lib/net/client-ip.ts::clientIp`
+  (reaproveitado, mesmo critério já usado pela API B2B/widget: `x-vercel-forwarded-for` -> `x-real-ip` ->
+  `x-forwarded-for`) quando isto for ligado a uma rota de verdade. Testado: 6 casos novos (token expira depois de
+  10 min, token "do futuro" além de 5s de tolerância é recusado, token malformado não lança, limite soma listas
+  diferentes da mesma campanha, limite é por campanha — outra campanha tem cota própria). O teto por instância
+  (em vez de compartilhado entre instâncias) virou dívida D-145 (média), com Ruling de que é **obrigatório**
+  resolver antes de ligar a uma rota pública — diferente do racional "primeira camada, Firewall resolve o resto"
+  aceito em outras fatias, porque aqui o abuso infla diretamente o "acúmulo informativo" cobrável de um parceiro
+  terceiro.
+- Ruling (Importante 3 — retomada não respeitava quem pausou): campanha ganhou `pause_origin` (`owner`/`admin`/
+  `budget_auto`, preenchido só enquanto `status = 'paused'`, limpo em qualquer outra transição). Pausa do ADMIN só
+  o admin retoma (`forbidden` para o dono, mesmo com orçamento disponível); pausa do DONO ou automática por
+  orçamento (`budget_auto`) o dono também retoma — no caso `budget_auto` ele TEM permissão, mas esbarra no
+  orçamento esgotado (`budget_exhausted`), uma falha diferente de `forbidden` (o teste dos 3 casos confere
+  exatamente essa distinção). `CampaignsTable.tsx` (B2B06) esconde o botão "Retomar" e mostra um aviso quando
+  `pauseOrigin === 'admin'`, para não prometer ao dono uma ação que o banco recusaria (mesmo racional da correção
+  "resumeCampaignAction coerente" da rodada 1).
+- Ruling (Menor, resolvido — concorrência de orçamento): `b2b_campaign_record_event` trava a linha da campanha
+  (`for update`) ANTES de checar elegibilidade (que inclui o orçamento), não só dentro do gatilho de acúmulo —
+  sem isto, duas chamadas concorrentes perto do teto podiam as duas passar pela checagem e as duas inserir,
+  estourando o orçamento por mais de um evento. A trava foi colocada em `record_event` (caminho de ESCRITA), NUNCA
+  em `b2b_campaign_eligible` (que `serve()` também usa, em volume de LEITURA bem maior — travar ali serializaria
+  leituras concorrentes à toa). Resolvido em código, sem virar dívida (o pedido permitia resolver "se for barato",
+  e era).
+- Dívida nova (D-146, baixa): diferença de "outras" ao longo do tempo — repetir a mesma consulta de insights
+  conforme escolas publicam/removem listas pode, em tese, isolar a contribuição de uma escola por diferenciação
+  entre duas leituras. Sem solução simples nesta fatia (limitar frequência de consulta, ou privacidade
+  diferencial de verdade); registrada para revisão futura.
+- Estado final: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes.
+  Unitária **3360/3360** (+6: expiração/tolerância de relógio/token malformado do tracking-service, limite por
+  campanha somando listas). Banco **1778/1781** (+3: privilégio por coluna de `list_version_id`/`event_id`, os 3
+  casos de `pause_origin`, `b2b_campaign_performance`; 3 pulados = baseline). E2E `scripts/e2e-s26.sh`: **20/20**,
+  sem regressão (nada no roteiro pausa/retoma campanha nem lê as tabelas afetadas diretamente).

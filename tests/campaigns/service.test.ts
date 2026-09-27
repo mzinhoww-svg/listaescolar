@@ -96,6 +96,7 @@ describe("CampaignService.getCampaignForActor", () => {
     targetCities: null,
     status: "approved",
     statusReason: null,
+    pauseOrigin: null,
     decidedAt: null,
     isDemo: false,
     createdAt: "2026-01-01T00:00:00Z",

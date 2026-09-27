@@ -40,10 +40,13 @@ function Actions({ campaign, onDone }: { campaign: CampaignRow; onDone: () => vo
             Pausar
           </button>
         ) : null}
-        {campaign.status === "paused" ? (
+        {campaign.status === "paused" && campaign.pauseOrigin !== "admin" ? (
           <button type="button" disabled={pending} onClick={() => run(() => resumeCampaignAction({ campaignId: campaign.id }))} className="bg-verde-certo text-tinta rounded-botao h-9 px-3 text-[13px] font-extrabold disabled:opacity-50">
             Retomar
           </button>
+        ) : null}
+        {campaign.status === "paused" && campaign.pauseOrigin === "admin" ? (
+          <span className="text-texto-3 self-center text-[12px] font-semibold">Pausada pelo admin — só ele retoma</span>
         ) : null}
         {campaign.status === "approved" || campaign.status === "paused" ? (
           <button

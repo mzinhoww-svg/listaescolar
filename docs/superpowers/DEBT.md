@@ -193,6 +193,8 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-142 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaigns.target_cities` usa `ibge_code` (texto validado contra `municipalities` na criação), mas não há endpoint nem tela para o parceiro buscar o código pelo NOME da cidade — a Nova Campanha (B2B07, Task 3) precisa de um seletor de município, hoje só aceitaria o código cru | baixa | S26 (B2B) | aberta |
 | D-143 | ledger-comercio S26 Task 3 (Ruling de escopo) | Não há tela de admin para gerar o extrato B2B sob demanda (`b2b_statement_generate`) — nesta fatia a geração só acontece via chamada direta (script/seed do E2E). Falta uma Server Action + botão no admin (ou um cron mensal) para gerar o extrato de cada parceiro no fechamento do período | média | S26 (B2B) / futura fatia | aberta |
 | D-144 | ledger-comercio S26 Task 3 (fidelidade ao design vs. escopo) | `NovaCampanhaForm` (B2B07) só permite escolher UMA série por campanha (`<select>` simples), embora o schema (`targetGradeStages`) e a migration aceitem até 3 — cortado do MVP desta fatia por tempo; trocar por um grupo de checkboxes depois não muda a API | baixa | S26 (B2B) | aberta |
+| D-145 | reverificação de segurança S26, rodada 2 (`1e35153`) | O limite de eventos por (IP /24, campanha) de `features/campaigns/tracking-service.ts` é um balde em memória POR INSTÂNCIA — um invasor distribuindo requisições entre múltiplas instâncias/lambdas da Vercel contorna o teto. Um teto diário de verdade precisa de armazenamento COMPARTILHADO (tabela/contador no Postgres, ou Redis). Ruling: **obrigatório resolver antes de ligar este rastreamento a qualquer rota pública** — não é opcional para depois, ao contrário do racional "primeira camada" aceito para o widget/API B2B (D-001/D-113/D-139), porque aqui o abuso infla diretamente a cobrança informativa de um parceiro terceiro, não só o tráfego da própria plataforma | média | S26 (B2B) / obrigatório antes de wiring com rota pública | aberta |
+| D-146 | reverificação de segurança S26, rodada 2 (`1e35153`) | O agregado anônimo "outras" dos insights (`features/campaigns/insights-service.ts`) é seguro numa consulta ISOLADA, mas repetir a mesma consulta ao longo do tempo (conforme escolas publicam/removem listas) pode permitir um ataque de diferenciação: comparar dois retornos em momentos diferentes pode isolar a contribuição de uma escola que entrou ou saiu do agregado. Sem solução simples nesta fatia (exigiria limitar frequência de consulta por combinação categoria/série, ou uma técnica de privacidade diferencial); registrada como dívida | baixa | S19 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -209,16 +211,17 @@ D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudo
 Nota (numeração): D-135–D-139 pertencem à S25 (mesclada em `main` primeiro, PR #42/#43); os itens da S26 que
 colidiam com esses IDs (originalmente também D-135–D-137, escritos nesta branch antes de ver o merge da S25) foram
 renumerados para D-140–D-144 na resolução deste merge — mesmo conteúdo, só o número mudou (D-143 e D-144 são
-achados novos da Task 3, sem número anterior).
+achados novos da Task 3, sem número anterior). D-145 e D-146 são achados da reverificação de segurança (rodada 2,
+`1e35153`), sem colisão de numeração (origin/main não teve commit novo desde o merge anterior).
 
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 43 | 9 | 52 |
-| baixa | 66 | 10 | 76 |
-| **Total** | **119** | **24** | **143** |
+| média | 44 | 9 | 53 |
+| baixa | 67 | 10 | 77 |
+| **Total** | **121** | **24** | **145** |
 
 Contagem atualizada em 2026-09-27 (merge de `origin/main`, PR #43 — S25 soma D-135–D-139, todos baixa/média
 abertos — com a S26 desta branch: D-140–D-144, renumerados a partir de D-140 por colisão com os IDs da S25 já

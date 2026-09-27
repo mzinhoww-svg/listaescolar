@@ -2,10 +2,10 @@ import "server-only";
 
 import type { SessionActor } from "@/features/auth/actor";
 
-import type { CampaignRow } from "./repository";
+import type { CampaignPerformanceDay, CampaignRow } from "./repository";
 import type { InsightsResult } from "./insights-service";
 import type { DisplayStatement } from "./statement-service";
-import { getCampaignService, getInsightsService, getStatementService, myPartnerId } from "./wiring";
+import { getCampaignPerformance as getCampaignPerformanceFromDb, getCampaignService, getInsightsService, getStatementService, myPartnerId } from "./wiring";
 
 // Leituras de servidor para as páginas do portal B2B/admin (Task 3 consome estas funções, não `repository.ts`
 // direto) — mesmo padrão de `features/b2b/queries.ts`.
@@ -46,4 +46,9 @@ export async function listMyStatements(actor: SessionActor): Promise<DisplayStat
   const partnerId = await myPartnerId(actor);
   if (!partnerId) return [];
   return getStatementService().listForPartner(actor, partnerId);
+}
+
+/** Desempenho agregado por dia (dono/admin) — nunca lista/escola individual, k-anonimato aplicado no banco. */
+export async function getCampaignPerformance(actor: SessionActor, campaignId: string): Promise<CampaignPerformanceDay[]> {
+  return getCampaignPerformanceFromDb(actor, campaignId);
 }

@@ -51,7 +51,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-026 | ledger-pipeline S07 onda final | Sem "kick" do worker: envio assíncrono espera até 1 min pelo pg_cron | baixa | S19 | aberta |
 | D-027 | ledger-dados S03 | Lote preso em `processing` após queda dura só é retomado depois de 10 min; CSV parseado inteiro em memória (maiores exigem streaming) | baixa | S20 | aberta |
 | D-028 | ledger-comercio S13 onda final | Limite de 5.000 candidatos da cotação local conta itens vencidos (a validade é aplicada depois, no domínio) | baixa | S20 | aberta |
-| D-029 | ledger-comercio S14 T2 | `listCandidateStationeries` corta em silêncio acima do limite; mostrar "e mais N" ou paginar | baixa | S15 | aberta |
+| D-029 | ledger-comercio S14 T2 | `listCandidateStationeries` corta em silêncio acima do limite; mostrar "e mais N" ou paginar | baixa | S18 (revisitada na S15, não coube: sem relação com área da família) | aberta |
 
 ## UX, design e produto
 
@@ -130,7 +130,7 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-079 | ledger-comercio S11 T3 revisão | Endpoint de push revogado não pode ser reatribuído entre contas no mesmo aparelho (`endpoint_owned` vale mesmo revogado): quem troca de conta no mesmo navegador não liga o aviso até o endpoint mudar; decidir entre transferir endpoint revogado ou orientar "desativar antes de sair" | média | S17 | aberta |
 | D-080 | ledger-comercio S11 T4 / T5 | `PushOptIn` guarda o endpoint só em estado React: após recarregar volta a "Ativar" mesmo com assinatura ativa (não consulta `pushManager.getSubscription()`), e "Desativar" não chama `sub.unsubscribe()` no navegador | média | S18 | aberta |
 | D-081 | ledger-comercio S11 T3 revisão / T5 | Endpoint de push: o Zod normaliza host em maiúsculas e porta `:443` (via `new URL()`), mas o CHECK de `push_subscriptions.endpoint` valida a string crua e recusa esses casos ("Não foi possível ativar"); normalizar antes de gravar ou alinhar o CHECK | baixa | S19 | aberta |
-| D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S15 / S18 | aberta |
+| D-082 | ledger-comercio S11 T4 | Sino de notificações só no layout de `/conta`; `PanelShell` (papelaria), `AdminShell` e `SchoolShell` sem o contador de não lidas | baixa | S18 (revisitada na S15: mudaria dezenas de páginas por dívida de baixa severidade, ficou para lá) | aberta |
 | D-083 | ledger-comercio S11 T4 | Página de status da reivindicação (S06) não diz que a mudança de status também chega na central (`claim_updated`) | baixa | S16 | aberta |
 | D-084 | ledger-comercio S11 T4 | `AsyncOptions` (S07, "continuar aguardando") não oferece "Ativar notificação do navegador" nem aponta para `/conta/notificacoes` | baixa | S18 | aberta |
 | D-085 | ledger-comercio S11 T3 escopo | `ClaimTokenSender` (S06) ainda não usa o `ResendEmailTransport` da S11: o link de reivindicação por e-mail continua sem envio real até o humano fornecer conta/credencial (`EMAIL_NOTIFICATIONS_ENABLED`, `EMAIL_API_KEY`, `EMAIL_FROM`) e a S16/S19 ligar o transporte | média | Humano / S16 | aberta |
@@ -171,6 +171,9 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-120 | ledger-comercio S23 | Pap07-Desempenho não tem "respondido em até 1h" (agregação de `lead_events`) nem comparação anônima de bairro (k-anonimato ≥ 3 papelarias); ambos ficaram fora por tempo da fatia (Ruling do plano) | baixa | futura fatia de melhoria | aberta |
 | D-121 | ledger-comercio S23 | Admin14-Inadimplência não tem "Cobrar"/"Pausar leads"/"Reativar" manuais do design de referência; a régua é 100% automática sobre `payout_delinquency_status` (Ruling: menos superfície de estado divergente do calculado) | baixa | futura fatia de melhoria | aberta |
 | D-122 | ledger-comercio S23 | A comissão apurada em `payout_ledger` (entry_type `commission`) não tem nenhum instrumento de COBRANÇA da papelaria (nem debita `credit_ledger`, nem gera fatura): hoje é só um registro para o admin cobrar manualmente fora do sistema, sem tela nem lembrete para isso | média | futura fatia (cobrança automática da comissão) | aberta |
+| D-123 | ledger.md S15 (achado do E2E) | `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, `list_reader_get`/0601), não o id de `school_lists`; a página pública de uma lista oficial (`/escolas/[inep]/[serie]`) não tem hoje NENHUM link para "montar carrinho" — só a cópia do pai (`ParentCopyEditor`) linka para `/carrinho/novo?lista=`. Uma família que navega até a lista oficial não acha como montar o carrinho a partir dela pela UI | média | futura fatia de UX do carrinho (S18/S19) | aberta |
+| D-124 | ledger.md S15 | App19-Histórico (mapeada para a S15 em `SCREENS.md`) não foi construída como tela dedicada: o hub (`/conta`) e `/conta/carrinhos`/`/conta/listas-salvas` cobrem estudantes/listas salvas/carrinhos, mas não a vista cronológica combinada e filtrável por aluno que o design mostra | baixa | futura fatia de melhoria | aberta |
+| D-125 | ledger.md S15 | App16-HubPais mostra "% da lista resolvida" por aluno (barra de progresso); não implementado nesta fatia por falta de um sinal real de "resolvido" (nenhuma tabela liga item de carrinho/lista a "comprado"/"resolvido" por aluno hoje) — mostrar um número inventado violaria "nada inventado" (CLAUDE.md) | baixa | futura fatia (definir o sinal de "resolvido" antes de mostrar progresso) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -185,8 +188,14 @@ correções da revisão de segurança".
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 36 | 9 | 45 |
-| baixa | 52 | 9 | 61 |
-| **Total** | **98** | **23** | **121** |
+| média | 37 | 9 | 46 |
+| baixa | 54 | 9 | 63 |
+| **Total** | **101** | **23** | **124** |
 
-Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104; a S24 (Portal B2B, mesclada nesta rodada) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas; a S23 fecha D-099–D-101, D-103, D-105, D-107–D-111 (7 baixa + 3 média viram resolvida) e soma D-120–D-121 (baixa/abertas, renumeradas de D-112/D-113 por colisão com a S24) e D-122 (média/aberta, renumerada de D-114)).
+Contagem atualizada em 2026-09-27 (S15, área da família, worktree T3, fora de trilha): soma D-123 (média/aberta,
+achado do E2E — `/carrinho/novo?lista=` sem link nenhum a partir da lista oficial pública) e D-124/D-125
+(baixa/abertas — Histórico App19 não construído como tela dedicada; "% da lista resolvida" do App16 não mostrado
+por falta de sinal real de "resolvido"); D-029 e D-082 (dono S15/S18) revisitados e não resolvidos nesta fatia,
+dono passa integralmente para S18 (registrado no ledger.md, seção S15).
+
+Contagem anterior, 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104; a S24 (Portal B2B, mesclada nesta rodada) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas; a S23 fecha D-099–D-101, D-103, D-105, D-107–D-111 (7 baixa + 3 média viram resolvida) e soma D-120–D-121 (baixa/abertas, renumeradas de D-112/D-113 por colisão com a S24) e D-122 (média/aberta, renumerada de D-114)).

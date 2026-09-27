@@ -88,3 +88,49 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
 - Ruling: os resultados dos cenários em produção e a limpeza dos dados `e2e-teste` entram num PR só de docs (branch reiniciada de `main`), mesclado com CI verde e revisão registrada, como a feature — motivo: CLAUDE.md exige branch + PR para toda mudança, inclusive docs, e o relatório de produção só existe depois do merge — custo se estiver errada: um PR de docs a mais.
 - Ruling: o Ruling vindo do PR #30 que descreve o PR #28 como "mesclado pelo humano por outra sessão" foi inferência da sessão da S11; a execução foi desta sessão, pelo orquestrador, sob a autorização escrita do fundador (ADR-005), como registra o Ruling anterior sobre `16d76c8` — os dois registros ficam, com esta nota, para não reescrever o log; o número de WhatsApp que constava em texto claro num Ruling anterior foi redigido, pela mesma razão do kit (repositório público) — custo se estiver errada: nenhum.
 - Ruling: após a 0401 no staging, NÃO publicar plano de cobrança provisório — os valores de `plans` são preço de produto (regra "nunca inventar preço"); o staging recusa lead para papelaria real (`billing_unavailable`) até o humano informar os valores (PROGRESS > Aguardando humano, D-102) — custo se estiver errada: o E2E de lead real no staging fica bloqueado até lá; demo continua funcionando
+
+## S15 · Área da família (fora de trilha, worktree T3, 2026-09-27)
+
+- Ruling: migration na faixa "pós-trilhas" `06xx` (próximo prefixo livre após `0602`, S11): `0603_family_area.sql`
+  (tabelas `students`, `saved_lists`) — a S15 não é de trilha (PLAN: "S11 e S15 a S20 rodam depois do merge das
+  três") e o Ruling de `0001` já reserva `06xx` para isso; FKs reais para `schools`/`grades`/`profiles`/
+  `school_lists` são permitidas aqui (pós-integração) — custo se estiver errada: renomear o arquivo antes de
+  aplicar em staging (nunca aplicado nesta sessão).
+- Ruling: `students`/`saved_lists` como CRUD direto por RLS (grants por tabela + `with check`, cliente de SESSÃO),
+  não por função RPC — mesmo padrão de `carts`/`cart_items` (S12). A única regra cross-tabela ("lista salva precisa
+  ser `published`", "aluno da linha pertence ao mesmo dono") cabe num gatilho `BEFORE INSERT`
+  (`SECURITY DEFINER`, `search_path=''`, `EXECUTE` revogado de todos) — mais simples que uma função pública. Custo
+  se estiver errada: trocar por função é mecânico, sem migração de dado.
+- Ruling: nenhuma política de leitura para admin/system em `students`/`saved_lists` (diferente de `carts`, que tem
+  `carts_select_admin`) — mínimo de dado de menor (CLAUDE.md); nem o painel do admin (S16) nem o suporte enxergam
+  aluno por família nesta fatia. Custo se estiver errada: uma migration aditiva com a policy que faltar, quando
+  uma fatia futura de suporte precisar.
+- Ruling: apelido validado nas DUAS camadas (Zod no Server Action, na mesma ordem do `CHECK` do banco via
+  `student_nickname_valid`) — sem espaço (sinal prático de "nome e sobrenome"), sem dígito, sem controle, 2-30
+  caracteres. Escola e série são obrigatórias no cadastro (App13 já mostra os dois preenchidos): sem os dois a
+  família não consegue comparar a lista.
+- Ruling: exclusão de aluno é DELETE real (LGPD), com cascade em `saved_lists`; carrinho não referencia `students`
+  (nenhuma tela pede essa amarração nesta fatia).
+- Ruling: "cotações com status" do prompt da S15 já está pronto desde a S14/S22 (`/cotacao`, `listMyLeads`,
+  `StatusBadge`) — o hub só linka para lá, sem duplicar.
+- Ruling: D-082 e D-029 (dono S15, marcados "se couberem" no briefing) NÃO foram resolvidos nesta fatia: adicionar
+  o sino de notificações a `PanelShell`/`AdminShell`/`SchoolShell` (D-082) mexeria em toda página que usa essas
+  três cascas (dezenas de arquivos) para uma dívida de severidade baixa; D-029 é de outra área (`listCandidateStationeries`,
+  papelarias candidatas do lead), sem relação com a área da família. Custo/benefício desfavorável perto do fim da
+  sessão (risco de regressão ampla por pouco ganho); dono passa para S18 (D-082 já listava S18 como dono
+  alternativo). Ficam abertas, sem mudança de severidade.
+- Achado do E2E (correção de produto real, não só do roteiro): React 19 reinicializa campos NÃO controlados de um
+  `<form action={...}>` depois de QUALQUER conclusão da action, inclusive quando ela devolve erro — o formulário de
+  aluno usava `defaultValue` para apelido/série/ano/consentimento; depois de uma primeira tentativa recusada
+  (apelido com espaço), esses campos voltavam ao estado inicial e a segunda tentativa falhava em silêncio (bloqueio
+  nativo de campo `required` vazio, sem mensagem). Corrigido tornando esses campos controlados em `StudentForm`/
+  `GradeSelect`/`SchoolYearSelect`. Sem essa correção, qualquer família que errasse o apelido uma vez teria a
+  segunda tentativa quebrada silenciosamente — bug real, não só de teste.
+- Achado do E2E: `/carrinho/novo?lista=` espera o id da VERSÃO publicada (`list_versions.id`, conferido por
+  `list_reader_get`, 0601/S11), não o id de `school_lists`; a página pública de uma lista oficial
+  (`/escolas/[inep]/[serie]`) não tem, hoje, nenhum link para "montar carrinho" (só a cópia do pai, via
+  `ParentCopyEditor`, linka para lá) — dívida nova registrada no DEBT.md, dona de uma fatia futura de UX de
+  carrinho (fora do escopo da S15, que só consome carrinhos existentes no hub).
+- Achado de roteiro (`docs/superpowers/e2e/S15.md`): `clicktext` por `.click()` via `eval` falhou silenciosamente
+  para o botão "Salvar aluno"; substituído por `agent-browser find text "..." click` (clique real do Playwright) —
+  candidato a atualizar o padrão `PAT-002` do Segundo Cérebro.

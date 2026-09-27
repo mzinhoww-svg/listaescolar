@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { Logo } from "@/components/brand/Logo";
 import { signOutAction } from "@/components/auth/sign-out-action";
+import { SkipLink } from "@/components/site/SkipLink";
 
 import { NavLinks, type NavItem } from "./NavLinks";
 
@@ -12,6 +13,7 @@ export function PanelShell({ badge, nav, email, children }: Props) {
   const initials = (email ?? "?").slice(0, 2).toUpperCase();
   return (
     <div className="flex min-h-dvh flex-1 flex-col md:flex-row">
+      <SkipLink />
       <aside className="bg-tinta flex shrink-0 flex-col gap-5 px-4 py-5 md:w-[248px] md:px-[18px] md:py-7">
         <div className="px-1">
           <Logo variant="horizontal-negativo" height={32} />
@@ -32,7 +34,7 @@ export function PanelShell({ badge, nav, email, children }: Props) {
           </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-5 py-8 md:px-10">{children}</main>
+      <main id="conteudo" className="min-w-0 flex-1 px-5 py-8 md:px-10">{children}</main>
     </div>
   );
 }

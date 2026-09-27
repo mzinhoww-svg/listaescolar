@@ -89,6 +89,8 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
           </form>
           <p className="text-texto-2 text-[13px] font-semibold">
             {options.length} {options.length === 1 ? "papelaria atende" : "papelarias atendem"} {bairro ? `o bairro ${bairro}` : "a região"} para a lista de {view.context.gradeLabel} ({view.context.schoolYear}).
+            {/* D-029 (S18): a lista de candidatas tem um teto (nunca corte silencioso). */}
+            {view.truncated ? " Mostrando as primeiras; refine pelo bairro para ver outras." : null}
           </p>
           {options.length === 0 ? (
             <p className="text-texto-2 text-[15px] font-medium" data-testid="no-stationeries">Nenhuma papelaria cadastrada atende esta região com os filtros escolhidos.</p>

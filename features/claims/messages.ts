@@ -13,7 +13,7 @@ export const STATUS_LABEL: Record<ClaimStatus, string> = {
 
 export const STATUS_HINT: Record<ClaimStatus, string> = {
   submitted: "Conclua o pedido para a equipe ListaCerta analisar.",
-  awaiting_verification: "Acompanhe o status nesta página.",
+  awaiting_verification: "Acompanhe o status nesta página. Uma mudança também aparece na central de notificações.",
   token_expired: "O código ou link venceu. Peça um novo para continuar.",
   insufficient_evidence: "A equipe ListaCerta pediu mais evidências. Veja o motivo e reenvie.",
   rejected: "A reivindicação foi recusada. Veja o motivo abaixo.",

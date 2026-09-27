@@ -97,6 +97,26 @@ describe("ItemsTable", () => {
     expect(screen.getByText(/Preço e estoque: indisponível/)).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/R\$/);
   });
+
+  // D-034 (S18): a App05 agrupa por categoria; antes desta fatia a lista era plana (categoria só como legenda).
+  it("agrupa por categoria, na ordem de primeira aparição; sem categoria vai para 'Outros itens', sempre por último", () => {
+    render(
+      <ItemsTable
+        items={[
+          item({ id: "1", name: "Caderno", category: "Papelaria" }),
+          item({ id: "2", name: "Régua", category: null, quantity: null, unit: null }),
+          item({ id: "3", name: "Sabonete", category: "Higiene" }),
+          item({ id: "4", name: "Lápis", category: "Papelaria" }),
+        ]}
+      />,
+    );
+    const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Papelaria", "Higiene", "Outros itens"]);
+    // Caderno e Lápis (mesma categoria, não adjacentes na lista de entrada) ficam no mesmo grupo.
+    const papelariaGroup = screen.getByRole("heading", { level: 3, name: "Papelaria" }).nextElementSibling;
+    expect(papelariaGroup?.textContent).toContain("Caderno");
+    expect(papelariaGroup?.textContent).toContain("Lápis");
+  });
 });
 
 describe("VersionHistory", () => {

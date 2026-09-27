@@ -9,11 +9,14 @@ const PUB = join(process.cwd(), "supabase/functions/_shared/publication");
 const code = (f: string) => readFileSync(join(PUB, f), "utf8").split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
 
 describe("varreduras da Task 2", () => {
-  it("decide.ts, sweep.ts e settings.ts sem literal decimal (limiares só de ai_settings)", () => {
-    for (const f of ["decide.ts", "sweep.ts", "settings.ts"]) expect(code(f).match(/\b0?\.\d+\b/g) ?? [], f).toEqual([]);
+  it("decide.ts, decide-publish-stage.ts, sweep.ts e settings.ts sem literal decimal (limiares só de ai_settings)", () => {
+    for (const f of ["decide.ts", "decide-publish-stage.ts", "sweep.ts", "settings.ts"]) expect(code(f).match(/\b0?\.\d+\b/g) ?? [], f).toEqual([]);
   });
-  it("só decide.ts chama a porta publish (nenhum outro módulo do serviço)", () => {
-    expect(code("decide.ts").match(/\.publish\(/g)?.length).toBe(1);
+  it("só decide.ts/decide-publish-stage.ts chamam a porta publish (nenhum outro módulo do serviço)", () => {
+    // D-057 (S18): a etapa de publicação (lease -> porta -> registro) foi extraída de decide.ts para
+    // decide-publish-stage.ts; a chamada única à porta mudou de arquivo, não deixou de ser única no serviço.
+    expect(code("decide.ts").match(/\.publish\(/g)).toBeNull();
+    expect(code("decide-publish-stage.ts").match(/\.publish\(/g)?.length).toBe(1);
     for (const f of ["sweep.ts", "settings.ts", "composition.ts", "rpc-store.ts"]) expect(code(f), f).not.toMatch(/\.publish\(/);
   });
   it("a porta só é chamada depois de beginPublish devolver `leased` (prova comportamental)", async () => {
@@ -36,7 +39,7 @@ describe("varreduras da Task 2", () => {
     expect(spy).not.toHaveBeenCalled();
   });
   it("memória só é instanciada pela composição", () => {
-    for (const f of ["decide.ts", "sweep.ts", "settings.ts", "rpc-store.ts"]) expect(code(f), f).not.toMatch(/new Memory|from "\.\/memory/);
+    for (const f of ["decide.ts", "decide-publish-stage.ts", "sweep.ts", "settings.ts", "rpc-store.ts"]) expect(code(f), f).not.toMatch(/new Memory|from "\.\/memory/);
     expect(code("composition.ts")).toMatch(/MEMORY_PORT_ENVS/);
   });
   it("as linhas gravadas pelo serviço nunca levam nome de material, arquivo ou contato", () => {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/brand/Logo";
+import { SkipLink } from "@/components/site/SkipLink";
 import { CheckIcon } from "./icons";
 
 const NAV = [
@@ -19,12 +20,13 @@ const STEPS = ["Dados da lista", "Itens", "Revisar e publicar"];
 export function SchoolShell({ email, children }: { email: string | undefined; children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-1">
+      <SkipLink />
       <aside className="bg-tinta text-papel hidden w-[248px] shrink-0 flex-col gap-3 px-[18px] py-6 lg:flex">
         <Logo variant="horizontal-negativo" height={34} />
         <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[11px] font-extrabold">Escola</span>
         <nav aria-label="Portal da escola" className="mt-4 flex flex-col gap-1">
           {NAV.map((n) => {
-            const cls = `rounded-xl px-3.5 py-2.5 text-[15px] font-bold ${"current" in n ? "bg-papel/10 text-papel" : "text-papel/70"}`;
+            const cls = `focus-visible:outline-verde-certo rounded-xl px-3.5 py-2.5 text-[15px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${"current" in n ? "bg-papel/10 text-papel" : "text-papel/70"}`;
             return "href" in n ? (
               <Link key={n.label} href={n.href} className={cls}>
                 {n.label}
@@ -43,7 +45,7 @@ export function SchoolShell({ email, children }: { email: string | undefined; ch
           <span className="break-all">{email ?? "indisponível"}</span>
         </p>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col gap-5 px-6 py-8 lg:px-10">
+      <main id="conteudo" className="flex min-w-0 flex-1 flex-col gap-5 px-6 py-8 lg:px-10">
         <p className="text-texto-3 text-xs font-bold">Escola / Listas / Nova / PDF</p>
         <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-[-0.035em]">Enviar PDF da lista</h1>
         <ol className="flex items-center gap-3 text-sm font-bold">

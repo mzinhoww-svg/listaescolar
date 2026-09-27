@@ -25,7 +25,8 @@ import {
 import { createCartReader, createContextReader } from "./wiring";
 
 export type QuoteOptionView = StationeryOption & { estimate: Estimate };
-export type QuoteView = { cart: CartSnapshot; context: LeadListContext; municipalityId: string; options: QuoteOptionView[] };
+/** D-029 (S18): `truncated` avisa quando passou do teto de papelarias candidatas (nunca corte silencioso). */
+export type QuoteView = { cart: CartSnapshot; context: LeadListContext; municipalityId: string; options: QuoteOptionView[]; truncated: boolean };
 export type QuoteResult =
   | { status: "ok"; view: QuoteView }
   | { status: "not_found" }
@@ -58,8 +59,8 @@ export async function loadQuoteView(actor: SessionActor, cartId: string, neighbo
     ...(neighborhood ? { neighborhood } : {}),
   });
   const now = new Date();
-  const options = stationeries.map((o) => ({ ...o, estimate: estimateFromCatalog(cart.items, o.candidates, now) }));
-  return { status: "ok", view: { cart, context, municipalityId, options } };
+  const options = stationeries.options.map((o) => ({ ...o, estimate: estimateFromCatalog(cart.items, o.candidates, now) }));
+  return { status: "ok", view: { cart, context, municipalityId, options, truncated: stationeries.truncated } };
 }
 
 export async function listMyLeads(actor: SessionActor): Promise<RequesterLeadRow[]> {

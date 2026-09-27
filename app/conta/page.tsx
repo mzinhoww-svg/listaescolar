@@ -32,7 +32,7 @@ export default async function AccountHubPage() {
     : [[], [], []];
 
   return (
-    <main className="mx-auto flex w-full max-w-[420px] flex-1 flex-col gap-8 px-6 pt-6 pb-12">
+    <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-1 flex-col gap-8 px-6 pt-6 pb-12">
       <header className="flex flex-col gap-1">
         <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Minha conta</h1>
         <p className="text-texto-2 text-[13px] font-semibold">{user.email ?? "indisponível"}</p>
@@ -42,13 +42,19 @@ export default async function AccountHubPage() {
       <SavedListsSection savedLists={savedLists} />
       <CartsSection carts={carts} />
 
-      <Link href="/escolas" className="bg-tinta text-papel flex h-14 w-full items-center justify-center gap-2 rounded-botao text-base font-extrabold">
+      <Link
+        href="/escolas"
+        className="bg-tinta text-papel focus-visible:outline-verde-certo flex h-14 w-full items-center justify-center gap-2 rounded-botao text-base font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
         Buscar lista da escola
       </Link>
 
       <section aria-label="Cotações" className="flex flex-col gap-3">
         <h2 className="text-[15px] font-extrabold">Cotações</h2>
-        <Link href="/cotacao" className="bg-branco-tonal flex items-center justify-between rounded-[20px] p-4">
+        <Link
+          href="/cotacao"
+          className="bg-branco-tonal focus-visible:outline-verde-fundo flex items-center justify-between rounded-[20px] p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
           <span className="text-[14px] font-extrabold">Ver suas cotações e o status de cada uma</span>
           <span aria-hidden="true">→</span>
         </Link>
@@ -63,12 +69,15 @@ export default async function AccountHubPage() {
         </dl>
         <Link
           href="/conta/privacidade"
-          className="border-tinta text-tinta flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold"
+          className="border-tinta text-tinta focus-visible:outline-verde-fundo flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Privacidade e dados
         </Link>
         <form action={signOutAction}>
-          <button type="submit" className="border-tinta text-tinta flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold">
+          <button
+            type="submit"
+            className="border-tinta text-tinta focus-visible:outline-verde-fundo flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
             Sair
           </button>
         </form>

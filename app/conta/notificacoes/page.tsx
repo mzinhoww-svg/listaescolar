@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const data = await Promise.all([listNotifications(actor, page), unreadCount(actor), listPreferences(actor), listWatches(actor), activePushCount(actor)]).catch(() => null);
   if (!data) {
     return (
-      <main className="mx-auto flex w-full max-w-[420px] flex-col gap-4 px-6 pt-10">
+      <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-4 px-6 pt-10">
         <h1 className="text-[28px] font-extrabold">Notificações</h1>
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Não foi possível carregar. <Link href="/conta/notificacoes" className="underline">Tentar de novo</Link>
@@ -36,7 +36,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     const [list, unread, prefs, watches, pushCount] = data;
     const availability = channelAvailability(process.env);
     return (
-      <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-10 pb-12">
+      <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-10 pb-12">
         <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Notificações</h1>
         <NotificationList items={list.items} unread={unread} page={page} pageCount={Math.max(1, Math.ceil(list.total / PAGE_SIZE))} markRead={markReadAction} markAllRead={markAllReadAction} />
         <section aria-labelledby="pref" className="flex flex-col gap-3">

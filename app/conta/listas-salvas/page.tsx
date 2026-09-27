@@ -17,7 +17,7 @@ export default async function SavedListsPage() {
   const rows = actor ? await listMySavedLists(actor).catch(() => []) : [];
 
   return (
-    <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-14 pb-9">
+    <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-14 pb-9">
       <BackHeader href="/conta" title="Listas salvas" />
       {rows.length === 0 ? (
         <p className="text-texto-2 text-[15px] font-medium">Nenhuma lista salva ainda.</p>

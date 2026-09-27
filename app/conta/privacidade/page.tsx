@@ -20,7 +20,7 @@ export default async function PrivacyPage() {
   const consents = actor ? await listMyConsents(await createClient(), actor.userId).catch(() => []) : [];
 
   return (
-    <main className="mx-auto flex w-full max-w-[420px] flex-1 flex-col gap-8 px-6 pt-6 pb-12">
+    <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-1 flex-col gap-8 px-6 pt-6 pb-12">
       <header className="flex flex-col gap-1">
         <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Privacidade e dados</h1>
         <p className="text-texto-2 text-[13px] font-semibold">

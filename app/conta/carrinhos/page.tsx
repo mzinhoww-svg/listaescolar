@@ -20,7 +20,7 @@ export default async function CartsPage() {
   const carts = actor ? await listCartsForOwner(await createClient(), actor.userId, 100).catch(() => []) : [];
 
   return (
-    <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-14 pb-9">
+    <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-14 pb-9">
       <BackHeader href="/conta" title="Seus carrinhos" />
       {carts.length === 0 ? (
         <p className="text-texto-2 text-[15px] font-medium">Nenhum carrinho ainda.</p>

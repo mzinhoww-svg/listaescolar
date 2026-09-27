@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { signOutAction } from "@/components/auth/sign-out-action";
 import { Logo } from "@/components/brand/Logo";
+import { SkipLink } from "@/components/site/SkipLink";
 import { NavLinks, type NavItem } from "@/components/stationeries/NavLinks";
 import type { B2bPartnerStatus } from "@/features/b2b/states";
 
@@ -54,6 +55,7 @@ export function PortalShell({ tradeName, status, email, children }: Props) {
   const initials = (email ?? "?").slice(0, 2).toUpperCase();
   return (
     <div className="flex min-h-dvh flex-1 flex-col md:flex-row">
+      <SkipLink />
       <aside className="bg-tinta flex shrink-0 flex-col gap-5 px-4 py-5 md:w-[248px] md:px-[18px] md:py-7">
         <div className="px-1">
           <Logo variant="horizontal-negativo" height={32} />
@@ -74,7 +76,7 @@ export function PortalShell({ tradeName, status, email, children }: Props) {
           </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-5 py-8 md:px-10">
+      <main id="conteudo" className="min-w-0 flex-1 px-5 py-8 md:px-10">
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-texto-3 text-[13px] font-semibold">Portal de parceiros · {tradeName}</p>

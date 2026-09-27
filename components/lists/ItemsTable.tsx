@@ -2,39 +2,65 @@ import type { PublicListItem } from "@/features/lists/types";
 
 import { formatQuantity } from "./format";
 
-/** Itens da versão atual: nome, quantidade/unidade e categoria. Nada além do que a lista publicada informa. */
+/** D-034 (S18): item sem categoria (o campo é opcional) entra neste grupo, sempre por último. */
+const UNCATEGORIZED = "Outros itens";
+
+type Group = { category: string; items: PublicListItem[] };
+
+/** Agrupa preservando a ordem de primeira aparição da categoria na lista (nunca reordena por alfabeto). */
+function groupByCategory(items: readonly PublicListItem[]): Group[] {
+  const order: string[] = [];
+  const byCategory = new Map<string, PublicListItem[]>();
+  for (const item of items) {
+    const key = item.category ?? UNCATEGORIZED;
+    let bucket = byCategory.get(key);
+    if (!bucket) {
+      bucket = [];
+      byCategory.set(key, bucket);
+      order.push(key);
+    }
+    bucket.push(item);
+  }
+  // "Outros itens" sempre por último, mesmo que apareça antes de uma categoria nomeada na lista.
+  const named = order.filter((c) => c !== UNCATEGORIZED);
+  const rest = order.includes(UNCATEGORIZED) ? [UNCATEGORIZED] : [];
+  return [...named, ...rest].map((category) => ({ category, items: byCategory.get(category) ?? [] }));
+}
+
+/** Itens da versão atual, agrupados por categoria (App05). Nada além do que a lista publicada informa. */
 export function ItemsTable({ items }: { items: PublicListItem[] }) {
+  const groups = groupByCategory(items);
   return (
-    <section aria-labelledby="itens" className="flex flex-col gap-3">
+    <section aria-labelledby="itens" className="flex flex-col gap-4">
       <h2 id="itens" className="text-base font-extrabold">
         Itens da lista
       </h2>
-      <ul className="flex flex-col gap-2">
-        {items.map((item) => {
-          const qty = formatQuantity(item.quantity, item.unit);
-          return (
-            <li
-              key={item.id}
-              className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3.5"
-            >
-              <div className="min-w-0">
-                <p className="text-[15px] leading-[1.3] font-bold">{item.name}</p>
-                {item.category ? (
-                  <p className="text-texto-3 mt-0.5 text-xs font-semibold">{item.category}</p>
-                ) : null}
-              </div>
-              <p className="text-texto-2 shrink-0 text-[13px] font-extrabold">
-                {qty ?? (
-                  <>
-                    <span aria-hidden="true">—</span>
-                    <span className="sr-only">quantidade não informada</span>
-                  </>
-                )}
-              </p>
-            </li>
-          );
-        })}
-      </ul>
+      {groups.map((group) => (
+        <div key={group.category} className="flex flex-col gap-2">
+          <h3 className="text-texto-3 text-xs font-extrabold tracking-wide uppercase">{group.category}</h3>
+          <ul className="flex flex-col gap-2">
+            {group.items.map((item) => {
+              const qty = formatQuantity(item.quantity, item.unit);
+              return (
+                <li
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3.5"
+                >
+                  <p className="min-w-0 text-[15px] leading-[1.3] font-bold">{item.name}</p>
+                  <p className="text-texto-2 shrink-0 text-[13px] font-extrabold">
+                    {qty ?? (
+                      <>
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">quantidade não informada</span>
+                      </>
+                    )}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
       <p className="text-texto-3 text-xs font-medium">
         Preço e estoque: indisponível (sem fonte nesta lista).
       </p>

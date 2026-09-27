@@ -63,6 +63,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S17 LGPD e dados demonstrativos | #51 | 4c06b2a | 2026-09-27 | ✓ | ✓ | 3445 | 1844 (falhas isoladas pré-existentes, D-157) | ✓ | verify ✓ db ✓ | ✓ | build local, 22 verificações, 0 falhas (`e2e/S17.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
+| S18 Estados e acessibilidade | — (sem PR, por instrução) | `56755a7` (branch `slice/S18-estados-a11y`, worktree T3; ver histórico da branch para os 9 commits da fatia) | 2026-09-27 | ✓ | ✓ | 3468 | 1847 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 18 verificações, 0 falhas (`e2e/S18.md`) |
 
 Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto `listaescolare`; o humano as criou em 2026-09-25 e desde o #22 os previews ficam READY e públicos (noindex). O E2E passa a rodar no preview quando o deploy estiver verde (Ruling do ledger); a S11 ainda rodou local porque a leitura por IA no staging está bloqueada (D-077).
 
@@ -120,7 +121,7 @@ Produção: nenhuma migration (o projeto não existe).
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
 | Comércio e cobrança | S12, S13, S14, S27, S21, S22, S23 | **Completa** (S21 #34, S22 #36, S23 #40; migrations 0401–0403 no staging) |
 | B2B | S24, S25, S26 | **Completa** (S24 #38, S25 #42, S26 #47; migrations 0501–0503 no staging) |
-| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45), S16 ✓ (#50), S17 ✓ (#51); **S18 em andamento** (worktree T3); S19 depois da S18 |
+| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 ✓** (#50, worktree T3, `466a724` + merge com `origin/main`; `0604` no staging); **S17 ✓** (#51, branch `slice/S17-lgpd-demo`, worktree T2; migration `0605` no staging); **S18 ✓** (branch `slice/S18-estados-a11y`, worktree T3, sem PR por instrução; D-057 resolvida — os 10 arquivos ≤ 250 linhas —, D-048 resolvida, 22 dívidas S18 triadas — 12 resolvidas com teste, 10 com Ruling de adiamento —, sem migration nova) |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -140,10 +141,19 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 ## Próximos passos (ordem do PLAN)
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
-2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
+2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18. ✓ (S18, `9e3448c`).
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 ✓ (sem PR, por instrução — branch `slice/S26-campanhas`; 3 rodadas de reverificação de segurança aplicadas; migration `0503` só local)].
-4. S15 ✓ (#45), S16 ✓ (#50), S17 ✓ (#51); migrations 0603–0605 no staging.
-5. S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`). Proposta pendente de aprovação: instrumentação de produto com PostHog na S19 (ADR-007, `docs/tracking-plan.md`); só entra no PLAN se o humano aprovar.
+4. S15 ✓ (#45, ccd4c54; `0603` no staging; correções obrigatórias e uma segunda reverificação de segurança aplicadas — ver ledger). S16 ✓ (#50, `c2e8ee6`; worktree T3; dashboard, auditoria filtrável, denúncias, edição de `ai_settings`, arquivar lista; `0604` no staging; revisão de segurança aplicada, ver ledger). S17 ✓ (#51, branch `slice/S17-lgpd-demo`, worktree T2; migration `0605` no staging, aplicada depois de `0604`).
+5. **S18 ✓** (branch `slice/S18-estados-a11y`, worktree T3, sem PR por instrução; D-057 resolvida — repository.ts/
+   queries.ts/options-engine.ts/worker-core.ts/decide.ts/router.ts/extraction.ts divididos em arquivos-irmãos,
+   nenhum call site mudou —; D-048 resolvida; estados de rota — `app/loading.tsx` raiz, skip-link/`#conteudo`
+   nas 5 cascas autenticadas, foco visível nos botões/links compartilhados —; 22 dívidas S18 triadas (D-029,
+   D-034, D-080, D-083, D-084, D-090, D-091 parcial, D-140, D-153 resolvidas com teste; D-038 conferida sem
+   necessidade de mudança; D-031, D-039, D-042, D-052, D-067, D-072, D-082, D-092, D-124, D-151 com Ruling de
+   adiamento no ledger); E2E 18 PASS/0 FAIL (`e2e/S18.md`); sem migration nova). Próximo: S19 (a S19 também
+   hospeda a fonte localmente, D-072, e cobre D-158 — 7 módulos >250 linhas nascidos depois de D-057 nas
+   S21–S26). Proposta pendente de aprovação: instrumentação de produto com PostHog na S19 (ADR-007,
+   `docs/tracking-plan.md`); só entra no PLAN se o humano aprovar.
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
 
@@ -180,9 +190,18 @@ Conteúdo e dados:
 - Next 16 reescreve um bloco em CLAUDE.md: rode `git checkout CLAUDE.md` antes de commitar.
 - Após mudar `supabase/config.toml` (auth), rode `pnpm db:stop && pnpm db:start`; `db:reset` sozinho não recarrega o auth.
 - Banco local: `pnpm db:start`, `pnpm db:reset`, `pnpm test:db` (só banco local; o helper recusa host remoto).
+- `pnpm test:db` supõe banco recém-`db:reset` (D-090): rodar depois de um roteiro E2E que semeou dados dá falhas ambientais (dados extras contam em `count(*)`/limites que os testes esperam exatos). Sempre `pnpm db:reset` antes de `pnpm test:db` num gate; se algo falhar só depois de um E2E na mesma sessão, rode `db:reset` de novo antes de julgar a falha como regressão real.
 - Staging: advisor aceito com `auth_role()` executável por anon, `rls_auto_enable()` (função da plataforma) e a view definer `stationery_public` (S13, esperado).
 - Encerrar só o servidor aberto pela própria sessão (`kill "$(lsof -ti tcp:<porta> -sTCP:LISTEN)"`); nunca `pkill`.
-- Subagentes: nunca despachar dois na mesma rodada no mesmo worktree.
+- Subagentes: nunca despachar dois na mesma rodada no mesmo worktree. Achado real na S18: um fork despachado para
+  só pesquisar (triagem de dívidas) continuou implementando e rodando `pnpm db:reset`/`pnpm test:db` no mesmo
+  worktree em paralelo com o orquestrador por vários minutos depois de terminar a resposta — os dois `pnpm
+  test:db` concorrentes (ambos com `maxWorkers: 1`/`fileParallelism: false`, mas competindo pelo MESMO Postgres
+  local) causaram `Connection terminated unexpectedly` e decenas de falhas ambientais em cada um. Antes de rodar
+  `db:reset`/`test:db` depois de qualquer subagente no mesmo worktree, confira `pgrep -f "vitest.mjs run -c
+  vitest.db.config.ts"`/`pgrep -f "pnpm db:reset"` e espere (`until ! pgrep ...; do sleep 5; done`, nunca `sleep`
+  fixo) até não haver nenhum antes de rodar o próprio gate — regressões "aleatórias" que desaparecem numa nova
+  tentativa isolada são sinal disso, não do código.
 
 ## Política de uso (definida pelo humano em 2026-09-25, limite semanal em 79%)
 - Sonnet nos implementadores e nas revisões comuns; Opus só nas revisões de segurança (RLS, cobrança, B2B e dados de menor).

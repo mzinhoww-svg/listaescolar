@@ -1,0 +1,141 @@
+$ next build
+▲ Next.js 16.3.6 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 315ms
+- Experiments (use with caution):
+  · serverActions
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1625ms
+  Running TypeScript ...
+  Finished TypeScript in 10.4s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/39) ...
+  Generating static pages using 9 workers (9/39) 
+  Generating static pages using 9 workers (19/39) 
+  Generating static pages using 9 workers (29/39) 
+✓ Generating static pages using 9 workers (39/39) in 1460ms
+  Finalizing page optimization ...
+
+Route (app)                                  Revalidate  Expire
+┌ ○ /                                                1h      1y
+├ ○ /_not-found
+├ ○ /403
+├ ƒ /admin
+├ ƒ /admin/auditoria
+├ ƒ /admin/campanhas
+├ ƒ /admin/contestacoes
+├ ƒ /admin/importacoes
+├ ƒ /admin/importacoes/[batchId]
+├ ƒ /admin/importacoes/[batchId]/erros.csv
+├ ƒ /admin/inadimplencia
+├ ƒ /admin/papelarias
+├ ƒ /admin/papelarias/[id]
+├ ƒ /admin/parceiros
+├ ƒ /admin/parceiros/[id]
+├ ƒ /admin/planos
+├ ƒ /admin/reivindicacoes
+├ ƒ /admin/reivindicacoes/[id]
+├ ƒ /admin/reivindicacoes/evidencia/[id]
+├ ƒ /admin/repasses
+├ ƒ /admin/revisao
+├ ƒ /admin/revisao/[id]
+├ ƒ /admin/revisao/documento/[id]
+├ ƒ /api/billing/pix/webhook/[...path]
+├ ƒ /api/cron/b2b-maintenance
+├ ƒ /api/cron/billing-reconcile
+├ ƒ /api/cron/leads-expire
+├ ƒ /api/notifications/dispatch
+├ ƒ /api/pesquisa/concluir
+├ ƒ /api/pesquisa/export
+├ ƒ /api/pesquisa/lead
+├ ƒ /api/pesquisa/login
+├ ƒ /api/pesquisa/resposta
+├ ƒ /api/submissions/[id]/status
+├ ƒ /api/webhooks/dispatch
+├ ƒ /api/widget/config
+├ ƒ /api/widget/lists/[id]/items
+├ ƒ /api/widget/schools
+├ ƒ /api/widget/schools/[inep]/lists
+├ ƒ /auth/callback
+├ ƒ /auth/confirm
+├ ƒ /b2b
+├ ƒ /b2b/api
+├ ƒ /b2b/campanhas
+├ ƒ /b2b/campanhas/nova
+├ ƒ /b2b/conta
+├ ƒ /b2b/docs
+├ ƒ /b2b/faturamento
+├ ƒ /b2b/insights
+├ ƒ /b2b/webhooks
+├ ƒ /b2b/widget
+├ ƒ /cadastrar-papelaria
+├ ƒ /carrinho/[id]
+├ ƒ /carrinho/[id]/checkout
+├ ƒ /carrinho/novo
+├ ○ /como-funciona
+├ ƒ /conta
+├ ƒ /conta/compras
+├ ƒ /conta/notificacoes
+├ ƒ /cotacao
+├ ƒ /cotacao/[code]
+├ ƒ /cotacao/nova
+├ ƒ /entrar
+├ ƒ /enviar-lista
+├ ƒ /enviar-lista/[submissionId]
+├ ƒ /enviar-lista/[submissionId]/revisar
+├ ƒ /escola
+├ ƒ /escola/listas/nova
+├ ƒ /escolas
+├ ƒ /escolas/[inep]
+├ ƒ /escolas/[inep]/[serie]
+├ ƒ /escolas/[inep]/[serie]/opengraph-image
+├ ƒ /escolas/[inep]/[serie]/twitter-image
+├ ƒ /escolas/[inep]/opengraph-image
+├ ƒ /escolas/[inep]/reivindicar
+├ ƒ /escolas/[inep]/reivindicar/confirmar
+├ ƒ /escolas/[inep]/twitter-image
+├ ○ /icon.svg
+├ ƒ /ir-para/[cartId]/[retailer]
+├ ƒ /ir-para/[cartId]/[retailer]/go
+├ ƒ /l/[code]
+├ ƒ /l/[code]/qr
+├ ○ /opengraph-image
+├ ƒ /papelaria
+├ ƒ /papelaria/areas
+├ ƒ /papelaria/catalogo
+├ ƒ /papelaria/creditos
+├ ƒ /papelaria/creditos/faturas/[id]
+├ ƒ /papelaria/desempenho
+├ ƒ /papelaria/leads
+├ ƒ /papelaria/leads/[code]
+├ ƒ /papelarias/[slug]
+├ ƒ /parceiros
+├ ○ /parceiros/docs
+├ ○ /parceiros/termos
+├ ○ /pesquisa
+├ ○ /pesquisa/opengraph-image
+├ ○ /pesquisa/privacidade
+├ ƒ /pesquisa/resultados
+├ ○ /pesquisa/resultados/login
+├ ○ /privacidade
+├ ○ /robots.txt
+├ ○ /sitemap.xml                                     1h      1y
+├ ○ /sobre
+├ ○ /termos
+├ ○ /twitter-image
+├ ƒ /v1/[...rest]
+├ ƒ /v1/carts/match
+├ ƒ /v1/lists/[id]
+├ ƒ /v1/lists/[id]/items
+├ ƒ /v1/openapi.json
+├ ƒ /v1/schools
+├ ƒ /v1/schools/[inep]
+└ ƒ /v1/schools/[inep]/lists
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

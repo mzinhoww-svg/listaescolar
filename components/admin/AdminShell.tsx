@@ -9,6 +9,7 @@ const NAV = [
   { href: "/admin/revisao", label: "Revisão" },
   { href: "/admin/papelarias", label: "Papelarias" },
   { href: "/admin/parceiros", label: "Parceiros B2B" },
+  { href: "/admin/campanhas", label: "Campanhas B2B" },
   { href: "/admin/planos", label: "Planos e preços" },
   { href: "/admin/auditoria", label: "Auditoria de conversão" },
   { href: "/admin/contestacoes", label: "Contestações" },
@@ -27,6 +28,7 @@ type Props = {
     | "/admin/reivindicacoes"
     | "/admin/revisao"
     | "/admin/parceiros"
+    | "/admin/campanhas"
     | "/admin/planos"
     | "/admin/auditoria"
     | "/admin/contestacoes"

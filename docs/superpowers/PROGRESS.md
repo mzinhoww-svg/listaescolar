@@ -56,6 +56,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S22 Atribuição, conversão e contestação (Comércio) | #36 | 0ee3771 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
 | S23 Comissão, repasses e inadimplência (Comércio) | #40 | d30849f | 2026-09-27 | ✓ | ✓ | 3252 | 1729 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 30 verificações, 0 falhas (`e2e/S23.md`) |
+| S25 Widget e webhooks (B2B) | #42 | 634c9f2 | 2026-09-27 | ✓ | ✓ | 3303 | 1759 (3 skipped) | ✓ | verify ✓ db ✓ (concluídos depois do merge; ver Ruling) | ✓ | build local + receptor de webhook, 22 verificações, 0 falhas (`e2e/S25.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
@@ -63,7 +64,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 
 ## Migrations
 
-22 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+23 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -85,6 +86,7 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0402_lead_conversions.sql | S22 | lead_conversions | 20260927010517 (uma chamada transacional; md5 das 10 funções, RLS, gatilhos e privilégios idênticos ao banco local; sem advisor novo) |
 | 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
 | 0403_repasses.sql | S23 | repasses | 20260927044636 (uma chamada transacional; substitui 4 funções da 0401/0402 com md5 anterior registrado; 22 funções, RLS das 7 tabelas, 13 gatilhos e privilégios idênticos ao banco local; auditoria de `school_payout_settings` sem `pix_key`/`beneficiary_name`; sem configuração de comissão/repasse inserida) |
+| 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |

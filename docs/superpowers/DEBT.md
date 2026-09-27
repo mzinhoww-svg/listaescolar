@@ -183,6 +183,11 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-132 | ledger-comercio S25 Task 2/3 (Ruling de escopo) | A pré-visualização do widget (B2B04) e o `widget.js` real não têm seleção individual de item por checkbox (como no design, que mostra cada item marcável) — hoje é tudo-ou-nada ("Adicionar tudo ao carrinho"). Ruling S25: cortado do MVP desta fatia por tempo; o contrato de dados (`/api/widget/lists/{id}/items`) já traz item a item, então a UI pode ganhar isso depois sem mudar a API | baixa | S26 (B2B) | aberta |
 | D-133 | ledger-comercio S25 · correções da revisão de segurança (Menor) | `app/api/widget/**` responde com `access-control-allow-origin: *` para qualquer origem — correto hoje (dado público, sem cookie, sem credencial), mas sem allowlist do domínio cadastrado do parceiro (`cart_target_domain`) o widget pode ser embutido em QUALQUER site, não só no do parceiro que o configurou (não é uma falha de confidencialidade — o dado já é público —, mas permite uso não autorizado do widget de um parceiro em site de terceiro). Considerar restringir `Access-Control-Allow-Origin` ao(s) domínio(s) cadastrados quando o portal ganhar um campo de "domínios autorizados" | baixa | S26 (B2B) | aberta |
 | D-134 | ledger-comercio S25 · correções da revisão de segurança (Menor) | A restrição de porta 443 para HTTPS (revisão de segurança, `lib/net/safe-fetch.ts`) só é aplicada no ENVIO (`postWebhookSafely`); o CHECK de `b2b_webhook_endpoints.url` (0502) e o Zod de `SaveEndpointInputSchema` continuam aceitando `https://host:8443/...` na criação/atualização do endpoint — o parceiro só descobre que a porta não é aceita quando a primeira entrega vira `dead` (`invalid_url_port_not_allowed`). Validar a porta também na criação evitaria essa surpresa | baixa | S26 (B2B) | aberta |
+| D-135 | reverificação de segurança S25 (PR #42) | `list.archived` pode sair para lista que nunca foi pública (publicada com município desabilitado, habilitado depois e arquivada): o gate da 0502 (~l.533) não exige "já foi visível"; e só `schools.is_demo` é considerado, não `claims.is_demo` | baixa | S19 | aberta |
+| D-136 | reverificação de segurança S25 (PR #42) | `pg_trigger_depth() > 1` em `b2b_webhook_delivery_attempts` libera qualquer DELETE feito de dentro de um gatilho, não só a cascata de FK: acrescentar comentário de guarda e revisar em fatias futuras que criem gatilhos de DELETE | baixa | S19 | aberta |
+| D-137 | reverificação de segurança S25 (PR #42) | Cotas de reenvio de webhook (5 por entrega, 20/h por parceiro) sem lock: reenvios concorrentes podem passar um pouco do limite | baixa | S19 | aberta |
+| D-138 | reverificação de segurança S25 (PR #42) | Entrega em `sending` com lease vencida fica em `sending` para sempre se o endpoint for desativado depois (a varredura de dead letter só pega `attempts >= 10` e o claim a exclui); entregas `queued` de parceiro suspenso nunca são purgadas | média | S19 | aberta |
+| D-139 | reverificação de segurança S25 (PR #42) | Rate limit do widget ainda chaveado por `ip:partnerId` (`features/widget/route-helpers.ts:25`): UUIDs aleatórios contornam o limite por IP; chavear só por IP e validar o parceiro antes de contar | média | S19 | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -201,9 +206,9 @@ D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudo
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 39 | 9 | 48 |
-| baixa | 60 | 10 | 70 |
-| **Total** | **109** | **24** | **133** |
+| média | 41 | 9 | 50 |
+| baixa | 63 | 10 | 73 |
+| **Total** | **114** | **24** | **138** |
 
 Contagem atualizada em 2026-09-27 (merge de `main` — S23, Comissão/repasses/inadimplência — com a rodada de
 correções da revisão de segurança da S25 nesta branch). D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23

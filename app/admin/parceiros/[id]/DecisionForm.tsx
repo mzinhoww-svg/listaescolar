@@ -126,7 +126,7 @@ export function DecisionForm({ partnerId, status, action }: { partnerId: string;
                 required
                 min={PARTNER_TEST_RATE_PER_MINUTE.min}
                 max={PARTNER_TEST_RATE_PER_MINUTE.max}
-                defaultValue={PARTNER_TEST_RATE_PER_MINUTE.min}
+                defaultValue={PARTNER_TEST_RATE_PER_MINUTE.default}
                 className={inputCls}
               />
             </label>
@@ -138,7 +138,7 @@ export function DecisionForm({ partnerId, status, action }: { partnerId: string;
                 required
                 min={PARTNER_TEST_RATE_PER_DAY.min}
                 max={PARTNER_TEST_RATE_PER_DAY.max}
-                defaultValue={PARTNER_TEST_RATE_PER_DAY.min}
+                defaultValue={PARTNER_TEST_RATE_PER_DAY.default}
                 className={inputCls}
               />
             </label>
@@ -156,7 +156,7 @@ export function DecisionForm({ partnerId, status, action }: { partnerId: string;
               required
               min={PARTNER_LIVE_RATE_PER_MINUTE.min}
               max={PARTNER_LIVE_RATE_PER_MINUTE.max}
-              defaultValue={PARTNER_LIVE_RATE_PER_MINUTE.min}
+              defaultValue={PARTNER_LIVE_RATE_PER_MINUTE.default}
               className={inputCls}
             />
           </label>
@@ -168,7 +168,7 @@ export function DecisionForm({ partnerId, status, action }: { partnerId: string;
               required
               min={PARTNER_LIVE_RATE_PER_DAY.min}
               max={PARTNER_LIVE_RATE_PER_DAY.max}
-              defaultValue={PARTNER_LIVE_RATE_PER_DAY.min}
+              defaultValue={PARTNER_LIVE_RATE_PER_DAY.default}
               className={inputCls}
             />
           </label>

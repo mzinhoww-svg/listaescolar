@@ -2,14 +2,18 @@
 // rate limit é fixado aqui além destas faixas — o número real vem sempre da linha do parceiro (definido pelo admin).
 
 export type Range = { readonly min: number; readonly max: number };
+/** Faixa com um valor de partida sugerido na UI — `default` NÃO é o mínimo permitido (`min` já cobre isso); é só
+ * um ponto de partida razoável para quem preenche o formulário sem pensar num número (Admin15, revisão de
+ * segurança da Task 3: `defaultValue={range.min}` deixava o parceiro aprovado com 1 req/min e 1 req/dia). */
+export type RangeWithDefault = Range & { readonly default: number };
 
-export const PARTNER_TEST_RATE_PER_MINUTE: Range = { min: 1, max: 10_000 };
-export const PARTNER_TEST_RATE_PER_DAY: Range = { min: 1, max: 10_000_000 };
-export const PARTNER_LIVE_RATE_PER_MINUTE: Range = { min: 1, max: 10_000 };
-export const PARTNER_LIVE_RATE_PER_DAY: Range = { min: 1, max: 10_000_000 };
+export const PARTNER_TEST_RATE_PER_MINUTE: RangeWithDefault = { min: 1, max: 10_000, default: 60 };
+export const PARTNER_TEST_RATE_PER_DAY: RangeWithDefault = { min: 1, max: 10_000_000, default: 1_000 };
+export const PARTNER_LIVE_RATE_PER_MINUTE: RangeWithDefault = { min: 1, max: 10_000, default: 60 };
+export const PARTNER_LIVE_RATE_PER_DAY: RangeWithDefault = { min: 1, max: 10_000_000, default: 2_000 };
 
 /** Carência da rotação de chaves (dias). Padrão 7 (Ruling S24 · Task 2). */
-export const KEY_ROTATION_GRACE_DAYS: Range & { readonly default: number } = { min: 1, max: 30, default: 7 };
+export const KEY_ROTATION_GRACE_DAYS: RangeWithDefault = { min: 1, max: 30, default: 7 };
 
 /** No máximo duas chaves utilizáveis por (parceiro, ambiente): atual + anterior em carência. */
 export const MAX_USABLE_KEYS_PER_ENVIRONMENT = 2;

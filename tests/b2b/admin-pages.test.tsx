@@ -30,6 +30,12 @@ vi.mock("next/navigation", () => ({
 import AdminParceirosPage from "@/app/admin/parceiros/page";
 import AdminParceiroDetailPage from "@/app/admin/parceiros/[id]/page";
 import { DecisionForm } from "@/app/admin/parceiros/[id]/DecisionForm";
+import {
+  PARTNER_LIVE_RATE_PER_DAY,
+  PARTNER_LIVE_RATE_PER_MINUTE,
+  PARTNER_TEST_RATE_PER_DAY,
+  PARTNER_TEST_RATE_PER_MINUTE,
+} from "@/features/b2b/limits";
 
 const sp = (o: Record<string, string> = {}) => Promise.resolve(o);
 
@@ -179,6 +185,25 @@ describe("DecisionForm — confirmação para suspender/recusar", () => {
     fireEvent.change(screen.getByLabelText("Plano"), { target: { value: "regional" } });
     fireEvent.click(screen.getByRole("button", { name: "Aprovar em sandbox" }));
     expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it("aprovar sem editar os campos de limite: os valores enviados são o padrão de negócio, nunca o mínimo (1)", () => {
+    // Achado da re-revisão: `defaultValue={range.min}` deixava o parceiro aprovado com 1 req/min e 1 req/dia
+    // quando o admin não editava os campos. `features/b2b/limits.ts` agora tem um `default` separado de `min`.
+    const action = vi.fn();
+    render(<DecisionForm partnerId="p1" status="pending" action={action} />);
+    fireEvent.click(screen.getByLabelText("Aprovar em produção"));
+    fireEvent.change(screen.getByLabelText("Plano"), { target: { value: "regional" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar em produção" }));
+    expect(action).toHaveBeenCalledTimes(1);
+    const sent = action.mock.calls[0]![0] as FormData;
+    expect(sent.get("testRatePerMinute")).toBe(String(PARTNER_TEST_RATE_PER_MINUTE.default));
+    expect(sent.get("testRatePerDay")).toBe(String(PARTNER_TEST_RATE_PER_DAY.default));
+    expect(sent.get("liveRatePerMinute")).toBe(String(PARTNER_LIVE_RATE_PER_MINUTE.default));
+    expect(sent.get("liveRatePerDay")).toBe(String(PARTNER_LIVE_RATE_PER_DAY.default));
+    for (const field of ["testRatePerMinute", "testRatePerDay", "liveRatePerMinute", "liveRatePerDay"]) {
+      expect(sent.get(field)).not.toBe("1");
+    }
   });
 
   it("cancelar na confirmação não envia nada", () => {

@@ -116,6 +116,7 @@ Ambiente e deploy:
 - Google OAuth: criar credenciais no console Google e ativar o provider no Supabase.
 - Pepper do IP de auditoria: FEITO na 0601 (`audit_row_change` lê o Vault quando o GUC não existe; D-059 resolvida); na produção, gerar outro segredo `audit_ip_pepper` no Vault.
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
+- Vercel (S24, Portal B2B): `B2B_API_KEY_PEPPER` (≥ 32 caracteres, gerado aleatoriamente, **diferente por ambiente**, nunca commitado) em Production/Preview/Development — sem ele a API `/v1` responde 503 e o portal não emite chaves. Atenção: um valor com menos de 32 caracteres (ou qualquer outra variável do `serverSchema` de `lib/env.ts` ausente/inválida, ex. `OPENROUTER_KEY`/`AI_MODEL_*`) quebra `getServerEnv()` inteiro e derruba TODA a API B2B com 503 silencioso (sem log — revisão final do branch, corrigido para logar só o nome do erro). Cron diário `/api/cron/b2b-maintenance` (mesmo `CRON_SECRET` já usado por `leads-expire`) precisa do aceite no plano da conta, igual ao S14.
 
 Credenciais e contas:
 - Provedor real de e-mail (S11) e credencial de WhatsApp (tokens de reivindicação da S06 e notificações).

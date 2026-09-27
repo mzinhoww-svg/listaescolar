@@ -23,13 +23,21 @@ async function publishFirstTime(c: Client, listId: string, versionId: string): P
   await publish(c, listId, versionId);
 }
 
+/** Escola + lista REAL (não-demo): a maioria destes testes usa parceiro `active`, que só recebe evento de dado
+ * REAL (revisão de segurança, Bloqueante 1) — `seedList` marca `is_demo = true` por padrão (outras fatias). */
+async function seedRealSchoolAndList(c: Client, opts: { enabled?: boolean } = {}): Promise<{ schoolId: string; listId: string }> {
+  const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)), opts.enabled ?? true);
+  const listId = await seedList(c, schoolId);
+  await c.query("update public.school_lists set is_demo = false where id = $1", [listId]);
+  return { schoolId, listId };
+}
+
 describe("eventos reais de webhook (S25)", () => {
   it("list.published: 1ª publicação enfileira para o endpoint assinante, na cobertura certa, uma vez só", async () => {
     await tx(async (c) => {
       const partner = await seedPartner(c, { status: "active", coverageUfs: ["MT"] });
       const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
-      const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)));
-      const listId = await seedList(c, schoolId);
+      const { listId } = await seedRealSchoolAndList(c);
       const versionId = await seedCandidate(c, listId, 3);
       await publishFirstTime(c, listId, versionId);
 
@@ -45,8 +53,7 @@ describe("eventos reais de webhook (S25)", () => {
     await tx(async (c) => {
       const partner = await seedPartner(c, { status: "active", coverageUfs: ["MT"] });
       const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.published", "list.updated"] });
-      const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)));
-      const listId = await seedList(c, schoolId);
+      const { listId } = await seedRealSchoolAndList(c);
       const v1 = await seedCandidate(c, listId, 2);
       await publishFirstTime(c, listId, v1);
       const v2 = await seedCandidate(c, listId, 4);
@@ -62,8 +69,7 @@ describe("eventos reais de webhook (S25)", () => {
     await tx(async (c) => {
       const partner = await seedPartner(c, { status: "active", coverageUfs: ["MT"] });
       const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.archived"] });
-      const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)));
-      const listId = await seedList(c, schoolId);
+      const { listId } = await seedRealSchoolAndList(c);
       const versionId = await seedCandidate(c, listId);
       await publishFirstTime(c, listId, versionId);
       await c.query("select public.list_archive($1, $2, 'teste')", [listId, IDS.admin]);
@@ -93,8 +99,7 @@ describe("eventos reais de webhook (S25)", () => {
     await tx(async (c) => {
       const partner = await seedPartner(c, { status: "active", coverageUfs: ["MT"] });
       const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["school.approved"] }); // sem list.*
-      const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)));
-      const listId = await seedList(c, schoolId);
+      const { listId } = await seedRealSchoolAndList(c);
       const versionId = await seedCandidate(c, listId);
       await publishFirstTime(c, listId, versionId);
       expect(await deliveriesFor(c, endpoint)).toHaveLength(0);
@@ -107,8 +112,7 @@ describe("eventos reais de webhook (S25)", () => {
       const nacional = await seedPartner(c, { status: "active", coverageUfs: null, ownerId: IDS.school_member });
       const epRegional = await createEndpoint(c, regional, IDS.parent, { events: ["list.published"] });
       const epNacional = await createEndpoint(c, nacional, IDS.school_member, { events: ["list.published"] });
-      const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)));
-      const listId = await seedList(c, schoolId);
+      const { listId } = await seedRealSchoolAndList(c);
       const versionId = await seedCandidate(c, listId);
       await publishFirstTime(c, listId, versionId);
       expect(await deliveriesFor(c, epRegional)).toHaveLength(0);
@@ -121,6 +125,55 @@ describe("eventos reais de webhook (S25)", () => {
       const pending = await seedPartner(c, { status: "pending" });
       // pending não pode nem criar endpoint (defesa em profundidade além do filtro de fila por status).
       await expect(createEndpoint(c, pending, IDS.parent, {})).rejects.toThrow();
+    });
+  });
+
+  // Revisão de segurança (Bloqueante 1): a fila de webhooks tem que respeitar a MESMA regra de visibilidade
+  // pública da API v1 da S24 (município habilitado, escola não suspensa, is_demo × ambiente do parceiro).
+  describe("visibilidade pública (Bloqueante 1): mesma regra da API v1 (S24)", () => {
+    it("lista DEMO não vai para parceiro active (só dado real); vai para parceiro sandbox (só dado demo)", async () => {
+      await tx(async (c) => {
+        const active = await seedPartner(c, { status: "active", coverageUfs: ["MT"], ownerId: IDS.parent });
+        const sandbox = await seedPartner(c, { status: "sandbox", coverageUfs: ["MT"], ownerId: IDS.school_member });
+        const epActive = await createEndpoint(c, active, IDS.parent, { events: ["list.published"] });
+        const epSandbox = await createEndpoint(c, sandbox, IDS.school_member, { events: ["list.published"] });
+        // seedList já marca is_demo = true por padrão: usar direto (sem seedRealSchoolAndList) para este teste.
+        const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)));
+        const listId = await seedList(c, schoolId);
+        const versionId = await seedCandidate(c, listId);
+        await publishFirstTime(c, listId, versionId);
+        expect(await deliveriesFor(c, epActive)).toHaveLength(0);
+        expect(await deliveriesFor(c, epSandbox)).toHaveLength(1);
+      });
+    });
+
+    it("escola de município DESABILITADO não gera evento nenhum (nem para active, nem para sandbox)", async () => {
+      await tx(async (c) => {
+        const active = await seedPartner(c, { status: "active", coverageUfs: null, ownerId: IDS.parent });
+        const sandbox = await seedPartner(c, { status: "sandbox", coverageUfs: null, ownerId: IDS.school_member });
+        const epActive = await createEndpoint(c, active, IDS.parent, { events: ["list.published"] });
+        const epSandbox = await createEndpoint(c, sandbox, IDS.school_member, { events: ["list.published"] });
+        const schoolId = await seedSchool(c, String(60_000_000 + randomInt(0, 900_000)), false); // enabled=false (Goiânia)
+        const listId = await seedList(c, schoolId);
+        await c.query("update public.school_lists set is_demo = false where id = $1", [listId]);
+        const versionId = await seedCandidate(c, listId);
+        await publishFirstTime(c, listId, versionId);
+        expect(await deliveriesFor(c, epActive)).toHaveLength(0);
+        expect(await deliveriesFor(c, epSandbox)).toHaveLength(0);
+        expect(await emitErrors(c)).toBe(0); // não visível não é erro, é silêncio
+      });
+    });
+
+    it("escola SUSPENSA não gera evento (list.published nem school.approved)", async () => {
+      await tx(async (c) => {
+        const active = await seedPartner(c, { status: "active", coverageUfs: null, ownerId: IDS.parent });
+        const endpoint = await createEndpoint(c, active, IDS.parent, { events: ["list.published", "school.approved"] });
+        const { schoolId, listId } = await seedRealSchoolAndList(c);
+        await c.query("update public.schools set verification_status = 'suspended' where id = $1", [schoolId]);
+        const versionId = await seedCandidate(c, listId);
+        await publishFirstTime(c, listId, versionId);
+        expect(await deliveriesFor(c, endpoint)).toHaveLength(0);
+      });
     });
   });
 });

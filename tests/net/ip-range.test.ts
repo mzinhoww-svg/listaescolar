@@ -27,4 +27,24 @@ describe("isPublicIp (anti-SSRF)", () => {
       expect(isPublicIp(ip, 6), ip).toBe(true);
     }
   });
+
+  it("default-deny: recusa qualquer coisa fora de 2000::/3, inclusive formas disfarçadas de loopback/metadata (revisão de segurança, Importante 4)", () => {
+    const blocked = [
+      "::127.0.0.1", // IPv4-compatível (deprecado): 127.0.0.1 embutido, fora de 2000::/3
+      "::a9fe:a9fe", // 169.254.169.254 (metadata) embutido em forma hex, fora de 2000::/3
+      "::ffff:7f00:1", // ::ffff:127.0.0.1 escrito em hexteto em vez de decimal-pontuado
+      "64:ff9b::1", // NAT64 (RFC 6052), fora de 2000::/3
+      "100::1", // discard-only (RFC 6666), fora de 2000::/3
+    ];
+    for (const ip of blocked) expect(isPublicIp(ip, 6), ip).toBe(false);
+  });
+
+  it("recusa Teredo (2001::/32) e 6to4 (2002::/16), que caem DENTRO de 2000::/3 mas não são endereçáveis com confiança", () => {
+    const blocked = ["2001:0:4136:e378::1", "2001:0::1", "2002:c000:0204::1"];
+    for (const ip of blocked) expect(isPublicIp(ip, 6), ip).toBe(false);
+  });
+
+  it("não bloqueia endereços públicos que só coincidem no prefixo 2001: (Teredo é 2001:0000::/32, não 2001::/16)", () => {
+    expect(isPublicIp("2001:4860:4860::8888", 6)).toBe(true); // Google DNS
+  });
 });

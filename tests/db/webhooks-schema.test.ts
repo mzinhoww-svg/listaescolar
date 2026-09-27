@@ -13,9 +13,18 @@ import { createEndpoint, deliveriesFor, fakeSecret } from "./webhook-fixtures";
 beforeAll(seedUsers);
 afterAll(cleanupUsers);
 
+/** Lista REAL (não-demo) publicada: os testes de despacho usam parceiro `active`, que só recebe evento de dado
+ * REAL (revisão de segurança, Bloqueante 1) — `seedList` marca `is_demo = true` por padrão (usado por outras
+ * fatias), então este helper desliga a flag depois de semear. */
 async function newPublishedList(c: Client): Promise<{ listId: string; versionId: string }> {
   const schoolId = await seedSchool(c, String(70_000_000 + randomInt(0, 900_000)));
   const listId = await seedList(c, schoolId);
+  // `service_role` não tem UPDATE em `school_lists` (só as funções SECURITY DEFINER escrevem lá) — alguns testes
+  // chamam este helper já com `set local role service_role` ativo; sai e volta para o papel atual.
+  const prevRole = (await c.query("select current_user as u")).rows[0].u as string;
+  await c.query("reset role");
+  await c.query("update public.school_lists set is_demo = false where id = $1", [listId]);
+  await c.query(`set local role ${prevRole}`).catch(() => undefined);
   const versionId = await seedCandidate(c, listId);
   for (const s of ["submitted", "processing", "approved"] as const) await transition(c, listId, s);
   await publish(c, listId, versionId);
@@ -137,7 +146,7 @@ describe("webhooks: endpoints, segredo e RLS", () => {
   });
 });
 
-type Claimed = { id: string; leaseId: string; attempts: number; eventType: string; url: string; secret: unknown };
+type Claimed = { id: string; leaseId: string; attempts: number; eventType: string; eventId: string; url: string; secret: unknown };
 
 /** `setof jsonb`: cada linha vem como uma coluna jsonb nomeada como a função. */
 async function claim(c: Client, limit = 10): Promise<Claimed[]> {
@@ -252,6 +261,129 @@ describe("despacho: lease, retry exponencial com teto e dead letter", () => {
       expect(upd.error).not.toBeNull();
       const del = await attempt(c, "delete from public.b2b_webhook_delivery_attempts where id = $1", [attemptRow.id]);
       expect(del.error).not.toBeNull();
+    });
+  });
+
+  // Revisão de segurança (Importante 2): o gatilho imutável de `b2b_webhook_delivery_attempts` bloqueava até a
+  // exclusão em CASCATA (vinda de apagar a entrega/o endpoint/o parceiro), travando `b2b_webhook_purge_old` para
+  // sempre depois de qualquer entrega ter uma tentativa registrada.
+  it("purge_old apaga entrega antiga COM tentativa registrada, sem o gatilho imutável travar a cascata", async () => {
+    await tx(async (c) => {
+      const partner = await seedPartner(c, { status: "active" });
+      await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
+      await newPublishedList(c);
+      await c.query("set local role service_role");
+      const [claimed] = await claim(c, 1);
+      await callAsService(c, "select public.b2b_webhook_mark_delivery($1,$2,'sent',200,null,5)", [claimed!.id, claimed!.leaseId]);
+      await c.query("reset role");
+      // `set_updated_at` (gatilho BEFORE UPDATE) sobrescreveria qualquer tentativa de "viajar no tempo" por
+      // UPDATE normal; desliga só para este UPDATE de teste (superuser) e liga de volta.
+      await c.query("alter table public.b2b_webhook_deliveries disable trigger b2b_webhook_deliveries_set_updated_at");
+      await c.query("update public.b2b_webhook_deliveries set updated_at = now() - interval '31 days' where id = $1", [claimed!.id]);
+      await c.query("alter table public.b2b_webhook_deliveries enable trigger b2b_webhook_deliveries_set_updated_at");
+      const purged = await callAsService<{ b2b_webhook_purge_old: number }>(c, "select public.b2b_webhook_purge_old(30)", []);
+      expect(purged[0]!.b2b_webhook_purge_old).toBeGreaterThanOrEqual(1);
+      const left = await c.query("select count(*)::int as n from public.b2b_webhook_deliveries where id = $1", [claimed!.id]);
+      expect(left.rows[0].n).toBe(0);
+      const attemptsLeft = await c.query("select count(*)::int as n from public.b2b_webhook_delivery_attempts where delivery_id = $1", [claimed!.id]);
+      expect(attemptsLeft.rows[0].n).toBe(0);
+    });
+  });
+
+  it("apagar um endpoint (ou o parceiro-dono) em cascata apaga entregas e tentativas, sem o gatilho imutável travar", async () => {
+    await tx(async (c) => {
+      const partner = await seedPartner(c, { status: "active" });
+      const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
+      await newPublishedList(c);
+      await c.query("set local role service_role");
+      const [claimed] = await claim(c, 1);
+      await callAsService(c, "select public.b2b_webhook_mark_delivery($1,$2,'sent',200,null,5)", [claimed!.id, claimed!.leaseId]);
+      await c.query("reset role");
+      const delEndpoint = await attempt(c, "delete from public.b2b_webhook_endpoints where id = $1", [endpoint]);
+      expect(delEndpoint.error).toBeNull();
+      const attemptsLeft = await c.query("select count(*)::int as n from public.b2b_webhook_delivery_attempts where delivery_id = $1", [claimed!.id]);
+      expect(attemptsLeft.rows[0].n).toBe(0);
+
+      // parceiro em cascata: novo endpoint/entrega/tentativa, agora apagando o PARCEIRO.
+      const endpoint2 = await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
+      await newPublishedList(c);
+      await c.query("set local role service_role");
+      const [claimed2] = await claim(c, 1);
+      await callAsService(c, "select public.b2b_webhook_mark_delivery($1,$2,'sent',200,null,5)", [claimed2!.id, claimed2!.leaseId]);
+      await c.query("reset role");
+      const delPartner = await attempt(c, "delete from public.b2b_partners where id = $1", [partner]);
+      expect(delPartner.error).toBeNull();
+      const endpointsLeft = await c.query("select count(*)::int as n from public.b2b_webhook_endpoints where id = $1", [endpoint2]);
+      expect(endpointsLeft.rows[0].n).toBe(0);
+    });
+  });
+});
+
+describe("resend e claim respeitam o estado do endpoint/parceiro (revisão de segurança, Importante 3)", () => {
+  it("reenvio exige parceiro active/sandbox e endpoint active", async () => {
+    await tx(async (c) => {
+      const partner = await seedPartner(c, { status: "active", ownerId: IDS.parent });
+      const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
+      await newPublishedList(c);
+      await c.query("set local role service_role");
+      const [claimed] = await claim(c, 1);
+      await callAsService(c, "select public.b2b_webhook_mark_delivery($1,$2,'permanent',400,'bad_request',5)", [claimed!.id, claimed!.leaseId]);
+      await c.query("reset role");
+
+      // endpoint desativado: reenvio recusado.
+      await c.query("update public.b2b_webhook_endpoints set status = 'disabled' where id = $1", [endpoint]);
+      const rDisabled = await attemptH(c, "select public.b2b_webhook_resend($1,$2)", [IDS.parent, claimed!.id]);
+      expect(rDisabled.hint).toBe("invalid_state");
+      await c.query("update public.b2b_webhook_endpoints set status = 'active' where id = $1", [endpoint]);
+
+      // parceiro suspenso: reenvio recusado.
+      await c.query("update public.b2b_partners set status = 'suspended', status_reason = 'teste' where id = $1", [partner]);
+      const rSuspended = await attemptH(c, "select public.b2b_webhook_resend($1,$2)", [IDS.parent, claimed!.id]);
+      expect(rSuspended.hint).toBe("invalid_state");
+      await c.query("update public.b2b_partners set status = 'active', status_reason = null where id = $1", [partner]);
+
+      const ok = await callAsService<{ b2b_webhook_resend: string }>(c, "select public.b2b_webhook_resend($1,$2)", [IDS.parent, claimed!.id]);
+      expect(ok[0]!.b2b_webhook_resend).toMatch(/^[0-9a-f-]{36}$/);
+    });
+  });
+
+  it("cota de reenvio: no máximo 5 por entrega original; recusa o 6º", async () => {
+    await tx(async (c) => {
+      const partner = await seedPartner(c, { status: "active", ownerId: IDS.parent });
+      const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
+      await newPublishedList(c);
+      await c.query("set local role service_role");
+      const [claimed] = await claim(c, 1);
+      await callAsService(c, "select public.b2b_webhook_mark_delivery($1,$2,'permanent',400,'bad_request',5)", [claimed!.id, claimed!.leaseId]);
+      await c.query("reset role");
+      // Simula 4 reenvios já existentes direto no banco (o 5º vem pela função de verdade) para não gastar tempo
+      // de teste repetindo a função 5 vezes; o que importa é a CONTAGEM, não como cada linha nasceu.
+      for (let i = 0; i < 4; i++) {
+        await c.query(
+          "insert into public.b2b_webhook_deliveries (endpoint_id, partner_id, event_type, event_id, payload, status) values ($1,$2,'list.published',$3,$4,'dead')",
+          [endpoint, partner, `${claimed!.eventId}:resend:${i}`, JSON.stringify({})],
+        );
+      }
+      const fifth = await callAsService<{ b2b_webhook_resend: string }>(c, "select public.b2b_webhook_resend($1,$2)", [IDS.parent, claimed!.id]);
+      expect(fifth[0]!.b2b_webhook_resend).toMatch(/^[0-9a-f-]{36}$/);
+      const sixth = await attemptH(c, "select public.b2b_webhook_resend($1,$2)", [IDS.parent, claimed!.id]);
+      expect(sixth.hint).toBe("invalid_state");
+    });
+  });
+
+  it("claim nunca reivindica entrega de endpoint desativado nem de parceiro suspenso (fica só na fila)", async () => {
+    await tx(async (c) => {
+      const partner = await seedPartner(c, { status: "active", ownerId: IDS.parent });
+      const endpoint = await createEndpoint(c, partner, IDS.parent, { events: ["list.published"] });
+      await newPublishedList(c);
+      await c.query("update public.b2b_webhook_endpoints set status = 'disabled' where id = $1", [endpoint]);
+      await c.query("set local role service_role");
+      expect(await claim(c, 10)).toHaveLength(0);
+      await c.query("reset role");
+      await c.query("update public.b2b_webhook_endpoints set status = 'active' where id = $1", [endpoint]);
+      await c.query("update public.b2b_partners set status = 'suspended', status_reason = 'teste' where id = $1", [partner]);
+      await c.query("set local role service_role");
+      expect(await claim(c, 10)).toHaveLength(0);
     });
   });
 });

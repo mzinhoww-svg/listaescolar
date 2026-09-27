@@ -37,6 +37,26 @@ describe("validateWebhookUrl", () => {
     expect(validateWebhookUrl("https://user:pass@parceiro.example.com/hook", undefined)).toEqual({ ok: false, reason: "invalid_url" });
     expect(validateWebhookUrl("not a url", undefined)).toEqual({ ok: false, reason: "invalid_url" });
   });
+
+  it("https só na porta 443 (revisão de segurança, Menor: reduz uso como sonda de porta)", () => {
+    expect(validateWebhookUrl("https://parceiro.example.com/hook", undefined)).toMatchObject({ ok: true, port: 443 });
+    expect(validateWebhookUrl("https://parceiro.example.com:443/hook", undefined)).toMatchObject({ ok: true, port: 443 });
+    expect(validateWebhookUrl("https://parceiro.example.com:8443/hook", undefined)).toEqual({ ok: false, reason: "port_not_allowed" });
+    expect(validateWebhookUrl("https://parceiro.example.com:9999/hook", undefined)).toEqual({ ok: false, reason: "port_not_allowed" });
+  });
+
+  it("exceção de loopback exige APP_ENV=local E ausência de process.env.VERCEL (revisão de segurança, Menor)", () => {
+    const prevVercel = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      expect(validateWebhookUrl("http://127.0.0.1:4000/hook", "local")).toEqual({ ok: false, reason: "scheme_not_allowed" });
+    } finally {
+      if (prevVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = prevVercel;
+    }
+    // sem VERCEL, a exceção volta a valer
+    expect(validateWebhookUrl("http://127.0.0.1:4000/hook", "local")).toMatchObject({ ok: true });
+  });
 });
 
 describe("resolvePublicAddress (DNS mockado: sem rede de verdade)", () => {

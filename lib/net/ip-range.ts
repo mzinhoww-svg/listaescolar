@@ -1,5 +1,14 @@
+import { BlockList } from "node:net";
+
 // Classificação de IP público × privado (S25, anti-SSRF do envio de webhooks). Puro, sem I/O: fácil de testar com
 // exaustão de faixas. IPv4 mapeado em IPv6 (`::ffff:a.b.c.d`) é desembrulhado antes de classificar.
+//
+// Revisão de segurança independente (Importante 4): a versão anterior do IPv6 negava faixa por faixa (default
+// ALLOW) — qualquer faixa reservada esquecida da lista passava como pública. Trocado para DEFAULT-DENY: só é
+// público se estiver dentro de `2000::/3` (o bloco de unicast global atual, RFC 4291) e fora das faixas especiais
+// que caem DENTRO dele (documentação, Teredo, 6to4). Loopback, link-local, ULA, multicast, IPv4-mapeado,
+// discard-only (`100::/64`) e NAT64 (`64:ff9b::/96`) já ficam de fora só por estarem fora de `2000::/3` — não
+// precisam de entrada própria na lista (cobertos pelos testes com `::127.0.0.1`, `::a9fe:a9fe`, `::ffff:7f00:1`).
 
 function ipv4ToInt(ip: string): number | null {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
@@ -41,26 +50,25 @@ function isPublicIpv4(ip: string): boolean {
   return !IPV4_BLOCKED.some(([base, bits]) => inCidr(n, base, bits));
 }
 
-function firstHextet(ip: string): number {
-  if (ip.startsWith("::")) return 0;
-  const seg = ip.split(":")[0]!;
-  const n = Number.parseInt(seg, 16);
-  return Number.isNaN(n) ? 0 : n;
-}
+// Unicast global atual (RFC 4291 §2.4): só endereços aqui dentro podem ser públicos.
+const GLOBAL_UNICAST = new BlockList();
+GLOBAL_UNICAST.addSubnet("2000::", 3, "ipv6");
+
+// Faixas especiais que caem DENTRO de `2000::/3` mas não são endereçáveis publicamente de forma confiável.
+const SPECIAL_WITHIN_GLOBAL_UNICAST = new BlockList();
+SPECIAL_WITHIN_GLOBAL_UNICAST.addSubnet("2001:db8::", 32, "ipv6"); // documentação (RFC 3849)
+SPECIAL_WITHIN_GLOBAL_UNICAST.addSubnet("2001::", 32, "ipv6"); // Teredo (RFC 4380) — encapsula IPv4, pode ser privado
+SPECIAL_WITHIN_GLOBAL_UNICAST.addSubnet("2002::", 16, "ipv6"); // 6to4 (RFC 3056) — idem
 
 function isPublicIpv6(ipRaw: string): boolean {
   const ip = ipRaw.toLowerCase();
-  if (ip === "::1") return false; // loopback
-  if (ip === "::") return false; // unspecified
-  // IPv4 mapeado: ::ffff:a.b.c.d
+  // IPv4 mapeado em forma pontuada (::ffff:a.b.c.d): desembrulha e classifica como IPv4. Uma forma hexadecimal
+  // (ex. `::ffff:7f00:1`) não bate este regex e cai no default-deny abaixo (fora de `2000::/3`) — nunca passa
+  // como pública por engano.
   const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(ip);
   if (mapped) return isPublicIpv4(mapped[1]!);
-  const g = firstHextet(ip);
-  if (g >= 0xfe80 && g <= 0xfebf) return false; // link-local fe80::/10
-  if (g >= 0xfc00 && g <= 0xfdff) return false; // ULA fc00::/7
-  if (g >= 0xff00 && g <= 0xffff) return false; // multicast ff00::/8
-  if (ip.startsWith("2001:db8:")) return false; // documentação
-  if (ip.startsWith("64:ff9b::")) return false; // NAT64 (pode encapsular IPv4 privado; recusa por precaução)
+  if (!GLOBAL_UNICAST.check(ip, "ipv6")) return false;
+  if (SPECIAL_WITHIN_GLOBAL_UNICAST.check(ip, "ipv6")) return false;
   return true;
 }
 

@@ -932,3 +932,91 @@ correções antes de prosseguir.
 - Ruling: `SaveEndpointInputSchema` (`features/webhooks/schemas.ts`) usava `z.url({ hostname: z.regexes.domain })`, que rejeita qualquer host literal — travava a criação de endpoint mesmo com `APP_ENV=local` (a exceção de loopback documentada desde a Task 1). Corrigido para validar só a FORMA da URL (`z.url({ protocol: /^https?$/ })`); a política de segurança de verdade continua só no CHECK do banco e em `lib/net/safe-fetch.ts` (revalidado a cada envio) — Zod não deve duplicar (pior, endurecer) uma política de segurança que já vive numa camada mais confiável.
 - E2E real, ponta a ponta, contra o build de produção local (`scripts/e2e-s25.sh`, `scripts/e2e-s25-seed.sql`, `scripts/e2e-webhook-receiver.mjs`): parceiro varejista já ativo (dono real, sem repetir o cadastro/aprovação da S24), lista publicada real, reivindicação pronta para aprovar. Widget: configurar, snippet com `partner_id` real, `/api/widget/**` com CORS aberto e dados reais (busca de escola, listas, itens). Webhooks: criar endpoint apontando para um receptor HTTP local (loopback, só por causa de `APP_ENV=local`), ver o segredo uma vez, revelar, rotacionar. Eventos reais (`list.updated` de uma republicação, `school.approved` de uma aprovação de reivindicação de verdade) disparam entregas; despacho real assina com HMAC-SHA256 e o receptor CONFIRMA a assinatura recebida (aceite "assinatura verificável por teste" também coberto ponta a ponta, além dos testes de unidade de `sign.ts`); falha forçada no receptor → `failed` com retry agendado → (avançando o relógio da linha para 24h) `dead` → "Reenviar" pela UI cria uma nova entrega preservando o histórico da original → sucesso. **22/22 verificações**, sem falha.
 - Estado: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes. Unitária **3273/3273** (sem teste novo nesta task — só telas e E2E). Banco **1699/1702** (3 pulados = baseline, sem mudança de schema nesta task). Build de produção local OK. E2E: **22/22**, `docs/superpowers/e2e/S25.md`, capturas em `docs/superpowers/e2e/screenshots/S25-*.png` (segredo redigido na captura que o mostrava em claro).
+
+## S25 · correções da revisão de segurança (Opus, sobre `ba26b08`)
+
+Rodada única de correções sobre a S25 já mesclada com `origin/main` (`ba26b08`, não staged em nenhum ambiente
+além do local: a migration `0502` foi editada NO LUGAR, sem migration nova). 1 Bloqueante, 3 Importantes e 6
+Menores. Vermelho capturado antes de cada correção (`docs/superpowers/logs/s25-security-review-red.txt` para o
+Importante 4/ip-range; os demais, nos próprios arquivos de teste de banco alterados, rodados contra a migration
+ainda sem a correção — ver histórico desta sessão).
+
+- Ruling (Bloqueante 1): os gatilhos de webhook (`webhook_on_list_status_event`, `webhook_on_claim_approved`)
+  ignoravam por completo os filtros de visibilidade pública da S24 (`is_demo` × ambiente, município habilitado,
+  escola não suspensa) — um parceiro `active` podia receber evento de escola/lista DEMONSTRATIVA, e uma escola
+  suspensa ou de município desabilitado gerava evento mesmo assim. Corrigido com duas funções NOVAS em `0502`
+  (`b2b_webhook_list_gate`/`b2b_webhook_school_gate`) que espelham a MESMA regra de `b2b_v1_visible_lists`/
+  `b2b_v1_school_base` (0501, já staged — não alterada) sem duplicar a lógica linha a linha: só os 3 critérios
+  (município habilitado, escola não suspensa, `is_demo`) são recalculados, porque a 0501 não expõe esses
+  critérios "crus" (só embutidos na consulta pública final, cujo filtro de ambiente é fixo por chamada, não
+  reaproveitável para decidir POR PARCEIRO qual ambiente ele deve receber). `b2b_webhook_enqueue` ganhou o
+  parâmetro `p_is_demo`: `active` só recebe dado real, `sandbox` só recebe dado demo. Fato sobre lista/escola fora
+  do gate não enfileira NADA (nem erro, nem tentativa) — silêncio, não falha. Testado com lista demo × parceiro
+  active/sandbox, escola de município desabilitado, escola suspensa (`tests/db/webhook-events.test.ts`, describe
+  "visibilidade pública"). Custo se errada: alto (é exatamente o tipo de vazamento que a S24 gastou uma revisão de
+  segurança inteira evitando na API `/v1`) — mitigado por 3 testes novos dedicados, além dos existentes migrados
+  para usar lista REAL explicitamente (`seedRealSchoolAndList`/`newPublishedList` atualizados).
+- Ruling (Importante 2): o gatilho imutável de `b2b_webhook_delivery_attempts` (`enable always`) bloqueava
+  qualquer DELETE, inclusive o vindo de ON DELETE CASCADE (apagar a entrega/o endpoint/o parceiro) — confirmado
+  empiricamente que `pg_trigger_depth()` é 2 dentro do gatilho quando o DELETE vem de uma cascata de FK (a própria
+  RI é implementada como um gatilho interno) e 1 quando é um DELETE direto na tabela. Corrigido permitindo DELETE
+  só quando `pg_trigger_depth() > 1`; UPDATE continua sempre bloqueado, em qualquer profundidade. Sem isto,
+  `b2b_webhook_purge_old` quebrava para sempre (`500`) assim que a primeira entrega com tentativa registrada
+  completasse 30 dias — um bug que só apareceria em produção depois de um mês rodando. A nova tabela de auditoria
+  `b2b_webhook_secret_events` (Menor, abaixo) recebeu o MESMO tratamento preventivamente. Testado: purgar uma
+  entrega com tentativa; apagar um endpoint e depois um parceiro inteiro, os dois com histórico de tentativas.
+  Custo se errada: alto (disponibilidade do despacho, silenciosa até completar 30 dias) — mitigado por 2 testes
+  dedicados rodando a sequência real (`claim` → `mark_delivery` → apagar o pai).
+- Ruling (Importante 3): `b2b_webhook_resend` não tinha cota (um clique repetido, ou uma automação contra a
+  Server Action, recriava entregas sem limite) e nem `resend` nem `b2b_webhook_claim_deliveries` conferiam se o
+  ENDPOINT estava `active` ou o PARCEIRO `active`/`sandbox` — um endpoint desativado ou parceiro suspenso podia
+  continuar recebendo despacho de entregas já enfileiradas antes da mudança de estado. Corrigido com duas cotas
+  independentes (no máximo 5 reenvios por entrega original — a raiz mais os filhos `:resend:` —, e no máximo 20
+  reenvios por hora por parceiro, todas as origens) e checagem de estado nos dois lugares; `b2b_webhook_endpoint_update`
+  ganhou a MESMA checagem de estado do parceiro que já existia só na criação (achado adjacente: um parceiro
+  suspenso conseguia editar a URL/eventos do próprio endpoint). Entrega de endpoint desativado/parceiro suspenso
+  fica só na fila (nunca é reivindicada), sem erro. Testado: cota de 5 reenvios (6º recusado), reenvio recusado
+  com endpoint desativado/parceiro suspenso, `claim` nunca reivindica nesses dois casos. Custo se errada: médio
+  (abuso de recursos — flood do próprio parceiro/endpoint —, não um vazamento de dado de terceiro).
+- Ruling (Importante 4): `lib/net/ip-range.ts` classificava IPv6 negando faixa por faixa (default ALLOW) — uma
+  faixa reservada esquecida da lista passava como pública. Confirmado com o código ANTERIOR que 7 de 8 endereços
+  disfarçados citados pelo revisor (`::127.0.0.1`, `::a9fe:a9fe`/metadata, `::ffff:7f00:1`, `100::1`, Teredo ×2,
+  6to4) eram classificados como PÚBLICOS incorretamente (log em `docs/superpowers/logs/s25-security-review-red.txt`).
+  Reescrito para DEFAULT-DENY usando `node:net.BlockList`: só é público dentro de `2000::/3` (unicast global
+  atual, RFC 4291) e fora de Teredo/6to4/documentação (que caem DENTRO desse bloco). Loopback, link-local, ULA,
+  multicast, IPv4-mapeado, discard-only e NAT64 já ficam de fora só por estarem fora de `2000::/3` — não precisam
+  de entrada própria, o que elimina a classe inteira de bug "faixa esquecida". Testado com os 8 casos do revisor
+  mais Teredo/6to4 e um endereço público real (Google DNS) para confirmar que o prefixo `2001:` sozinho não
+  dispara o bloqueio de Teredo por engano (Teredo é `2001:0000::/32`, não qualquer coisa que comece com `2001:`).
+  Custo se errada: alto (é a defesa central de IPv6 contra SSRF) — mitigado por 7 testes dedicados.
+- Ruling (Menor): a exceção de loopback (`http://127.0.0.1`, só para o E2E) passou a exigir `APP_ENV=local` **e**
+  a ausência de `process.env.VERCEL` (variável que a própria Vercel injeta em todo deploy) — defesa em
+  profundidade contra um `APP_ENV=local` configurado por engano num ambiente real da Vercel reabrir a exceção de
+  SSRF.
+- Ruling (Menor): HTTPS restrito à porta 443 (`lib/net/safe-fetch.ts`) — reduz o uso do envio de webhook como
+  sonda de porta contra um host público arbitrário. Sem suporte a 8443 nesta fatia (ninguém pediu); registrado
+  como comentário no código para não crescer por engano, e como dívida (D-126) o fato de a checagem valer só no
+  ENVIO, não na criação/atualização do endpoint (Zod e o CHECK do banco continuam aceitando qualquer porta).
+- Ruling (Menor): `lib/rate-limit/memory-bucket.ts` fazia `buckets.clear()` (zerar TUDO) ao atingir o teto de
+  10 000 chaves rastreadas — descartava a cota em andamento de todo mundo, inclusive quem nem estava perto do
+  limite. Trocado por despejar só a chave MAIS ANTIGA (primeira do `Map`, que preserva ordem de inserção) por
+  chamada, abrindo uma vaga de cada vez. Testado enchendo o mapa até o teto e confirmando que só uma entrada
+  desaparece por chave nova.
+- Ruling (Menor): auditoria de criar/rotacionar/revelar o segredo do webhook. `b2b_partner_events` (0501) já está
+  staged e seu CHECK de `event_type` não cobre estes três eventos — em vez de alterar uma migration já aplicada
+  em staging, criada `b2b_webhook_secret_events` (tabela irmã, imutável, `partner_id` com `on delete cascade` —
+  ao contrário de `b2b_partner_events`, que usa `restrict` — para não travar a exclusão de um parceiro, Importante
+  2 acima). `actor_id` fora do grant de `authenticated` (mesmo padrão de `decided_by`/`created_by` na 0501). Isto
+  RESOLVE o D-120 (registrado na Task 1 desta mesma fatia).
+- Ruling (Menor): `b2b_webhook_endpoint_create` ganhou `pg_advisory_xact_lock` por parceiro (mesmo padrão de
+  `b2b_partner_apply`, 0501) para duas criações concorrentes não passarem as duas pela checagem do limite de 3
+  endpoints antes de qualquer uma inserir.
+- Dívida nova (D-125, baixa): `app/api/widget/**` responde `access-control-allow-origin: *` para qualquer
+  origem — correto para o DADO (público, sem cookie), mas sem allowlist do domínio cadastrado do parceiro, o
+  widget de um parceiro pode ser embutido em site de terceiro não autorizado. Registrada para quando o portal
+  ganhar um campo de "domínios autorizados".
+- Estado: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build` verdes.
+  Unitária **3279/3279** (+6: 2 em `safe-fetch.test.ts`, 3 em `ip-range.test.ts`, 1 em `memory-bucket.test.ts`).
+  Banco **1707/1710** (3 pulados = baseline; +8: 3 em `webhook-events.test.ts` — visibilidade pública —, 5 em
+  `webhooks-schema.test.ts` — purge/cascata, cota de reenvio, estado do endpoint/parceiro). E2E `scripts/e2e-s25.sh`
+  refeito do zero (`pnpm db:reset` + reseed): **22/22**, sem regressão de nenhuma verificação anterior.

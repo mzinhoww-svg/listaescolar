@@ -1,0 +1,25 @@
+S25 · correções da revisão de segurança (Opus, ba26b08) — vermelho antes do fix
+
+Importante 4 (lib/net/ip-range.ts): rodando a implementação ANTERIOR (default-allow por faixa) contra os casos
+citados pelo revisor, todos exceto um passavam como "público" incorretamente:
+
+  ::127.0.0.1        -> true (deveria ser false; IPv4-compatível, embute 127.0.0.1)
+  ::a9fe:a9fe        -> true (deveria ser false; embute 169.254.169.254, metadata)
+  ::ffff:7f00:1      -> true (deveria ser false; ::ffff:127.0.0.1 em forma hex, não batia o regex decimal-pontuado)
+  64:ff9b::1         -> false (já estava certo, checagem explícita de NAT64)
+  100::1             -> true (deveria ser false; discard-only, RFC 6666)
+  2001:0:4136:e378::1 -> true (deveria ser false; Teredo, RFC 4380)
+  2001:0::1          -> true (deveria ser false; Teredo)
+  2002:c000:0204::1  -> true (deveria ser false; 6to4, RFC 3056)
+
+Comando usado para confirmar (fora da suíte, script descartável): `npx tsx -e "..."` importando a versão do
+arquivo em `HEAD` (ba26b08) antes desta rodada de correções.
+
+Depois da reescrita (default-DENY: só público dentro de `2000::/3`, com Teredo/6to4/documentação negados por
+dentro desse bloco), os 8 casos batem o esperado e `tests/net/ip-range.test.ts` (14 casos, incluindo os 8 novos)
+passa 100%.
+
+Demais itens (Bloqueante 1, Importantes 2 e 3) tiveram o vermelho capturado nos próprios arquivos de teste de
+banco novos/alterados (`tests/db/webhook-events.test.ts`, `tests/db/webhooks-schema.test.ts`) rodados ANTES da
+migration 0502 ser editada — ver o histórico de execução desta sessão; a migration é local (nunca aplicada em
+staging/produção), então foi editada no lugar, sem migration nova.

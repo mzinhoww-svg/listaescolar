@@ -102,11 +102,20 @@ create table public.b2b_webhook_delivery_attempts (
 create index b2b_webhook_delivery_attempts_delivery_idx on public.b2b_webhook_delivery_attempts (delivery_id, created_at);
 create trigger b2b_webhook_delivery_attempts_set_updated_at before update on public.b2b_webhook_delivery_attempts for each row execute function public.set_updated_at();
 
+-- Revisão de segurança (Bloqueante-adjacente, Importante 2): UPDATE continua sempre bloqueado; DELETE só passa
+-- quando vem de uma exclusão em CASCATA (a entrega/o endpoint/o parceiro-dono foi apagado — `pg_trigger_depth() >
+-- 1` porque a própria ação de FK ON DELETE CASCADE já é um nível de gatilho antes deste disparar; um DELETE
+-- direto nesta tabela roda em profundidade 1 e continua recusado). Sem isto, `b2b_webhook_purge_old` nunca
+-- conseguia apagar uma entrega com tentativa registrada (o ciclo de despacho quebrava para sempre depois de 30
+-- dias) e apagar um endpoint/parceiro também travava.
 create function public.b2b_webhook_delivery_attempts_block_mutation() returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
   raise exception 'b2b_webhook_delivery_attempts é imutável (% bloqueado)', tg_op using errcode = '42501';
 end;
 $$;
@@ -124,6 +133,41 @@ create table public.b2b_webhook_emit_errors (
   updated_at timestamptz not null default now()
 );
 
+-- Auditoria de criar/rotacionar/revelar o segredo (revisão de segurança, Menor): quem e quando, NUNCA o segredo.
+-- `b2b_partner_events` (0501) já está aplicada em staging e seu CHECK de `event_type` não cobre estes eventos —
+-- em vez de alterar uma migration já staged, esta tabela irmã guarda o mesmo tipo de trilha só para webhooks.
+-- Imutável (mesmo padrão de `b2b_partner_events`): sem UPDATE/DELETE. `on delete cascade` em `partner_id` (ao
+-- contrário de `b2b_partner_events`, que usa `restrict`): apagar o parceiro-dono apaga o histórico de segredo
+-- dele junto (revisão de segurança, Importante 2 — apagar parceiro precisa funcionar de ponta a ponta, sem uma
+-- tabela de auditoria travando a exclusão); `endpoint_id` fica solto (sem FK) porque um endpoint específico pode
+-- ser apagado no futuro (D-122) sem que o parceiro em si suma.
+create table public.b2b_webhook_secret_events (
+  id uuid primary key default gen_random_uuid(),
+  endpoint_id uuid not null,
+  partner_id uuid not null references public.b2b_partners (id) on delete cascade,
+  event_type text not null check (event_type in ('created', 'rotated', 'revealed')),
+  actor_id uuid,
+  created_at timestamptz not null default clock_timestamp(),
+  updated_at timestamptz not null default clock_timestamp()
+);
+create index b2b_webhook_secret_events_endpoint_idx on public.b2b_webhook_secret_events (endpoint_id, created_at);
+create index b2b_webhook_secret_events_partner_idx on public.b2b_webhook_secret_events (partner_id, created_at);
+
+create function public.b2b_webhook_secret_events_block_mutation() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old; -- exclusão em cascata (o parceiro-dono foi apagado): log morre junto, UPDATE continua bloqueado
+  end if;
+  raise exception 'b2b_webhook_secret_events é imutável (% bloqueado)', tg_op using errcode = '42501';
+end;
+$$;
+create trigger b2b_webhook_secret_events_immutable before update or delete on public.b2b_webhook_secret_events
+  for each row execute function public.b2b_webhook_secret_events_block_mutation();
+alter table public.b2b_webhook_secret_events enable always trigger b2b_webhook_secret_events_immutable;
+
 -- ---------------------------------------------------------------------------
 -- RLS e grants (mesmo padrão da 0501: authenticated lê por RLS, colunas restritas; toda escrita é função)
 -- ---------------------------------------------------------------------------
@@ -132,6 +176,7 @@ alter table public.b2b_webhook_endpoints enable row level security;
 alter table public.b2b_webhook_deliveries enable row level security;
 alter table public.b2b_webhook_delivery_attempts enable row level security;
 alter table public.b2b_webhook_emit_errors enable row level security;
+alter table public.b2b_webhook_secret_events enable row level security;
 
 create policy b2b_widget_configs_select_member_or_admin on public.b2b_widget_configs for select to authenticated
   using (
@@ -161,8 +206,14 @@ create policy b2b_webhook_delivery_attempts_select_member_or_admin on public.b2b
     or (select public.auth_role()) = 'admin'
   );
 
+create policy b2b_webhook_secret_events_select_member_or_admin on public.b2b_webhook_secret_events for select to authenticated
+  using (
+    exists (select 1 from public.b2b_partner_members m where m.partner_id = b2b_webhook_secret_events.partner_id and m.profile_id = (select auth.uid()))
+    or (select public.auth_role()) = 'admin'
+  );
+
 revoke all on public.b2b_widget_configs, public.b2b_webhook_endpoints, public.b2b_webhook_deliveries,
-  public.b2b_webhook_delivery_attempts, public.b2b_webhook_emit_errors from public, anon, authenticated, service_role;
+  public.b2b_webhook_delivery_attempts, public.b2b_webhook_emit_errors, public.b2b_webhook_secret_events from public, anon, authenticated, service_role;
 
 grant select on public.b2b_widget_configs to authenticated, service_role;
 
@@ -178,7 +229,13 @@ grant select on public.b2b_webhook_deliveries to service_role;
 grant select on public.b2b_webhook_delivery_attempts to authenticated, service_role;
 grant select on public.b2b_webhook_emit_errors to service_role;
 
+-- `actor_id` (uuid de perfil de quem criou/rotacionou/revelou) fora do grant de `authenticated`, mesmo padrão da
+-- 0501 para `decided_by`/`created_by`/`revoked_by`.
+grant select (id, endpoint_id, partner_id, event_type, created_at, updated_at) on public.b2b_webhook_secret_events to authenticated;
+grant select on public.b2b_webhook_secret_events to service_role;
+
 revoke execute on function public.b2b_webhook_delivery_attempts_block_mutation() from public, anon, authenticated, service_role;
+revoke execute on function public.b2b_webhook_secret_events_block_mutation() from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- Widget: salvar (dono/admin) e ler pública (só service_role; o Route Handler do widget é quem chama)
@@ -283,12 +340,16 @@ begin
   if p_secret_ciphertext is null or p_secret_iv is null or p_secret_tag is null or length(p_secret_iv) <> 12 or length(p_secret_tag) <> 16 then
     raise exception 'segredo inválido' using errcode = '22023', hint = 'invalid_input';
   end if;
+  -- Revisão de segurança (Menor): trava por (parceiro) para duas criações concorrentes não passarem as duas pela
+  -- checagem de limite antes de qualquer uma inserir (mesmo padrão de `b2b_partner_apply`, 0501).
+  perform pg_advisory_xact_lock(hashtextextended('b2b_webhook_endpoint_create:' || p_partner_id::text, 0));
   if (select count(*) from public.b2b_webhook_endpoints e where e.partner_id = p_partner_id and e.status = 'active') >= 3 then
     raise exception 'limite de endpoints atingido' using errcode = '23514', hint = 'too_many_endpoints';
   end if;
   insert into public.b2b_webhook_endpoints (partner_id, url, events, secret_ciphertext, secret_iv, secret_tag, secret_key_version, created_by)
   values (p_partner_id, v_url, v_events, p_secret_ciphertext, p_secret_iv, p_secret_tag, coalesce(p_key_version, 1)::smallint, p_actor_id)
   returning id into v_id;
+  insert into public.b2b_webhook_secret_events (endpoint_id, partner_id, event_type, actor_id) values (v_id, p_partner_id, 'created', p_actor_id);
   return v_id;
 end;
 $$;
@@ -308,6 +369,11 @@ begin
     raise exception 'endpoint não encontrado' using errcode = 'P0002', hint = 'not_found';
   end if;
   perform public.b2b_webhook_require_owner_or_admin(p_actor_id, v_partner);
+  -- Revisão de segurança (Importante 3, achado adjacente): sem isto um parceiro suspenso/recusado conseguia
+  -- editar a URL/eventos do próprio endpoint (a checagem de estado só existia na criação).
+  if not exists (select 1 from public.b2b_partners p where p.id = v_partner and p.status in ('active', 'sandbox')) then
+    raise exception 'parceiro precisa estar aprovado' using errcode = '23514', hint = 'invalid_state';
+  end if;
   if v_url = '' or length(v_url) > 500 or not (v_url ~ '^https://[^\s/@]+(/[^\s]*)?$' or v_url ~ '^http://(127\.0\.0\.1|localhost)(:[0-9]+)?(/[^\s]*)?$') then
     raise exception 'URL do endpoint inválida' using errcode = '22023', hint = 'invalid_input';
   end if;
@@ -342,10 +408,16 @@ begin
   update public.b2b_webhook_endpoints
      set secret_ciphertext = p_secret_ciphertext, secret_iv = p_secret_iv, secret_tag = p_secret_tag, secret_key_version = coalesce(p_key_version, 1)::smallint
    where id = p_endpoint_id;
+  insert into public.b2b_webhook_secret_events (endpoint_id, partner_id, event_type, actor_id) values (p_endpoint_id, v_partner, 'rotated', p_actor_id);
 end;
 $$;
 
--- "Revelar" (fiel à tela B2B05): decifra sob demanda, só para o dono/admin. Nunca logado pelo chamador.
+-- "Revelar" (fiel à tela B2B05): decifra sob demanda, só para o dono/admin. Nunca logado pelo chamador. Ruling
+-- S25 (revisão de segurança): ao contrário das chaves de API (S24, "mostrada uma vez"), o servidor PRECISA do
+-- segredo em claro para assinar as próprias chamadas de saída — cifrado é o suficiente para "guardado só no
+-- servidor"; permitir revelar de novo evita forçar rotação toda vez que o parceiro precisa reconfigurar o
+-- receptor dele. Cada revelação grava uma linha imutável em `b2b_webhook_secret_events` (quem e quando, nunca o
+-- segredo).
 create function public.b2b_webhook_secret_reveal(p_actor_id uuid, p_endpoint_id uuid)
 returns table (secret_ciphertext bytea, secret_iv bytea, secret_tag bytea, secret_key_version smallint)
 language plpgsql
@@ -360,15 +432,49 @@ begin
     raise exception 'endpoint não encontrado' using errcode = 'P0002', hint = 'not_found';
   end if;
   perform public.b2b_webhook_require_owner_or_admin(p_actor_id, v_partner);
+  insert into public.b2b_webhook_secret_events (endpoint_id, partner_id, event_type, actor_id) values (p_endpoint_id, v_partner, 'revealed', p_actor_id);
   return query select e.secret_ciphertext, e.secret_iv, e.secret_tag, e.secret_key_version from public.b2b_webhook_endpoints e where e.id = p_endpoint_id;
 end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Enfileiramento interno (chamado só pelos gatilhos abaixo). Filtra por parceiro apto, evento assinado e
--- cobertura por UF (nacional = sem filtro). Idempotente pelo unique (endpoint_id, event_id).
+-- Visibilidade pública (revisão de segurança, Bloqueante 1): espelha a MESMA regra da leitura pública da S24
+-- (`b2b_v1_visible_lists`/`b2b_v1_school_base`, 0501: município habilitado, escola não suspensa) — sem alterar a
+-- 0501, que já está aplicada em staging. `is_demo` volta para o enfileiramento decidir por ambiente do PARCEIRO
+-- (não da chave): `active` só recebe evento de dado REAL (não-demo); `sandbox` só recebe evento de dado DEMO —
+-- mesmo espelhamento `live`/`test` da API pública.
 -- ---------------------------------------------------------------------------
-create function public.b2b_webhook_enqueue(p_event_type public.b2b_webhook_event_type, p_event_id text, p_uf text, p_payload jsonb) returns integer
+create function public.b2b_webhook_list_gate(p_list_id uuid) returns table (visible boolean, is_demo boolean, uf text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select (m.is_enabled and s.verification_status <> 'suspended'), (s.is_demo or l.is_demo), m.uf
+    from public.school_lists l
+    join public.schools s on s.id = l.school_id
+    join public.municipalities m on m.id = s.municipality_id
+   where l.id = p_list_id;
+$$;
+
+create function public.b2b_webhook_school_gate(p_school_id uuid) returns table (visible boolean, is_demo boolean, uf text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select (m.is_enabled and s.verification_status <> 'suspended'), s.is_demo, m.uf
+    from public.schools s
+    join public.municipalities m on m.id = s.municipality_id
+   where s.id = p_school_id;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Enfileiramento interno (chamado só pelos gatilhos abaixo, já depois do gate de visibilidade). Filtra por
+-- parceiro apto, ambiente (is_demo do fato x status do parceiro), evento assinado e cobertura por UF (nacional =
+-- sem filtro). Idempotente pelo unique (endpoint_id, event_id).
+-- ---------------------------------------------------------------------------
+create function public.b2b_webhook_enqueue(p_event_type public.b2b_webhook_event_type, p_event_id text, p_uf text, p_is_demo boolean, p_payload jsonb) returns integer
 language plpgsql
 security definer
 set search_path = ''
@@ -381,7 +487,7 @@ begin
     from public.b2b_webhook_endpoints e
     join public.b2b_partners p on p.id = e.partner_id
    where e.status = 'active'
-     and p.status in ('active', 'sandbox')
+     and ((p_is_demo and p.status = 'sandbox') or (not p_is_demo and p.status = 'active'))
      and p_event_type = any (e.events)
      and (p.coverage_ufs is null or p_uf is null or p_uf = any (p.coverage_ufs))
   on conflict (endpoint_id, event_id) do nothing;
@@ -391,7 +497,9 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Gatilhos: eventos reais (S25, Global Constraints). Erro ao montar o payload NUNCA desfaz o fato.
+-- Gatilhos: eventos reais (S25, Global Constraints). Erro ao montar o payload NUNCA desfaz o fato. Fato sobre
+-- lista/escola que não passa no gate de visibilidade (escola suspensa, município desabilitado) não enfileira
+-- NADA — nem erro, nem tentativa: silenciosamente não é um evento público.
 -- ---------------------------------------------------------------------------
 create function public.webhook_on_list_status_event() returns trigger
 language plpgsql
@@ -403,6 +511,7 @@ declare
   v_school record;
   v_grade record;
   v_version record;
+  v_gate record;
   v_event public.b2b_webhook_event_type;
   v_payload jsonb;
 begin
@@ -419,7 +528,13 @@ begin
   if not found then
     return null;
   end if;
-  select s.inep, s.name, m.uf into v_school from public.schools s join public.municipalities m on m.id = s.municipality_id where s.id = v_list.school_id;
+
+  select * into v_gate from public.b2b_webhook_list_gate(v_list.list_id);
+  if v_gate.visible is not true then
+    return null; -- escola suspensa ou município desabilitado: não é um evento público
+  end if;
+
+  select s.inep, s.name into v_school from public.schools s where s.id = v_list.school_id;
   select g.slug, g.name into v_grade from public.grades g where g.id = v_list.grade_id;
   if new.version_id is not null then
     select v.version_number, v.item_count into v_version from public.list_versions v where v.id = new.version_id;
@@ -440,7 +555,7 @@ begin
     v_payload := v_payload || jsonb_build_object('archived_at', v_list.archived_at);
   end if;
 
-  perform public.b2b_webhook_enqueue(v_event, new.id::text, v_school.uf, v_payload);
+  perform public.b2b_webhook_enqueue(v_event, new.id::text, v_gate.uf, v_gate.is_demo, v_payload);
   return null;
 exception when others then
   insert into public.b2b_webhook_emit_errors (event_type, sqlstate) values (coalesce(v_event::text, 'list_status_event'), sqlstate);
@@ -459,13 +574,15 @@ set search_path = ''
 as $$
 declare
   v_school record;
+  v_gate record;
 begin
-  select s.inep, s.name, m.uf into v_school from public.schools s join public.municipalities m on m.id = s.municipality_id where s.id = new.school_id;
-  if not found then
-    return null;
+  select * into v_gate from public.b2b_webhook_school_gate(new.school_id);
+  if not found or v_gate.visible is not true then
+    return null; -- escola suspensa ou município desabilitado: não é um evento público
   end if;
+  select s.inep, s.name into v_school from public.schools s where s.id = new.school_id;
   perform public.b2b_webhook_enqueue(
-    'school.approved', new.id::text || ':approved', v_school.uf,
+    'school.approved', new.id::text || ':approved', v_gate.uf, v_gate.is_demo,
     jsonb_build_object('school', jsonb_build_object('inep', v_school.inep, 'name', v_school.name), 'approved_at', now())
   );
   return null;
@@ -497,9 +614,16 @@ begin
    where status = 'sending' and locked_until < now() and attempts >= 10;
   return query
   with c as (
+    -- Revisão de segurança (Importante 3): nunca reivindica entrega de endpoint desativado nem de parceiro fora
+    -- de active/sandbox — fica só na fila (`queued`/`failed`), sem tentar de novo, até a situação mudar.
     select d.id from public.b2b_webhook_deliveries d
-     where (d.status in ('queued', 'failed') and d.next_attempt_at <= now() and (d.locked_until is null or d.locked_until < now()))
-        or (d.status = 'sending' and d.locked_until < now() and d.attempts < 10)
+      join public.b2b_webhook_endpoints e on e.id = d.endpoint_id
+      join public.b2b_partners p on p.id = d.partner_id
+     where e.status = 'active' and p.status in ('active', 'sandbox')
+       and (
+         (d.status in ('queued', 'failed') and d.next_attempt_at <= now() and (d.locked_until is null or d.locked_until < now()))
+         or (d.status = 'sending' and d.locked_until < now() and d.attempts < 10)
+       )
      order by d.next_attempt_at, d.id limit p_limit for update skip locked
   ), u as (
     update public.b2b_webhook_deliveries d
@@ -554,6 +678,11 @@ end;
 $$;
 
 -- Reenvio manual (B2B05 "Reenviar"): nova linha de entrega, histórico da original intacto.
+-- Revisão de segurança (Importante 3): sem cota, o botão "Reenviar" (ou uma automação contra a Server Action)
+-- podia recriar entregas sem limite, inundando o próprio parceiro (e o endpoint dele) de tráfego. Duas cotas
+-- independentes: no máximo 5 reenvios por entrega ORIGINAL (a própria mais os filhos `:resend:`) e no máximo 20
+-- reenvios por hora por parceiro (todas as entregas dele, qualquer origem). Exige parceiro active/sandbox e
+-- endpoint active (mesma regra do claim, para não recriar uma entrega que o despacho nunca vai pegar).
 create function public.b2b_webhook_resend(p_actor_id uuid, p_delivery_id uuid) returns uuid
 language plpgsql
 security definer
@@ -561,6 +690,9 @@ set search_path = ''
 as $$
 declare
   v_row public.b2b_webhook_deliveries%rowtype;
+  v_root text;
+  v_resend_count integer;
+  v_hour_count integer;
   v_id uuid;
 begin
   select * into v_row from public.b2b_webhook_deliveries where id = p_delivery_id;
@@ -571,6 +703,26 @@ begin
   if v_row.status not in ('failed', 'dead') then
     raise exception 'só entregas com falha podem ser reenviadas' using errcode = '23514', hint = 'invalid_state';
   end if;
+  if not exists (select 1 from public.b2b_partners p where p.id = v_row.partner_id and p.status in ('active', 'sandbox')) then
+    raise exception 'parceiro precisa estar aprovado' using errcode = '23514', hint = 'invalid_state';
+  end if;
+  if not exists (select 1 from public.b2b_webhook_endpoints e where e.id = v_row.endpoint_id and e.status = 'active') then
+    raise exception 'endpoint desativado' using errcode = '23514', hint = 'invalid_state';
+  end if;
+
+  v_root := split_part(v_row.event_id, ':resend:', 1);
+  select count(*) into v_resend_count from public.b2b_webhook_deliveries d
+   where d.endpoint_id = v_row.endpoint_id and (d.event_id = v_root or d.event_id like v_root || ':resend:%');
+  if v_resend_count > 5 then
+    raise exception 'limite de reenvios desta entrega atingido' using errcode = '23514', hint = 'invalid_state';
+  end if;
+
+  select count(*) into v_hour_count from public.b2b_webhook_deliveries d
+   where d.partner_id = v_row.partner_id and d.event_id like '%:resend:%' and d.created_at > now() - interval '1 hour';
+  if v_hour_count >= 20 then
+    raise exception 'limite de reenvios por hora atingido' using errcode = '23514', hint = 'invalid_state';
+  end if;
+
   insert into public.b2b_webhook_deliveries (endpoint_id, partner_id, event_type, event_id, payload)
   values (v_row.endpoint_id, v_row.partner_id, v_row.event_type, v_row.event_id || ':resend:' || gen_random_uuid()::text, v_row.payload)
   returning id into v_id;
@@ -605,7 +757,8 @@ revoke execute on function
   public.b2b_webhook_endpoint_create(uuid, uuid, text, text[], bytea, bytea, bytea, integer),
   public.b2b_webhook_endpoint_update(uuid, uuid, text, text[]),
   public.b2b_webhook_secret_rotate(uuid, uuid, bytea, bytea, bytea, integer), public.b2b_webhook_secret_reveal(uuid, uuid),
-  public.b2b_webhook_enqueue(public.b2b_webhook_event_type, text, text, jsonb),
+  public.b2b_webhook_list_gate(uuid), public.b2b_webhook_school_gate(uuid),
+  public.b2b_webhook_enqueue(public.b2b_webhook_event_type, text, text, boolean, jsonb),
   public.webhook_on_list_status_event(), public.webhook_on_claim_approved(),
   public.b2b_webhook_claim_deliveries(int), public.b2b_webhook_mark_delivery(uuid, uuid, text, int, text, int),
   public.b2b_webhook_resend(uuid, uuid), public.b2b_webhook_purge_old(int)

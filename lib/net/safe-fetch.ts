@@ -14,7 +14,7 @@ import { isPublicIp } from "./ip-range";
 // redirecionamento, timeout e teto de leitura da resposta (nunca persiste o corpo).
 
 export type ValidatedUrl = { protocol: "http:" | "https:"; hostname: string; port: number; href: string };
-export type ValidationFailure = { ok: false; reason: "invalid_url" | "scheme_not_allowed" | "literal_ip_not_allowed" };
+export type ValidationFailure = { ok: false; reason: "invalid_url" | "scheme_not_allowed" | "literal_ip_not_allowed" | "port_not_allowed" };
 
 /** Só formato (sem I/O). `appEnv === "local"` é a ÚNICA exceção que permite `http://127.0.0.1|localhost`. */
 export function validateWebhookUrl(rawUrl: string, appEnv: string | undefined): (ValidatedUrl & { ok: true }) | ValidationFailure {
@@ -26,7 +26,10 @@ export function validateWebhookUrl(rawUrl: string, appEnv: string | undefined): 
   }
   const hostname = url.hostname.toLowerCase();
   const isLoopbackHost = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
-  const localException = appEnv === "local" && isLoopbackHost;
+  // Revisão de segurança (Menor): a exceção de loopback exige APP_ENV=local E a ausência de `VERCEL` (variável
+  // que a própria Vercel injeta em todo deploy) — evita que um `APP_ENV=local` configurado por engano num preview
+  // real reabra a exceção de SSRF pensada só para o E2E numa máquina de desenvolvimento.
+  const localException = appEnv === "local" && !process.env.VERCEL && isLoopbackHost;
   if (url.protocol !== "https:" && !(url.protocol === "http:" && localException)) {
     return { ok: false, reason: "scheme_not_allowed" };
   }
@@ -35,6 +38,11 @@ export function validateWebhookUrl(rawUrl: string, appEnv: string | undefined): 
   const isLiteralIp = net.isIP(bareHostname) !== 0;
   if (isLiteralIp && !(localException && hostname === "127.0.0.1")) return { ok: false, reason: "literal_ip_not_allowed" };
   const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+  // Revisão de segurança (Menor): porta restrita a 443 em HTTPS (reduz a superfície de uso deste envio como
+  // sonda de porta contra um host público arbitrário). Sem exceção para 8443 nesta fatia — nenhum parceiro pediu;
+  // se pedir, é uma linha nesta lista, registrada aqui de propósito para não crescer por engano.
+  const ALLOWED_HTTPS_PORTS = [443];
+  if (url.protocol === "https:" && !ALLOWED_HTTPS_PORTS.includes(port)) return { ok: false, reason: "port_not_allowed" };
   return { ok: true, protocol: url.protocol as "http:" | "https:", hostname, port, href: url.href };
 }
 

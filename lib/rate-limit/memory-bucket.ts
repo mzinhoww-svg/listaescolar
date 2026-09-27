@@ -5,7 +5,7 @@ import "server-only";
 // instâncias/lambdas é o Firewall da Vercel, configurado pelo humano. Teto de chaves rastreadas para nunca
 // crescer sem limite (mesmo padrão do limitador por IP da API B2B).
 
-const MAX_TRACKED_KEYS = 10_000;
+export const MAX_TRACKED_KEYS = 10_000;
 type Bucket = { count: number; windowStart: number };
 const buckets = new Map<string, Bucket>();
 
@@ -21,7 +21,13 @@ export function checkRateLimit(key: string, limit: number, windowMs: number, now
   if (!b || now - b.windowStart >= windowMs) {
     if (!buckets.has(key) && buckets.size >= MAX_TRACKED_KEYS) {
       pruneExpired(now, windowMs);
-      if (buckets.size >= MAX_TRACKED_KEYS) buckets.clear();
+      // Revisão de segurança (Menor): ainda cheio (muitas chaves distintas ativas ao mesmo tempo) — despeja só a
+      // mais ANTIGA (primeira do `Map`, que preserva ordem de inserção) para abrir uma vaga, nunca `clear()`
+      // global (que descartaria a contagem em andamento de todo mundo, inclusive quem nem estava perto do limite).
+      if (buckets.size >= MAX_TRACKED_KEYS) {
+        const oldestKey = buckets.keys().next().value;
+        if (oldestKey !== undefined) buckets.delete(oldestKey);
+      }
     }
     b = { count: 0, windowStart: now };
     buckets.set(key, b);

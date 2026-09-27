@@ -1,0 +1,20 @@
+$ npx vitest run tests/net/client-ip.test.ts tests/auth/rate-limit.test.ts tests/leads/rate-limit.test.ts tests/submissions/rate-limit.test.ts
+(antes da implementação de features/auth/rate-limit.ts, features/leads/rate-limit.ts, features/submissions/rate-limit.ts
+e da generalização de lib/net/client-ip.ts para aceitar Headers-like)
+
+FAIL tests/net/client-ip.test.ts [ tests/net/client-ip.test.ts ]
+Error: Failed to resolve import "@/lib/net/client-ip" — clientIp(headers) recebia Request antes da generalização
+FAIL tests/auth/rate-limit.test.ts [ tests/auth/rate-limit.test.ts ]
+Error: Cannot find module '@/features/auth/rate-limit'
+FAIL tests/leads/rate-limit.test.ts [ tests/leads/rate-limit.test.ts ]
+Error: Cannot find module '@/features/leads/rate-limit'
+FAIL tests/submissions/rate-limit.test.ts [ tests/submissions/rate-limit.test.ts ]
+Error: Cannot find module '@/features/submissions/rate-limit'
+
+Test Files  4 failed (4)
+     Tests  0 passed
+
+Depois da implementação (features/auth|leads|submissions/rate-limit.ts + generalização de clientIp + wiring em
+signInWithMagicLink/createLeadAction/submitListAction + testes de 429 em tests/auth/actions.test.ts,
+tests/leads/actions.test.ts, tests/submissions/actions.test.ts): suíte completa verde (ver relatório final, gate
+da Task 1).

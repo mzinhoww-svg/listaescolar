@@ -21,6 +21,6 @@ export function widgetOptionsResponse(): Response {
 }
 
 export function widgetRateLimited(request: Request, partnerId: string | null): boolean {
-  const ip = clientIp(request) ?? "unknown";
+  const ip = clientIp(request.headers) ?? "unknown";
   return !checkRateLimit(`widget:${ip}:${partnerId ?? "-"}`, WIDGET_RATE_LIMIT, WIDGET_RATE_WINDOW_MS);
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getSessionActor } from "@/features/auth/actor";
@@ -11,6 +12,7 @@ import { messageFor, type FormErrorCode } from "@/features/submissions/copy";
 import { buildSubmitDeps } from "@/features/submissions/deps";
 import { checkUploadSize } from "@/features/submissions/file-validation";
 import { submitFieldsSchema, type SubmitState } from "@/features/submissions/form-schema";
+import { submitRateLimited } from "@/features/submissions/rate-limit";
 import { SubmissionError, submitList } from "@/features/submissions/service";
 
 const fail = (code: FormErrorCode): SubmitState => ({ status: "error", code, message: messageFor(code) });
@@ -27,6 +29,9 @@ async function isPublicSchool(id: string): Promise<boolean> {
  */
 export async function submitListAction(_prev: SubmitState, formData: FormData): Promise<SubmitState> {
   const { user, role } = await requireAccess("/enviar-lista");
+
+  // D-001 (S19): primeira camada de rate limit por IP+ator no envio (aciona upload + OCR síncrono, S07).
+  if (submitRateLimited(await headers(), user.id)) return fail("rate_limited");
 
   if (formData.get("consent") !== "on") return fail("consent_required");
   const schoolRaw = formData.get("schoolId");

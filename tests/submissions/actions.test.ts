@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAccess = vi.fn();
 vi.mock("@/features/auth/guard", () => ({ requireAccess: (p: string) => requireAccess(p) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-real-ip": "203.0.113.9" }) }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`REDIRECT:${url}`);
@@ -24,6 +25,7 @@ vi.mock("@/lib/supabase/public", () => ({
 
 import { submitListAction } from "@/app/enviar-lista/actions";
 import { SubmissionError } from "@/features/submissions/service";
+import { __resetRateLimitForTests } from "@/lib/rate-limit/memory-bucket";
 
 const SCHOOL = "5b1d4c2e-7d1a-4f0e-9a52-0c3f5e9a1b11";
 const idle = { status: "idle" } as const;
@@ -50,6 +52,7 @@ describe("submitListAction", () => {
     linked.mockReset();
     linked.mockResolvedValue([]);
     submitList.mockReset();
+    __resetRateLimitForTests();
   });
 
   it("exige sessão e papel de /enviar-lista antes de tudo", async () => {
@@ -142,5 +145,13 @@ describe("submitListAction", () => {
   it("recusa do banco (school_not_linked) chega como a mensagem do vínculo", async () => {
     submitList.mockRejectedValue(new SubmissionError("school_not_linked"));
     expect(await submitListAction(idle, form())).toMatchObject({ code: "school_not_linked" });
+  });
+
+  it("D-001: acima de 5 envios pelo mesmo IP+ator em 10 minutos, recusa sem chamar submitList", async () => {
+    submitList.mockResolvedValue({ status: "review_needed", submissionId: "s-rl", result: {} });
+    for (let i = 0; i < 5; i++) await expect(submitListAction(idle, form())).rejects.toThrow("REDIRECT:");
+    submitList.mockClear();
+    expect(await submitListAction(idle, form())).toMatchObject({ status: "error", code: "rate_limited" });
+    expect(submitList).not.toHaveBeenCalled();
   });
 });

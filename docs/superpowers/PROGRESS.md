@@ -57,17 +57,15 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S24 Portal B2B: cadastro, chaves e API v1 | #38 | d6f5288 | 2026-09-27 | ✓ | ✓ | 3228 | 1677 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 41 verificações, 0 falhas (`e2e/S24.md`) |
 | S23 Comissão, repasses e inadimplência (Comércio) | #40 | d30849f | 2026-09-27 | ✓ | ✓ | 3252 | 1729 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 30 verificações, 0 falhas (`e2e/S23.md`) |
 | S25 Widget e webhooks (B2B) | #42 | 634c9f2 | 2026-09-27 | ✓ | ✓ | 3303 | 1759 (3 skipped) | ✓ | verify ✓ db ✓ (concluídos depois do merge; ver Ruling) | ✓ | build local + receptor de webhook, 22 verificações, 0 falhas (`e2e/S25.md`) |
+| S15 Área da família | #45 | ccd4c54 | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
-| S15 Área da família (fora de trilha) | — (sem PR, por instrução) | 90a1ad5 | 2026-09-27 | ✓ | ✓ | 3257 | 1750 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S15.md`) |
-| S15 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | 0941356 | 2026-09-27 | ✓ | ✓ | 3307 | 1785 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0603 editada no lugar (5 correções, ver ledger) |
-| S15 · segunda reverificação de segurança (Opus) | #45 (aberto por outra sessão; esta correção entra por push) | 072da2f | 2026-09-27 | ✓ | ✓ | 3308 | 1786 (3 skipped) | ✓ | n/d | n/d | build local + E2E rápido do formulário de aluno (bypass recusado, nome acentuado aceito); migration 0603 editada no lugar de novo (apelido restrito a script latino, ver ledger) |
 
 Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto `listaescolare`; o humano as criou em 2026-09-25 e desde o #22 os previews ficam READY e públicos (noindex). O E2E passa a rodar no preview quando o deploy estiver verde (Ruling do ledger); a S11 ainda rodou local porque a leitura por IA no staging está bloqueada (D-077).
 
 ## Migrations
 
-23 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
+24 aplicadas no staging (ref `hojbnqkwzsicahzgshne`, ADR-003), via Supabase MCP. O histórico remoto usa versões por timestamp com nomes próprios (Ruling do ledger); versões remotas conferidas via `list_migrations` do MCP em 2026-09-25; reconciliar de novo antes da S20.
 
 | Arquivo | Fatia | Nome no MCP | Versão remota |
 |---|---|---|---|
@@ -90,24 +88,12 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0501_b2b_partners_api.sql | S24 | b2b_partners_api | 20260927022020 (uma chamada transacional; md5 das 27 funções, RLS das 6 tabelas, gatilhos e privilégios idênticos ao banco local; sem parceiro nem chave criados) |
 | 0403_repasses.sql | S23 | repasses | 20260927044636 (uma chamada transacional; substitui 4 funções da 0401/0402 com md5 anterior registrado; 22 funções, RLS das 7 tabelas, 13 gatilhos e privilégios idênticos ao banco local; auditoria de `school_payout_settings` sem `pix_key`/`beneficiary_name`; sem configuração de comissão/repasse inserida) |
 | 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
+| 0603_family_area.sql | S15 | family_area | aplicada em 2026-09-27 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
 
 | 0204_human_review.sql | S10 | human_review | 20260925181909 |
 | 0600_cross_track_fks.sql | S11 | cross_track_fks | aplicada em 2026-09-25 após `checks/0600_orphans.sql` = 0 órfãos (versão remota: conferir com `list_migrations`) |
 | 0601_integration.sql | S11 | integration | aplicada em 2026-09-25 (perfil `system` criado; `auth.users` do hospedado conferido antes) |
 | 0602_notifications.sql | S11 | notifications | aplicada em 2026-09-25 (advisors conferidos: 7 tabelas com RLS; ver D-094–D-096) |
-
-Pendente de staging: `0403_repasses.sql` (S23 — comissão, repasse e inadimplência; aditiva sobre 0401/0402, que já
-estão no staging), ainda só local (`pnpm db:reset` verde nesta sessão, inclusive depois da rodada de correções da
-revisão de segurança — ver abaixo); não aplicada porque a tarefa da S23 marcou staging/Vercel como invioláveis para
-este implementador. `0603_family_area.sql` (S15 — estudantes e listas salvas; fora de trilha, faixa pós-trilhas
-06xx, sem FK cruzando com 0403) também só local, pela mesma regra de invioláveis desta sessão (não tocar staging).
-Aplicar as duas via Supabase MCP na sequência normal (prefixo numérico) antes ou durante a próxima sessão que tiver
-mandato para tocar o staging. As tabelas `survey_*` vêm das migrations 0700/0701
-do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 pelo orquestrador sob autorização
-escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir
-na revisão de segurança da S19.
-
-Pendente de staging: `0502_b2b_widget_webhooks.sql` (S25 — widget embutível e webhooks assinados: `b2b_widget_configs`, `b2b_webhook_endpoints`/`_deliveries`/`_delivery_attempts`, gatilhos sobre `list_status_events`/`claims` já existentes), só local (`pnpm db:reset` + `pnpm test:db` verdes: 1699/1702, 3 pulados = baseline); não aplicada porque a tarefa da S25 marcou staging/Vercel como invioláveis para este implementador. `0501_b2b_partners_api.sql` (S24) já está no staging (linha acima, aplicada em `main` #38); `0502` depende dela (mesma faixa 05xx) e pode ser aplicada na sequência normal.
 
 Produção: nenhuma migration (o projeto não existe).
 
@@ -118,7 +104,9 @@ Produção: nenhuma migration (o projeto não existe).
 | Dados | S03, S04, S05, S06 | **Completa** (S03–S06) |
 | Pipeline | S07, S08, S09, S10 | **Completa** (S07–S10) |
 | Integração | S11 | **Completa** (portas reais ligadas; `auto_publish_enabled` continua DESLIGADO por dado até o humano ligar no staging) |
-| Comércio | S12, S13, S14, S27, S21, S22 | **Completa** (S12–S14, S27, S21 e S22, mescladas em `main` nos PRs #34 e #36). **S23 concluída, com rodada de correções da revisão de segurança (Opus) já aplicada** (branch `slice/S23-repasses`, worktree T3, criada de `main` em `0ee3771` com S21/S22 dentro: migration `0403_repasses.sql` (aditiva sobre 0401/0402, já no staging), `features/payouts/**`, telas Admin13-Repasses, Admin14-Inadimplência, Pap07-Desempenho e "Pix pela plataforma" em Pap03; fecha D-099–D-101, D-103, D-105, D-107–D-111; abre D-120–D-122 (baixa/média, renumeradas por colisão com os IDs da S24). Revisão sobre `a51b62b` achou 2 bloqueantes (EXECUTE aberto a anon/authenticated em 8 funções novas; `audit_log` guardando `pix_key`/`beneficiary_name`) e 4 importantes (régua de inadimplência contando recarga de crédito; sinal Pix contável só pela própria declaração; conluio papelaria+escola gerando repasse sem revisão; falta de `payout_reverse_entry`), todos corrigidos nesta mesma migration editada no lugar (ver ledger-comercio, seção "S23 · correções da revisão de segurança") — gate completo verde (1721 testes de banco, 3252 unitários) e E2E local refeito 26/26 (`e2e/S23.md`) — **sem PR aberto, por instrução da tarefa**; falta revisão da correção e merge; migration `0403` ainda só local, não aplicada em staging) |
+| Comércio e cobrança | S12, S13, S14, S27, S21, S22, S23 | **Completa** (S21 #34, S22 #36, S23 #40; migrations 0401–0403 no staging) |
+| B2B | S24, S25, S26 | S24 ✓ (#38), S25 ✓ (#42); **S26 em correções finais da revisão de segurança** (worktree T2) |
+| Pós-trilhas | S15, S16, S17, S18, S19, S28, S20 | S15 ✓ (#45); **S16 em andamento** (worktree T3) |
 
 ## Ponto de retomada (2026-09-26, após reinício da máquina)
 
@@ -140,7 +128,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
 3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (#42), S26 (em andamento no worktree T2)].
-4. S15 ✓ (branch `slice/S15-area-familia`, worktree T3, antecipada — ver Ruling; correções obrigatórias da revisão de segurança aplicadas — school_id/school_year fora de `students`, apelido só letras, gatilhos SECURITY INVOKER, grant de UPDATE restrito, advisory lock nos tetos; gate verde, E2E 21/21; PR #45 aberto, migration `0603` só local; segunda reverificação — apelido restrito a script latino, fecha bypass de letra invisível/apóstrofo-letra — aplicada, gate verde, E2E rápido do formulário confirmado). S16.
+4. S15 ✓ (#45, ccd4c54; 0603 no staging). S16 (em andamento no worktree T3).
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S28 · Excelência de produto e design (nova, ADR-006, pedida pelo humano em 2026-09-27): brainstorming autônomo, `/impeccable`, `/design-intelligence` e `/tripled-ui`; aceite com Lighthouse mobile ≥ 90, axe sem violação séria/crítica, `docs/MELHORIAS.md` + `DESIGN.md`, top 15 e custo de IA por lista < R$ 0,50.
 7. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige a S28 mesclada (ADR-006) e `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
@@ -186,7 +174,6 @@ Conteúdo e dados:
 - Juntar correções pequenas numa única rodada.
 - Se o limite estiver perto do fim: registrar o estado neste arquivo e parar num ponto limpo, com push feito.
 - Bloqueio conhecido: o classificador impede o orquestrador de copiar credencial de arquivo local para sistema remoto e de mesclar PR revisado só por subagente ("Self-Approval"): esses itens vão para "Aguardando humano" (regra permanente no CLAUDE.md, seção Autonomia).
-
 
 ## Aguardando humano
 Fila de ações que o classificador barrou ou que só o humano pode fazer. O orquestrador registra aqui, deixa o PR/estado pronto e segue para a próxima tarefa; o humano resolve a fila quando passar por aqui. Remover o item ao resolver.

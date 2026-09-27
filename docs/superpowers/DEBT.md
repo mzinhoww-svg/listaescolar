@@ -176,6 +176,13 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-125 | reverificação de segurança S23 (PR #40) | `already_settled` em `payout_reverse_entry` compara `created_at`: `repasse_due` gravado antes de um lote mas confirmado depois é tratado como liquidado (só recusa o estorno) | baixa | S19 | aberta |
 | D-126 | reverificação de segurança S23 (PR #40) | O valor do repasse é o declarado pela papelaria; o admin vê na fila de validação mas não informa nem corrige o valor — documentar ou permitir ajuste do admin | média | S19 | aberta |
 | D-127 | reverificação de segurança S23 (PR #40) | `sale_payment_admin_validations` sem gatilho de truncate nem de auditoria, ao contrário de `payout_ledger` (ninguém tem grant de truncate; é consistência) | baixa | S19 | aberta |
+| D-128 | ledger-comercio S25 Task 1 (planejamento vs. implementação) | ~~`b2b_webhook_secret_reveal` (0502) confere posse (dono/admin) mas não grava nenhum evento de auditoria de quem revelou o segredo e quando~~ | baixa | S26 (B2B) | resolvida na rodada de correções da revisão de segurança (`b2b_webhook_secret_events`, tabela imutável com created/rotated/revealed, actor_id fora do grant de `authenticated`) |
+| D-129 | ledger-comercio S25 Task 2 (revisão própria) | Rotação de `B2B_WEBHOOK_ENCRYPTION_KEY` (troca da chave de cifra do servidor, não do segredo do endpoint) não tem caminho de recifra em lote: um segredo cifrado com uma versão antiga da chave fica permanentemente indecifrável (`secret_undecryptable`, `dead` na hora, sem alerta ao dono nem ao admin) até o parceiro rotacionar manualmente pelo portal. Sem impacto hoje (só existe uma chave, gerada uma vez); vira risco real se a chave precisar girar por vazamento | média | S26 (B2B) / Humano decide o processo de rotação antes de girar em produção | aberta |
+| D-130 | ledger-comercio S25 Task 3 (fidelidade ao design vs. escopo) | Não há ação de excluir/desativar um endpoint de webhook no portal (só criar e atualizar URL/eventos, até 3 por parceiro) — um parceiro não consegue decomissionar de vez um endpoint indesejado, só parar de usá-lo (ele continua recebendo eventos assinados). `status` da tabela já suporta `disabled`; falta a Server Action e o botão | baixa | S26 (B2B) | aberta |
+| D-131 | ledger-comercio S25 Task 3 (E2E) | `public/widget.js` foi validado ponta a ponta via `curl` contra as rotas que ele consome (`/api/widget/**`) e por leitura de código, mas o SCRIPT em si (busca de escola, seleção de série/ano, "Adicionar tudo ao carrinho" abrindo a URL do carrinho) não foi exercitado num navegador de verdade dentro de uma página hospedeira de terceiro pelo E2E — só a tela de configuração (B2B04) e a API pública foram cobertas por `agent-browser`/`curl`. Escrever um roteiro com uma página HTML de teste embutindo o `<script>` real | baixa | S26 (B2B) | aberta |
+| D-132 | ledger-comercio S25 Task 2/3 (Ruling de escopo) | A pré-visualização do widget (B2B04) e o `widget.js` real não têm seleção individual de item por checkbox (como no design, que mostra cada item marcável) — hoje é tudo-ou-nada ("Adicionar tudo ao carrinho"). Ruling S25: cortado do MVP desta fatia por tempo; o contrato de dados (`/api/widget/lists/{id}/items`) já traz item a item, então a UI pode ganhar isso depois sem mudar a API | baixa | S26 (B2B) | aberta |
+| D-133 | ledger-comercio S25 · correções da revisão de segurança (Menor) | `app/api/widget/**` responde com `access-control-allow-origin: *` para qualquer origem — correto hoje (dado público, sem cookie, sem credencial), mas sem allowlist do domínio cadastrado do parceiro (`cart_target_domain`) o widget pode ser embutido em QUALQUER site, não só no do parceiro que o configurou (não é uma falha de confidencialidade — o dado já é público —, mas permite uso não autorizado do widget de um parceiro em site de terceiro). Considerar restringir `Access-Control-Allow-Origin` ao(s) domínio(s) cadastrados quando o portal ganhar um campo de "domínios autorizados" | baixa | S26 (B2B) | aberta |
+| D-134 | ledger-comercio S25 · correções da revisão de segurança (Menor) | A restrição de porta 443 para HTTPS (revisão de segurança, `lib/net/safe-fetch.ts`) só é aplicada no ENVIO (`postWebhookSafely`); o CHECK de `b2b_webhook_endpoints.url` (0502) e o Zod de `SaveEndpointInputSchema` continuam aceitando `https://host:8443/...` na criação/atualização do endpoint — o parceiro só descobre que a porta não é aceita quando a primeira entrega vira `dead` (`invalid_url_port_not_allowed`). Validar a porta também na criação evitaria essa surpresa | baixa | S26 (B2B) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -185,13 +192,27 @@ descritas — nenhum dos 2 bloqueantes/4 importantes/5 menores desta rodada toca
 diretamente no código (nenhum ficou como dívida nova); ver `docs/superpowers/ledger-comercio.md`, seção "S23 ·
 correções da revisão de segurança".
 
+Nota (numeração): D-120–D-127 pertencem à S23 (mesclada em `main` primeiro); os itens da S25 que colidiam com esses
+IDs (originalmente também D-120–D-126, escritos numa branch que ainda não via a S23) foram renumerados para
+D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudou.
+
 ## Resumo
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 38 | 9 | 47 |
-| baixa | 55 | 9 | 64 |
-| **Total** | **103** | **23** | **126** |
+| média | 39 | 9 | 48 |
+| baixa | 60 | 10 | 70 |
+| **Total** | **109** | **24** | **133** |
 
-Contagem atualizada em 2026-09-26 (mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e reforça D-104; a S24 (Portal B2B, mesclada nesta rodada) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas; a S23 fecha D-099–D-101, D-103, D-105, D-107–D-111 (7 baixa + 3 média viram resolvida) e soma D-120–D-121 (baixa/abertas, renumeradas de D-112/D-113 por colisão com a S24) e D-122 (média/aberta, renumerada de D-114)).
+Contagem atualizada em 2026-09-27 (merge de `main` — S23, Comissão/repasses/inadimplência — com a rodada de
+correções da revisão de segurança da S25 nesta branch). D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23
+(7 baixa + 3 média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais
+baixa/abertas); a rodada de correções da S25 sobre esta branch resolve D-120 (renumerada D-128 nesta resolução de
+merge — auditoria de revelar/rotacionar/criar segredo implementada) e soma D-129–D-134 (D-129 média/aberta —
+chave de cifra do servidor sem caminho de recifra em lote —, as demais baixa/abertas). Estado anterior a este
+merge, só no lado `main` (2026-09-26): mesclado com `main` após a S11; S21 Task 3 soma D-097 e D-098, ambas
+baixa/abertas; D-076 anotada, sem mudar severidade/estado; D-077 já veio resolvida de `main`; S22 soma D-103 a
+D-106, todas baixa/abertas; a rodada de correções da revisão de segurança da S22 soma D-107 (média/aberta) e
+reforça D-104; a S24 (Portal B2B) soma D-112 a D-119: D-116 média/aberta (falta transição para editar limites de
+parceiro `active` sem revogar chave; Ruling de adiamento deliberado), as demais baixa/abertas.

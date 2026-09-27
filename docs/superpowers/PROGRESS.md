@@ -100,6 +100,8 @@ do PR #28 ("Pesquisa com mães", ADR-005, fora do PLAN, mesclado em 2026-09-25 p
 escrita do fundador, ADR-005 — ver ledger); os advisors apontam RLS sem policy nelas (só service_role) — conferir
 na revisão de segurança da S19.
 
+Pendente de staging: `0502_b2b_widget_webhooks.sql` (S25 — widget embutível e webhooks assinados: `b2b_widget_configs`, `b2b_webhook_endpoints`/`_deliveries`/`_delivery_attempts`, gatilhos sobre `list_status_events`/`claims` já existentes), só local (`pnpm db:reset` + `pnpm test:db` verdes: 1699/1702, 3 pulados = baseline); não aplicada porque a tarefa da S25 marcou staging/Vercel como invioláveis para este implementador. `0501_b2b_partners_api.sql` (S24) já está no staging (linha acima, aplicada em `main` #38); `0502` depende dela (mesma faixa 05xx) e pode ser aplicada na sequência normal.
+
 Produção: nenhuma migration (o projeto não existe).
 
 ## Trilhas
@@ -130,7 +132,7 @@ Retomada: S21 concluiu as Tasks 2 e 3 (2026-09-26, gate verde, E2E 17/17; falta 
 
 1. S10 e S11 concluídas. Ligar `ai_settings.auto_publish_enabled` no staging só depois de a leitura por IA funcionar lá (D-077) e de um E2E no preview.
 2. Consolidar os ledgers de trilha em `ledger.md` (D-048) na S18.
-3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (branch `slice/S23-repasses`, sem PR ainda)] ∥ [S24 ✓ (#38), S25 (em andamento), S26].
+3. Em paralelo: [S21 ✓ (#34), S22 ✓ (#36), S23 ✓ (#40)] ∥ [S24 ✓ (#38), S25 ✓ (branch `slice/S25-widget-webhooks`, sem PR ainda — ver abaixo), S26 (próxima)].
 4. S15 (em andamento no worktree T3, antecipada — ver Ruling), S16.
 5. S17, S18, S19 (a S19 também hospeda a fonte localmente, D-072). A S18 inclui a refatoração dos arquivos acima de 250 linhas (`DEBT.md`).
 6. S20: **parar para confirmação humana antes de qualquer ação em produção.** O go-live exige `DEBT.md` sem item de severidade alta aberto, ou com Ruling explícito.
@@ -149,7 +151,8 @@ Ambiente e deploy:
 - Pepper do IP de auditoria: FEITO na 0601 (`audit_row_change` lê o Vault quando o GUC não existe; D-059 resolvida); na produção, gerar outro segredo `audit_ip_pepper` no Vault.
 - Projeto Supabase de produção: só o humano cria (necessário na S20).
 - Vercel (S24, Portal B2B): `B2B_API_KEY_PEPPER` (≥ 32 caracteres, gerado aleatoriamente, **diferente por ambiente**, nunca commitado) em Production/Preview/Development — sem ele a API `/v1` responde 503 e o portal não emite chaves. Atenção: um valor com menos de 32 caracteres (ou qualquer outra variável do `serverSchema` de `lib/env.ts` ausente/inválida, ex. `OPENROUTER_KEY`/`AI_MODEL_*`) quebra `getServerEnv()` inteiro e derruba TODA a API B2B com 503 silencioso (sem log — revisão final do branch, corrigido para logar só o nome do erro). Cron diário `/api/cron/b2b-maintenance` (mesmo `CRON_SECRET` já usado por `leads-expire`) precisa do aceite no plano da conta, igual ao S14.
-- Vercel Firewall: rate limit global por IP em `/v1` — o limite em memória por instância do código (S24, revisão de segurança independente, achado 1b: 60 req/min por IP, `features/b2b/api/handler.ts`) é só a primeira camada; o limite de verdade entre todas as instâncias precisa ser configurado no Firewall/WAF da Vercel pelo humano (regra de rate limit por IP no projeto `listaescolar`, escopo `/v1/*`). Sem isso, um invasor distribuindo requisições entre múltiplas instâncias/lambdas contorna o limite por instância.
+- Vercel Firewall: rate limit global por IP em `/v1` — o limite em memória por instância do código (S24, revisão de segurança independente, achado 1b: 60 req/min por IP, `features/b2b/api/handler.ts`) é só a primeira camada; o limite de verdade entre todas as instâncias precisa ser configurado no Firewall/WAF da Vercel pelo humano (regra de rate limit por IP no projeto `listaescolar`, escopo `/v1/*`). Sem isso, um invasor distribuindo requisições entre múltiplas instâncias/lambdas contorna o limite por instância. A partir da S25, a mesma lacuna vale para `/api/widget/*` (balde em memória por IP+parceiro, `lib/rate-limit/memory-bucket.ts`, primeira camada só).
+- Vercel (S25, Widget e webhooks): `B2B_WEBHOOK_ENCRYPTION_KEY` (32 bytes em hex, ex. `openssl rand -hex 32`, diferente por ambiente, nunca commitado) em Production/Preview/Development — sem ele criar/rotacionar/revelar segredo de webhook e o despacho respondem "indisponível" (nunca enviam sem poder assinar). `WEBHOOKS_DISPATCH_SECRET` (ou reaproveitar `CRON_SECRET`, já existente) para `/api/webhooks/dispatch`; cron de 1 min (pg_cron ou Vercel Cron) precisa do aceite no plano da conta, mesmo modelo do despacho de notificações da S11 — sem ele, webhooks ficam só na fila (`queued`), nunca entregues.
 
 Credenciais e contas:
 - Provedor real de e-mail (S11) e credencial de WhatsApp (tokens de reivindicação da S06 e notificações).

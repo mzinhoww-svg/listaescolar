@@ -132,7 +132,7 @@ describe("exportAccountData / deleteAccount", () => {
     await expect(deleteAccount(admin, userId)).resolves.toBeUndefined();
   });
 
-  it("dono de papelaria ativa: deleteAccount recusa ANTES de tentar qualquer coisa (revisão de segurança)", async () => {
+  it("única dona de papelaria: deleteAccount recusa ANTES de tentar qualquer coisa (revisão de segurança)", async () => {
     const email = `s17-blocked-${Date.now()}@teste.invalid`;
     const created = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
     if (created.error || !created.data.user) throw new Error(`createUser: ${created.error?.message}`);
@@ -142,8 +142,8 @@ describe("exportAccountData / deleteAccount", () => {
       stationeryId = await withSuperuser((c) => seedStationery(c, { status: "active", ownerId: userId }));
 
       const blockers = await getDeletionBlockers(admin, userId);
-      expect(blockers).toContain("stationery_owner_active");
-      await expect(deleteAccount(admin, userId)).rejects.toMatchObject({ code: "stationery_owner_active" });
+      expect(blockers).toContain("stationery_owner");
+      await expect(deleteAccount(admin, userId)).rejects.toMatchObject({ code: "stationery_owner" });
 
       // não tentou nada: o perfil continua existindo
       const still = await withSuperuser((c) => c.query("select 1 from auth.users where id = $1", [userId]));

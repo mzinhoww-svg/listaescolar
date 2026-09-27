@@ -512,23 +512,33 @@ describe("account_deletion_blockers (revisão de segurança)", () => {
     });
   });
 
-  it("dono de papelaria ATIVA: bloqueado; papelaria não ativa: não bloqueado", async () => {
+  it("dono de papelaria: bloqueado em QUALQUER status diferente de rejected (reverificação — active sozinho deixava passar as outras)", async () => {
+    // stationery_members_one_owner_per_profile (unique) impede um mesmo perfil ser dono de duas papelarias ao
+    // mesmo tempo: um só perfil (IDS.stationery_member) é reaproveitado em sequência, com limpeza entre estados.
+    const NOT_REJECTED = ["signup", "accreditation", "under_review", "approved", "active", "paused", "suspended"] as const;
+    for (const status of NOT_REJECTED) {
+      await withSuperuser(async (c) => {
+        const id = await seedStationery(c, { status, ownerId: IDS.stationery_member });
+        const r = await c.query<{ account_deletion_blockers: string[] }>(
+          "select public.account_deletion_blockers($1) as account_deletion_blockers",
+          [IDS.stationery_member],
+        );
+        expect(r.rows[0]!.account_deletion_blockers, status).toContain("stationery_owner");
+        await c.query("delete from public.stationery_members where stationery_id = $1", [id]);
+        await c.query("delete from public.stationeries where id = $1", [id]);
+      });
+    }
+  });
+
+  it("dono de papelaria rejected: não bloqueado (nunca chegou a ser um negócio de verdade)", async () => {
     await withSuperuser(async (c) => {
-      const active = await seedStationery(c, { status: "active", ownerId: IDS.school_member });
-      stationeryIds.push(active);
-      const r1 = await c.query<{ account_deletion_blockers: string[] }>(
+      const rejected = await seedStationery(c, { status: "rejected", ownerId: IDS.school_member });
+      stationeryIds.push(rejected);
+      const r = await c.query<{ account_deletion_blockers: string[] }>(
         "select public.account_deletion_blockers($1) as account_deletion_blockers",
         [IDS.school_member],
       );
-      expect(r1.rows[0]!.account_deletion_blockers).toContain("stationery_owner_active");
-
-      const paused = await seedStationery(c, { status: "paused", ownerId: IDS.admin });
-      stationeryIds.push(paused);
-      const r2 = await c.query<{ account_deletion_blockers: string[] }>(
-        "select public.account_deletion_blockers($1) as account_deletion_blockers",
-        [IDS.admin],
-      );
-      expect(r2.rows[0]!.account_deletion_blockers).not.toContain("stationery_owner_active");
+      expect(r.rows[0]!.account_deletion_blockers).not.toContain("stationery_owner");
     });
   });
 

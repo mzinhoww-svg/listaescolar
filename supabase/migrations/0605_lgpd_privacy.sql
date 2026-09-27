@@ -40,7 +40,9 @@
 --    permite `insufficient_evidence -> awaiting_verification`), então a evidência dela não é "definitiva" e não
 --    deve entrar no expurgo mesmo que `decided_at` seja antigo.
 -- 8) `account_deletion_blockers(p_profile_id)`: a exclusão de conta é recusada (com mensagem específica, nunca erro
---    genérico) quando o titular é dono de papelaria ATIVA, dono de parceiro B2B, ou tem histórico de curadoria
+--    genérico) quando o titular é a ÚNICA dona de uma papelaria em qualquer status diferente de `rejected`
+--    (reverificação: `status = 'active'` sozinho deixava passar `signup`/`accreditation`/`under_review`/
+--    `approved`/`paused`/`suspended`), a única dona de um parceiro B2B, ou tem histórico de curadoria
 --    administrativa (`review_versions.actor_id`, sem `on delete` explícito = `no action`, e é append-only — nunca
 --    poderia ser apagado nem anonimizado sem quebrar a trilha de auditoria da revisão humana). Chamada por
 --    `features/privacy/repository.ts#deleteAccount` ANTES de tentar `auth.admin.deleteUser`.
@@ -320,10 +322,21 @@ grant execute on function public.retention_purge(text, uuid[]) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- account_deletion_blockers: recusa a exclusão (com mensagem específica, nunca erro genérico de FK) quando o
--- titular é dono de papelaria ATIVA, dono de parceiro B2B, ou tem histórico de curadoria administrativa
+-- titular é dono de papelaria, dono de parceiro B2B, ou tem histórico de curadoria administrativa
 -- (`review_versions.actor_id`: sem `on delete` explícito = `no action`, e a tabela é append-only — nunca poderia
 -- ser apagada nem anonimizada sem quebrar a trilha de auditoria da revisão humana). Chamada pelo Server Action
 -- ANTES de `auth.admin.deleteUser`. SECURITY DEFINER, EXECUTE só service_role.
+--
+-- Reverificação (Opus, sobre ae06173): `status = 'active'` deixava passar `signup`/`accreditation`/
+-- `under_review`/`approved`/`paused`/`suspended` — só `rejected` significa "nunca chegou a ser um negócio de
+-- verdade" (nenhuma outra etapa do cadastro é reversível sem custo para quem depender da papelaria); trocado
+-- para `status <> 'rejected'`. Os dois blocos (papelaria e B2B) também passam a contar explicitamente se existe
+-- OUTRO dono antes de bloquear — hoje `stationery_members_one_owner_per_stationery`/
+-- `b2b_partner_members_one_owner_per_partner` (unique) já garantem um só dono por entidade, então isto é
+-- redundante com o esquema atual, mas deixa a condição corrigida explicitamente pela regra de negócio ("só
+-- bloqueia quem é a ÚNICA responsável"), não pela coincidência de uma constraint que poderia mudar no futuro
+-- (ex.: co-donos). A mensagem "você é a única responsável" (Server Action) passa a ser verdade por construção da
+-- consulta, não só por invariante do schema.
 -- ---------------------------------------------------------------------------
 create function public.account_deletion_blockers(p_profile_id uuid) returns text[]
 language sql
@@ -332,13 +345,22 @@ set search_path = ''
 stable
 as $$
   select array_remove(array[
-    (select 'stationery_owner_active' where exists (
+    (select 'stationery_owner' where exists (
       select 1 from public.stationery_members sm
         join public.stationeries s on s.id = sm.stationery_id
-       where sm.profile_id = p_profile_id and sm.member_role = 'owner' and s.status = 'active'
+       where sm.profile_id = p_profile_id and sm.member_role = 'owner' and s.status <> 'rejected'
+         and not exists (
+           select 1 from public.stationery_members other
+            where other.stationery_id = sm.stationery_id and other.member_role = 'owner' and other.profile_id <> p_profile_id
+         )
     )),
     (select 'b2b_partner_owner' where exists (
-      select 1 from public.b2b_partner_members bm where bm.profile_id = p_profile_id
+      select 1 from public.b2b_partner_members bm
+       where bm.profile_id = p_profile_id and bm.member_role = 'owner'
+         and not exists (
+           select 1 from public.b2b_partner_members other
+            where other.partner_id = bm.partner_id and other.member_role = 'owner' and other.profile_id <> p_profile_id
+         )
     )),
     (select 'review_history' where exists (
       select 1 from public.review_versions rv where rv.actor_id = p_profile_id

@@ -6,7 +6,7 @@ export const PRIVACY_ERROR_CODES = [
   "database",
   // Revisão de segurança/privacidade: bloqueios explícitos e claros da exclusão de conta, nunca erro genérico.
   "storage_failed", // falha ao remover documento do Storage: exclusão interrompida, pode tentar de novo
-  "stationery_owner_active", // dono único de papelaria ATIVA: transfira ou encerre antes
+  "stationery_owner", // dona única de papelaria (qualquer status exceto rejected): transfira ou encerre antes
   "b2b_partner_owner", // dono de parceiro B2B: transfira ou encerre antes
   "review_history", // histórico de curadoria administrativa (review_versions): fale com o suporte
   "reauth_required", // sessão não é recente o bastante para uma ação irreversível

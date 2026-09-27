@@ -21,8 +21,8 @@ const REAUTH_WINDOW_MS = 15 * 60 * 1000;
 export type DeleteAccountResult = { status: "ok" } | { status: "error"; message: string };
 
 const DELETION_BLOCKER_MESSAGE: Record<string, string> = {
-  stationery_owner_active: "Você é a única responsável por uma papelaria ativa. Transfira o cadastro ou encerre a papelaria antes de excluir sua conta.",
-  b2b_partner_owner: "Você é a responsável por um parceiro do portal B2B. Transfira o cadastro ou encerre o parceiro antes de excluir sua conta.",
+  stationery_owner: "Você é a única responsável por um cadastro de papelaria. Transfira o cadastro para outra pessoa ou peça o encerramento antes de excluir sua conta.",
+  b2b_partner_owner: "Você é a única responsável por um parceiro do portal B2B. Transfira o cadastro para outra pessoa ou peça o encerramento antes de excluir sua conta.",
   review_history: "Sua conta tem histórico de revisão administrativa de listas, que não pode ser removido. Fale com o suporte para excluir sua conta.",
 };
 
@@ -54,7 +54,7 @@ function messageForError(e: unknown): string {
 
 /**
  * Excluir conta (LGPD): exige sessão reautenticada há pouco tempo, a palavra de confirmação, e nenhum vínculo
- * bloqueante (dono de papelaria ativa/parceiro B2B, histórico de curadoria administrativa). Apaga o que é
+ * bloqueante (única dona de papelaria/parceiro B2B, histórico de curadoria administrativa). Apaga o que é
  * pessoal, anonimiza o que precisa ficar por registro que mantemos (ver `features/privacy/repository.ts` e o
  * Ruling do ledger "S17"), e sai da sessão.
  */

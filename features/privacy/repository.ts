@@ -21,7 +21,7 @@ export async function exportAccountData(admin: SupabaseClient, profileId: string
 }
 
 /** Espelha `account_deletion_blockers` (migration 0605). */
-export const DELETION_BLOCKERS = ["stationery_owner_active", "b2b_partner_owner", "review_history"] as const;
+export const DELETION_BLOCKERS = ["stationery_owner", "b2b_partner_owner", "review_history"] as const;
 export type DeletionBlocker = (typeof DELETION_BLOCKERS)[number];
 const blockerSchema = z.enum(DELETION_BLOCKERS);
 
@@ -65,7 +65,7 @@ async function removeOrThrow(admin: SupabaseClient, bucket: string, paths: strin
 
 /**
  * Exclusão de conta (Ruling 6, S17 + correções da revisão de segurança): confere primeiro os vínculos que a
- * bloqueiam (`getDeletionBlockers` — dono de papelaria ativa, de parceiro B2B, ou histórico de curadoria
+ * bloqueiam (`getDeletionBlockers` — única dona de papelaria (qualquer status exceto rejected), de parceiro B2B, ou histórico de curadoria
  * administrativa); se houver algum, lança sem tentar nada (o chamador mapeia para a mensagem certa). Sem
  * bloqueio, remove os documentos do Storage do próprio dono (lista de envios e evidência de reivindicação) — uma
  * falha aqui INTERROMPE a exclusão (erro claro, tentar de novo; nunca segue e deixa o arquivo órfão) — e só então

@@ -378,3 +378,56 @@ Revisão não achou bloqueantes; 7 itens numerados + achados menores. Todos corr
   `review_versions` direto no cleanup e, corrigido, quebrou `cleanupUsers()` por deixar uma linha órfã
   referenciando `profiles.id` de um perfil compartilhado entre arquivos de teste — lição registrada aqui para
   não repetir: cleanup de tabela append-only É pelo pai, nunca em modo replica quando o pai tem cascade real.
+
+## S17 · segunda reverificação de segurança (Opus, sobre ae06173)
+
+Sem bloqueantes; uma correção antes do PR + registro de riscos residuais.
+
+- Ruling (correção única): `account_deletion_blockers` comparava só `status = 'active'`, deixando passar
+  `signup`/`accreditation`/`under_review`/`approved`/`paused`/`suspended` — qualquer uma dessas etapas já é um
+  cadastro de papelaria real (alguém investiu tempo cadastrando, ou já operou e foi pausada/suspensa), então
+  excluir a conta da única dona sem aviso deixaria o cadastro órfão do mesmo jeito que `active` deixaria. Trocado
+  para `status <> 'rejected'` (só `rejected` significa "nunca chegou a ser um negócio de verdade"). Código
+  renomeado de `stationery_owner_active` para `stationery_owner` (o sufixo `_active` não descrevia mais a
+  condição) em toda a cadeia (`account_deletion_blockers`, `features/privacy/errors.ts`,
+  `features/privacy/repository.ts#DELETION_BLOCKERS`, `app/conta/privacidade/actions.ts`, testes). Teste novo
+  cobre os 7 status que bloqueiam e o 1 que não bloqueia (`rejected`), cada um com o mesmo perfil reaproveitado em
+  sequência (`stationery_members_one_owner_per_profile` só permite um perfil dono de uma papelaria por vez).
+- Ruling (achado menor, "conte coproprietários"): tanto `stationery_members` quanto `b2b_partner_members` já têm
+  unique index que garante UM SÓ dono por entidade
+  (`stationery_members_one_owner_per_stationery`/`b2b_partner_members_one_owner_per_partner`), então "você é a
+  única responsável" já era verdade por invariante do schema, não só por suposição. Mesmo assim, a consulta de
+  `account_deletion_blockers` passou a conferir explicitamente `not exists (select ... outro dono)` para os dois
+  casos — redundante com a constraint atual, mas deixa a condição de negócio explícita na própria função, não só
+  implícita numa unique index que poderia mudar (ex.: co-donos, se a Comércio decidir permitir). Não escrevi teste
+  para "com coproprietário, não bloqueia": o schema atual impede CONSTRUIR esse cenário (a unique index nunca
+  deixaria dois `owner` na mesma entidade), então o ramo é verificável só por leitura da consulta, não por teste
+  de banco — registrado aqui para quem revisar de novo não estranhar a ausência do teste.
+- Riscos residuais registrados (pedido explícito da revisão; nenhum é bloqueante, nenhum é vazamento de dado):
+  - **Reautenticação por usuário, não por sessão**: `deleteAccountAction` confere `last_sign_in_at` do `User`
+    (GoTrue), que é atualizado a cada login do usuário em QUALQUER sessão/dispositivo — não existe, na API do
+    Supabase Auth usada aqui (`getUser`, nunca `getSession`), um timestamp de "quando ESTA sessão específica foi
+    emitida". Efeito prático: se o titular logar pelo link mágico em outro aparelho enquanto uma aba antiga (com
+    sessão já emitida há mais de 15 minutos) ainda está aberta neste, a aba antiga também passa a satisfazer a
+    janela de 15 minutos, porque o relógio é do USUÁRIO, não da SESSÃO. Isto não abre uma porta para outra
+    pessoa excluir a conta (ainda exige o cookie de sessão válido do próprio titular, que só ele tem), só
+    enfraquece um pouco a garantia de "prove que é você de novo, agora" para o caso estreito de múltiplas abas/
+    dispositivos simultâneos do MESMO titular. Custo de corrigir: exigiria um campo próprio de "quando esta
+    sessão foi emitida" (JWT `iat` da sessão atual, decodificado no servidor, comparado ao invés de
+    `last_sign_in_at`) — mudança maior, fora do escopo desta correção pontual; registrado aqui, não como DEBT
+    numerada (baixíssimo risco, produto sem senha, e o cookie de sessão em si já expira por conta própria).
+  - **Exclusão parcial se o Storage falhar no meio, ou se `deleteUser` falhar DEPOIS do Storage ter sido limpo**:
+    `deleteAccount` roda em passos sequenciais (bloqueios → Storage → `auth.admin.deleteUser`), sem transação
+    distribuída (não existe tal coisa entre o Storage e o Auth do Supabase). Se o Storage for limpo com sucesso e
+    a chamada a `deleteUser` falhar depois (rede, timeout), a conta continua existindo, mas os arquivos que ela
+    tinha em `list_submissions`/`claim_evidence` já se foram — o titular veria o próprio envio de lista ou
+    evidência de reivindicação "quebrado" (sem arquivo) até tentar excluir de novo com sucesso. Não é vazamento
+    (nenhum dado passa para outra pessoa) nem perda de dado ALÉM do que a exclusão já pediria — só uma ordem de
+    operações onde a segunda etapa pode falhar depois da primeira ter sucesso. `deleteAccount` é seguro para
+    tentar de novo (`ownedStoragePaths` simplesmente não acha mais nada para remover na segunda tentativa, e
+    `deleteUser` é idempotente — 404 não é erro). Alternativa mais segura seria inverter a ordem (excluir o
+    usuário primeiro, Storage depois) — mas isso trocaria o risco por outro: perfil já apagado (nome sumiu da UI)
+    com arquivo do Storage ainda vivo até uma segunda tentativa, o que expõe o MESMO arquivo por mais tempo em
+    vez de menos. Mantida a ordem atual (Storage primeiro) por ser a que minimiza o tempo em que um documento
+    pessoal (potencialmente sensível, evidência de reivindicação) continua acessível depois que a exclusão foi
+    pedida. Sem DEBT numerada: comportamento aceitável e já coberto pela idempotência.

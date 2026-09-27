@@ -89,7 +89,7 @@ describe("deleteAccountAction: reautenticação recente", () => {
 
 describe("deleteAccountAction: mensagens por vínculo bloqueante", () => {
   it.each([
-    ["stationery_owner_active", /papelaria ativa/i],
+    ["stationery_owner", /cadastro de papelaria/i],
     ["b2b_partner_owner", /parceiro do portal B2B/i],
     ["review_history", /fale com o suporte/i],
   ] as const)("%s -> mensagem específica, nunca erro genérico", async (code, re) => {

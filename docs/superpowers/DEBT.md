@@ -183,6 +183,9 @@ A regra do CLAUDE.md vale para **componente React** (250 linhas). Varredura de 2
 | D-132 | ledger-comercio S25 Task 2/3 (Ruling de escopo) | A pré-visualização do widget (B2B04) e o `widget.js` real não têm seleção individual de item por checkbox (como no design, que mostra cada item marcável) — hoje é tudo-ou-nada ("Adicionar tudo ao carrinho"). Ruling S25: cortado do MVP desta fatia por tempo; o contrato de dados (`/api/widget/lists/{id}/items`) já traz item a item, então a UI pode ganhar isso depois sem mudar a API | baixa | S26 (B2B) | aberta |
 | D-133 | ledger-comercio S25 · correções da revisão de segurança (Menor) | `app/api/widget/**` responde com `access-control-allow-origin: *` para qualquer origem — correto hoje (dado público, sem cookie, sem credencial), mas sem allowlist do domínio cadastrado do parceiro (`cart_target_domain`) o widget pode ser embutido em QUALQUER site, não só no do parceiro que o configurou (não é uma falha de confidencialidade — o dado já é público —, mas permite uso não autorizado do widget de um parceiro em site de terceiro). Considerar restringir `Access-Control-Allow-Origin` ao(s) domínio(s) cadastrados quando o portal ganhar um campo de "domínios autorizados" | baixa | S26 (B2B) | aberta |
 | D-134 | ledger-comercio S25 · correções da revisão de segurança (Menor) | A restrição de porta 443 para HTTPS (revisão de segurança, `lib/net/safe-fetch.ts`) só é aplicada no ENVIO (`postWebhookSafely`); o CHECK de `b2b_webhook_endpoints.url` (0502) e o Zod de `SaveEndpointInputSchema` continuam aceitando `https://host:8443/...` na criação/atualização do endpoint — o parceiro só descobre que a porta não é aceita quando a primeira entrega vira `dead` (`invalid_url_port_not_allowed`). Validar a porta também na criação evitaria essa surpresa | baixa | S26 (B2B) | aberta |
+| D-135 | ledger-comercio S26 Task 1 (Ruling de escopo) | `b2b_statements` é imutável por desenho: não há caminho para reemitir/corrigir um extrato de período já gerado (nem retificação, nem novo extrato para o MESMO período — a chave `(partner_id, period_start, period_end)` é única). Se o admin errar `payment_instruction` ou gerar um período antes da hora, a única saída hoje é gerar um extrato para um período diferente | baixa | S26 (B2B) | aberta |
+| D-136 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns` inteira (`order by random()`) para achar campanhas elegíveis; em volume alto de listas publicadas servidas simultaneamente pode custar caro (mesmo racional de N+1/cota de outras fatias B2B, ex. D-113). Sem medição real de tráfego ainda | média | S19 | aberta |
+| D-137 | ledger-comercio S26 Task 1 (planejamento) | `b2b_campaigns.target_cities` usa `ibge_code` (texto validado contra `municipalities` na criação), mas não há endpoint nem tela para o parceiro buscar o código pelo NOME da cidade — a Nova Campanha (B2B07, Task 3) precisa de um seletor de município, hoje só aceitaria o código cru | baixa | S26 (B2B) | aberta |
 
 Nota (E2E da S27): o E2E da S27 rodou local, em build de produção, e não no preview da Vercel (proteção de login). Já coberto por D-049; não duplicado.
 
@@ -201,11 +204,13 @@ D-128–D-134 na resolução deste merge — mesmo conteúdo, só o número mudo
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
 | alta | 10 | 5 | 15 |
-| média | 39 | 9 | 48 |
-| baixa | 60 | 10 | 70 |
-| **Total** | **109** | **24** | **133** |
+| média | 40 | 9 | 49 |
+| baixa | 62 | 10 | 72 |
+| **Total** | **112** | **24** | **136** |
 
-Contagem atualizada em 2026-09-27 (merge de `main` — S23, Comissão/repasses/inadimplência — com a rodada de
+Contagem atualizada em 2026-09-27 (S26 Task 1 soma D-135–D-137: 1 média/aberta — D-136, cota/cache de
+`b2b_campaign_serve` —, as demais baixa/abertas). Estado anterior desta linha (merge de `main` — S23,
+Comissão/repasses/inadimplência — com a rodada de
 correções da revisão de segurança da S25 nesta branch). D-099–D-101, D-103, D-105, D-107–D-111 fechadas pela S23
 (7 baixa + 3 média viram resolvida); S23 soma D-120–D-127 (2 média/abertas — D-122, D-126 —, as demais
 baixa/abertas); a rodada de correções da S25 sobre esta branch resolve D-120 (renumerada D-128 nesta resolução de

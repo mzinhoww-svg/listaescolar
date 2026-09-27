@@ -1279,3 +1279,64 @@ ainda sem a correção — ver histórico desta sessão).
   Banco **1707/1710** (3 pulados = baseline; +8: 3 em `webhook-events.test.ts` — visibilidade pública —, 5 em
   `webhooks-schema.test.ts` — purge/cascata, cota de reenvio, estado do endpoint/parceiro). E2E `scripts/e2e-s25.sh`
   refeito do zero (`pnpm db:reset` + reseed): **22/22**, sem regressão de nenhuma verificação anterior.
+
+## S26 · Campanhas de marca, insights e faturamento B2B
+
+### S26 · Task 1 (migration 0503 e testes de banco)
+
+- Ruling: bid/orçamento de campanha (`bid_cents`, `daily_budget_cents`, `total_budget_cents`) é **declarado pelo
+  próprio parceiro marca** na criação, não um preço de tabela da plataforma — não fere "nunca inventar preço":
+  é o anunciante decidindo quanto paga pelo próprio inventário, mesmo racional de um leilão de mídia.
+  Custo se errada: baixo (é só o parceiro se auto-limitando; sem impacto em terceiros).
+- Ruling: o bloqueio Procon (Lei 12.886, alerta `restrictive_brand_or_spec`) é decidido **inteiramente dentro de
+  `b2b_campaign_serve`** (categoria alvo da campanha × categorias com o alerta na versão publicada da lista), não
+  como um estado gravado na campanha — a mesma campanha pode servir numa lista e ser bloqueada noutra, e o estado
+  da campanha (`approved`) não muda por isso. Nenhum outro caminho decide elegibilidade: domínio (Task 2) e UI só
+  formatam o que essa função devolve. Custo se errada: alto (é o requisito legal central da fatia) — mitigado por
+  teste dedicado com 3 cenários (categoria bloqueada, sem alerta, alerta em categoria diferente).
+- Ruling: `is_demo` da campanha é **fixado na criação** a partir do status do parceiro no momento (`sandbox` →
+  demo; `active` → real) e nunca recalculado depois — se o parceiro trocar de status, campanhas antigas mantêm o
+  ambiente com que nasceram (evita uma campanha sandbox virar real, ou vice-versa, sem revisão). `b2b_campaign_serve`
+  só cruza campanha e lista do MESMO `is_demo`. Custo se errada: médio (vazamento de dado demo/real entre ambientes)
+  — mitigado por teste dedicado.
+- Ruling: a contagem crua de insights (`b2b_insights_raw`) não tem k-anonimato embutido e é **`service_role`-only**
+  (revogada de `authenticated`/`anon`/`public`, mesmo padrão das funções `b2b_v1_*` da 0501) — a supressão por
+  k-anonimato mínimo (`b2b_insights_settings.min_k`, configurável em banco) e a supressão complementar (evitar
+  recuperar a célula oculta por subtração do total) são do domínio TypeScript (Task 2), testadas por unidade
+  (mais rápido de cobrir as combinações de fronteira do que em SQL). Custo se errada: alto (é o requisito de
+  privacidade central da tela B2B08) — a defesa em profundidade é o próprio grant: mesmo um bug na supressão do
+  domínio não expõe a contagem crua a um parceiro via SQL direto, porque a função nem é executável por
+  `authenticated`.
+- Ruling: linha de "uso de API" no extrato (`b2b_statement_generate`) fica **sempre `pricing_status =
+  'unavailable'`** nesta fatia — não existe tabela de preço por request excedente da API B2B (mesmo racional do
+  `billing_unavailable` da S21/D-102: nunca inventar preço). Linhas de campanha (CPM/CPC) sempre `'priced'`, porque
+  o valor é o bid que o próprio parceiro declarou. Custo se errada: baixo (é conservador: mostra menos, nunca
+  inventa mais).
+- Ruling: sem integração de pagamento real. `b2b_statements`/`b2b_statement_line_items` são só um **snapshot
+  imutável** (extrato) + `payment_instruction` (texto livre para o admin agir manualmente fora do sistema).
+  Nenhuma função debita `credit_ledger` nem chama gateway. Duplicar o mesmo período (`partner_id`,
+  `period_start`, `period_end`) é recusado (`23505`/`duplicate_period`) — reemissão de um período fica fora do
+  escopo desta fatia (dívida, ver abaixo).
+- Ruling: clique só é aceito se existir uma **impressão prévia no mesmo dia com o mesmo `dedupe_key`**
+  (`b2b_campaign_record_event`) — reduz clique inflado sem exibição correspondente, sem precisar de cookie de
+  terceiro nem de nenhum dado pessoal (o `dedupe_key` é um hash hexadecimal anônimo fornecido pelo chamador).
+  Custo se errada: baixo (só descarta clique suspeito; nunca gera falso positivo de fraude visível ao parceiro).
+- Ruling: orçamento esgotado (diário ou total) **pausa a campanha automaticamente** dentro do próprio gatilho de
+  acúmulo (`b2b_campaign_event_accrue`), sem job externo — evita servir/cobrar (mesmo que só informativamente)
+  além do que o parceiro autorizou. Retomar (`paused` → `approved`) com o orçamento TOTAL já esgotado é recusado
+  (`23514`/`budget_exhausted`); só o orçamento diário zera a cada dia (não há bloqueio de retomada por ele).
+- Achado da implementação (não é dívida, é comportamento correto do Postgres): `truncate` em
+  `b2b_campaign_events` falha com `0A000` (bloqueado pela FK de `b2b_campaign_ledger`, antes mesmo do gatilho
+  disparar) em vez de `42501` — os dois bloqueiam a imutabilidade; o teste aceita ambos os códigos.
+- Dívida nova (D-135, baixa): não há caminho para reemitir/corrigir um extrato de período já gerado (o registro é
+  imutável por desenho) — hoje, se o admin errar `payment_instruction` ou gerar um período antes da hora, a única
+  saída é gerar um extrato para um período diferente; falta uma nota de retificação ou reemissão explícita.
+- Dívida nova (D-136, média): `b2b_campaign_serve` não tem cota nem cache — cada chamada varre `b2b_campaigns`
+  com `order by random()`; em volume alto de listas publicadas servidas simultaneamente isso pode custar caro
+  (mesmo racional de N+1/cota que apareceu em outras fatias B2B, ex. D-113); sem medição real de tráfego ainda,
+  então fica registrado em vez de otimizado às pressas.
+- Dívida nova (D-137, baixa): `target_cities` usa `ibge_code` (texto livre validado contra `municipalities` na
+  criação), mas não há tela nem endpoint para o parceiro BUSCAR o código pelo nome da cidade — a Task 3 (telas)
+  precisa de um seletor de município (nome → ibge_code) na Nova Campanha (B2B07), hoje só um campo de código.
+- Estado ao final da Task 1: `pnpm typecheck && pnpm lint` verdes; `pnpm db:reset && pnpm test:db`: **1769/1772**
+  (3 pulados = baseline; migration 0503 só local, não aplicada em staging — ver PROGRESS.md).

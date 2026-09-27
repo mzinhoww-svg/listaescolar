@@ -680,3 +680,81 @@ Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnp
   S23 acrescentar a fonte real.
 - (baixa) `/conta/compras` lista até 30 pedidos do pai sem paginação; não é um problema hoje (poucos leads por pai
   no piloto), mas cresce sem paginar se o produto pegar tração.
+
+## S22 · correções da revisão de segurança (Opus, rodada única sobre 93f78e7)
+
+Migration `0402_lead_conversions.sql` EDITADA NO LUGAR (ainda não aplicada em nenhum ambiente além do local desta
+sessão — sem PR, sem apply em staging). Um Ruling por item pedido na revisão.
+
+**1) Avaliação só com compra confirmada.** `lead_review_create` agora recusa lead `cancelled` (hint `invalid_state`)
+e exige `l.status = 'converted'` OU uma confirmação `bought_here` em `lead_purchase_confirmations` (hint
+`purchase_not_confirmed`) antes de aceitar a avaliação. Ruling: usei os MESMOS dois sinais da regra de conversão (2
+de 3) como pré-condição de "comprou de verdade" — não um terceiro critério novo — porque são exatamente os dois
+sinais que já existem nesta fatia (o terceiro, Pix pela plataforma, segue ausente). Custo se errado: um pai que
+comprou mas nunca confirmou nem teve a venda declarada não consegue avaliar; aceitável, porque ele sempre pode
+confirmar em `/conta/compras` primeiro.
+
+**2) Autoavaliação/autoconversão.** `lead_confirm_purchase` e `lead_review_create` recusam (hint `forbidden`) um
+ator que é `stationery_members` da papelaria do PRÓPRIO lead, mesmo que `requester_id` coincida com o perfil dele
+(checagem redundante ao `requester_id is distinct from p_actor_id`, mas defesa em profundidade contra o caso em que
+os dois coincidem). `lead_create` (0303, S14) NÃO ganhou o bloqueio simétrico — Ruling: essa migration já está
+aplicada no staging (`billing` já rodou por cima dela na 0401) e este implementador não tem mandato para editar uma
+migration já aplicada fora deste worktree local; fazer isso exigiria uma migration NOVA e aditiva (trigger ou check
+em `lead_create`) que fica fora do escopo de uma correção "rodada única" sobre a 0402. Registrado como D-107 (média,
+`DEBT.md`) para a S23. Custo se errado (enquanto D-107 está aberta): um dono de papelaria consegue CRIAR um lead
+para si mesmo, mas não consegue confirmar a compra nem se autoavaliar — o pior cenário (nota falsa) já está coberto.
+
+**3) Contestação de lead vendido.** `lead_dispute_open` recusa (hint `lead_sold`) quando `l.status = 'converted'`
+OU existe confirmação `bought_here` — os 4 motivos fixos (número errado, lista incompleta, duplicado, fora da área)
+são sobre a QUALIDADE do lead recebido, nunca cabíveis depois que a venda já foi confirmada por qualquer um dos dois
+lados. Também recusa (hint `stationery_unavailable`) quando a papelaria está `suspended`. `getDisputeGate`
+(`features/conversion/repository.ts`) espelha as duas regras para EXIBIÇÃO (`blockedReason: 'sold' | 'suspended' |
+'expired'`), calculadas por leitura própria (join com `lead_purchase_confirmations` e `stationeries.status`) — o
+banco continua sendo a fonte final; a tela só evita mostrar um formulário que o banco recusaria. Admin12
+(`/admin/contestacoes`) passou a mostrar o status do lead e os 3 sinais (via `AdminDisputeView`, que chama
+`lead_conversion_signals` por disputa) antes de "Aceitar"/"Rejeitar" — hoje isso é redundante com a regra 3 (uma
+disputa nova nunca nasce sobre um lead já vendido), mas é informação de auditoria útil para disputas antigas ou uma
+regra futura que mude essa condição.
+
+**4) Moderação de avaliação.** `lead_review_hide(p_review_id, p_actor_id, p_reason)`: só admin, `p_reason` de uma
+lista FECHADA (`personal_data`, `offensive`, `policy_violation`, `other` — nunca texto livre do moderador),
+idempotente (ocultar 2x devolve o mesmo id sem regravar o motivo), nunca reabre (`published -> hidden` é a única
+transição aceita pelo gatilho `lead_reviews_guard`, novo). Botão "Ocultar" em `/admin/auditoria` (componente
+`ReviewModeration`). Ruling: moderação PLENA (fila de revisão antes de publicar, IA de toxicidade, etc.) fica como
+dívida — o que existe é reativo (alguém precisa ver e clicar), não preventivo; ver D-104 (reforçada). A heurística de
+dado pessoal (`lead_review_contains_personal_data`) ganhou: normalização de separador ENTRE dois dígitos (colapsa
+`espaço`/`.`/`-`/`(`/`)` repetidamente até estabilizar, pegando `"9 9 9 9 - 9 9 9 9"`), número por extenso
+(`zero`..`nove`, com fronteira de palavra `\y` para não confundir "um" artigo com dígito isolado — só vira 1 dígito
+quando cercado só por espaço/pontuação de outros números/separadores, nunca some sozinho no meio de uma frase normal
+o bastante para formar 8 dígitos) e `"arroba"` como `@` ofuscado (com o espaço ao redor absorvido, senão o e-mail
+não bate no regex). Achado ao testar: a checagem de e-mail original quebrava com `"fulano arroba exemplo.com"`
+porque sobrava espaço ao redor do `@` recém-substituído — corrigido absorvendo `\s*` nas duas pontas da troca.
+
+**Menores (todos aplicados):**
+- `grant select (..., lead_id, ...)` em `lead_reviews` saiu do `anon` (ficou só em `authenticated`, papelaria/admin):
+  correlacionar uma avaliação publicada a um `lead_id` específico é uma pista de "quem comprou o quê" que ninguém
+  de fora precisa.
+- Avaliação `is_demo` nunca aparece no perfil público de papelaria REAL (`listPublishedReviews` cruza com
+  `stationeries.is_demo`); optei por FILTRAR (não por selo por avaliação) porque o perfil já tem o selo
+  "Demonstração" no cabeçalho quando a papelaria é demo — um selo por avaliação seria redundante.
+- Etiquetas mostram o rótulo legível (`REVIEW_TAG_LABEL`, compartilhado entre `PurchaseCard` e `PublicProfileView`),
+  nunca o slug cru.
+- Média honesta: "Avaliações · [nota] (média das últimas N)", `N` = quantidade REALMENTE usada no cálculo (o mesmo
+  limite passado a `listPublishedReviews`), nunca um número diferente do que está na tela.
+- `getDisputeGate` devolve `existingDispute.detail = null` quando quem pede é o SOLICITANTE (pai) do lead — só a
+  papelaria e o admin leem o texto livre que a papelaria escreveu ao contestar.
+- Disputa aceita sem lançamento a estornar mostra "sem crédito a devolver" (Pap03 e Admin12), nunca "crédito
+  devolvido"; teste novo confirma que `reversed_entry_id`, quando não nulo, sempre existe em `credit_ledger` com
+  `entry_type = 'reversal'`.
+- Papelaria `suspended` não contesta (regra 3 acima cobre isso; a UI usa o mesmo `blockedReason`).
+
+**Achado sem relação direta com o pedido, mas bloqueante para o gate:** o novo gatilho `lead_reviews_guard`
+quebrava `ON DELETE SET NULL` de `lead_reviews.actor_id -> profiles` (exclusão de conta, LGPD) — qualquer teste que
+apagasse um usuário com uma avaliação sua disparava "lead_reviews é imutável". Corrigido acrescentando ao guard uma
+segunda transição permitida: `actor_id` virando `NULL` com todas as outras colunas iguais (o efeito exato do
+cascade). Sem esse ajuste, excluir a conta de um pai que já avaliou uma papelaria falharia em produção.
+
+Verificação: `pnpm db:reset && pnpm typecheck && pnpm lint && pnpm test && pnpm test:db && pnpm build`, todos verdes
+(2971 testes unitários; 1567 de banco, 3 skipped pré-existentes). E2E (`scripts/e2e-s22.sh`) repetido: 21/21, ver
+`docs/superpowers/e2e/S22.md`. Vermelho real (4 achados de teste, listados) em
+`docs/superpowers/logs/s22-security-review-red.log`.

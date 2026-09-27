@@ -54,6 +54,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S11 Integração das trilhas e notificações | #29 | 05160d5 | 2026-09-25 | ✓ | ✓ | 2691 | 1492 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, portas REAIS, IA falsa, worker Deno: 57 verificações, 0 falhas (`e2e/S11.md`); no staging: login por link mágico e envio OK, leitura por IA bloqueada por OPENROUTER_KEY (D-077) |
 | S21 Cobrança da papelaria (Comércio) | #34 | b7c6229 | 2026-09-26 | ✓ | ✓ | 2959 | 1539 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 17 verificações, 0 falhas (`e2e/S21.md`) |
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
+| S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 
 Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto `listaescolare`; o humano as criou em 2026-09-25 e desde o #22 os previews ficam READY e públicos (noindex). O E2E passa a rodar no preview quando o deploy estiver verde (Ruling do ledger); a S11 ainda rodou local porque a leitura por IA no staging está bloqueada (D-077).
 

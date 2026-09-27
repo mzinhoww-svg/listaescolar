@@ -7,6 +7,9 @@ export const CONVERSION_ERROR_CODES = [
   "already_disputed",
   "dispute_expired",
   "personal_data_rejected",
+  "purchase_not_confirmed",
+  "lead_sold",
+  "stationery_unavailable",
   "database",
 ] as const;
 export type ConversionErrorCode = (typeof CONVERSION_ERROR_CODES)[number];

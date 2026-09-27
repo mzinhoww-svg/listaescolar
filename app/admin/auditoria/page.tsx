@@ -5,23 +5,35 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { Notice } from "@/components/stationeries/PanelShell";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
+import { errorMessageForCode } from "@/features/conversion/messages";
+import type { AuditRow, ReviewView } from "@/features/conversion/ports";
 import { getConversionService } from "@/features/conversion/wiring";
+
+import { ReviewModeration } from "./ReviewModeration";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Auditoria de conversão · Admin · ListaCerta", robots: { index: false, follow: false } };
+
+const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Cuiaba" }).format(d);
 }
 
-/** Admin11: declarado (a papelaria disse "Vendi") x confirmado (regra de 2 de 3 sinais). */
-export default async function Page() {
+/** Admin11: declarado (a papelaria disse "Vendi") x confirmado (regra de 2 de 3 sinais), mais moderação de avaliações. */
+export default async function Page({ searchParams }: { searchParams: Promise<{ erro?: string | string[]; ok?: string | string[] }> }) {
   const { user } = await requireAccess("/admin");
-  let rows: Awaited<ReturnType<ReturnType<typeof getConversionService>["listAuditRows"]>> = [];
+  const sp = await searchParams;
+  const erro = errorMessageForCode(one(sp.erro));
+  let rows: AuditRow[] = [];
+  let reviews: ReviewView[] = [];
   let failed = false;
   try {
     const a = await getSessionActor();
-    rows = a ? await getConversionService().listAuditRows(a, 100) : [];
+    if (a) {
+      const svc = getConversionService();
+      [rows, reviews] = await Promise.all([svc.listAuditRows(a, 100), svc.listRecentReviewsForAdmin(a, 50)]);
+    }
   } catch (error) {
     console.error("listar auditoria de conversão", error instanceof Error ? error.message : "erro");
     failed = true;
@@ -29,6 +41,8 @@ export default async function Page() {
   const divergent = rows.filter((r) => r.divergent).length;
   return (
     <AdminShell active="/admin/auditoria" email={user.email} breadcrumb="Admin / Auditoria" title="Auditoria de conversão">
+      {one(sp.ok) ? <Notice kind="ok">Avaliação ocultada.</Notice> : null}
+      {erro ? <Notice kind="error">{erro}</Notice> : null}
       {failed ? (
         <Notice kind="error">
           Não foi possível carregar. <Link href="/admin/auditoria" className="underline">Tentar de novo</Link>
@@ -74,6 +88,8 @@ export default async function Page() {
               </tbody>
             </table>
           </div>
+          <h2 className="mt-8 mb-3 text-[18px] font-extrabold">Avaliações recentes</h2>
+          <ReviewModeration reviews={reviews} />
         </>
       )}
     </AdminShell>

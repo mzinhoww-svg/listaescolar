@@ -13,9 +13,18 @@
 -- de moderação — Ruling por tempo de fatia, ver ledger-comercio).
 -- Escrita só pelas funções SECURITY DEFINER abaixo (EXECUTE só service_role); nenhuma tabela tem grant de
 -- INSERT/UPDATE/DELETE para authenticated nem service_role. Erros com errcode + hint estáveis: forbidden, not_found,
--- invalid_input, invalid_state, already_disputed, dispute_expired, personal_data_rejected, reason_required.
+-- invalid_input, invalid_state, already_disputed, dispute_expired, personal_data_rejected, reason_required,
+-- purchase_not_confirmed, lead_sold, stationery_unavailable.
 -- Sem FK para tabelas de outras trilhas (ADR-004): lead_id/stationery_id apontam só para leads/stationeries
 -- (trilha Comércio, já em main).
+-- Revisão de segurança (Opus, rodada única sobre 93f78e7): (1) avaliação só com compra confirmada (pelo pai ou
+-- declarada pela papelaria) e nunca de lead cancelado; (2) `lead_confirm_purchase`/`lead_review_create` recusam
+-- ator que é MEMBRO da papelaria do lead (autoavaliação/autoconversão), mesmo que por algum acidente o `requester_id`
+-- coincida com o perfil do membro — `lead_create` (0303, S14) não ganhou o mesmo bloqueio porque já está aplicada em
+-- outros lugares (migration imutável depois de aplicada); Ruling registrado no ledger-comercio, seção "S22 ·
+-- correções da revisão de segurança"; (3) `lead_dispute_open` recusa lead já vendido (`converted` ou `bought_here`)
+-- e papelaria `suspended`; (4) `lead_review_hide` (admin, motivo de lista fechada) para moderação; heurística de
+-- dado pessoal ganhou normalização de separadores e números por extenso, e "arroba" como `@` ofuscado.
 
 -- ---------------------------------------------------------------------------
 -- Tabelas
@@ -45,8 +54,14 @@ create table public.lead_reviews (
   comment text check (comment is null or (btrim(comment) <> '' and length(comment) <= 500)),
   status text not null default 'published' check (status in ('published', 'hidden')),
   is_demo boolean not null default false,
+  -- moderação (revisão de segurança): oculta por admin, motivo de LISTA FECHADA (nunca texto livre do moderador).
+  hidden_at timestamptz,
+  hidden_by uuid,
+  hidden_reason text check (hidden_reason is null or hidden_reason in ('personal_data', 'offensive', 'policy_violation', 'other')),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  check ((status = 'hidden') = (hidden_at is not null)),
+  check ((status = 'hidden') = (hidden_reason is not null))
 );
 create index lead_reviews_stationery_idx on public.lead_reviews (stationery_id, status, created_at desc);
 
@@ -109,6 +124,43 @@ create trigger lead_disputes_guard before update or delete on public.lead_disput
   for each row execute function public.lead_dispute_guard();
 alter table public.lead_disputes enable always trigger lead_disputes_guard;
 
+-- lead_reviews: só a transição published -> hidden (moderação, `lead_review_hide`), gravando hidden_at/hidden_by/
+-- hidden_reason; nada mais muda (nunca volta a `published`, nunca delete).
+create function public.lead_review_guard() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'lead_reviews é imutável (delete bloqueado)' using errcode = '42501';
+  end if;
+  if old.status = 'published' and new.status = 'hidden'
+     and new.lead_id = old.lead_id and new.stationery_id = old.stationery_id
+     and new.actor_id is not distinct from old.actor_id and new.rating = old.rating
+     and new.tags = old.tags and new.comment is not distinct from old.comment
+     and new.is_demo = old.is_demo and new.created_at = old.created_at
+     and new.hidden_at is not null and new.hidden_reason is not null
+  then
+    return new;
+  end if;
+  -- `actor_id references profiles (id) on delete set null`: exclusão de conta (LGPD) dispara essa UPDATE sozinha,
+  -- sem passar por `lead_review_hide` — precisa ser aceita mesmo com o guard, senão excluir a conta falha.
+  if new.actor_id is null and old.actor_id is not null
+     and new.status = old.status and new.lead_id = old.lead_id and new.stationery_id = old.stationery_id
+     and new.rating = old.rating and new.tags = old.tags and new.comment is not distinct from old.comment
+     and new.is_demo = old.is_demo and new.created_at = old.created_at
+     and new.hidden_at is not distinct from old.hidden_at and new.hidden_reason is not distinct from old.hidden_reason
+     and new.hidden_by is not distinct from old.hidden_by
+  then
+    return new;
+  end if;
+  raise exception 'lead_reviews é imutável (só a transição published -> hidden, pela função lead_review_hide)' using errcode = '42501';
+end;
+$$;
+create trigger lead_reviews_guard before update or delete on public.lead_reviews
+  for each row execute function public.lead_review_guard();
+alter table public.lead_reviews enable always trigger lead_reviews_guard;
+
 -- auditoria (append-only, já existe desde a 0001): sem colunas sensíveis a excluir aqui (nenhuma destas tabelas
 -- guarda identificação do pai alem do actor_id, que já é excluído dos grants abaixo).
 create trigger lead_purchase_confirmations_audit after insert or update on public.lead_purchase_confirmations
@@ -136,16 +188,43 @@ exception when others then
 end;
 $$;
 
--- Heurística de dado pessoal em texto livre (S22): e-mail, ou uma sequência de ao menos 8 dígitos com no máximo um
--- separador entre cada um (telefone, CPF, CEP colado). Não é um validador de PII completo; é a barreira mínima
--- combinada com o vocabulário de etiquetas fixo para cobrir "sem texto livre com dado pessoal" (Ruling, ver ledger).
+-- Heurística de dado pessoal em texto livre (S22, reforçada na revisão de segurança): e-mail (inclusive "arroba"
+-- ofuscado), ou uma sequência de ao menos 8 dígitos depois de (a) trocar número por extenso ("zero".."nove") por
+-- dígito e (b) colapsar QUALQUER separador (espaço, ponto, traço, parênteses) entre dois dígitos até estabilizar —
+-- pega "9 9 9 9 - 9 9 9 9" e "zero um dois três quatro cinco seis sete oito", não só dígitos colados. Não é um
+-- validador de PII completo (não pega nome nem ofensa); é a barreira mínima na ESCRITA, combinada com o vocabulário
+-- de etiquetas fixo e a moderação humana (`lead_review_hide`) para o que passar. Moderação plena fica como dívida
+-- (Ruling, ver ledger-comercio, seção "S22 · correções da revisão de segurança").
 create function public.lead_review_contains_personal_data(p_text text) returns boolean
-language sql
+language plpgsql
 immutable
 set search_path = ''
 as $$
-  select p_text ~* '[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}'
-      or p_text ~ '([0-9][ .\-()]?){7,}[0-9]';
+declare
+  v text := lower(p_text);
+  v_prev text;
+begin
+  v := regexp_replace(v, '\s*\yarroba\y\s*', '@', 'g');
+  if v ~* '[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}' then
+    return true;
+  end if;
+  v := regexp_replace(v, '\yzero\y', '0', 'g');
+  v := regexp_replace(v, '\y(um|uma)\y', '1', 'g');
+  v := regexp_replace(v, '\y(dois|duas)\y', '2', 'g');
+  v := regexp_replace(v, '\y(tres|três)\y', '3', 'g');
+  v := regexp_replace(v, '\yquatro\y', '4', 'g');
+  v := regexp_replace(v, '\ycinco\y', '5', 'g');
+  v := regexp_replace(v, '\yseis\y', '6', 'g');
+  v := regexp_replace(v, '\ysete\y', '7', 'g');
+  v := regexp_replace(v, '\yoito\y', '8', 'g');
+  v := regexp_replace(v, '\ynove\y', '9', 'g');
+  loop
+    v_prev := v;
+    v := regexp_replace(v, '([0-9])[ ._()\-]+([0-9])', '\1\2', 'g');
+    exit when v = v_prev;
+  end loop;
+  return v ~ '[0-9]{8,}';
+end;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -177,6 +256,11 @@ begin
   end if;
   if l.requester_id is distinct from p_actor_id then
     raise exception 'ator não é o solicitante do lead' using errcode = '42501', hint = 'forbidden';
+  end if;
+  -- revisão de segurança: membro da própria papelaria do lead não confirma compra (autoconversão), mesmo que por
+  -- algum acidente o requester_id coincida com o perfil dele.
+  if exists (select 1 from public.stationery_members m where m.stationery_id = l.stationery_id and m.profile_id = p_actor_id) then
+    raise exception 'ator é membro da papelaria do lead' using errcode = '42501', hint = 'forbidden';
   end if;
 
   insert into public.lead_purchase_confirmations (lead_id, actor_id, answer)
@@ -263,6 +347,20 @@ begin
   if l.requester_id is distinct from p_actor_id then
     raise exception 'ator não é o solicitante do lead' using errcode = '42501', hint = 'forbidden';
   end if;
+  -- revisão de segurança: membro da própria papelaria do lead não se autoavalia.
+  if exists (select 1 from public.stationery_members m where m.stationery_id = l.stationery_id and m.profile_id = p_actor_id) then
+    raise exception 'ator é membro da papelaria do lead' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if l.status = 'cancelled' then
+    raise exception 'lead cancelado não pode ser avaliado' using errcode = '23514', hint = 'invalid_state';
+  end if;
+  -- revisão de segurança: só avalia quem tem sinal de compra (declarada pela papelaria OU confirmada pelo próprio
+  -- pai em "Você comprou?") — sem isso, qualquer solicitante avaliaria uma papelaria sem nunca ter comprado.
+  if l.status <> 'converted' and not exists (
+    select 1 from public.lead_purchase_confirmations c where c.lead_id = p_lead_id and c.answer = 'bought_here'
+  ) then
+    raise exception 'compra não confirmada' using errcode = '23514', hint = 'purchase_not_confirmed';
+  end if;
   if exists (select 1 from public.lead_reviews r where r.lead_id = p_lead_id) then
     raise exception 'lead já avaliado' using errcode = '23514', hint = 'invalid_state';
   end if;
@@ -287,6 +385,7 @@ declare
   v_id uuid;
   v_detail text := nullif(btrim(coalesce(p_detail, '')), '');
   v_sub text := public.conversion_jwt_sub();
+  v_stationery_status public.stationery_status;
 begin
   if p_actor_id is null then
     raise exception 'ator ausente' using errcode = '42501', hint = 'forbidden';
@@ -307,6 +406,17 @@ begin
   end if;
   if not exists (select 1 from public.stationery_members m where m.stationery_id = l.stationery_id and m.profile_id = p_actor_id) then
     raise exception 'ator não é membro da papelaria do lead' using errcode = '42501', hint = 'forbidden';
+  end if;
+  select st.status into v_stationery_status from public.stationeries st where st.id = l.stationery_id;
+  if v_stationery_status = 'suspended' then
+    raise exception 'papelaria suspensa não pode contestar' using errcode = '23514', hint = 'stationery_unavailable';
+  end if;
+  -- revisão de segurança: lead já vendido (declarado pela papelaria OU confirmado pelo pai) não é mais "lead ruim"
+  -- a contestar — os 4 motivos fixos são sobre a qualidade do LEAD, não sobre desistir de uma venda já feita.
+  if l.status = 'converted' or exists (
+    select 1 from public.lead_purchase_confirmations c where c.lead_id = p_lead_id and c.answer = 'bought_here'
+  ) then
+    raise exception 'lead já vendido não pode ser contestado' using errcode = '23514', hint = 'lead_sold';
   end if;
   if now() > l.created_at + interval '72 hours' then
     raise exception 'prazo de 72h encerrado' using errcode = '23514', hint = 'dispute_expired';
@@ -390,6 +500,45 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- lead_review_hide: moderação (revisão de segurança). Só admin; motivo de LISTA FECHADA (nunca texto livre do
+-- moderador); idempotente (ocultar já oculta devolve o id sem gravar de novo); nunca reabre.
+-- ---------------------------------------------------------------------------
+create function public.lead_review_hide(p_review_id uuid, p_actor_id uuid, p_reason text) returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_role public.user_role;
+  v_status text;
+begin
+  if p_actor_id is null then
+    raise exception 'ator ausente' using errcode = '42501', hint = 'forbidden';
+  end if;
+  select role into v_role from public.profiles where id = p_actor_id;
+  if v_role is distinct from 'admin' then
+    raise exception 'ator não é admin' using errcode = '42501', hint = 'forbidden';
+  end if;
+  if p_reason not in ('personal_data', 'offensive', 'policy_violation', 'other') then
+    raise exception 'motivo inválido' using errcode = '22023', hint = 'invalid_input';
+  end if;
+
+  select status into v_status from public.lead_reviews where id = p_review_id for update;
+  if not found then
+    raise exception 'avaliação não encontrada' using errcode = 'P0002', hint = 'not_found';
+  end if;
+  if v_status = 'hidden' then
+    return p_review_id; -- idempotente: já oculta.
+  end if;
+
+  update public.lead_reviews
+     set status = 'hidden', hidden_at = now(), hidden_by = p_actor_id, hidden_reason = p_reason
+   where id = p_review_id;
+  return p_review_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Grants
 -- ---------------------------------------------------------------------------
 revoke execute on function public.conversion_jwt_sub() from public, anon, authenticated, service_role;
@@ -406,13 +555,20 @@ grant execute on function public.lead_dispute_open(uuid, uuid, text, text) to se
 revoke execute on function public.lead_dispute_resolve(uuid, uuid, text, text, text) from public, anon, authenticated, service_role;
 grant execute on function public.lead_dispute_resolve(uuid, uuid, text, text, text) to service_role;
 revoke execute on function public.lead_dispute_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.lead_review_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.lead_review_hide(uuid, uuid, text) from public, anon, authenticated, service_role;
+grant execute on function public.lead_review_hide(uuid, uuid, text) to service_role;
 
 revoke all on public.lead_purchase_confirmations, public.lead_reviews, public.lead_disputes from public, anon, authenticated, service_role;
 
 grant select (id, lead_id, answer, created_at, updated_at) on public.lead_purchase_confirmations to authenticated;
 grant select on public.lead_purchase_confirmations to service_role;
 
-grant select (id, lead_id, stationery_id, rating, tags, comment, status, created_at) on public.lead_reviews to anon, authenticated;
+-- revisão de segurança: anon (perfil público, Pap08) NÃO ganha `lead_id` — correlacionar avaliação a um lead
+-- específico, mesmo publicada, deixa de ser um dado agregado e vira uma pista de "quem comprou o quê"; a papelaria
+-- e o admin (via `authenticated` + política própria) continuam com `lead_id` para investigar disputa/moderação.
+grant select (id, stationery_id, rating, tags, comment, status, is_demo, created_at) on public.lead_reviews to anon;
+grant select (id, lead_id, stationery_id, rating, tags, comment, status, is_demo, created_at) on public.lead_reviews to authenticated;
 grant select on public.lead_reviews to service_role;
 
 grant select (id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, created_at, updated_at)

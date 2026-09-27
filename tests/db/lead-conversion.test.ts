@@ -75,6 +75,10 @@ async function createReview(c: Client, o: { lead: string; actor?: string; rating
   ]);
 }
 
+async function hideReview(c: Client, o: { review: string; actor: string | null; reason?: string }) {
+  return attemptH(c, "select public.lead_review_hide($1::uuid, $2::uuid, $3::text) as id", [o.review, o.actor, o.reason ?? "personal_data"]);
+}
+
 describe("S22 · confirmação, avaliação e contestação de lead", () => {
   beforeAll(async () => {
     await seedUsers();
@@ -120,6 +124,15 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
         expect(wrong.hint).toBe("forbidden");
         const bad = await confirmPurchase(c, { lead: lead.id, answer: "yes" });
         expect(bad.hint).toBe("invalid_input");
+      });
+    });
+
+    it("membro da própria papelaria do lead -> forbidden (autoconversão), mesmo que requester_id coincida", async () => {
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+        const selfLead = await seedLead(c, { stationeryId: st, requesterId: IDS.stationery_member });
+        const r = await confirmPurchase(c, { lead: selfLead.id, actor: IDS.stationery_member });
+        expect(r.hint).toBe("forbidden");
       });
     });
 
@@ -179,10 +192,11 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
   });
 
   describe("lead_review_create", () => {
-    it("o solicitante avalia com nota e etiquetas; segunda avaliação do mesmo lead -> invalid_state", async () => {
+    it("o solicitante avalia com nota e etiquetas (compra confirmada); segunda avaliação do mesmo lead -> invalid_state", async () => {
       await withClaims("system", async (c) => {
         const st = await seedStationery(c, { status: "active" });
         const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        await confirmPurchase(c, { lead: lead.id, answer: "bought_here" });
         const ok = await createReview(c, { lead: lead.id, rating: 4, tags: ["bom_atendimento", "entrega_rapida"] });
         expect(ok.error).toBeNull();
         const dup = await createReview(c, { lead: lead.id, rating: 5 });
@@ -198,23 +212,57 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
         const l1 = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
         const l2 = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
         const l3 = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        for (const l of [l1, l2, l3]) await confirmPurchase(c, { lead: l.id, answer: "bought_here" });
         const email = await createReview(c, { lead: l1.id, comment: "me chama em fulano@exemplo.com" });
         expect(email.hint).toBe("personal_data_rejected");
         const phone = await createReview(c, { lead: l2.id, comment: "meu whatsapp é 65 99999-0000 pra combinar" });
         expect(phone.hint).toBe("personal_data_rejected");
         const clean = await createReview(c, { lead: l3.id, comment: "atendimento rápido e educado, recomendo" });
         expect(clean.error).toBeNull();
-        const badTag = await createReview(c, { lead: (await seedLead(c, { stationeryId: st, requesterId: IDS.parent })).id, tags: ["nota_10"] });
+        const l4 = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        await confirmPurchase(c, { lead: l4.id, answer: "bought_here" });
+        const badTag = await createReview(c, { lead: l4.id, tags: ["nota_10"] });
         expect(badTag.hint).toBe("invalid_input");
       });
     });
 
-    it("ator diferente do solicitante -> forbidden", async () => {
+    it("comentário com número por extenso ou 'arroba' ofuscado também é recusado (heurística reforçada)", async () => {
       await withClaims("system", async (c) => {
         const st = await seedStationery(c, { status: "active" });
+        const l1 = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        const l2 = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        for (const l of [l1, l2]) await confirmPurchase(c, { lead: l.id, answer: "bought_here" });
+        const spelled = await createReview(c, { lead: l1.id, comment: "meu numero e zero um dois tres quatro cinco seis sete oito" });
+        expect(spelled.hint).toBe("personal_data_rejected");
+        const obfuscated = await createReview(c, { lead: l2.id, comment: "me chama fulano arroba exemplo.com" });
+        expect(obfuscated.hint).toBe("personal_data_rejected");
+      });
+    });
+
+    it("ator diferente do solicitante -> forbidden; membro da própria papelaria -> forbidden (autoavaliação), mesmo com sinal de compra", async () => {
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
         const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
         const r = await createReview(c, { lead: lead.id, actor: IDS.spare });
         expect(r.hint).toBe("forbidden");
+        // requester_id coincide com o membro por acidente (a 0303/S14 já aplicada não tem esse bloqueio; Ruling no
+        // ledger): mesmo com o lead já `converted` (sinal de compra presente), a autoavaliação é recusada.
+        const selfLead = await seedLead(c, { stationeryId: st, requesterId: IDS.stationery_member, status: "converted" });
+        expect((await createReview(c, { lead: selfLead.id, actor: IDS.stationery_member })).hint).toBe("forbidden");
+      });
+    });
+
+    it("lead cancelado não pode ser avaliado; lead sem sinal de compra -> purchase_not_confirmed; declarado 'Vendi' basta", async () => {
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "active" });
+        const cancelled = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "cancelled" });
+        expect((await createReview(c, { lead: cancelled.id })).hint).toBe("invalid_state");
+
+        const noSignal = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        expect((await createReview(c, { lead: noSignal.id })).hint).toBe("purchase_not_confirmed");
+
+        const declared = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+        expect((await createReview(c, { lead: declared.id })).error).toBeNull();
       });
     });
   });
@@ -253,6 +301,27 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
         expect(r.hint).toBe("dispute_expired");
       });
     });
+
+    it("lead já vendido (declarado 'Vendi' ou confirmado pelo pai) -> lead_sold", async () => {
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+        const declared = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+        expect((await openDispute(c, { lead: declared.id, actor: IDS.stationery_member })).hint).toBe("lead_sold");
+
+        const confirmed = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        await confirmPurchase(c, { lead: confirmed.id, answer: "bought_here" });
+        expect((await openDispute(c, { lead: confirmed.id, actor: IDS.stationery_member })).hint).toBe("lead_sold");
+      });
+    });
+
+    it("papelaria suspensa -> stationery_unavailable", async () => {
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "suspended", ownerId: IDS.stationery_member });
+        const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent });
+        const r = await openDispute(c, { lead: lead.id, actor: IDS.stationery_member });
+        expect(r.hint).toBe("stationery_unavailable");
+      });
+    });
   });
 
   describe("lead_dispute_resolve · estorno idempotente no razão", () => {
@@ -287,6 +356,10 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
 
         const disputeRow = await c.query("select status, reversed_entry_id from public.lead_disputes where id = $1", [disputeId]);
         expect(disputeRow.rows[0]).toMatchObject({ status: "accepted", reversed_entry_id: reversals[0]!.id });
+        // revisão de segurança: reversed_entry_id, quando não nulo, sempre aponta para uma linha real do razão.
+        const reversedRow = await c.query("select id, entry_type from public.credit_ledger where id = $1", [disputeRow.rows[0].reversed_entry_id]);
+        expect(reversedRow.rows).toHaveLength(1);
+        expect(reversedRow.rows[0].entry_type).toBe("reversal");
 
         const conflicting = await resolveDispute(c, { dispute: disputeId, actor: IDS.admin, role: "admin", decision: "rejected" });
         expect(conflicting.hint).toBe("invalid_state");
@@ -324,6 +397,62 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
     });
   });
 
+  describe("lead_review_hide · moderação (revisão de segurança)", () => {
+    async function publishedReview(c: Client): Promise<string> {
+      const st = await seedStationery(c, { status: "active" });
+      const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+      const r = await createReview(c, { lead: lead.id });
+      return r.rows[0]!.id as string;
+    }
+
+    it("admin oculta com motivo de lista fechada; ocultar de novo é idempotente (mesmo id, sem erro)", async () => {
+      await withClaims("system", async (c) => {
+        const reviewId = await publishedReview(c);
+        const first = await hideReview(c, { review: reviewId, actor: IDS.admin, reason: "personal_data" });
+        expect(first.error).toBeNull();
+        const row = await c.query("select status, hidden_reason, hidden_by from public.lead_reviews where id = $1", [reviewId]);
+        expect(row.rows[0]).toEqual({ status: "hidden", hidden_reason: "personal_data", hidden_by: IDS.admin });
+        const second = await hideReview(c, { review: reviewId, actor: IDS.admin, reason: "offensive" });
+        expect(second.error).toBeNull();
+        expect(second.rows[0]!.id).toBe(reviewId);
+        const rowAfter = await c.query("select hidden_reason from public.lead_reviews where id = $1", [reviewId]);
+        expect(rowAfter.rows[0].hidden_reason).toBe("personal_data"); // 2ª chamada não regrava (idempotente).
+      });
+    });
+
+    it("não-admin -> forbidden; motivo fora da lista fechada -> invalid_input; review inexistente -> not_found", async () => {
+      await withClaims("system", async (c) => {
+        const reviewId = await publishedReview(c);
+        expect((await hideReview(c, { review: reviewId, actor: IDS.parent })).hint).toBe("forbidden");
+        expect((await hideReview(c, { review: reviewId, actor: IDS.admin, reason: "porque sim" })).hint).toBe("invalid_input");
+        expect((await hideReview(c, { review: "00000000-0000-4000-8000-000000000099", actor: IDS.admin })).hint).toBe("not_found");
+      });
+    });
+
+    it("avaliação oculta some da leitura pública mas continua visível ao admin/papelaria", async () => {
+      // withClaims abre uma transação/conexão própria: trocar de papel DENTRO da mesma transação (em vez de aninhar
+      // withClaims, que não veria os dados ainda não commitados) é o mesmo padrão de `asOwner` em helpers.ts.
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "active", ownerId: IDS.stationery_member });
+        const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+        const reviewId = (await createReview(c, { lead: lead.id })).rows[0]!.id as string;
+        await hideReview(c, { review: reviewId, actor: IDS.admin });
+
+        await c.query("set local role anon");
+        await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "anon" })]);
+        const asAnon = await attemptH(c, "select id from public.lead_reviews where id = $1", [reviewId]);
+        expect(asAnon.rowCount).toBe(0);
+
+        await c.query("set local role authenticated");
+        await c.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "authenticated", sub: IDS.stationery_member })]);
+        const asMember = await attemptH(c, "select id from public.lead_reviews where id = $1", [reviewId]);
+        expect(asMember.rowCount).toBe(1);
+
+        await c.query("set local role service_role");
+      });
+    });
+  });
+
   describe("imutabilidade e grants", () => {
     it("update/delete direto em lead_disputes é bloqueado, inclusive para service_role", async () => {
       await withClaims("system", async (c) => {
@@ -338,11 +467,24 @@ describe("S22 · confirmação, avaliação e contestação de lead", () => {
       });
     });
 
+    it("update/delete direto em lead_reviews é bloqueado (fora de lead_review_hide), inclusive para service_role", async () => {
+      await withClaims("system", async (c) => {
+        const st = await seedStationery(c, { status: "active" });
+        const lead = await seedLead(c, { stationeryId: st, requesterId: IDS.parent, status: "converted" });
+        const reviewId = (await createReview(c, { lead: lead.id })).rows[0]!.id as string;
+        const upd = await attemptH(c, "update public.lead_reviews set rating = 1 where id = $1", [reviewId]);
+        expect(upd.code).toBe("42501");
+        const del = await attemptH(c, "delete from public.lead_reviews where id = $1", [reviewId]);
+        expect(del.code).toBe("42501");
+      });
+    });
+
     it("EXECUTE das funções de escrita negado a anon/authenticated", async () => {
       const fns = [
         "select public.lead_dispute_open('00000000-0000-4000-8000-000000000099'::uuid, $1::uuid, 'wrong_number', null)",
         "select public.lead_dispute_resolve('00000000-0000-4000-8000-000000000099'::uuid, $1::uuid, 'admin', 'accepted', null)",
         "select public.lead_review_create('00000000-0000-4000-8000-000000000099'::uuid, $1::uuid, 5, '{}'::text[], null)",
+        "select public.lead_review_hide('00000000-0000-4000-8000-000000000099'::uuid, $1::uuid, 'personal_data')",
       ];
       await withClaims("stationery_member", async (c) => {
         for (const sql of fns) {

@@ -7,7 +7,7 @@ import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { resolveDisputeAction } from "@/features/conversion/actions";
 import { errorMessageForCode } from "@/features/conversion/messages";
-import type { DisputeView } from "@/features/conversion/ports";
+import type { AdminDisputeView, DisputeView } from "@/features/conversion/ports";
 import { getConversionService } from "@/features/conversion/wiring";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +20,28 @@ const REASON_LABEL: Record<DisputeView["reason"], string> = {
   out_of_area: "Fora da área de entrega",
 };
 
+const LEAD_STATUS_LABEL: Record<string, string> = {
+  received: "recebido",
+  viewed: "visto",
+  in_progress: "em atendimento",
+  quote_sent: "orçamento enviado",
+  awaiting_customer: "aguardando cliente",
+  converted: "vendido (Vendi)",
+  declined: "não fechou",
+  expired: "expirado",
+  cancelled: "cancelado",
+};
+
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Cuiaba" }).format(d);
+}
+
+/** Resumo dos 3 sinais antes de decidir (revisão de segurança): status do lead + papelaria/pai/Pix. */
+function signalsSummary(d: AdminDisputeView): string {
+  const parts = [d.signals.stationeryConfirmed ? "papelaria" : null, d.signals.parentConfirmed ? "responsável" : null].filter(Boolean);
+  return `Status do pedido: ${LEAD_STATUS_LABEL[d.leadStatus] ?? d.leadStatus}. Sinais confirmados: ${parts.length > 0 ? parts.join(" + ") : "nenhum"} (${d.signals.signalCount}/3; Pix pela plataforma indisponível nesta fase).`;
 }
 
 const btn = "bg-tinta text-papel rounded-botao h-10 px-4 text-[13px] font-extrabold";
@@ -34,8 +52,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   const { user } = await requireAccess("/admin");
   const sp = await searchParams;
   const erro = errorMessageForCode(one(sp.erro));
-  let open: DisputeView[] = [];
-  let resolved: DisputeView[] = [];
+  let open: AdminDisputeView[] = [];
+  let resolved: AdminDisputeView[] = [];
   let failed = false;
   try {
     const actor = await getSessionActor();
@@ -68,12 +86,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                     <div>
                       <p className="text-[14px] font-extrabold">Pedido {d.leadCode} · {REASON_LABEL[d.reason]}</p>
                       <p className="text-texto-3 text-[13px] font-semibold">Prazo do pai/papelaria: até {formatWhen(d.deadlineAt)}{d.detail ? ` · ${d.detail}` : ""}</p>
+                      <p className="text-texto-3 text-[13px] font-semibold">{signalsSummary(d)}</p>
                     </div>
                     <div className="flex gap-2">
                       <form action={resolveDisputeAction}>
                         <input type="hidden" name="disputeId" value={d.id} />
                         <input type="hidden" name="decision" value="accepted" />
-                        <button type="submit" className={btn}>Aceitar (devolve o crédito)</button>
+                        <button type="submit" className={btn}>Aceitar (devolve o crédito, se houver)</button>
                       </form>
                       <form action={resolveDisputeAction}>
                         <input type="hidden" name="disputeId" value={d.id} />
@@ -95,7 +114,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                 {resolved.map((d) => (
                   <li key={d.id} className="bg-campo rounded-campo flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
                     <span>Pedido {d.leadCode} · {REASON_LABEL[d.reason]}</span>
-                    <span className="font-extrabold">{d.status === "accepted" ? "Aceita, crédito devolvido" : "Rejeitada"}{d.resolvedAt ? ` · ${formatWhen(d.resolvedAt)}` : ""}</span>
+                    <span className="font-extrabold">
+                      {d.status === "accepted" ? (d.reversedEntryId ? "Aceita, crédito devolvido" : "Aceita, sem crédito a devolver") : "Rejeitada"}
+                      {d.resolvedAt ? ` · ${formatWhen(d.resolvedAt)}` : ""}
+                    </span>
                   </li>
                 ))}
               </ul>

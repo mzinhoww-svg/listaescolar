@@ -7,6 +7,7 @@ import { isSessionActor, type SessionActor } from "@/features/stationeries/actor
 
 import { CONVERSION_ERROR_CODES, ConversionError, type ConversionErrorCode } from "./errors";
 import type {
+  AdminDisputeView,
   AuditRow,
   ConversionSignals,
   ConversionStore,
@@ -15,6 +16,7 @@ import type {
   DisputeView,
   LeadDisputeGate,
   PurchaseAnswer,
+  ReviewHideReason,
   ReviewTag,
   ReviewView,
   SurveyLeadView,
@@ -160,24 +162,72 @@ const reviewRow = z.object({
   tags: z.array(z.string()),
   comment: z.string().nullable(),
   status: z.enum(["published", "hidden"]),
+  is_demo: z.boolean(),
+  hidden_reason: z.string().nullable(),
   created_at: z.string(),
 });
 
 function toReview(r: z.infer<typeof reviewRow>): ReviewView {
-  return { id: r.id, leadId: r.lead_id, stationeryId: r.stationery_id, rating: r.rating, tags: r.tags, comment: r.comment, status: r.status, createdAt: new Date(r.created_at) };
+  return {
+    id: r.id,
+    leadId: r.lead_id,
+    stationeryId: r.stationery_id,
+    rating: r.rating,
+    tags: r.tags,
+    comment: r.comment,
+    status: r.status,
+    isDemo: r.is_demo,
+    hiddenReason: r.hidden_reason as ReviewHideReason | null,
+    createdAt: new Date(r.created_at),
+  };
 }
 
-/** Avaliações publicadas da papelaria (Pap08, perfil público): sem exigir ator (dado público). */
+/**
+ * Avaliações publicadas da papelaria (Pap08, perfil público): sem exigir ator (dado público). Revisão de segurança:
+ * avaliação `is_demo` só aparece se a PRÓPRIA papelaria também for `is_demo` — nunca mostra um "brincadeira" numa
+ * papelaria real (o resto do perfil já tem o selo "Demonstração" quando a papelaria é demo; não repete por avaliação).
+ */
 async function listPublishedReviews(admin: SupabaseClient, stationeryId: string, limit: number): Promise<ReviewView[]> {
+  const [reviewsRes, stationeryRes] = await Promise.all([
+    admin
+      .from("lead_reviews")
+      .select("id, lead_id, stationery_id, rating, tags, comment, status, is_demo, hidden_reason, created_at")
+      .eq("stationery_id", stationeryId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    admin.from("stationeries").select("is_demo").eq("id", stationeryId).maybeSingle(),
+  ]);
+  if (reviewsRes.error) fail("ler avaliações", reviewsRes.error);
+  if (stationeryRes.error) fail("ler papelaria", stationeryRes.error);
+  const stationeryIsDemo = z.object({ is_demo: z.boolean() }).nullable().parse(stationeryRes.data)?.is_demo ?? false;
+  return z
+    .array(reviewRow)
+    .parse(reviewsRes.data ?? [])
+    .filter((r) => stationeryIsDemo || !r.is_demo)
+    .map(toReview);
+}
+
+/** Avaliações recentes para moderação (admin, todas as papelarias, publicadas e ocultas). */
+async function listRecentReviewsForAdmin(admin: SupabaseClient, actor: SessionActor, limit: number): Promise<ReviewView[]> {
+  requireActor(actor);
+  if (actor.role !== "admin") throw new ConversionError("só a equipe modera avaliações", "forbidden");
   const { data, error } = await admin
     .from("lead_reviews")
-    .select("id, lead_id, stationery_id, rating, tags, comment, status, created_at")
-    .eq("stationery_id", stationeryId)
-    .eq("status", "published")
+    .select("id, lead_id, stationery_id, rating, tags, comment, status, is_demo, hidden_reason, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) fail("ler avaliações", error);
+  if (error) fail("listar avaliações para moderação", error);
   return z.array(reviewRow).parse(data ?? []).map(toReview);
+}
+
+/** `lead_review_hide`: só admin, motivo de lista fechada (nunca texto livre do moderador). Idempotente. */
+async function hideReview(admin: SupabaseClient, actor: SessionActor, reviewId: string, reason: ReviewHideReason): Promise<string> {
+  requireActor(actor);
+  if (actor.role !== "admin") throw new ConversionError("só a equipe modera avaliações", "forbidden");
+  const { data, error } = await admin.rpc("lead_review_hide", { p_review_id: reviewId, p_actor_id: actor.userId, p_reason: reason });
+  if (error) fail("ocultar avaliação", error);
+  return z.uuid().parse(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,23 +285,43 @@ async function resolveDispute(admin: SupabaseClient, actor: SessionActor, disput
   return z.uuid().parse(data);
 }
 
-/** Estado da contestação para o Pap03: prazo, se ainda pode contestar, e a disputa existente (se houver). */
+/**
+ * Estado da contestação para o Pap03: prazo, se ainda pode contestar (com o motivo do bloqueio, quando houver) e a
+ * disputa existente. Espelha as regras da 0402 (`lead_dispute_open`) só para EXIBIÇÃO — o banco é a fonte final.
+ */
 async function getDisputeGate(admin: SupabaseClient, actor: SessionActor, leadId: string): Promise<LeadDisputeGate> {
   const lead = await loadLead(admin, leadId);
   await requireLeadAccess(admin, actor, lead);
   const deadlineAt = new Date(new Date(lead.created_at).getTime() + 72 * 60 * 60 * 1000);
-  const { data, error } = await admin
-    .from("lead_disputes")
-    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at")
-    .eq("lead_id", leadId)
-    .maybeSingle();
-  if (error) fail("ler contestação", error);
-  const existingDispute = data ? toDispute(disputeRow.parse(data), lead.code) : null;
+  const [disputeRes, confirmationRes, stationeryRes] = await Promise.all([
+    admin
+      .from("lead_disputes")
+      .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at")
+      .eq("lead_id", leadId)
+      .maybeSingle(),
+    admin.from("lead_purchase_confirmations").select("answer").eq("lead_id", leadId).maybeSingle(),
+    admin.from("stationeries").select("status").eq("id", lead.stationery_id).maybeSingle(),
+  ]);
+  if (disputeRes.error) fail("ler contestação", disputeRes.error);
+  if (confirmationRes.error) fail("ler confirmação de compra", confirmationRes.error);
+  if (stationeryRes.error) fail("ler papelaria", stationeryRes.error);
+  let existingDispute = disputeRes.data ? toDispute(disputeRow.parse(disputeRes.data), lead.code) : null;
+  // revisão de segurança: o solicitante (pai) do lead nunca lê o `detail` (texto livre) que a papelaria escreveu ao
+  // contestar — só a própria papelaria e o admin.
+  const isRequester = actor.role !== "admin" && actor.role !== "system" && lead.requester_id === actor.userId;
+  if (existingDispute && isRequester) existingDispute = { ...existingDispute, detail: null };
+
+  const boughtHere = z.object({ answer: z.string() }).nullable().parse(confirmationRes.data)?.answer === "bought_here";
+  const sold = lead.status === "converted" || boughtHere;
+  const suspended = z.object({ status: z.string() }).nullable().parse(stationeryRes.data)?.status === "suspended";
+  const expired = Date.now() > deadlineAt.getTime();
+  const blockedReason: LeadDisputeGate["blockedReason"] = existingDispute ? null : sold ? "sold" : suspended ? "suspended" : expired ? "expired" : null;
   return {
     leadId,
     stationeryId: lead.stationery_id,
     deadlineAt,
-    canDispute: existingDispute === null && Date.now() <= deadlineAt.getTime(),
+    canDispute: existingDispute === null && blockedReason === null,
+    blockedReason,
     existingDispute,
   };
 }
@@ -273,35 +343,42 @@ async function listDisputesForStationery(admin: SupabaseClient, actor: SessionAc
     .map((r) => toDispute(r, r.leads?.code ?? ""));
 }
 
-async function listOpenDisputesForAdmin(admin: SupabaseClient, actor: SessionActor): Promise<DisputeView[]> {
+/** Enriquece disputas com o status do lead e os 3 sinais — o admin vê isso ANTES de aceitar/rejeitar (revisão de segurança). */
+async function toAdminDisputeViews(admin: SupabaseClient, rows: readonly (z.infer<typeof disputeRow> & { leads: { code: string; status: string } | null })[]): Promise<AdminDisputeView[]> {
+  return Promise.all(
+    rows.map(async (r) => {
+      const dispute = toDispute(r, r.leads?.code ?? "");
+      const signals = await fetchSignals(admin, r.lead_id);
+      return { ...dispute, leadStatus: r.leads?.status ?? "indisponível", signals };
+    }),
+  );
+}
+
+async function listOpenDisputesForAdmin(admin: SupabaseClient, actor: SessionActor): Promise<AdminDisputeView[]> {
   requireActor(actor);
   if (actor.role !== "admin") throw new ConversionError("só a equipe vê a fila de contestações", "forbidden");
   const { data, error } = await admin
     .from("lead_disputes")
-    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code)")
+    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code, status)")
     .eq("status", "open")
     .order("deadline_at", { ascending: true });
   if (error) fail("listar contestações abertas", error);
-  return z
-    .array(disputeRow.extend({ leads: z.object({ code: z.string() }).nullable() }))
-    .parse(data ?? [])
-    .map((r) => toDispute(r, r.leads?.code ?? ""));
+  const rows = z.array(disputeRow.extend({ leads: z.object({ code: z.string(), status: z.string() }).nullable() })).parse(data ?? []);
+  return toAdminDisputeViews(admin, rows);
 }
 
-async function listResolvedDisputesForAdmin(admin: SupabaseClient, actor: SessionActor, limit: number): Promise<DisputeView[]> {
+async function listResolvedDisputesForAdmin(admin: SupabaseClient, actor: SessionActor, limit: number): Promise<AdminDisputeView[]> {
   requireActor(actor);
   if (actor.role !== "admin") throw new ConversionError("só a equipe vê o histórico de contestações", "forbidden");
   const { data, error } = await admin
     .from("lead_disputes")
-    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code)")
+    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code, status)")
     .neq("status", "open")
     .order("resolved_at", { ascending: false })
     .limit(limit);
   if (error) fail("listar contestações resolvidas", error);
-  return z
-    .array(disputeRow.extend({ leads: z.object({ code: z.string() }).nullable() }))
-    .parse(data ?? [])
-    .map((r) => toDispute(r, r.leads?.code ?? ""));
+  const rows = z.array(disputeRow.extend({ leads: z.object({ code: z.string(), status: z.string() }).nullable() })).parse(data ?? []);
+  return toAdminDisputeViews(admin, rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +482,8 @@ export function createConversionStore(admin: SupabaseClient): ConversionStore {
     getSignals: (actor, leadId) => getSignals(admin, actor, leadId),
     createReview: (actor, leadId, input) => createReview(admin, actor, leadId, input),
     listPublishedReviews: (stationeryId, limit) => listPublishedReviews(admin, stationeryId, limit),
+    listRecentReviewsForAdmin: (actor, limit) => listRecentReviewsForAdmin(admin, actor, limit),
+    hideReview: (actor, reviewId, reason) => hideReview(admin, actor, reviewId, reason),
     openDispute: (actor, leadId, reason, detail) => openDispute(admin, actor, leadId, reason, detail),
     resolveDispute: (actor, disputeId, decision, reason) => resolveDispute(admin, actor, disputeId, decision, reason),
     getDisputeGate: (actor, leadId) => getDisputeGate(admin, actor, leadId),

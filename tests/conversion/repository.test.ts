@@ -61,7 +61,9 @@ afterAll(cleanupUsers);
 describe("ConversionStore × banco real", () => {
   it("confirmação do pai (1 sinal) + declaração da papelaria (2 sinais) -> confirmed; avaliação some da lista de pendentes", async () => {
     const store = createConversionStore(admin);
-    const lead = await withSuperuser((c) => seedLead(c, { stationeryId, requesterId: IDS.parent }));
+    // is_demo: false (papelaria também é real): avaliação real deve aparecer no perfil público (a de brincadeira
+    // numa papelaria real é filtrada por `listPublishedReviews`, revisão de segurança).
+    const lead = await withSuperuser((c) => seedLead(c, { stationeryId, requesterId: IDS.parent, overrides: { is_demo: false } }));
 
     const parentActor = await actor(IDS.parent, "parent");
     const stationeryActor = await actor(IDS.stationery_member, "stationery_member");

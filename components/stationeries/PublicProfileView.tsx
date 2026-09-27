@@ -1,5 +1,5 @@
 import { formatBRL } from "@/features/cart/money";
-import type { ReviewView } from "@/features/conversion/ports";
+import { REVIEW_TAG_LABEL, type ReviewTag, type ReviewView } from "@/features/conversion/ports";
 import type { PublicProfile } from "@/features/stationeries/repository";
 import { PAYMENT_METHODS } from "@/features/stationeries/schemas";
 import { WHATSAPP_ORDER_MESSAGE, whatsappLink } from "@/features/stationeries/whatsapp";
@@ -98,7 +98,7 @@ export function PublicProfileView({ profile, reviews = [] }: { profile: PublicPr
 
         <section aria-labelledby="avaliacoes-publicas">
           <h2 id="avaliacoes-publicas" className="mt-2 mb-2 text-[17px] font-extrabold">
-            Avaliações{avg !== null ? ` · [${avg.toFixed(1)}]` : ""}
+            Avaliações{avg !== null ? ` · [${avg.toFixed(1)}] (média das últimas ${reviews.length})` : ""}
           </h2>
           {reviews.length === 0 ? (
             <p className="rounded-[18px] bg-white p-4 text-[14px] font-bold">Ainda sem avaliações de quem comprou aqui.</p>
@@ -106,7 +106,9 @@ export function PublicProfileView({ profile, reviews = [] }: { profile: PublicPr
             <ul className="flex flex-col gap-2">
               {reviews.slice(0, 10).map((r) => (
                 <li key={r.id} className="rounded-[18px] bg-white p-4">
-                  <p className="text-[14px] font-extrabold">[{r.rating}/5]{r.tags.length > 0 ? ` · ${r.tags.join(", ")}` : ""}</p>
+                  <p className="text-[14px] font-extrabold">
+                    [{r.rating}/5]{r.tags.length > 0 ? ` · ${r.tags.map((t) => REVIEW_TAG_LABEL[t as ReviewTag] ?? t).join(", ")}` : ""}
+                  </p>
                   {r.comment ? <p className="text-texto-2 mt-1 text-[13px] font-semibold">{r.comment}</p> : null}
                 </li>
               ))}

@@ -88,3 +88,17 @@ export async function resolveDisputeAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/auditoria");
   redirect(`${back}?ok=1`);
 }
+
+/** Admin (moderação): oculta uma avaliação publicada, com motivo de lista fechada (nunca texto livre). */
+export async function hideReviewAction(formData: FormData): Promise<void> {
+  const back = "/admin/auditoria";
+  const actor = await getSessionActor();
+  if (!actor) redirect(`/entrar?next=${encodeURIComponent(back)}`);
+  try {
+    await getConversionService().hideReview(actor, { reviewId: text(formData, "reviewId"), reason: text(formData, "reason") });
+  } catch (error) {
+    redirect(`${back}?erro=${logAndCode("ocultar avaliação", error)}`);
+  }
+  revalidatePath(back);
+  redirect(`${back}?ok=oculta`);
+}

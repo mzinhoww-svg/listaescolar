@@ -166,11 +166,13 @@ describe("PublicProfileView", () => {
     expect(text).not.toMatch(/estrela|parceira|cnpj|prazo/i);
     expect(text).not.toContain("Demonstração");
   });
-  it("avaliações publicadas (S22): nota entre colchetes (Ruling SPEC-2), etiquetas e comentário", () => {
-    const reviews = [{ id: "r1", leadId: "l1", stationeryId: "a", rating: 5, tags: ["bom_atendimento"], comment: "Atendimento ótimo", status: "published" as const, createdAt: new Date() }];
+  it("avaliações publicadas (S22): nota entre colchetes (Ruling SPEC-2), etiqueta legível (não o slug) e comentário", () => {
+    const reviews = [
+      { id: "r1", leadId: "l1", stationeryId: "a", rating: 5, tags: ["bom_atendimento"], comment: "Atendimento ótimo", status: "published" as const, isDemo: false, hiddenReason: null, createdAt: new Date() },
+    ];
     render(<PublicProfileView profile={profile} reviews={reviews} />);
-    expect(screen.getByText("Avaliações · [5.0]")).toBeInTheDocument();
-    expect(screen.getByText("[5/5] · bom_atendimento")).toBeInTheDocument();
+    expect(screen.getByText("Avaliações · [5.0] (média das últimas 1)")).toBeInTheDocument();
+    expect(screen.getByText("[5/5] · Bom atendimento")).toBeInTheDocument();
     expect(screen.getByText("Atendimento ótimo")).toBeInTheDocument();
   });
   it("demo tem selo; sem preços e sem WhatsApp: estados vazios honestos", () => {

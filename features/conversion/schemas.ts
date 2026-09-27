@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { DISPUTE_DECISIONS, DISPUTE_REASONS, PURCHASE_ANSWERS, REVIEW_TAGS } from "./ports";
+import { DISPUTE_DECISIONS, DISPUTE_REASONS, PURCHASE_ANSWERS, REVIEW_HIDE_REASONS, REVIEW_TAGS } from "./ports";
 
 export const confirmPurchaseInputSchema = z
   .object({
@@ -49,7 +49,15 @@ export const disputeResolveInputSchema = z
   })
   .strict();
 
+export const reviewHideInputSchema = z
+  .object({
+    reviewId: z.uuid(),
+    reason: z.enum(REVIEW_HIDE_REASONS),
+  })
+  .strict();
+
 export type ConfirmPurchaseInput = z.infer<typeof confirmPurchaseInputSchema>;
 export type ReviewInput = z.infer<typeof reviewInputSchema>;
 export type DisputeOpenInput = z.infer<typeof disputeOpenInputSchema>;
 export type DisputeResolveInput = z.infer<typeof disputeResolveInputSchema>;
+export type ReviewHideInput = z.infer<typeof reviewHideInputSchema>;

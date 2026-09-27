@@ -12,6 +12,12 @@ function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Cuiaba" }).format(d);
 }
 
+const BLOCKED_MESSAGE: Record<NonNullable<LeadDisputeGate["blockedReason"]>, string> = {
+  sold: "Este pedido já foi vendido (confirmado pela papelaria ou pelo responsável) e não pode mais ser contestado.",
+  suspended: "Papelaria suspensa: contestação indisponível.",
+  expired: "Prazo de contestação encerrado",
+};
+
 /** Pap03 "Contestar": prazo de 72h da criação do pedido. Mostra o estado atual quando já existe uma contestação. */
 export function DisputeForm({ code, gate }: { code: string; gate: LeadDisputeGate }) {
   const dispute = gate.existingDispute;
@@ -20,7 +26,9 @@ export function DisputeForm({ code, gate }: { code: string; gate: LeadDisputeGat
       dispute.status === "open"
         ? `Contestação enviada (${REASON_LABEL[dispute.reason]}), aguardando análise.`
         : dispute.status === "accepted"
-          ? `Contestação aceita: o crédito do pedido foi devolvido no extrato.`
+          ? dispute.reversedEntryId
+            ? "Contestação aceita: o crédito do pedido foi devolvido no extrato."
+            : "Contestação aceita: sem crédito a devolver (este pedido não gerou cobrança)."
           : `Contestação rejeitada.${dispute.resolutionReason ? ` Motivo: ${dispute.resolutionReason}` : ""}`;
     return (
       <section className="rounded-card flex flex-col gap-2 bg-white p-5" aria-label="Contestação">
@@ -30,10 +38,11 @@ export function DisputeForm({ code, gate }: { code: string; gate: LeadDisputeGat
     );
   }
   if (!gate.canDispute) {
+    const msg = gate.blockedReason === "expired" ? `${BLOCKED_MESSAGE.expired} em ${formatWhen(gate.deadlineAt)}.` : gate.blockedReason ? BLOCKED_MESSAGE[gate.blockedReason] : "Contestação indisponível.";
     return (
       <section className="rounded-card flex flex-col gap-2 bg-white p-5" aria-label="Contestação">
         <p className="text-[15px] font-extrabold">Contestação</p>
-        <p className="text-texto-3 text-[13px] font-semibold">Prazo de contestação encerrado em {formatWhen(gate.deadlineAt)}.</p>
+        <p className="text-texto-3 text-[13px] font-semibold">{msg}</p>
       </section>
     );
   }

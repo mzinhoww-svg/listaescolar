@@ -3,8 +3,8 @@ import "server-only";
 import type { SessionActor } from "@/features/stationeries/actor";
 
 import { ConversionError } from "./errors";
-import type { AuditRow, ConversionSignals, ConversionStore, DisputeView, LeadDisputeGate, ReviewView, SurveyLeadView } from "./ports";
-import { confirmPurchaseInputSchema, disputeOpenInputSchema, disputeResolveInputSchema, reviewInputSchema } from "./schemas";
+import type { AdminDisputeView, AuditRow, ConversionSignals, ConversionStore, DisputeView, LeadDisputeGate, ReviewView, SurveyLeadView } from "./ports";
+import { confirmPurchaseInputSchema, disputeOpenInputSchema, disputeResolveInputSchema, reviewHideInputSchema, reviewInputSchema } from "./schemas";
 
 export type ConversionServiceDeps = { store: ConversionStore };
 
@@ -32,6 +32,16 @@ export class ConversionService {
     return this.deps.store.listPublishedReviews(stationeryId, limit);
   }
 
+  async listRecentReviewsForAdmin(actor: SessionActor, limit = 50): Promise<ReviewView[]> {
+    return this.deps.store.listRecentReviewsForAdmin(actor, limit);
+  }
+
+  async hideReview(actor: SessionActor, raw: unknown): Promise<string> {
+    const parsed = reviewHideInputSchema.safeParse(raw);
+    if (!parsed.success) throw new ConversionError("dados inválidos", "invalid_input");
+    return this.deps.store.hideReview(actor, parsed.data.reviewId, parsed.data.reason);
+  }
+
   async openDispute(actor: SessionActor, raw: unknown): Promise<string> {
     const parsed = disputeOpenInputSchema.safeParse(raw);
     if (!parsed.success) throw new ConversionError("dados inválidos", "invalid_input");
@@ -52,11 +62,11 @@ export class ConversionService {
     return this.deps.store.listDisputesForStationery(actor, stationeryId);
   }
 
-  async listOpenDisputesForAdmin(actor: SessionActor): Promise<DisputeView[]> {
+  async listOpenDisputesForAdmin(actor: SessionActor): Promise<AdminDisputeView[]> {
     return this.deps.store.listOpenDisputesForAdmin(actor);
   }
 
-  async listResolvedDisputesForAdmin(actor: SessionActor, limit = 20): Promise<DisputeView[]> {
+  async listResolvedDisputesForAdmin(actor: SessionActor, limit = 20): Promise<AdminDisputeView[]> {
     return this.deps.store.listResolvedDisputesForAdmin(actor, limit);
   }
 

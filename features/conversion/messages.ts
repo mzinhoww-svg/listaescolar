@@ -10,6 +10,9 @@ const BY_CODE: Record<ConversionErrorCode | "desconhecido", string> = {
   already_disputed: "Este pedido já foi contestado.",
   dispute_expired: "O prazo de 72 h para contestar este pedido já encerrou.",
   personal_data_rejected: "Remova dados de contato (telefone, e-mail) do comentário antes de enviar.",
+  purchase_not_confirmed: "Só é possível avaliar depois de confirmar a compra ou de a papelaria declarar a venda.",
+  lead_sold: "Este pedido já foi vendido e não pode mais ser contestado.",
+  stationery_unavailable: "Esta papelaria não pode contestar agora.",
   database: "Não foi possível concluir agora. Tente de novo.",
   desconhecido: "Não foi possível concluir agora. Tente de novo.",
 };

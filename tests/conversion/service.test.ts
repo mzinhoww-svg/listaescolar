@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ConversionError } from "@/features/conversion/errors";
-import type { AuditRow, ConversionSignals, ConversionStore, DisputeView, LeadDisputeGate, ReviewView, SurveyLeadView } from "@/features/conversion/ports";
+import type { AdminDisputeView, AuditRow, ConversionSignals, ConversionStore, DisputeView, LeadDisputeGate, ReviewView, SurveyLeadView } from "@/features/conversion/ports";
 import { ConversionService } from "@/features/conversion/service";
 import type { SessionActor } from "@/features/stationeries/actor";
 
@@ -16,12 +16,14 @@ function makeStore(over: Partial<ConversionStore> = {}): ConversionStore {
     getSignals: async () => NO_SIGNALS,
     createReview: async () => "review-id",
     listPublishedReviews: async (): Promise<ReviewView[]> => [],
+    listRecentReviewsForAdmin: async (): Promise<ReviewView[]> => [],
+    hideReview: async () => "review-id",
     openDispute: async () => "dispute-id",
     resolveDispute: async () => "dispute-id",
-    getDisputeGate: async (): Promise<LeadDisputeGate> => ({ leadId: LEAD_ID, stationeryId: "st", deadlineAt: new Date(), canDispute: true, existingDispute: null }),
+    getDisputeGate: async (): Promise<LeadDisputeGate> => ({ leadId: LEAD_ID, stationeryId: "st", deadlineAt: new Date(), canDispute: true, blockedReason: null, existingDispute: null }),
     listDisputesForStationery: async (): Promise<DisputeView[]> => [],
-    listOpenDisputesForAdmin: async (): Promise<DisputeView[]> => [],
-    listResolvedDisputesForAdmin: async (): Promise<DisputeView[]> => [],
+    listOpenDisputesForAdmin: async (): Promise<AdminDisputeView[]> => [],
+    listResolvedDisputesForAdmin: async (): Promise<AdminDisputeView[]> => [],
     listSurveyLeadsForParent: async (): Promise<SurveyLeadView[]> => [],
     listAuditRows: async (): Promise<AuditRow[]> => [],
   };

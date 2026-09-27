@@ -1,13 +1,4 @@
-import { REVIEW_TAGS, type SurveyLeadView } from "@/features/conversion/ports";
-
-const TAG_LABEL: Record<(typeof REVIEW_TAGS)[number], string> = {
-  entrega_rapida: "Entrega rápida",
-  bom_atendimento: "Bom atendimento",
-  preco_justo: "Preço justo",
-  estoque_completo: "Estoque completo",
-  demorou_muito: "Demorou muito",
-  sem_estoque: "Faltou item",
-};
+import { REVIEW_TAG_LABEL, REVIEW_TAGS, type SurveyLeadView } from "@/features/conversion/ports";
 
 const ANSWER_LABEL: Record<NonNullable<SurveyLeadView["existingAnswer"]>, string> = {
   bought_here: "Você disse: comprei aqui",
@@ -70,7 +61,7 @@ export function PurchaseCard({
             {REVIEW_TAGS.map((tag) => (
               <label key={tag} className="bg-campo has-checked:bg-tinta has-checked:text-papel rounded-botao px-3 py-1.5 text-[12px] font-bold">
                 <input type="checkbox" name="tags" value={tag} className="sr-only" />
-                {TAG_LABEL[tag]}
+                {REVIEW_TAG_LABEL[tag]}
               </label>
             ))}
           </div>
@@ -81,6 +72,7 @@ export function PurchaseCard({
             aria-label="Comentário (opcional)"
             className="bg-campo rounded-campo min-h-20 px-4 py-3 text-[14px] font-semibold"
           />
+          <p className="text-texto-3 text-[12px] font-semibold">Não escreva nomes de crianças nem contatos (telefone, e-mail) no comentário.</p>
           <button type="submit" className={`${btn} self-start`}>Enviar avaliação</button>
         </form>
       ) : null}

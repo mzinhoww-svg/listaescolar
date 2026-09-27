@@ -28,11 +28,13 @@ sql_stdin() { docker exec -i "$DB" psql -U postgres -At -v ON_ERROR_STOP=1; }
 ok() { PASS=$((PASS+1)); echo "PASS  $1"; }
 bad() { FAIL=$((FAIL+1)); echo "FAIL  $1  ($2)"; }
 eq() { if [[ "$1" == "$2" ]]; then ok "$3"; else bad "$3" "esperava '$2'; veio '$1'"; fi; }
-has() { if grep -qF -- "$2" <<<"$1"; then ok "$3"; else bad "$3" "esperava conter '$2'; veio: ${1:0:200}"; fi; }
-lacks() { if grep -qF -- "$2" <<<"$1"; then bad "$3" "não devia conter '$2'"; else ok "$3"; fi; }
+has() { if grep -qiF -- "$2" <<<"$1"; then ok "$3"; else bad "$3" "esperava conter '$2'; veio: ${1:0:200}"; fi; }
+lacks() { if grep -qiF -- "$2" <<<"$1"; then bad "$3" "não devia conter '$2'"; else ok "$3"; fi; }
 expect_text() { local t; t=$(ab "$1" get text body 2>/dev/null); has "$t" "$2" "$3"; }
 absent_text() { local t; t=$(ab "$1" get text body 2>/dev/null); lacks "$t" "$2" "$3"; }
-wait_text() { for _ in $(seq 1 "$3"); do ab "$1" get text body 2>/dev/null | grep -qF -- "$2" && return 0; sleep 1; done; return 1; }
+# Case-insensitive (mesmo padrão de e2e-s16.sh): headings com `uppercase` por CSS não mudam o texto do DOM, só a
+# renderização — comparar por texto exato aqui daria falso negativo (achado real ao escrever o E2E da S18).
+wait_text() { for _ in $(seq 1 "$3"); do ab "$1" get text body 2>/dev/null | grep -qiF -- "$2" && return 0; sleep 1; done; return 1; }
 wait_ok() { wait_text "$1" "$2" "${4:-30}" && ok "$3" || bad "$3" "esperava '$2'; veio: $(ab "$1" get text body 2>/dev/null | head -c 220)"; }
 shot() { sleep 1; ab "$1" screenshot "$2" >/dev/null; }
 

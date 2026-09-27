@@ -657,6 +657,24 @@ para quem só consulta o ledger.
   moderado (2-3 arquivos + testes de rota e de componente), sem risco de segurança, mas o tempo desta fatia foi
   para D-057 (10 arquivos) e os demais itens de estados/a11y/dívida — custo se estiver errada: o contador de não
   lidas só atualiza ao navegar entre páginas, não em tempo real (o dado em si nunca é o errado).
+- Achado do E2E da S18 (roteiro, não produto): o cenário de D-153 reabria a MESMA URL
+  (`/admin/denuncias/[id]`) depois do clique em "Colocar em análise" para conferir que o `<select>` de resolução
+  ficava habilitado — reabrir a URL idêntica é um no-op (o navegador/roteador não refaz a navegação), então a
+  releitura via `eval` ainda via o DOM de antes do clique (`disabled: true`). Confirmado que era só do roteiro
+  antes de "corrigir" qualquer coisa: `select status from reports` no banco já mostrava `reviewing`, e uma
+  sessão nova/isolada, com login genuíno na mesma página, já mostrava `disabled === false`. Corrigido trocando a
+  releitura por `location.reload()` (força um GET de verdade) em `scripts/e2e-s18.sh`. Candidato a lição para o
+  PAT-002 do Segundo Cérebro (mesma classe dos achados de "wait_text"/checkbox de sessões anteriores: reabrir a
+  MESMA URL não é reload) — custo se estiver errada: nenhum, é só o roteiro.
+- Ruling: E2E final da S18 (`scripts/e2e-s18.sh`, build de produção local, porta 3003, banco `t3`): 18 PASS, 0
+  FAIL, cobrindo D-034 (agrupamento por categoria), D-140 (link "Montar carrinho" com o id da versão publicada),
+  foco visível/skip-link por teclado no `AdminShell` (novo nesta fatia) e D-153 (campos de resolução desabilitados
+  com status `open`, habilitados após "Colocar em análise"), mais um passe axe-core (CDN, sem dependência nova)
+  em 3 rotas sem violação séria/crítica. Os demais itens de D-057 (refatoração sem UI) e de dívida resolvida por
+  texto/lógica sem tela própria (D-029, D-038, D-080, D-083, D-084, D-090, D-091, D-092) ficam cobertos pelos
+  testes automatizados, não repetidos no E2E manual — custo se estiver errada: nenhuma tela nova ficaria sem
+  cobertura de E2E (D-080/`PushOptIn` é melhor testado por mock de `pushManager` do que por agent-browser sem
+  hardware de push real).
 
 ## Trilha Dados (consolidado de ledger-dados.md, D-048, S18)
 

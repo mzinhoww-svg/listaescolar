@@ -193,4 +193,24 @@ Formato: `Ruling: <decisão> — <motivo> — <custo se estiver errada>`
   checkbox via `eval` precisa de `.click()`, não `set value + dispatch('change')`; (b) `wait_text` deve sempre
   esperar por um texto que só exista no estado-alvo, nunca um substring presente também no estado de repouso da
   tela.
+
+## S15 · segunda reverificação de segurança (Opus, sobre `abf5f4e`)
+
+- Ruling: `student_nickname_valid` (0603) e `LETTERS_ONLY` (Zod) trocam a base de "letra Unicode" (`[[:alpha:]]`
+  no banco, `\p{L}` no Zod) por "letra do SCRIPT LATINO" (faixas A-Z/a-z, Latin-1 Supplement e Latin Extended-A
+  acentuadas no banco; `\p{Script=Latin}` no Zod) — achado da reverificação: "letra" Unicode (categoria `L`) inclui
+  coisa que não é letra de verdade, como os preenchedores de Hangul (U+115F, U+1160, U+3164, U+FFA0 — categoria
+  `Lo`, invisíveis) e a U+02BC apóstrofo-letra (categoria `Lm`); `"Maria"+U+3164+"Silva"` passava as duas
+  validações e aparecia como "Maria Silva" (sem espaço de verdade, então também escapava do teste de sobrenome).
+  Restringir ao script latino fecha as duas faixas de Hangul, a U+02BC e qualquer outro script (cirílico etc.) de
+  uma vez, sem precisar listar caractere invisível um por um — mais robusto que ir caçando exceção por exceção.
+  Verificado direto contra o Postgres local (`en_US.UTF-8`) antes de decidir pela faixa literal de caracteres (não
+  há operador de script/propriedade Unicode no regex ARE do Postgres): as faixas casam por valor de código, não
+  por ordenação de locale, então funcionam independente do collation do banco. Custo se estiver errada: a
+  migration ainda não foi aplicada em lugar nenhum além do local, então ajustar a faixa é só editar o arquivo de
+  novo.
+- Achado (vermelho confirmado antes da correção, não só teórico): rodado contra o código antigo, tanto o teste do
+  Zod (`tests/students/schemas.test.ts`) quanto o de banco (`tests/db/family-area.test.ts`) falharam para
+  `"MariaㅤSilva"` (e os demais códigos U+FFA0/U+115F/U+1160/U+02BC/cirílico) — `\p{L}`/`[[:alpha:]]`
+  aceitavam, confirmando o achado da revisão antes de qualquer correção no arquivo.
 - Ruling: a S28 (ADR-006) entra no PLAN entre a S19 e a S20 e passa a ser pré-requisito do go-live; o brainstorming dela roda em modo autônomo (o orquestrador responde às perguntas da skill com SPEC, PLAN, `docs/design`, a pesquisa do ADR-005 e dados do staging) e o spec resultante vira Ruling — pedido explícito do humano em 2026-09-27 — custo se estiver errada: uma fatia a mais no caminho crítico antes do go-live

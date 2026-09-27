@@ -15,6 +15,12 @@ describe("nicknameSchema", () => {
     expect(nicknameSchema.parse("D’Alva")).toBe("D'Alva"); // apóstrofo curvo -> reto
     expect(nicknameSchema.safeParse("D'Alva").success).toBe(true); // apóstrofo reto direto
     expect(nicknameSchema.parse("Zé")).toBe("Zé"); // NFD (e + acento combinante) -> NFC
+
+    // reverificação de segurança (abf5f4e): nome latino acentuado continua aceito depois de restringir a
+    // \p{Script=Latin} (Latin-1 Supplement / Latin Extended-A).
+    expect(nicknameSchema.safeParse("João").success).toBe(true);
+    expect(nicknameSchema.safeParse("Ângela").success).toBe(true);
+    expect(nicknameSchema.safeParse("Çelo").success).toBe(true);
   });
 
   it("recusa vazio, sobrenome (espaço), tamanho, hífen, ponto, sublinhado, arroba, dígito e invisível — código certo", () => {
@@ -31,6 +37,16 @@ describe("nicknameSchema", () => {
     expect(codeOf(nicknameSchema.safeParse("Aluno123"))).toBe("nickname_invalid");
     expect(codeOf(nicknameSchema.safeParse("Maria\u0007Silva"))).toBe("nickname_invalid"); // controle
     expect(codeOf(nicknameSchema.safeParse("Maria​Silva"))).toBe("nickname_invalid"); // zero-width space, sem espaço visível
+  });
+
+  it("reverificação de segurança (abf5f4e): recusa preenchedor de Hangul, apóstrofo-letra U+02BC e outro script (cirílico)", () => {
+    // \p{L} aceitava essas "letras" que não são letra de verdade; \p{Script=Latin} corrige.
+    expect(codeOf(nicknameSchema.safeParse("MariaㅤSilva"))).toBe("nickname_invalid"); // U+3164 HANGUL FILLER
+    expect(codeOf(nicknameSchema.safeParse("MariaﾠSilva"))).toBe("nickname_invalid"); // U+FFA0 HALFWIDTH HANGUL FILLER
+    expect(codeOf(nicknameSchema.safeParse("MariaᅟSilva"))).toBe("nickname_invalid"); // U+115F HANGUL CHOSEONG FILLER
+    expect(codeOf(nicknameSchema.safeParse("MariaᅠSilva"))).toBe("nickname_invalid"); // U+1160 HANGUL JUNGSEONG FILLER
+    expect(codeOf(nicknameSchema.safeParse("MariaʼSilva"))).toBe("nickname_invalid"); // U+02BC MODIFIER LETTER APOSTROPHE
+    expect(codeOf(nicknameSchema.safeParse("Мария"))).toBe("nickname_invalid"); // cirílico
   });
 });
 

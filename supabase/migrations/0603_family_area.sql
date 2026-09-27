@@ -9,6 +9,11 @@
 -- 1) students perde school_id/school_year (regra SPEC §5: só apelido e série).
 -- 2) student_nickname_valid fica mais estrito: só letras Unicode (um apóstrofo interno no máximo), rejeitando
 --    hífen, ponto, sublinhado, arroba, dígito e caractere invisível/formatação (ex.: U+200B).
+-- 2b) reverificação (Opus) em abf5f4e: `[[:alpha:]]` (POSIX, dependente de locale) e o `\p{L}` do Zod aceitam
+--    "letra" Unicode que é invisível — os preenchedores de Hangul (U+115F, U+1160, U+3164, U+FFA0) e a
+--    U+02BC (apóstrofo-letra) são categoria Lo/Lm, então passavam por "letra" sem ser uma. Restrito a script
+--    Latino explícito (faixas A-Z/a-z, Latin-1 Supplement e Latin Extended-A acentuadas), que exclui as duas
+--    faixas de Hangul e a U+02BC por construção — sem precisar listar caractere invisível um por um.
 -- 3) students_check_limit/saved_lists_check_limit/saved_lists_guard passam de SECURITY DEFINER para SECURITY
 --    INVOKER: rodando com o privilégio de quem chama, a RLS já escopa as consultas internas ao próprio dono, o
 --    que fecha o oráculo (antes, um `owner_id` forjado no INSERT podia fazer o gatilho revelar, pela mensagem de
@@ -20,11 +25,16 @@
 --    hashtextextended('namespace:' || id, 0) já usado em claim_create/lead_create/stationery_register etc.).
 
 -- ---------------------------------------------------------------------------
--- Validador do apelido (usado no CHECK, mesmo padrão de review_items_valid/0204): só letras Unicode, com no
--- máximo um apóstrofo interno (ex.: "D'Alva"), 2-30 caracteres, já aparado. Qualquer outro caractere — espaço,
--- hífen, ponto, sublinhado, arroba, dígito, ou invisível/formatação (zero-width space etc.) — é recusado, porque
--- nenhum deles é [[:alpha:]]. O app (Zod) normaliza NFC e troca o apóstrofo curvo (’) pelo reto (') antes de
--- gravar, então aqui só o reto precisa ser aceito.
+-- Validador do apelido (usado no CHECK, mesmo padrão de review_items_valid/0204): só letra LATINA (A-Z/a-z,
+-- Latin-1 Supplement e Latin Extended-A acentuadas — cobre "João", "Ângela", "Çelo" e afins), com no máximo um
+-- apóstrofo interno (ex.: "D'Alva"), 2-30 caracteres, já aparado. Qualquer outro caractere — espaço, hífen,
+-- ponto, sublinhado, arroba, dígito, invisível/formatação (zero-width space etc.), OUTRO SCRIPT (cirílico etc.)
+-- ou "letra" Unicode que não é letra de verdade (preenchedor de Hangul U+115F/U+1160/U+3164/U+FFA0, ou a
+-- U+02BC apóstrofo-letra) — é recusado, porque nenhum deles cai nas faixas abaixo. Faixas usadas:
+-- A-Za-z (ASCII), À-ÖØ-öø-ÿ (Latin-1 Supplement, pula × U+00D7 e ÷ U+00F7) e Ā-ſ (Latin Extended-A). Verificado
+-- direto contra o Postgres local (locale en_US.UTF-8): as faixas casam por valor de código, não por ordenação de
+-- locale. O app (Zod) usa `\p{Script=Latin}` (mesma exclusão) e normaliza NFC; troca o apóstrofo curvo (’) pelo
+-- reto (') antes de gravar, então aqui só o reto precisa ser aceito.
 -- ---------------------------------------------------------------------------
 create function public.student_nickname_valid(p text) returns boolean
 language sql immutable set search_path = ''
@@ -32,7 +42,7 @@ as $$
   select p is not null
      and p = btrim(p)
      and length(p) between 2 and 30
-     and (p ~ '^[[:alpha:]]+$' or p ~ '^[[:alpha:]]+''[[:alpha:]]+$');
+     and (p ~ '^[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]+$' or p ~ '^[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]+''[A-Za-zÀ-ÖØ-öø-ÿĀ-ſ]+$');
 $$;
 
 -- ---------------------------------------------------------------------------

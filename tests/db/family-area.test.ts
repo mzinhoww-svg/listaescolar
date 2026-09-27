@@ -82,6 +82,22 @@ describe("student_nickname_valid", () => {
       }
     });
   });
+  it("só script latino (reverificação de segurança, abf5f4e): aceita nome acentuado; recusa preenchedor de Hangul, apóstrofo-letra e cirílico", async () => {
+    await inTx(async (c) => {
+      // Nomes latinos acentuados (Latin-1 Supplement / Latin Extended-A) — continuam aceitos.
+      for (const ok of ["João", "Ângela", "Çelo"]) expect(await valid(c, ok), ok).toBe(true);
+      for (const bad of [
+        "MariaㅤSilva", // U+3164 HANGUL FILLER (categoria Lo — passava por "letra" no [[:alpha:]] antigo)
+        "MariaﾠSilva", // U+FFA0 HALFWIDTH HANGUL FILLER
+        "MariaᅟSilva", // U+115F HANGUL CHOSEONG FILLER
+        "MariaᅠSilva", // U+1160 HANGUL JUNGSEONG FILLER
+        "MariaʼSilva", // U+02BC MODIFIER LETTER APOSTROPHE (categoria Lm, não é apóstrofo de verdade)
+        "Мария", // cirílico — script diferente, nunca deveria passar
+      ]) {
+        expect(await valid(c, bad), JSON.stringify(bad)).toBe(false);
+      }
+    });
+  });
 });
 
 describe("tabelas: colunas e RLS", () => {

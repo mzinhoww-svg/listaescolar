@@ -6,14 +6,21 @@ export const NICKNAME_MIN = 2;
 export const NICKNAME_MAX = 30;
 
 // Só um apóstrofo interno (reto ou curvo), no máximo, entre dois grupos de letras — cobre nomes como "D'Alva".
-const LETTERS_ONLY = /^\p{L}+(['’]\p{L}+)?$/u;
+// `\p{Script=Latin}`, não `\p{L}`: `\p{L}` é "categoria letra" e inclui coisa que NÃO é letra de verdade — os
+// preenchedores de Hangul (U+115F, U+1160, U+3164, U+FFA0, invisíveis) e a U+02BC (apóstrofo-letra) são
+// categoria Lo/Lm, então passavam por "letra" sem ser uma (achado da reverificação de segurança, abf5f4e:
+// "Maria"+U+3164+"Silva" passava e aparecia como "Maria Silva"). `\p{Script=Latin}` exclui as duas coisas por
+// construção (nenhuma delas é do script latino) e ainda aceita nome acentuado (João, Ângela, Çelo) e cirílico
+// continua fora (script diferente).
+const LETTERS_ONLY = /^\p{Script=Latin}+(['’]\p{Script=Latin}+)?$/u;
 
 /**
- * Só apelido, sem sobrenome (regra de produto, SPEC §5) e só letras Unicode (correção da revisão de segurança:
- * hífen, ponto, sublinhado, arroba, dígito e caractere invisível/formatação — ex.: zero-width space — são
- * recusados, porque nenhum deles é letra). NFC normaliza antes de validar e grava sempre a forma composta (é, não
- * e + acento combinante); o apóstrofo curvo (’) vira reto (') antes de gravar, para bater com o CHECK do banco
- * (`student_nickname_valid`, 0603), que só aceita o reto.
+ * Só apelido, sem sobrenome (regra de produto, SPEC §5) e só letra LATINA (correção da revisão de segurança:
+ * hífen, ponto, sublinhado, arroba, dígito, caractere invisível/formatação e letra de outro script/categoria —
+ * ex.: zero-width space, preenchedor de Hangul, apóstrofo-letra U+02BC, cirílico — são recusados). NFC normaliza
+ * antes de validar e grava sempre a forma composta (é, não e + acento combinante); o apóstrofo curvo (’) vira
+ * reto (') antes de gravar, para bater com o CHECK do banco (`student_nickname_valid`, 0603), que só aceita o
+ * reto.
  */
 export const nicknameSchema = z
   .string()

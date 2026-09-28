@@ -1,4 +1,5 @@
-import { otherMethods, withApiKey } from "@/features/b2b/api/handler";
+import { otherMethods } from "@/features/b2b/api/handler";
+import { withApiKey } from "@/features/b2b/api/with-api-key";
 import { schoolsEndpoint } from "@/features/b2b/api/endpoints/schools";
 
 export const dynamic = "force-dynamic";

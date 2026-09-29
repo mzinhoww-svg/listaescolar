@@ -81,10 +81,11 @@ describe("seed das jornadas S29", () => {
       expect(list.rows).toEqual([{ st: "published", is_demo: true, items: 4 }]);
 
       const cart = await c.query(
-        `select c.is_demo, c.list_kind, (select count(*)::int from public.cart_items ci where ci.cart_id = c.id) as items
+        `select c.is_demo, c.list_kind, (select count(*)::int from public.cart_items ci where ci.cart_id = c.id) as items,
+                exists (select 1 from public.list_versions v where v.id = c.list_id and v.status = 'published') as from_published_version
            from public.carts c join auth.users u on u.id = c.owner_id where u.email = 'familia@listacerta.test'`,
       );
-      expect(cart.rows).toEqual([{ is_demo: true, list_kind: "official", items: 4 }]);
+      expect(cart.rows).toEqual([{ is_demo: true, list_kind: "official", items: 4, from_published_version: true }]);
 
       const submission = await c.query(
         `select s.status::text as st, s.is_demo, (select count(*)::int from public.parent_list_copies p where p.submission_id = s.id) as copies

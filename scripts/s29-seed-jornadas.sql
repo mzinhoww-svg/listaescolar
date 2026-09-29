@@ -143,16 +143,16 @@ begin
 end $$;
 
 -- Carrinho da família a partir dessa lista publicada (mesmas linhas que features/cart/repository.createCart grava).
+-- `list_id` do carrinho é o id da VERSÃO publicada (é o que `/carrinho/novo?lista=` recebe), não o da lista.
 insert into public.carts (id, owner_id, list_id, strategy, is_demo, list_kind)
-select '00000000-0000-4000-8000-0000000029d2', '00000000-0000-4000-8000-0000000029a1', l.id, 'cheapest', true, 'official'
+select '00000000-0000-4000-8000-0000000029d2', '00000000-0000-4000-8000-0000000029a1', l.current_version_id, 'cheapest', true, 'official'
 from public.school_lists l
 where l.school_id = '00000000-0000-4000-8000-0000000029b1' and l.school_year = 2027 and l.status = 'published'
-on conflict (id) do nothing;
+on conflict (id) do update set list_id = excluded.list_id;
 insert into public.cart_items (cart_id, list_item_id, name, quantity)
 select '00000000-0000-4000-8000-0000000029d2', i.id, i.original_name, greatest(1, round(i.quantity)::int)
 from public.carts c
-  join public.school_lists l on l.id = c.list_id
-  join public.list_items i on i.version_id = l.current_version_id
+  join public.list_items i on i.version_id = c.list_id
 where c.id = '00000000-0000-4000-8000-0000000029d2'
   and not exists (select 1 from public.cart_items ci where ci.cart_id = c.id);
 

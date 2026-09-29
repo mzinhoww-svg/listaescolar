@@ -160,24 +160,37 @@ flowchart LR
 
 ## J7 · Equipe opera (núcleo piloto)
 
+Percorrida no navegador (fichas/J7.md) com decisões reais: revisão de lista, pedido de administração, papelaria e contestação, e o efeito de cada uma vista do outro lado. Detalhes de denúncia e de lote de importação não foram exercitados (sem seed).
+
 ```mermaid
 flowchart LR
-  admin["/admin (fila de atenção)"] --> revisao["/admin/revisao"]
-  revisao --> revitem["/admin/revisao/[id]"]
-  revitem -.->|"aprova"| aviso{{"Aviso à família (J4)"}}
-  admin --> reiv["/admin/reivindicacoes"]
-  reiv --> reivitem["/admin/reivindicacoes/[id]"]
-  reivitem -.->|"decide"| escola{{"Escola confirma (J5)"}}
-  admin --> pap["/admin/papelarias"]
-  pap --> papitem["/admin/papelarias/[id]"]
-  admin --> den["/admin/denuncias"]
-  den --> denitem["/admin/denuncias/[id]"]
-  admin --> cont["/admin/contestacoes"]
-  cont -.->|"decide"| papelaria{{"Papelaria (J6)"}}
-  admin --> listas["/admin/listas/[id]"]
-  admin --> resto["/admin/planos · ia · repasses · inadimplencia · campanhas · parceiros · importacoes · eventos · auditoria"]
+  admin["/admin (contagem por entidade)"] -. "AUSENTE hoje (J7-07): fila de atenção; chips sem link, sem contestações nem listas em revisão" .-> revisao
+  admin -->|"menu"| revisao["/admin/revisao"]
+  familiaenv{{"Família: envio de lista (J4)"}} -.->|"cai em revisão humana"| revisao
+  revisao -->|"Abrir (fora do cartão a 390 px, J7-01)"| revitem["/admin/revisao/[id]"]
+  revitem -->|"Aprovar e publicar (1 clique, sem confirmar, J7-03)"| aviso{{"Família: 'Sua lista foi publicada' (J4)"}}
+  revitem -. "SEM VOLTA hoje (J7-03): depois de publicar não há link para a lista publicada; desfazer só por /admin/listas/[id]" .-> listapub["/escolas/[inep]/[serie] (J1)"]
+  admin -->|"menu"| reiv["/admin/reivindicacoes"]
+  escolapedido{{"Escola: pedir para administrar (J5)"}} -.-> reiv
+  reiv -->|"Abrir e decidir"| reivitem["/admin/reivindicacoes/[id]"]
+  reivitem -->|"Aprovar (com diálogo de confirmação)"| escola{{"Escola: 'A reivindicação foi aprovada' (J5, J7-10)"}}
+  escola -->|"link do aviso: /escolas/[inep]/reivindicar, não /escola"| painelescola["/escola (J5)"]
+  admin -->|"menu"| pap["/admin/papelarias"]
+  cadpap{{"Papelaria: Enviar para análise (J6)"}} -.-> pap
+  pap -. "'Recusar' é link ao detalhe (J7-02)" .-> papitem["/admin/papelarias/[id]"]
+  pap -->|"Aprovar (1 clique, sem confirmar)"| aprovada["Estado Aprovada: só em 'Todas' (J7-08)"]
+  aprovada -. "AUSENTE hoje (J7-06): nenhum aviso à papelaria" .-> painelpap{{"Papelaria: /papelaria 'Publicar papelaria' (J6)"}}
+  admin -->|"menu"| den["/admin/denuncias"]
+  den -->|"detalhe (sem seed)"| denitem["/admin/denuncias/[id]"]
+  denitem -->|"arquivar lista"| listas["/admin/listas/[id] (órfã: só pela denúncia, J7-12)"]
+  admin -->|"menu"| cont["/admin/contestacoes"]
+  papelariacont{{"Papelaria: Contestar (J6)"}} -.-> cont
+  cont -->|"Aceitar/Rejeitar (1 clique, sem motivo, J7-04)"| papelaria{{"Papelaria: 'Contestação rejeitada.' sem motivo, sem aviso (J6)"}}
+  admin -->|"menu"| resto["/admin/planos · ia · repasses · inadimplencia · campanhas · parceiros · importacoes · eventos · auditoria"]
+  vendas{{"Papelaria: Vendi (J6)"}} -.-> resto
   resto --> parc["/admin/parceiros/[id]"]
-  resto --> imp["/admin/importacoes/[id]"]
+  resto --> imp["/admin/importacoes/[id] (sem seed; id inexistente cai no 404 público, J7-16)"]
+  resto -. "trilha /admin/eventos mostra ator 'system' em toda decisão (J7-14)" .-> resto
 ```
 
 ## J8 · Parceiro B2B integra

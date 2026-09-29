@@ -72,3 +72,34 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:25:50.230Z contra `http://1
 | `/papelaria/desempenho` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
 | `/papelarias/s29-papelaria-demo` | pub | 200 | falha | beco sem saída: sem caminho de volta |
 <!-- J6:end -->
+
+<!-- J7:start -->
+## J7 · Equipe opera
+
+Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:56:36.813Z contra `http://127.0.0.1:3003`. Rotas com falha: **15** de 22.
+
+| Rota | Conta | HTTP | Resultado | Achados |
+|---|---|---|---|---|
+| `/admin` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/revisao` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/reivindicacoes` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/papelarias` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/denuncias` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/contestacoes` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/planos` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/ia` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/repasses` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/inadimplencia` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/campanhas` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/parceiros` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/importacoes` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/eventos` | admin | 200 | falha | beco sem saída: sem caminho de volta |
+| `/admin/auditoria` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/admin/revisao/` | admin | - | pulada | pulada: sem dado no seed (item de revisão); o seed cresce na Task 5 |
+| `/admin/listas/` | admin | - | pulada | pulada: sem dado no seed (lista); o seed cresce na Task 5 |
+| `/admin/reivindicacoes/` | admin | - | pulada | pulada: sem dado no seed (reivindicação); o seed cresce na Task 5 |
+| `/admin/papelarias/` | admin | - | pulada | pulada: sem dado no seed (id da papelaria); o seed cresce na Task 5 |
+| `/admin/denuncias/` | admin | - | pulada | pulada: sem dado no seed (denúncia); o seed cresce na Task 5 |
+| `/admin/importacoes/` | admin | - | pulada | pulada: sem dado no seed (lote de importação); o seed cresce na Task 5 |
+| `/admin/parceiros/` | admin | - | pulada | pulada: sem dado no seed (id do parceiro); o seed cresce na Task 5 |
+<!-- J7:end -->

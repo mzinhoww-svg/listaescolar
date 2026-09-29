@@ -20,8 +20,8 @@ export function SchoolCard({ school }: { school: SchoolListItem }) {
           {initials(school.name)}
         </span>
         <span className="flex min-w-0 grow flex-col gap-0.5">
-          <span className="text-[15px] leading-tight font-extrabold">{school.name}</span>
-          <span className="text-texto-3 text-xs font-medium">
+          <span className="text-[15px] leading-tight font-extrabold [overflow-wrap:anywhere]">{school.name}</span>
+          <span className="text-texto-3 text-xs font-medium [overflow-wrap:anywhere]">
             INEP {school.inep}
             {where ? ` · ${where}` : ""}
           </span>

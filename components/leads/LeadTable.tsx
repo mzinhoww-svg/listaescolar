@@ -12,7 +12,7 @@ const detail = (code: string): string => `/papelaria/leads/${code}`;
 /** Tabela (desktop). Valor "enviado" só quando a papelaria informou; sem estimativa aqui (o detalhe calcula do catálogo). */
 export function LeadTable({ rows, now }: Props) {
   return (
-    <div className="rounded-card hidden overflow-x-auto bg-white md:block">
+    <div className="rounded-card hidden overflow-x-auto bg-white md:block" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[720px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">

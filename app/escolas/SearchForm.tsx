@@ -44,20 +44,20 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
           maxLength={100}
           autoComplete="off"
           placeholder="Nome da escola ou INEP"
-          className="placeholder:text-texto-3 min-w-0 grow bg-transparent text-[15px] font-semibold outline-none [&::-webkit-search-cancel-button]:hidden"
+          className="placeholder:text-texto-3 h-11 min-w-0 grow bg-transparent text-[15px] font-semibold outline-none [&::-webkit-search-cancel-button]:hidden"
         />
         {value ? (
           <button
             type="button"
             onClick={() => setValue("")}
             aria-label="Limpar busca"
-            className="text-texto-2 flex size-9 shrink-0 items-center justify-center rounded-full"
+            className="text-texto-2 flex size-11 shrink-0 items-center justify-center rounded-full"
           >
             <CloseIcon />
           </button>
         ) : null}
         {stacked ? null : (
-          <button type="submit" className="bg-tinta text-papel rounded-botao h-10 shrink-0 px-4 text-sm font-extrabold">
+          <button type="submit" className="bg-tinta text-papel rounded-botao h-11 shrink-0 px-4 text-sm font-extrabold">
             {submitLabel}
           </button>
         )}

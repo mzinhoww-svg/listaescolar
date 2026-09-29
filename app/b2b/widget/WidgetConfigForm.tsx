@@ -32,7 +32,7 @@ export function WidgetConfigForm({ partnerId, coverageLabel, initial, siteOrigin
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
       <div className="flex flex-col gap-4 rounded-[20px] bg-white p-5">
         <h2 className="text-[16px] font-extrabold">Configuração</h2>
         {error ? (
@@ -88,7 +88,7 @@ export function WidgetConfigForm({ partnerId, coverageLabel, initial, siteOrigin
 
         <div className="flex flex-col gap-1.5">
           <p className="text-texto-3 text-[12px] font-extrabold tracking-[0.04em] uppercase">Código de incorporação</p>
-          <pre className="bg-tinta text-papel overflow-x-auto rounded-campo p-4 text-[12.5px] leading-relaxed">
+          <pre tabIndex={0} aria-label="Código de incorporação" className="bg-tinta text-papel overflow-x-auto rounded-campo p-4 text-[12.5px] leading-relaxed">
             <code>{snippet}</code>
           </pre>
           <button
@@ -109,12 +109,12 @@ export function WidgetConfigForm({ partnerId, coverageLabel, initial, siteOrigin
           <h2 className="text-[16px] font-extrabold">Pré-visualização</h2>
           <span className="bg-campo text-texto-2 rounded-botao px-3 py-1 text-[12px] font-extrabold">Como aparece no seu site</span>
         </div>
-        <div className="rounded-[16px] border-[1.5px] border-dashed border-[#c9c2b3] p-4" style={{ borderColor: accentColor }}>
+        <div className="rounded-[16px] border-[1.5px] border-dashed border-linha-tracejada p-4" style={{ borderColor: accentColor }}>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-[15px] font-extrabold">Lista escolar</p>
-            <span className="text-texto-3 text-[11px] font-bold">por listacerta</span>
+            <span className="text-texto-3 text-[12px] font-bold">por listacerta</span>
           </div>
-          <div className="border-linha bg-campo mb-3 rounded-campo border-[1.5px] px-3 py-2.5 text-[13px] font-semibold text-[#8a8375]">Nome da escola</div>
+          <div className="border-linha bg-campo mb-3 rounded-campo border-[1.5px] px-3 py-2.5 text-[13px] font-semibold text-texto-3">Nome da escola</div>
           <ul className="mb-3 flex flex-col gap-2">
             {["[Item da lista]", "[Item da lista]", "[Item da lista]"].map((it, i) => (
               <li key={i} className="flex items-center justify-between text-[13px] font-semibold">

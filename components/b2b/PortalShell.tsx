@@ -69,7 +69,7 @@ export function PortalShell({ tradeName, status, email, children }: Props) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-bold">{email ?? "indisponível"}</p>
             <form action={signOutAction}>
-              <button type="submit" className="text-[12px] font-semibold text-white/70 underline">
+              <button type="submit" className="min-h-11 px-2 text-[12px] font-semibold text-white/70 underline">
                 Sair
               </button>
             </form>

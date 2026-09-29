@@ -36,7 +36,7 @@ export function ConsentsList({ consents }: { consents: MyConsent[] }) {
             <p className="text-texto-2 text-[12px] font-bold">Revogado em {new Date(c.revoked_at).toLocaleDateString("pt-BR")}</p>
           ) : revocable(c.purpose) ? (
             <>
-              <p className="text-texto-3 text-[11px] font-semibold">{REVOKE_EFFECT_NOTE[c.purpose]}</p>
+              <p className="text-texto-3 text-[12px] font-semibold">{REVOKE_EFFECT_NOTE[c.purpose]}</p>
               <form action={revokeConsentAction}>
                 <input type="hidden" name="id" value={c.id} />
                 <button type="submit" className="text-erro-texto text-[12px] font-extrabold underline">
@@ -45,7 +45,7 @@ export function ConsentsList({ consents }: { consents: MyConsent[] }) {
               </form>
             </>
           ) : (
-            <p className="text-texto-3 text-[11px] font-semibold">Aceite contratual: para revogar, encerre o contrato correspondente.</p>
+            <p className="text-texto-3 text-[12px] font-semibold">Aceite contratual: para revogar, encerre o contrato correspondente.</p>
           )}
         </li>
       ))}

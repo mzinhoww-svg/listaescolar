@@ -3,7 +3,7 @@
  * Medição da S28 (antes/depois): Lighthouse mobile, axe e screenshots 390x844 das páginas principais.
  * Roda contra um `next start` local com o Supabase local e dados de demonstração (nunca staging/produção).
  *
- * Uso: node scripts/s28-medir.mjs <antes|depois> [--only=inicio,busca] [--skip=lighthouse,axe,shots]
+ * Uso: node scripts/s28-medir.mjs <antes|depois> [--only=inicio,busca] [--skip=lighthouse,axe,shots,checks]
  * Ambiente (defaults da trilha 2):
  *   BASE=http://127.0.0.1:3002  MAILPIT=http://127.0.0.1:54524  DB=supabase_db_listacerta-t2
  *   RUNS=3 (execuções do Lighthouse por página; usa a mediana)
@@ -42,6 +42,8 @@ const ab = (k, ...a) => sh("agent-browser", ["--session", session(k), ...a]);
 
 const PARENT = "s28pai@listacerta.test";
 const STATIONERY = "s14a@listacerta.test"; // papelaria demo A (scripts/e2e-s14-seed.sql)
+const B2B_OWNER = "parent@listacerta.test"; // dono de parceiro B2B (seed e2e-s24 ou insert em b2b_partner_members)
+const ADMIN = "admin@listacerta.test"; // admin semeado pelo db:reset (S28 Task 20)
 const cartId = sql("select id from public.carts order by created_at desc limit 1");
 const PAGES = [
   { key: "inicio", path: "/", who: "pub" },
@@ -53,6 +55,25 @@ const PAGES = [
   { key: "login", path: "/entrar", who: "pub" },
   { key: "papelaria", path: "/papelaria", who: "pap" },
   { key: "como-funciona", path: "/como-funciona", who: "pub" },
+  // S28 Task 20: áreas fora das 9 páginas originais.
+  { key: "cotacao-nova", path: "/cotacao/nova", who: "pai" },
+  { key: "conta", path: "/conta", who: "pai" },
+  { key: "escola-painel", path: "/escola", who: "pai" },
+  { key: "admin", path: "/admin", who: "adm" },
+  { key: "b2b", path: "/b2b", who: "b2b" },
+  { key: "parceiros", path: "/parceiros", who: "pub" },
+].filter((p) => !only || only.includes(p.key));
+
+// Rotas extras só para as checagens de layout (alvo de toque, h1, main, rolagem horizontal, texto < 12 px).
+const CHECK_EXTRA = [
+  ...["planos", "papelarias", "contestacoes", "ia", "campanhas", "revisao", "parceiros", "eventos", "inadimplencia", "reivindicacoes", "repasses", "auditoria", "denuncias", "importacoes"].map((x) => ({ key: `admin-${x}`, path: `/admin/${x}`, who: "adm" })),
+  ...["carrinhos", "compras", "listas-salvas", "notificacoes", "privacidade", "alunos/novo"].map((x) => ({ key: `conta-${x.replace("/", "-")}`, path: `/conta/${x}`, who: "pai" })),
+  ...["insights", "widget", "campanhas", "api", "webhooks", "conta", "faturamento", "docs"].map((x) => ({ key: `b2b-${x}`, path: `/b2b/${x}`, who: "b2b" })),
+  ...["papelaria-areas", "papelaria-catalogo", "papelaria-creditos", "papelaria-desempenho", "papelaria-leads"].map((x) => ({ key: x, path: `/${x.replace("-", "/")}`, who: "pap" })),
+  { key: "parceiros-docs", path: "/parceiros/docs", who: "pub" },
+  { key: "cadastrar-papelaria", path: "/cadastrar-papelaria", who: "pai" },
+  { key: "pesquisa", path: "/pesquisa", who: "pub" },
+  { key: "papelaria-publica", path: "/papelarias/s14-papelaria-a", who: "pub" },
 ].filter((p) => !only || only.includes(p.key));
 
 async function login(k, email, next) {
@@ -70,13 +91,23 @@ async function login(k, email, next) {
 async function ensureSessions() {
   ab("pub", "set", "viewport", "390", "844");
   const need = new Set(PAGES.map((p) => p.who));
-  if (need.has("pai")) {
+  if (need.has("pai") || CHECK_EXTRA.some((p) => p.who === "pai")) {
     ab("pai", "set", "viewport", "390", "844");
     await login("pai", PARENT, "/");
     await sleep(1500);
     assertLogged("pai", "/enviar-lista");
   }
-  if (need.has("pap")) {
+  if (need.has("b2b") || CHECK_EXTRA.some((p) => p.who === "b2b")) {
+    ab("b2b", "set", "viewport", "390", "844");
+    await login("b2b", B2B_OWNER, "/b2b");
+    await sleep(1500);
+  }
+  if (need.has("adm") || CHECK_EXTRA.some((p) => p.who === "adm")) {
+    ab("adm", "set", "viewport", "390", "844");
+    await login("adm", ADMIN, "/admin");
+    await sleep(1500);
+  }
+  if (need.has("pap") || CHECK_EXTRA.some((p) => p.who === "pap")) {
     ab("pap", "set", "viewport", "390", "844");
     await login("pap", STATIONERY, "/papelaria");
     await sleep(1500);
@@ -223,13 +254,72 @@ function runShots() {
   }
 }
 
+// Checagens de layout a 390 px (Task 20): rolagem horizontal, `main`/`h1`, alvos de toque < 44 px, texto < 12 px.
+const PROBE = `(()=>{
+const vis=e=>{const r=e.getBoundingClientRect();const c=getComputedStyle(e);return r.width>0&&r.height>0&&c.visibility!=='hidden'&&c.display!=='none'};
+const sel=e=>e.tagName.toLowerCase()+(e.id?'#'+e.id:'')+(e.className&&typeof e.className==='string'?'.'+e.className.trim().split(/\\s+/).slice(0,2).join('.'):'');
+const vw=document.documentElement.clientWidth;
+const out={path:location.pathname,sw:document.documentElement.scrollWidth,vw,h1:document.querySelectorAll('h1').length,main:document.querySelectorAll('main').length,over:[],small:[],tiny:[]};
+if(out.sw>vw+1){out.over=[];const clipped=e=>{for(let p=e.parentElement;p&&p!==document.body;p=p.parentElement){const c=getComputedStyle(p);if(c.overflowX!=='visible'&&p.getBoundingClientRect().right<=vw+1)return true}return false};for(const e of document.body.querySelectorAll('*')){const r=e.getBoundingClientRect();if(r.width>0&&r.right>vw+1&&!clipped(e)){out.over.push(sel(e)+' '+Math.round(r.right)+' pos='+getComputedStyle(e).position);if(out.over.length>=5)break}}}
+for(const e of document.querySelectorAll('a[href],button,select,textarea,summary,[role=button],[role=tab],input:not([type=hidden])')){
+ if(!vis(e)||e.closest('.sr-only')||e.matches('.sr-only'))continue;
+ const c=getComputedStyle(e);if(e.tagName==='A'&&c.display==='inline')continue;
+ let r=e.getBoundingClientRect();
+ if(e.tagName==='INPUT'&&/checkbox|radio/.test(e.type)){const l=e.closest('label')||(e.id&&document.querySelector('label[for="'+e.id+'"]'));if(l)r=l.getBoundingClientRect();}
+ if(r.height<43.5||r.width<43.5)out.small.push(sel(e)+' '+Math.round(r.width)+'x'+Math.round(r.height));
+}
+const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+while((n=w.nextNode())){if(!n.textContent.trim())continue;const p=n.parentElement;if(!p||!vis(p)||p.closest('.sr-only,script,style,svg'))continue;const f=parseFloat(getComputedStyle(p).fontSize);if(f<11.99)out.tiny.push(sel(p)+' '+f+'px')}
+out.small=[...new Set(out.small)].slice(0,8);out.tiny=[...new Set(out.tiny)].slice(0,5);
+return JSON.stringify(out)})()`;
+
+function runChecks() {
+  const rows = [];
+  const details = [];
+  let bad = 0;
+  for (const p of [...PAGES, ...CHECK_EXTRA]) {
+    console.log(`check ${p.key}`);
+    try {
+      ab(p.who, "open", `${BASE}${p.path}`);
+      ab(p.who, "wait", "1200");
+      const raw = execFileSync("agent-browser", ["--session", session(p.who), "--json", "eval", "--stdin"], { input: PROBE, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      const r = JSON.parse(JSON.parse(raw).data.result);
+      const moved = r.path !== p.path.split("?")[0] ? ` → \`${r.path}\`` : "";
+      const noScroll = r.sw <= r.vw + 1;
+      const fails = [!noScroll && "rolagem", r.main !== 1 && `main=${r.main}`, r.h1 !== 1 && `h1=${r.h1}`, r.small.length && `alvos=${r.small.length}`, r.tiny.length && `texto<12=${r.tiny.length}`].filter(Boolean);
+      if (fails.length && !moved) bad += 1;
+      rows.push(`| ${p.key} | \`${p.path}\`${moved} | ${r.sw}/${r.vw} | ${r.main} | ${r.h1} | ${r.small.length} | ${r.tiny.length} | ${moved ? "redirecionou" : fails.join(", ") || "ok"} |`);
+      if (fails.length && !moved) details.push(`### ${p.key}\n${r.over.length ? `- estouro: ${r.over.join("; ")}\n` : ""}${r.small.length ? `- alvos < 44 px: ${r.small.join("; ")}\n` : ""}${r.tiny.length ? `- texto < 12 px: ${r.tiny.join("; ")}\n` : ""}`);
+    } catch (e) {
+      rows.push(`| ${p.key} | \`${p.path}\` | erro | | | | | ${String(e.message).split("\n")[0].slice(0, 80)} |`);
+    }
+  }
+  const md = `# Checagens de layout a 390 px (${label}) · S28
+
+Gerado por \`scripts/s28-medir.mjs\` em ${new Date().toISOString()}. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um \`main\` e um \`h1\`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
+
+Rotas com falha: **${bad}**
+
+| Chave | Rota | Rolagem/viewport | main | h1 | Alvos < 44 px | Texto < 12 px | Resultado |
+|---|---|---|---|---|---|---|---|
+${rows.join("\n")}
+
+## Detalhe das falhas
+
+${details.join("\n") || "Nenhuma."}
+`;
+  writeFileSync(join(OUT, "checks.md"), md);
+  console.log(`checks: ${bad} rota(s) com falha`);
+}
+
 await ensureSessions();
 try {
   if (!skip.has("lighthouse")) runLighthouse();
   if (!skip.has("axe")) runAxe();
   if (!skip.has("shots")) runShots();
+  if (!skip.has("checks")) runChecks();
 } finally {
-  for (const k of ["pub", "pai", "pap"]) {
+  for (const k of ["pub", "pai", "pap", "adm", "b2b"]) {
     try {
       ab(k, "close");
     } catch {

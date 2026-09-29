@@ -19,8 +19,8 @@ function Card({ state, eyebrow, tag, title, text, children }: { state: string; e
   return (
     <section aria-labelledby="reivindicar" className="bg-campo flex flex-col gap-3 rounded-3xl p-5" data-claim-state={state}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-texto-3 text-[11px] font-extrabold tracking-[0.1em] uppercase">{eyebrow}</span>
-        <span className="rounded-botao bg-white px-2.5 py-1 text-[11px] font-extrabold">{tag}</span>
+        <span className="text-texto-3 text-[12px] font-extrabold tracking-[0.1em] uppercase">{eyebrow}</span>
+        <span className="rounded-botao bg-white px-2.5 py-1 text-[12px] font-extrabold">{tag}</span>
       </div>
       <h2 id="reivindicar" className="text-base font-extrabold">{title}</h2>
       <p className="text-texto-2 text-[13px] leading-[1.4] font-medium">{text}</p>

@@ -67,11 +67,11 @@ export default async function Page() {
         </div>
       )}
       <div className="mt-6 flex flex-wrap gap-3 text-[14px] font-extrabold">
-        <Link href="/admin/importacoes" className="text-verde-fundo underline">Importações de escolas</Link>
-        <Link href="/admin/papelarias" className="text-verde-fundo underline">Papelarias</Link>
-        <Link href="/admin/eventos" className="text-verde-fundo underline">Eventos (auditoria)</Link>
-        <Link href="/admin/denuncias" className="text-verde-fundo underline">Denúncias</Link>
-        <Link href="/admin/ia" className="text-verde-fundo underline">Configuração de IA</Link>
+        <Link href="/admin/importacoes" className="text-verde-fundo inline-flex min-h-11 items-center underline">Importações de escolas</Link>
+        <Link href="/admin/papelarias" className="text-verde-fundo inline-flex min-h-11 items-center underline">Papelarias</Link>
+        <Link href="/admin/eventos" className="text-verde-fundo inline-flex min-h-11 items-center underline">Eventos (auditoria)</Link>
+        <Link href="/admin/denuncias" className="text-verde-fundo inline-flex min-h-11 items-center underline">Denúncias</Link>
+        <Link href="/admin/ia" className="text-verde-fundo inline-flex min-h-11 items-center underline">Configuração de IA</Link>
       </div>
     </AdminShell>
   );

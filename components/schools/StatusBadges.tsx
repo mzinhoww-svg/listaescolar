@@ -8,7 +8,7 @@ const TONE: Record<VerificationStatus, string> = {
   suspended: "bg-erro-fundo text-erro-texto",
 };
 
-const BASE = "rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[11px] font-extrabold whitespace-nowrap";
+const BASE = "rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[12px] font-extrabold whitespace-nowrap";
 
 /** Selo do status real + selo "Demonstração" quando for dado demonstrativo. */
 export function StatusBadges({ status, isDemo }: { status: VerificationStatus; isDemo: boolean }) {

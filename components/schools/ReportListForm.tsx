@@ -31,7 +31,7 @@ export function ReportListForm({ listId, action, ok, erro }: { listId: string; a
               <option key={r} value={r}>{REPORT_REASON_LABEL[r]}</option>
             ))}
           </select>
-          <button type="submit" className="border-tinta text-tinta rounded-botao h-10 border-[1.5px] bg-transparent font-extrabold">Denunciar</button>
+          <button type="submit" className="border-tinta text-tinta rounded-botao h-11 border-[1.5px] bg-transparent font-extrabold">Denunciar</button>
         </form>
       </div>
     </details>

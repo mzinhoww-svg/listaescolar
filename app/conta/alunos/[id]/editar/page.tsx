@@ -24,7 +24,7 @@ export default async function EditStudentPage({ params }: { params: Promise<{ id
 
   return (
     <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
-      <BackHeader href="/conta" title="Editar aluno" />
+      <BackHeader href="/conta" title="Editar aluno" heading />
       <StudentForm
         action={updateStudentAction}
         defaults={{ id: student.id, nickname: student.nickname, gradeSlug: student.gradeSlug ?? undefined }}

@@ -25,7 +25,7 @@ export function ClaimLayout({ inep, title, crumb, children }: { inep: string; ti
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
           <div className="flex flex-col gap-5 rounded-[24px] bg-white p-6 lg:p-8">{children}</div>
           <aside className="bg-tinta text-papel flex flex-col gap-4 rounded-[24px] p-6">
-            <p className="text-verde-certo text-[11px] font-extrabold tracking-[0.15em] uppercase">Por que administrar a página</p>
+            <p className="text-verde-certo text-[12px] font-extrabold tracking-[0.15em] uppercase">Por que administrar a página</p>
             <ul className="flex flex-col gap-3 text-[14px] leading-[1.4] font-bold">
               {WHY.map((t) => (
                 <li key={t} className="flex gap-2.5"><span aria-hidden="true" className="text-verde-certo">✓</span>{t}</li>

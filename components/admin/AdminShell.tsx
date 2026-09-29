@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { AdminNav } from "@/components/admin/AdminNav";
 import { Logo } from "@/components/brand/Logo";
 import { SkipLink } from "@/components/site/SkipLink";
 
@@ -52,27 +51,16 @@ type Props = {
 export function AdminShell({ active, email, breadcrumb, title, actions, children }: Props) {
   const initials = (email ?? "?").slice(0, 2).toUpperCase();
   return (
-    <div className="flex min-h-screen flex-1">
+    <div className="flex min-h-screen flex-1 flex-col md:flex-row">
       <SkipLink />
-      <aside className="bg-tinta text-papel flex w-[248px] shrink-0 flex-col gap-6 px-6 py-7">
+      <aside className="bg-tinta text-papel flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 md:w-[248px] md:flex-col md:items-stretch md:gap-6 md:px-6 md:py-7">
         <Logo variant="horizontal-negativo" height={36} />
         <span className="bg-verde-certo text-tinta w-fit rounded-botao px-3 py-0.5 text-xs font-extrabold">
           Admin interno
         </span>
-        <nav aria-label="Administração" className="flex flex-col gap-1">
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              aria-current={n.href === active ? "page" : undefined}
-              className={`focus-visible:outline-verde-certo rounded-campo px-3 py-2.5 text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 ${n.href === active ? "bg-white/10" : "text-papel/70"}`}
-            >
-              {n.label}
-            </Link>
-          ))}
-        </nav>
+        <AdminNav items={NAV} active={active} />
         {email === null ? null : (
-          <div className="mt-auto flex items-center gap-3">
+          <div className="flex items-center gap-3 md:mt-auto">
             <span className="bg-verde-certo text-tinta flex size-10 items-center justify-center rounded-full text-xs font-extrabold">
               {initials}
             </span>
@@ -80,11 +68,11 @@ export function AdminShell({ active, email, breadcrumb, title, actions, children
           </div>
         )}
       </aside>
-      <main id="conteudo" className="flex min-w-0 flex-1 flex-col gap-6 px-10 py-9">
+      <main id="conteudo" className="flex min-w-0 flex-1 flex-col gap-6 px-4 py-6 md:px-10 md:py-9">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-texto-3 text-[13px] font-semibold">{breadcrumb}</p>
-            <h1 className="text-[32px] leading-[1.1] font-extrabold tracking-[-0.035em]">{title}</h1>
+            <h1 className="text-[26px] leading-[1.1] md:text-[32px] font-extrabold tracking-[-0.035em]">{title}</h1>
           </div>
           {actions}
         </header>

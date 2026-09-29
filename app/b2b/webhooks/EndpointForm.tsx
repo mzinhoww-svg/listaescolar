@@ -138,7 +138,7 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
                   {copied ? "Copiado" : "Copiar"}
                 </button>
                 {justCreatedSecret && !endpoint ? (
-                  <button type="button" onClick={concludeCreate} className="bg-tinta text-papel rounded-botao h-10 w-fit px-4 text-[13px] font-extrabold">
+                  <button type="button" onClick={concludeCreate} className="bg-tinta text-papel rounded-botao h-11 w-fit px-4 text-[13px] font-extrabold">
                     Já copiei
                   </button>
                 ) : null}

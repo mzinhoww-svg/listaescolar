@@ -51,7 +51,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
           <section className="flex flex-col gap-3 rounded-[20px] bg-white p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[11px] font-extrabold">{LIST_STATE_LABEL[list.status] ?? list.status}</span>
+              <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[12px] font-extrabold">{LIST_STATE_LABEL[list.status] ?? list.status}</span>
               {list.isDemo ? <DemoBadge /> : null}
             </div>
             <h2 className="text-[22px] font-extrabold">

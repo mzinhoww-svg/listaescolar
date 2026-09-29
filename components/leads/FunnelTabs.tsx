@@ -13,7 +13,7 @@ export function FunnelTabs({ active, counts, hrefFor }: Props) {
           key={t.id}
           href={hrefFor(t.id)}
           aria-current={t.id === active ? "page" : undefined}
-          className={`${t.id === active ? "bg-tinta text-papel" : "bg-campo text-tinta"} rounded-botao px-4 py-2.5 text-[14px] font-extrabold`}
+          className={`${t.id === active ? "bg-tinta text-papel" : "bg-campo text-tinta"} rounded-botao inline-flex min-h-11 items-center px-4 py-2.5 text-[14px] font-extrabold`}
         >
           {t.label} <span className="opacity-70">({counts[t.id]})</span>
         </Link>

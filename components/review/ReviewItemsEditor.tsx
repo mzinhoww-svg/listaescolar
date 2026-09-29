@@ -110,7 +110,7 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
           </span>
         </p>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
         <table className="w-full min-w-[640px] text-left text-[14px]">
           <caption className="sr-only">Itens lidos no documento, com quantidade, categoria e confiança</caption>
           <thead>

@@ -87,7 +87,7 @@ export function SchoolSearchPicker({
               <ul className="flex flex-col gap-1.5">
                 {hits.map((h) => (
                   <li key={h.id}>
-                    <button type="button" onClick={() => setChosen(h)} className="bg-campo w-full rounded-campo px-4 py-2.5 text-left text-[14px] font-semibold">
+                    <button type="button" onClick={() => setChosen(h)} className="min-h-11 inline-flex items-center justify-center bg-campo w-full rounded-campo px-4 py-2.5 text-left text-[14px] font-semibold">
                       <span className="font-extrabold">{h.name}</span> · INEP {h.inep}
                       <span className="text-texto-3 block text-[12px]">{[h.neighborhood, h.municipalityName].filter(Boolean).join(" · ")}</span>
                     </button>

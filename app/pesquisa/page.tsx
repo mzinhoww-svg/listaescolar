@@ -11,8 +11,10 @@ export const metadata: Metadata = {
 
 export default function PesquisaPage() {
   return (
-    <Suspense fallback={null}>
-      <Pesquisa />
-    </Suspense>
+    <main id="conteudo" className="flex flex-1 flex-col">
+      <Suspense fallback={null}>
+        <Pesquisa />
+      </Suspense>
+    </main>
   );
 }

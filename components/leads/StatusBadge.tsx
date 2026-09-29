@@ -25,7 +25,7 @@ export function StatusBadge({ status }: { status: LeadStatus }) {
 
 export function DemoSeal() {
   return (
-    <span className="bg-campo text-texto-2 rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[11px] font-extrabold whitespace-nowrap">
+    <span className="bg-campo text-texto-2 rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[12px] font-extrabold whitespace-nowrap">
       Demonstração
     </span>
   );

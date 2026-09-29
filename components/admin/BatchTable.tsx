@@ -17,7 +17,7 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
     );
   }
   return (
-    <div className="rounded-card bg-branco-tonal overflow-x-auto">
+    <div className="rounded-card bg-branco-tonal overflow-x-auto" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full border-collapse text-[15px] whitespace-nowrap">
         <thead>
           <tr className="border-linha border-b">

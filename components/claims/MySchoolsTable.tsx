@@ -7,7 +7,7 @@ import { nextStep } from "@/features/claims/next-step";
 import type { MyClaimRow, MySchoolRow } from "@/features/claims/queries-mine";
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
-const chip = "rounded-botao inline-flex w-fit px-2.5 py-1 text-[11px] font-extrabold";
+const chip = "rounded-botao inline-flex w-fit px-2.5 py-1 text-[12px] font-extrabold";
 const link = "text-verde-fundo text-[14px] font-extrabold";
 
 function Step({ title, body }: { title: string; body: string }) {
@@ -24,7 +24,7 @@ function Cell({ name, inep, demo }: { name: string; inep: string; demo: boolean 
     <>
       <td className="px-5 py-4">
         <span className="flex items-center gap-3 text-[15px] font-bold">
-          <span className="bg-tinta text-papel grid size-9 shrink-0 place-items-center rounded-[10px] text-[11px] font-extrabold">{initials(name)}</span>
+          <span className="bg-tinta text-papel grid size-9 shrink-0 place-items-center rounded-[10px] text-[12px] font-extrabold">{initials(name)}</span>
           {name}
           {demo ? <DemoBadge /> : null}
         </span>
@@ -45,10 +45,10 @@ export function MySchoolsTable({ schools, claims, withList = new Set() }: { scho
     );
   }
   return (
-    <div className="overflow-x-auto rounded-[24px] bg-white">
+    <div className="overflow-x-auto rounded-[24px] bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[640px] text-left">
         <thead>
-          <tr className="text-texto-3 border-linha border-b text-[11px] font-extrabold tracking-[0.1em] uppercase">
+          <tr className="text-texto-3 border-linha border-b text-[12px] font-extrabold tracking-[0.1em] uppercase">
             <th className="px-5 py-4">Escola</th>
             <th className="px-5 py-4">INEP</th>
             <th className="px-5 py-4">Situação</th>

@@ -12,7 +12,7 @@ const STATE_TEXT = { awaiting_publication: "Aguardando publicação", published:
 /** Fila (Admin05). Só origem e data: nome e e-mail de quem enviou nunca chegam aqui. Textos vêm de frases fixas. */
 export function ReviewQueueTable({ rows, labels, demoPublication = false }: { rows: readonly QueueRow[]; labels: Readonly<Record<string, SchoolLabel>>; demoPublication?: boolean }) {
   return (
-    <div className="overflow-x-auto rounded-[24px] bg-white p-2">
+    <div className="overflow-x-auto rounded-[24px] bg-white p-2" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[860px] text-left text-[14px]">
         <caption className="sr-only">Listas enviadas para revisão, da mais antiga para a mais recente</caption>
         <thead>

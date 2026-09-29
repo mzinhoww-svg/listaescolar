@@ -36,7 +36,7 @@ export function ConfirmSaleForm({ leadId, declaredSaleCents, sale, back }: Props
       <form action={confirmSaleAction}>
         <input type="hidden" name="leadId" value={leadId} />
         <input type="hidden" name="back" value={back} />
-        <button type="submit" className="border-tinta text-tinta rounded-botao h-10 border-[1.5px] px-4 text-[13px] font-extrabold">
+        <button type="submit" className="border-tinta text-tinta rounded-botao h-11 border-[1.5px] px-4 text-[13px] font-extrabold">
           Confirmar Pix pela plataforma ({formatBrl(declaredSaleCents)})
         </button>
       </form>

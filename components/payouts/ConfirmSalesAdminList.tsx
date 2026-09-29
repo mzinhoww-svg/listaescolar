@@ -47,7 +47,7 @@ export function ConfirmSalesAdminList({ sales, schools }: { sales: readonly Conf
                     ))}
                   </select>
                 </label>
-                <button type="submit" className="bg-tinta text-papel rounded-botao h-10 px-4 text-[13px] font-extrabold">
+                <button type="submit" className="bg-tinta text-papel rounded-botao h-11 px-4 text-[13px] font-extrabold">
                   {s.awaitingValidation ? "Validar" : "Confirmar"}
                 </button>
               </form>

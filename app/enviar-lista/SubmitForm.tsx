@@ -59,7 +59,8 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
 
   return (
     <>
-      <form action={action} onSubmit={onSubmit} noValidate className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-5 pt-14 pb-9">
+      <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col">
+      <form action={action} onSubmit={onSubmit} noValidate className="flex w-full flex-1 flex-col gap-4 px-5 pt-14 pb-9">
         <header className="relative flex h-12 items-center justify-center">
           <Link href="/" aria-label="Voltar" className="bg-campo absolute left-0 grid size-12 place-items-center rounded-full">
             <ChevronLeftIcon />
@@ -107,6 +108,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
           {preparing ? "Preparando a foto…" : "Enviar para revisão"}
         </button>
       </form>
+      </main>
       {pending ? (
         <div className="fixed inset-0 z-50 overflow-auto">
           <ProcessingScreen phase="sending" title="Enviando sua lista" subtitle="Guardando o arquivo e iniciando a leitura." />

@@ -30,7 +30,7 @@ export function ClaimQueueCard({ row }: { row: QueueRow }) {
           </p>
         </div>
         <span className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className={`rounded-botao px-2.5 py-1 text-[11px] font-extrabold ${withAdmin ? "bg-tinta text-white" : "bg-campo text-texto-2"}`}>
+          <span className={`rounded-botao px-2.5 py-1 text-[12px] font-extrabold ${withAdmin ? "bg-tinta text-white" : "bg-campo text-texto-2"}`}>
             {withAdmin ? "Escola com admin" : "Escola sem admin"}
           </span>
           {row.isDemo ? <DemoBadge /> : null}
@@ -47,7 +47,7 @@ export function ClaimQueueCard({ row }: { row: QueueRow }) {
       </dl>
       <footer className="flex items-center justify-between gap-3">
         <ClaimStatusBadge status={row.status} />
-        <Link href={`/admin/reivindicacoes/${row.id}`} className="bg-tinta text-papel rounded-botao px-5 py-2.5 text-[14px] font-extrabold">
+        <Link href={`/admin/reivindicacoes/${row.id}`} className="min-h-11 inline-flex items-center justify-center bg-tinta text-papel rounded-botao px-5 py-2.5 text-[14px] font-extrabold">
           Abrir e decidir
         </Link>
       </footer>

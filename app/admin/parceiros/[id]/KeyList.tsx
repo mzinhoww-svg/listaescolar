@@ -16,7 +16,7 @@ export function KeyList({ partnerId, keys }: { partnerId: string; keys: readonly
     <div className="flex flex-col gap-2">
       {keys.map((k) => (
         <div key={k.id} className="flex flex-wrap items-center gap-3 rounded-[16px] bg-white p-4">
-          <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[11px] font-extrabold">{k.environment === "live" ? "Produção" : "Sandbox"}</span>
+          <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[12px] font-extrabold">{k.environment === "live" ? "Produção" : "Sandbox"}</span>
           <KeyMask environment={k.environment} last4={k.last4} />
           <ScopeChips scopes={k.scopes} />
           <KeyStatusBadge status={k.status} expiresAt={k.expiresAt} />

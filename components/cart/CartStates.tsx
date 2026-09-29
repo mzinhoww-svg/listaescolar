@@ -18,7 +18,8 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
   );
 }
 
-export function BackHeader({ href, title }: { href: string; title: string }) {
+/** `heading`: o título é o `h1` da página (use quando a página não tem outro `h1`). */
+export function BackHeader({ href, title, heading = false }: { href: string; title: string; heading?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <Link
@@ -40,7 +41,7 @@ export function BackHeader({ href, title }: { href: string; title: string }) {
           <path d="M15 18l-6-6 6-6" />
         </svg>
       </Link>
-      <p className="text-base font-bold">{title}</p>
+      {heading ? <h1 className="text-base font-bold">{title}</h1> : <p className="text-base font-bold">{title}</p>}
       <div className="w-12" />
     </div>
   );

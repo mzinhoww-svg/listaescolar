@@ -17,7 +17,7 @@ export function DelinquencyTable({ rows }: { rows: readonly DelinquencyRow[] }) 
     return <p className="text-texto-3 text-[14px] font-semibold">Nenhuma papelaria em atraso.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white">
+    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[640px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">

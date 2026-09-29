@@ -57,7 +57,7 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false,
                   {item.name}
                   {(item.alerts ?? []).map((a) =>
                     ALERT_LABEL[a] ? (
-                      <span key={a} className="text-texto-3 ml-2 text-[11px] font-semibold">
+                      <span key={a} className="text-texto-3 ml-2 text-[12px] font-semibold">
                         {ALERT_LABEL[a]}
                       </span>
                     ) : null,

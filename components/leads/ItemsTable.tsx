@@ -28,7 +28,7 @@ export function ItemsTable({ estimate }: { estimate: Estimate }) {
               <td className="px-4 py-3">{l.name}</td>
               <td className="px-4 py-3">
                 {moneyOrUnavailable(l.lineTotalCents)}
-                {l.priceUpdatedAt ? <span className="text-texto-3 block text-[11px]">informado em {formatWhen(l.priceUpdatedAt)}</span> : null}
+                {l.priceUpdatedAt ? <span className="text-texto-3 block text-[12px]">informado em {formatWhen(l.priceUpdatedAt)}</span> : null}
               </td>
               <td className="px-4 py-3">
                 <span className={`${TONE[l.stockLabel]} rounded-botao px-3 py-1 text-[12px] font-extrabold whitespace-nowrap`}>{l.stockLabel}</span>

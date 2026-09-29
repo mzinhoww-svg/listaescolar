@@ -26,7 +26,7 @@ function Actions({ campaign, onDone }: { campaign: CampaignRow; onDone: () => vo
     <div className="flex flex-col items-end gap-1">
       <div className="flex flex-wrap justify-end gap-2">
         {campaign.status === "draft" ? (
-          <button type="button" disabled={pending} onClick={() => run(() => submitCampaignAction({ campaignId: campaign.id }))} className="bg-tinta text-papel rounded-botao h-9 px-3 text-[13px] font-extrabold disabled:opacity-50">
+          <button type="button" disabled={pending} onClick={() => run(() => submitCampaignAction({ campaignId: campaign.id }))} className="bg-tinta text-papel rounded-botao h-11 px-3 text-[13px] font-extrabold disabled:opacity-50">
             Enviar para aprovação
           </button>
         ) : null}
@@ -41,7 +41,7 @@ function Actions({ campaign, onDone }: { campaign: CampaignRow; onDone: () => vo
           </button>
         ) : null}
         {campaign.status === "paused" && campaign.pauseOrigin !== "admin" ? (
-          <button type="button" disabled={pending} onClick={() => run(() => resumeCampaignAction({ campaignId: campaign.id }))} className="bg-verde-certo text-tinta rounded-botao h-9 px-3 text-[13px] font-extrabold disabled:opacity-50">
+          <button type="button" disabled={pending} onClick={() => run(() => resumeCampaignAction({ campaignId: campaign.id }))} className="bg-verde-certo text-tinta rounded-botao h-11 px-3 text-[13px] font-extrabold disabled:opacity-50">
             Retomar
           </button>
         ) : null}
@@ -67,7 +67,7 @@ function Actions({ campaign, onDone }: { campaign: CampaignRow; onDone: () => vo
 export function CampaignsTable({ campaigns }: { campaigns: readonly CampaignRow[] }) {
   const router = useRouter();
   return (
-    <div className="overflow-x-auto rounded-[20px] bg-white">
+    <div className="overflow-x-auto rounded-[20px] bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[720px] text-left text-[14px]">
         <thead className="text-texto-3 text-[12px] font-extrabold uppercase">
           <tr>

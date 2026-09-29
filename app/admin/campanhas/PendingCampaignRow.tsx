@@ -65,7 +65,7 @@ export function PendingCampaignRow({ campaign }: { campaign: CampaignRow }) {
       ) : null}
       {error ? <p className="mb-2 text-[13px] font-bold text-erro-texto">{error}</p> : null}
       <div className="flex gap-2">
-        <button type="button" disabled={pending} onClick={() => decide("approved")} className="bg-verde-certo text-tinta rounded-botao h-10 px-4 text-[13px] font-extrabold disabled:opacity-50">
+        <button type="button" disabled={pending} onClick={() => decide("approved")} className="bg-verde-certo text-tinta rounded-botao h-11 px-4 text-[13px] font-extrabold disabled:opacity-50">
           Aprovar
         </button>
         <button

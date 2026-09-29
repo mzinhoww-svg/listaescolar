@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { redactEvent } from "@/lib/observability/sentry-redact";
+import { redactBreadcrumb, redactEvent } from "@/lib/observability/sentry-redact";
 
 describe("redactEvent", () => {
   it("remove e-mail, telefone e IP de message e da mensagem da exceção", () => {
@@ -52,5 +52,63 @@ describe("redactEvent", () => {
   it("zera qualquer `user` (defesa em profundidade; nunca usamos setUser)", () => {
     const out = redactEvent({ user: { id: "u1", email: "a@b.com" } });
     expect(out.user).toEqual({});
+  });
+
+  describe("URLs sem query string nem fragmento (revisão S19, I4)", () => {
+    it("request.url e contexts.nextjs.request_path perdem ?query e #fragmento", () => {
+      const out = redactEvent({
+        request: { url: "https://listacerta.example/auth/confirm?token_hash=SEGREDO&type=magiclink#frag" },
+        contexts: { nextjs: { request_path: "/auth/confirm?token_hash=SEGREDO", route_type: "page" } },
+      });
+      expect(out.request?.url).toBe("https://listacerta.example/auth/confirm");
+      const ctx = out.contexts?.nextjs as Record<string, unknown>;
+      expect(ctx.request_path).toBe("/auth/confirm");
+      expect(ctx.route_type).toBe("page");
+      expect(JSON.stringify(out)).not.toContain("SEGREDO");
+    });
+
+    it("breadcrumbs (fetch/navegação) e spans de transação perdem a query das URLs", () => {
+      const out = redactEvent({
+        breadcrumbs: [
+          { category: "fetch", data: { url: "https://x.supabase.co/rest/v1/a?token=SEGREDO", status_code: 200 } },
+          { category: "navigation", data: { from: "/entrar?next=%2Fx&t=SEGREDO", to: "/painel#SEGREDO" } },
+        ],
+        transaction: "GET /auth/confirm?token_hash=SEGREDO",
+        spans: [
+          { span_id: "a", trace_id: "b", start_timestamp: 1, status: "ok", description: "GET https://x.supabase.co/rest/v1/a?apikey=SEGREDO", data: { "http.url": "https://x.supabase.co/rest/v1/a?apikey=SEGREDO", "http.query": "apikey=SEGREDO" } },
+        ],
+      });
+      expect(JSON.stringify(out)).not.toContain("SEGREDO");
+      expect((out.breadcrumbs?.[0]?.data as Record<string, unknown>).url).toBe("https://x.supabase.co/rest/v1/a");
+      expect((out.breadcrumbs?.[0]?.data as Record<string, unknown>).status_code).toBe(200);
+      expect((out.breadcrumbs?.[1]?.data as Record<string, unknown>).to).toBe("/painel");
+    });
+
+    it("redactBreadcrumb (beforeBreadcrumb) também limpa a URL", () => {
+      const b = redactBreadcrumb({ category: "xhr", data: { url: "https://a.b/c?d=SEGREDO" } });
+      expect((b.data as Record<string, unknown>).url).toBe("https://a.b/c");
+    });
+
+    it("texto livre com URL na mensagem perde a query mas mantém o resto", () => {
+      const out = redactEvent({ message: "falhou ao chamar https://a.b/c?token=SEGREDO agora e/ou depois" });
+      expect(out.message).toBe("falhou ao chamar https://a.b/c agora e/ou depois");
+    });
+  });
+
+  describe("CPF e CNPJ (revisão S19, M5)", () => {
+    it.each(["123.456.789-09", "12345678909", "12.345.678/0001-95", "12345678000195"])("mascara %s em texto, extra e breadcrumbs", (doc) => {
+      const out = redactEvent({
+        message: `documento ${doc} inválido`,
+        extra: { d: `cliente ${doc}` },
+        breadcrumbs: [{ message: `busca ${doc}` }],
+      });
+      const all = JSON.stringify(out);
+      expect(all).not.toContain(doc);
+      expect(all).not.toContain(doc.replace(/\D/g, ""));
+    });
+    it("não mascara números curtos legítimos (ano, contagem, código LC-)", () => {
+      const out = redactEvent({ message: "ano 2027, 4 tarefas, lead LC-5TJ1" });
+      expect(out.message).toBe("ano 2027, 4 tarefas, lead LC-5TJ1");
+    });
   });
 });

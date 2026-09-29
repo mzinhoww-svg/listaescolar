@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 
-import { redactEvent } from "@/lib/observability/sentry-redact";
+import { redactBreadcrumb, redactEvent } from "@/lib/observability/sentry-redact";
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -19,6 +19,7 @@ if (dsn) {
     },
     tracesSampleRate: 0.1,
     beforeSend: redactEvent,
+    beforeBreadcrumb: redactBreadcrumb,
     beforeSendTransaction: redactEvent,
   });
 }

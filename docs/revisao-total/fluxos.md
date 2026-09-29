@@ -29,23 +29,26 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  lista["/escolas/[inep]/[serie] (J1)"] -->|"Montar carrinho"| novo["/carrinho/novo?lista="]
+  lista["/escolas/[inep]/[serie] (J1)"] -->|"Montar carrinho com esta lista"| novo["/carrinho/novo?lista="]
   novo -.->|"sem sessão"| entrar["/entrar (J3)"]
   entrar -.->|"volta ao ponto de origem"| novo
-  novo -->|"Comparar opções"| cart["/carrinho/[id]"]
-  cart -->|"Ir para a loja"| irpara{{"/ir-para/[id]/[loja] (site da loja)"}}
-  cart -->|"checkout"| checkout["/carrinho/[id]/checkout"]
-  cart -->|"Pedir cotação"| nova["/cotacao/nova"]
-  lista -. "não há link direto (J1-02)" .-> nova
-  cotacaoidx["/cotacao"] -->|"Nova cotação"| nova
-  nova -->|"escolhe papelaria e envia"| lead{{"Lead chega à papelaria (J6)"}}
-  lead -.->|"papelaria responde"| cot["/cotacao/[code]"]
-  nova -->|"pedido enviado"| cot
-  cot -->|"Continuar no WhatsApp"| wa{{"WhatsApp da papelaria"}}
-  cot -->|"Minhas compras"| compras["/conta/compras"]
-  cart -->|"Minhas compras"| compras
-  compras -->|"abre uma compra"| cot
-  compras -->|"abre um carrinho"| cart
+  novo -->|"Comparar opções"| cart["/carrinho/[id] (4 opções)"]
+  cart -->|"Escolher esta"| checkout["/carrinho/[id]/checkout (Comprar por loja)"]
+  checkout -->|"Buscar / Abrir busca de item"| irpara["/ir-para/[id]/[loja]"]
+  irpara -->|"Abrir loja"| loja{{"Site da loja"}}
+  irpara -->|"Voltar ao carrinho (leva ao checkout)"| checkout
+  cart -->|"Pedir cotação a papelarias"| escolhe["/cotacao/nova?carrinho="]
+  escolhe -->|"Pedir pelo WhatsApp"| consent["/cotacao/nova?carrinho=&papelaria="]
+  consent -->|"Confirmar pedido de cotação"| cot["/cotacao/[code]"]
+  consent -.->|"lead chega à papelaria"| papelaria{{"/papelaria/leads (J6)"}}
+  papelaria -.->|"papelaria responde"| cot
+  cot -->|"Abrir WhatsApp"| wa{{"WhatsApp da papelaria"}}
+  cot -->|"Voltar"| idx["/cotacao"]
+  conta{{"/conta (J3)"}} -->|"Minhas cotações"| idx
+  idx -->|"abre um pedido"| cot
+  compras["/conta/compras"]
+  cot -. "SEM LINK hoje (J2-01): a pergunta Você comprou nesta papelaria? é órfã" .-> compras
+  compras -.->|"Comprei aqui: registra a venda (J6)"| papelaria
 ```
 
 ## J3 · Família entra e cuida da conta (piloto)

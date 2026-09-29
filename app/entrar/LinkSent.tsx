@@ -25,6 +25,9 @@ export function LinkSent({ email, next, pending, resend, onChangeEmail }: Props)
       <p id="email-msg" className="text-verde-fundo text-[15px] leading-snug font-semibold">
         Enviamos o link para <strong className="break-all">{email}</strong>. Abra o e-mail neste aparelho e toque no link.
       </p>
+      <p className="text-texto-2 text-[13px] leading-snug font-semibold">
+        Se o link abrir dentro do WhatsApp ou de outro aplicativo e o acesso não funcionar, abra o link no navegador do celular (toque nos três pontinhos e escolha abrir no navegador).
+      </p>
       <p className="text-texto-3 text-[13px] font-medium">Não chegou? Veja a caixa de spam ou peça outro link.</p>
       <form action={resend}>
         <input type="hidden" name="next" value={next} />

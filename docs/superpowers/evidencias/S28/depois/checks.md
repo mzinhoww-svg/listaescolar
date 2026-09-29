@@ -1,6 +1,6 @@
 # Checagens de layout a 390 px (depois) · S28
 
-Gerado por `scripts/s28-medir.mjs` em 2026-09-29T14:08:05.463Z. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um `main` e um `h1`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
+Gerado por `scripts/s28-medir.mjs` em 2026-09-29T15:49:07.148Z. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um `main` e um `h1`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
 
 Rotas com falha: **0**
 
@@ -10,7 +10,7 @@ Rotas com falha: **0**
 | busca | `/escolas?q=Demonstra` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | escola | `/escolas/99001001` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | lista | `/escolas/99001001/ef-5?ano=2027` | 390/390 | 1 | 1 | 0 | 0 | ok |
-| carrinho | `/carrinho/` → `/carrinho` | 390/390 | 1 | 1 | 0 | 0 | redirecionou |
+| carrinho | `/carrinho/6613e784-fcb8-4df3-98be-1c8308ffbec5` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | enviar-lista | `/enviar-lista` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | login | `/entrar` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | papelaria | `/papelaria` | 390/390 | 1 | 1 | 0 | 0 | ok |
@@ -54,6 +54,7 @@ Rotas com falha: **0**
 | papelaria-creditos | `/papelaria/creditos` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | papelaria-desempenho | `/papelaria/desempenho` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | papelaria-leads | `/papelaria/leads` | 390/390 | 1 | 1 | 0 | 0 | ok |
+| escola-nova-lista | `/escola/listas/nova` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | parceiros-docs | `/parceiros/docs` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | cadastrar-papelaria | `/cadastrar-papelaria` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | pesquisa | `/pesquisa` | 390/390 | 1 | 1 | 0 | 0 | ok |

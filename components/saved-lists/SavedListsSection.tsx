@@ -12,7 +12,7 @@ export function SavedListsSection({ savedLists }: { savedLists: readonly SavedLi
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-extrabold">Listas salvas</h2>
         {savedLists.length > 0 ? (
-          <Link href="/conta/listas-salvas" className="text-verde-fundo text-[13px] font-extrabold">
+          <Link href="/conta/listas-salvas" className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold">
             Ver todas
           </Link>
         ) : null}

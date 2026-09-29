@@ -72,7 +72,7 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
             idempotencyKey={randomUUID()}
             preview={previewFor(view.context.schoolName, view.context.gradeLabel, view.context.schoolYear)}
           />
-          <Link href={novaHref(base)} className="text-verde-fundo text-center text-[14px] font-extrabold underline">Voltar às papelarias</Link>
+          <Link href={novaHref(base)} className="text-verde-fundo flex min-h-11 items-center justify-center text-center text-[14px] font-extrabold underline">Voltar às papelarias</Link>
         </>
       ) : (
         <>

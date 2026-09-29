@@ -43,6 +43,7 @@ const ab = (k, ...a) => sh("agent-browser", ["--session", session(k), ...a]);
 const PARENT = "s28pai@listacerta.test";
 const STATIONERY = "s14a@listacerta.test"; // papelaria demo A (scripts/e2e-s14-seed.sql)
 const B2B_OWNER = "parent@listacerta.test"; // dono de parceiro B2B (seed e2e-s24 ou insert em b2b_partner_members)
+const SCHOOL = "s28escola@listacerta.test"; // membro aprovado da escola 99001001 (scripts/s28-seed-medicao.sql)
 const ADMIN = "admin@listacerta.test"; // admin semeado pelo db:reset (S28 Task 20)
 const cartId = sql("select id from public.carts order by created_at desc limit 1");
 const PAGES = [
@@ -58,7 +59,7 @@ const PAGES = [
   // S28 Task 20: áreas fora das 9 páginas originais.
   { key: "cotacao-nova", path: "/cotacao/nova", who: "pai" },
   { key: "conta", path: "/conta", who: "pai" },
-  { key: "escola-painel", path: "/escola", who: "pai" },
+  { key: "escola-painel", path: "/escola", who: "esc" },
   { key: "admin", path: "/admin", who: "adm" },
   { key: "b2b", path: "/b2b", who: "b2b" },
   { key: "parceiros", path: "/parceiros", who: "pub" },
@@ -70,6 +71,7 @@ const CHECK_EXTRA = [
   ...["carrinhos", "compras", "listas-salvas", "notificacoes", "privacidade", "alunos/novo"].map((x) => ({ key: `conta-${x.replace("/", "-")}`, path: `/conta/${x}`, who: "pai" })),
   ...["insights", "widget", "campanhas", "api", "webhooks", "conta", "faturamento", "docs"].map((x) => ({ key: `b2b-${x}`, path: `/b2b/${x}`, who: "b2b" })),
   ...["papelaria-areas", "papelaria-catalogo", "papelaria-creditos", "papelaria-desempenho", "papelaria-leads"].map((x) => ({ key: x, path: `/${x.replace("-", "/")}`, who: "pap" })),
+  { key: "escola-nova-lista", path: "/escola/listas/nova", who: "esc" },
   { key: "parceiros-docs", path: "/parceiros/docs", who: "pub" },
   { key: "cadastrar-papelaria", path: "/cadastrar-papelaria", who: "pai" },
   { key: "pesquisa", path: "/pesquisa", who: "pub" },
@@ -96,6 +98,12 @@ async function ensureSessions() {
     await login("pai", PARENT, "/");
     await sleep(1500);
     assertLogged("pai", "/enviar-lista");
+  }
+  if (need.has("esc") || CHECK_EXTRA.some((p) => p.who === "esc")) {
+    ab("esc", "set", "viewport", "390", "844");
+    await login("esc", SCHOOL, "/escola");
+    await sleep(1500);
+    assertLogged("esc", "/escola");
   }
   if (need.has("b2b") || CHECK_EXTRA.some((p) => p.who === "b2b")) {
     ab("b2b", "set", "viewport", "390", "844");
@@ -320,7 +328,7 @@ try {
   if (!skip.has("shots")) runShots();
   if (!skip.has("checks")) runChecks();
 } finally {
-  for (const k of ["pub", "pai", "pap", "adm", "b2b"]) {
+  for (const k of ["pub", "pai", "pap", "adm", "b2b", "esc"]) {
     try {
       ab(k, "close");
     } catch {

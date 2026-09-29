@@ -85,7 +85,7 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
         <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[14px] font-bold" data-testid="lead-closed">Este pedido está encerrado.</p>
       )}
       <Timeline events={events} side="requester" />
-      <Link href="/" className="text-verde-fundo text-center text-[14px] font-extrabold underline">Voltar ao início</Link>
+      <Link href="/" className="text-verde-fundo flex min-h-11 items-center justify-center text-center text-[14px] font-extrabold underline">Voltar ao início</Link>
     </Screen>
   );
 }

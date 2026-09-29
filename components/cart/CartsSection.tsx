@@ -15,7 +15,7 @@ export function CartsSection({ carts }: { carts: readonly CartSummaryRow[] }) {
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-extrabold">Seus carrinhos</h2>
         {carts.length > 0 ? (
-          <Link href="/conta/carrinhos" className="text-verde-fundo text-[13px] font-extrabold">
+          <Link href="/conta/carrinhos" className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold">
             Ver todos
           </Link>
         ) : null}

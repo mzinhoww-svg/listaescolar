@@ -89,7 +89,7 @@ export function OptionCard({ option, cartId, selected, action }: Props) {
       {option.strategy === "local_stationery" ? (
         <Link
           href={`/cotacao/nova?carrinho=${cartId}`}
-          className="text-verde-fundo text-center text-sm font-extrabold underline"
+          className="text-verde-fundo flex min-h-11 items-center justify-center text-center text-sm font-extrabold underline"
         >
           Pedir cotação a papelarias
         </Link>

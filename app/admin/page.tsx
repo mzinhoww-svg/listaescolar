@@ -27,6 +27,8 @@ function CategoryCard({ title, category, labels }: { title: string; category: Da
       </div>
       {category.unavailable ? (
         <p className="text-erro-texto text-[13px] font-semibold">Não foi possível consultar agora.</p>
+      ) : category.counts.every((c) => c.count === 0) ? (
+        <p className="text-texto-3 text-[13px] font-semibold">Nenhum registro ainda.</p>
       ) : (
         <dl className="grid grid-cols-2 gap-2 text-[13px]">
           {category.counts
@@ -37,7 +39,6 @@ function CategoryCard({ title, category, labels }: { title: string; category: Da
                 <dd className="font-extrabold">{c.count}</dd>
               </div>
             ))}
-          {category.counts.every((c) => c.count === 0) ? <p className="text-texto-3 col-span-2 text-[13px] font-semibold">Nenhum registro ainda.</p> : null}
         </dl>
       )}
     </section>

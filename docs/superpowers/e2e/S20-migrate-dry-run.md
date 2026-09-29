@@ -25,4 +25,26 @@ Locais 27 · já aplicadas 27 · pendentes 0 · drift 0
 
 ## Não coberto
 
-A execução real (`psql --single-transaction`, criação de `supabase_migrations.schema_migrations`, registro) não foi rodada em nenhum banco nesta tarefa (sem banco local livre e sem produção). O primeiro uso real é o dry-run e depois `--apply` na produção (GO-LIVE etapas 6 e 9). Antes disso, o orquestrador deve rodar `--apply` contra um Postgres descartável (por exemplo `pnpm db:start` numa trilha livre, sem as migrations) e conferir `select version, name from supabase_migrations.schema_migrations`.
+A execução real foi provada depois em Postgres descartável (seção "Apply em Postgres descartável"). Falta apenas o primeiro uso na produção (GO-LIVE etapas 6 e 9).
+
+
+## Apply em Postgres descartável
+
+Executado em 2026-09-29 contra um container `public.ecr.aws/supabase/postgres:17.6.1.167` (mesma major da stack local), porta 55999, senha aleatória descartada; container parado e removido ao fim (`--rm`). O host não tem `psql`: um shim de PATH (fora do repositório) repassou as chamadas do script ao `psql` de dentro do container (`-f arquivo` virou stdin). O script não foi alterado.
+
+| Passo | Resultado |
+|---|---|
+| dry-run | exit 0: locais 27, pendentes 27, drift 0. Nota: são 27 arquivos nesta branch; o total 29 só existe depois do merge do PR #55 (`0606_system_alerts`, `0607_security_advisors`). |
+| `--apply` | exit 0 após os pré-requisitos abaixo: 27 aplicadas, cada arquivo numa transação junto com seu registro. |
+| segunda execução `--apply` | exit 0: já aplicadas 27, pendentes 0 (idempotente). 88 tabelas em `public`, todas com RLS; `schema_migrations` com 27 linhas. |
+| drift simulado (`0303` renomeada em `schema_migrations`) | exit 2: `DRIFT: version_name_mismatch versão 0303 nome remoto "renamed_by_drift_test" x local "leads"`; nada aplicado. Linha restaurada; dry-run seguinte com drift 0. |
+
+Guarda de host local: `127.0.0.1:55999` passou sem `--confirm-production` (a guarda já tratava 127.0.0.1 com porta e já tinha teste); nenhuma mudança no script.
+
+Retomada comprovada: duas execuções falharam no meio por falta de pré-requisito (a imagem crua não tem tabelas do storage nem colunas do GoTrue); o `--apply` seguinte retomou do ponto exato (5 aplicadas, depois 20), sem reaplicar nem deixar meia migration.
+
+### Pré-requisitos do Postgres cru (não são da produção)
+
+A imagem do Supabase traz os schemas `auth`, `storage`, `vault`, `extensions` e os papéis `anon/authenticated/service_role`, mas as tabelas vêm dos serviços (storage-api e GoTrue), que não estavam rodando. Foi preciso, como `supabase_admin`: criar `storage.buckets`, `storage.objects` (RLS ligada) e `storage.foldername(text)` mínimos; e adicionar `auth.users.banned_until` e `auth.users.email_change_token_new`. Um projeto Supabase real já tem tudo isso; por isso o teste com Postgres cru prova o mecanismo do script (ordem, transação, registro, idempotência, drift, retomada) e o SQL das 27 migrations, mas a prova final de compatibilidade com o GoTrue hospedado continua sendo o dry-run/apply no projeto de produção.
+
+Ruling: aceitar o Postgres cru com pré-requisitos mínimos como prova do `--apply` — o teste completo exigiria subir storage-api e GoTrue (equivalente ao `supabase start`, banco de outra trilha) — custo se estiver errada: uma diferença de versão do GoTrue/storage só apareceria no apply real, que é transacional por arquivo e retomável.

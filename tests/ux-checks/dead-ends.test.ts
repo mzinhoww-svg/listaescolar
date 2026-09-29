@@ -45,9 +45,13 @@ describe("findDeadEnds: volta", () => {
   it("fora da entrada o logo não basta", () => {
     expect(findDeadEnds(doc(`${H}<main><a href="/carrinho/1">Abrir</a></main>`), "/cotacao/nova")).toEqual(["sem caminho de volta"]);
   });
-  it("Voltar/Cancelar dentro do main conta; fora do main não", () => {
+  it("Voltar/Cancelar conta em qualquer lugar (main ou header da página)", () => {
     expect(findDeadEnds(doc(`${H}<main><a href="/x">Abrir</a><a href="/y">Cancelar</a></main>`), "/a/b")).toEqual([]);
-    expect(findDeadEnds(doc(`${H}<a href="/y">Voltar</a><main><a href="/x">Abrir</a></main>`), "/a/b")).toEqual(["sem caminho de volta"]);
+    expect(findDeadEnds(doc(`<header><a aria-label="Voltar para a busca" href="/escolas"></a></header><main><a href="/x">Abrir</a></main>`), "/escolas/99029001")).toEqual([]);
+  });
+  it("migalha fora do main conta; link para a rota-pai fora do main não", () => {
+    expect(findDeadEnds(doc(`<nav aria-label="Breadcrumb"></nav><main><a href="/x">Abrir</a></main>`), "/a/b")).toEqual([]);
+    expect(findDeadEnds(doc(`<div><a href="/a">Pai</a></div><main><a href="/x">Abrir</a></main>`), "/a/b")).toEqual(["sem caminho de volta"]);
   });
   it("migalha com aria-label conta (migalha, breadcrumb, trilha)", () => {
     for (const label of ["Migalha de pão", "Breadcrumb", "Trilha"]) {

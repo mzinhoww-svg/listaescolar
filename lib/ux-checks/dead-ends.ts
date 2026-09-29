@@ -62,20 +62,20 @@ function hasBack(doc: Document, path: string, origin?: string): boolean {
   if (ENTRY_ROUTES.includes(path)) {
     return Array.from(doc.querySelectorAll("header a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === "/");
   }
+  // Voltar/Cancelar e migalha valem em qualquer lugar da página; o link para a rota-pai só dentro de `main`.
+  if (Array.from(doc.querySelectorAll("a[href]")).some((a) => BACK_LINK_LABEL.test(labelOf(a)))) return true;
+  if (Array.from(doc.querySelectorAll("nav[aria-label]")).some((n) => CRUMB_LABEL.test(n.getAttribute("aria-label") ?? ""))) return true;
   const main = doc.querySelector("main");
   if (!main) return false;
   const parent = parentOf(path);
-  const links = Array.from(main.querySelectorAll("a[href]"));
-  if (links.some((a) => BACK_LINK_LABEL.test(labelOf(a)))) return true;
-  if (Array.from(main.querySelectorAll("nav[aria-label]")).some((n) => CRUMB_LABEL.test(n.getAttribute("aria-label") ?? ""))) return true;
-  return links.some((a) => normalizeHref(a.getAttribute("href"), origin) === parent);
+  return Array.from(main.querySelectorAll("a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === parent);
 }
 
 /**
  * Motivos de a tela ser um beco sem saída.
  * "Adiante": link ou botão fora de header/footer/nav que não seja Voltar/Cancelar/Fechar nem botão de ícone/menu.
- * "Volta": logo do header em "/" só nas rotas de entrada; nas demais, dentro de `main`, link Voltar/Cancelar,
- * migalha (`nav[aria-label]` com migalha/breadcrumb/trilha) ou link para a rota-pai.
+ * "Volta": logo do header em "/" só nas rotas de entrada; nas demais, link Voltar/Cancelar,
+ * migalha (`nav[aria-label]` com migalha/breadcrumb/trilha) em qualquer lugar da página, ou link para a rota-pai dentro de `main`.
  */
 export function findDeadEnds(doc: Document, path: string, origin?: string): string[] {
   const reasons: string[] = [];

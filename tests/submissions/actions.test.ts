@@ -154,4 +154,12 @@ describe("submitListAction", () => {
     expect(await submitListAction(idle, form())).toMatchObject({ status: "error", code: "rate_limited" });
     expect(submitList).not.toHaveBeenCalled();
   });
+
+  it("tentativas inválidas (sem consentimento) não gastam a cota de envios (revisão S19, M4c)", async () => {
+    submitList.mockResolvedValue({ status: "review_needed", submissionId: "s-ok", result: {} });
+    const noConsent = form();
+    noConsent.delete("consent");
+    for (let i = 0; i < 12; i++) expect(await submitListAction(idle, noConsent)).toMatchObject({ code: "consent_required" });
+    await expect(submitListAction(idle, form())).rejects.toThrow("REDIRECT:");
+  });
 });

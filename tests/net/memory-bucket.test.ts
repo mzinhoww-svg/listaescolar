@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { __resetRateLimitForTests, checkRateLimit, MAX_TRACKED_KEYS } from "@/lib/rate-limit/memory-bucket";
+import { __resetRateLimitForTests, checkRateLimit, MAX_TRACKED_KEYS, trackedKeyCount } from "@/lib/rate-limit/memory-bucket";
 
 beforeEach(__resetRateLimitForTests);
 
@@ -32,5 +32,24 @@ describe("checkRateLimit", () => {
     let stillBlocked = 0;
     for (let i = 1; i < MAX_TRACKED_KEYS; i++) if (checkRateLimit(`k${i}`, 1, 1_000_000, 0) === false) stillBlocked++;
     expect(stillBlocked).toBeGreaterThan(MAX_TRACKED_KEYS - 10);
+  });
+
+  it("chaves de um namespace nunca expulsam as de outro (revisão S19, I5: widget não reseta login/lead/envio)", () => {
+    // login e envio no limite, na mesma janela.
+    checkRateLimit("login:1.2.3.4", 1, 1_000_000, 0);
+    checkRateLimit("submit:1.2.3.4:u1", 1, 1_000_000, 0);
+    checkRateLimit("lead:1.2.3.4:u1", 1, 1_000_000, 0);
+    // atacante varia `partnerId` do widget muito além do teto.
+    for (let i = 0; i < MAX_TRACKED_KEYS * 2; i++) checkRateLimit(`widget:9.9.9.9:p${i}`, 30, 1_000_000, 0);
+    expect(checkRateLimit("login:1.2.3.4", 1, 1_000_000, 0)).toBe(false);
+    expect(checkRateLimit("submit:1.2.3.4:u1", 1, 1_000_000, 0)).toBe(false);
+    expect(checkRateLimit("lead:1.2.3.4:u1", 1, 1_000_000, 0)).toBe(false);
+  });
+
+  it("cada namespace tem o próprio teto de chaves rastreadas", () => {
+    expect(trackedKeyCount("widget")).toBe(0);
+    for (let i = 0; i < MAX_TRACKED_KEYS + 50; i++) checkRateLimit(`widget:ip:p${i}`, 30, 1_000_000, 0);
+    expect(trackedKeyCount("widget")).toBe(MAX_TRACKED_KEYS);
+    expect(trackedKeyCount("login")).toBe(0);
   });
 });

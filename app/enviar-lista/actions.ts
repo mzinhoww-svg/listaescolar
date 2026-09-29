@@ -30,9 +30,6 @@ async function isPublicSchool(id: string): Promise<boolean> {
 export async function submitListAction(_prev: SubmitState, formData: FormData): Promise<SubmitState> {
   const { user, role } = await requireAccess("/enviar-lista");
 
-  // D-001 (S19): primeira camada de rate limit por IP+ator no envio (aciona upload + OCR síncrono, S07).
-  if (submitRateLimited(await headers(), user.id)) return fail("rate_limited");
-
   if (formData.get("consent") !== "on") return fail("consent_required");
   const schoolRaw = formData.get("schoolId");
   const fields = submitFieldsSchema.safeParse({
@@ -41,6 +38,9 @@ export async function submitListAction(_prev: SubmitState, formData: FormData): 
     schoolId: typeof schoolRaw === "string" && schoolRaw !== "" ? schoolRaw : undefined,
   });
   if (!fields.success) return fail("invalid_input");
+  // D-001 (S19): primeira camada de rate limit por IP+ator no envio (aciona upload + OCR síncrono, S07). Só depois
+  // da validação (consentimento, campos): tentativas inválidas não gastam a cota (revisão M4c).
+  if (submitRateLimited(await headers(), user.id)) return fail("rate_limited");
   // D-002: envio da escola só de escola VINCULADA ao remetente (o banco confere de novo); a família escolhe qualquer escola pública.
   const actor = await getSessionActor();
   if (!actor) return fail("forbidden");

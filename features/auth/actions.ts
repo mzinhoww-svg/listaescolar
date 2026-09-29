@@ -41,8 +41,8 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
     };
   }
   const email = parsed.data.email;
-  // D-001 (S19): primeira camada de rate limit por IP, além do limite por e-mail que o Supabase Auth já aplica.
-  if (loginRateLimited(await headers())) {
+  // D-001 (S19): primeira camada de rate limit por IP + e-mail, além do limite por e-mail que o Supabase Auth já aplica.
+  if (loginRateLimited(await headers(), email)) {
     return { status: "error", message: RATE_LIMIT_ERROR, email };
   }
   try {

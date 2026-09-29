@@ -5,22 +5,43 @@ import { loginRateLimited } from "@/features/auth/rate-limit";
 
 beforeEach(__resetRateLimitForTests);
 
-describe("loginRateLimited", () => {
-  it("permite até o limite por IP e recusa depois", () => {
-    const h = new Headers({ "x-real-ip": "1.2.3.4" });
-    for (let i = 0; i < 5; i++) expect(loginRateLimited(h)).toBe(false);
-    expect(loginRateLimited(h)).toBe(true);
+const ip = (v: string) => new Headers({ "x-real-ip": v });
+
+describe("loginRateLimited (revisão S19, M4)", () => {
+  it("permite até 5 tentativas por IP + e-mail e recusa depois", () => {
+    const h = ip("1.2.3.4");
+    for (let i = 0; i < 5; i++) expect(loginRateLimited(h, "a@b.co")).toBe(false);
+    expect(loginRateLimited(h, "a@b.co")).toBe(true);
+  });
+  it("o e-mail é normalizado (caixa e espaços) antes de compor a chave", () => {
+    const h = ip("1.2.3.4");
+    for (let i = 0; i < 5; i++) loginRateLimited(h, "a@b.co");
+    expect(loginRateLimited(h, "  A@B.co ")).toBe(true);
+  });
+  it("e-mails diferentes atrás do mesmo IP (NAT de operadora) não se bloqueiam entre si", () => {
+    const h = ip("1.2.3.4");
+    for (let i = 0; i < 5; i++) expect(loginRateLimited(h, "a@b.co")).toBe(false);
+    expect(loginRateLimited(h, "a@b.co")).toBe(true);
+    for (let i = 0; i < 5; i++) expect(loginRateLimited(h, `outro${i}@b.co`)).toBe(false);
+  });
+  it("mas há um teto por IP mais alto (30) contra quem varia e-mails", () => {
+    const h = ip("1.2.3.4");
+    for (let i = 0; i < 30; i++) expect(loginRateLimited(h, `u${i}@b.co`)).toBe(false);
+    expect(loginRateLimited(h, "u31@b.co")).toBe(true);
   });
   it("IPs diferentes têm baldes independentes", () => {
-    const a = new Headers({ "x-real-ip": "1.1.1.1" });
-    const b = new Headers({ "x-real-ip": "2.2.2.2" });
-    for (let i = 0; i < 5; i++) expect(loginRateLimited(a)).toBe(false);
-    expect(loginRateLimited(a)).toBe(true);
-    expect(loginRateLimited(b)).toBe(false);
+    for (let i = 0; i < 5; i++) loginRateLimited(ip("1.1.1.1"), "a@b.co");
+    expect(loginRateLimited(ip("1.1.1.1"), "a@b.co")).toBe(true);
+    expect(loginRateLimited(ip("2.2.2.2"), "a@b.co")).toBe(false);
   });
-  it("sem cabeçalho de IP identificável, ainda limita (balde 'unknown')", () => {
+  it("sem IP identificável não vira um balde global: limita por e-mail e com teto de IP próprio, bem mais alto", () => {
     const h = new Headers();
-    for (let i = 0; i < 5; i++) expect(loginRateLimited(h)).toBe(false);
-    expect(loginRateLimited(h)).toBe(true);
+    for (let i = 0; i < 5; i++) expect(loginRateLimited(h, "a@b.co")).toBe(false);
+    expect(loginRateLimited(h, "a@b.co")).toBe(true);
+    // outro e-mail sem IP segue livre (não herda o balde do primeiro)
+    expect(loginRateLimited(h, "c@d.co")).toBe(false);
+    // e o teto agregado "sem IP" é bem maior que o de um IP real
+    __resetRateLimitForTests();
+    for (let i = 0; i < 100; i++) expect(loginRateLimited(h, `u${i}@b.co`)).toBe(false);
   });
 });

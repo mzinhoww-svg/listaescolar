@@ -1,6 +1,6 @@
 # ADR-007 · Instrumentação de produto com PostHog
 
-Data: 27/09/2026 · Status: **proposta** (pedida pelo humano, Aurimar Nogueira, em mensagem de sessão; não vale até o humano aprovar, conforme o CLAUDE.md) · Não altera ADR-001 a ADR-006.
+Data: 27/09/2026 · Status: **aceito** em 28/09/2026 pelo humano (Aurimar Nogueira), no plano gratuito do PostHog, com a condição de nenhum dado pessoal de menor nem do responsável nos eventos (só identificadores pseudônimos); instrumentação na S28 (Ruling do orquestrador). Proposta original de 27/09/2026 · Não altera ADR-001 a ADR-006.
 
 Nota de numeração: o pedido citou "ADR-004", mas esse número já é o das trilhas paralelas (e ADR-005 e ADR-006 também existem). Este registro usa o próximo número livre, ADR-007.
 
@@ -8,7 +8,7 @@ Nota de numeração: o pedido citou "ADR-004", mas esse número já é o das tri
 
 O produto já registra o que é de negócio no próprio banco: leads e `lead_events` (S14), conversão e contestação (S22), cobrança (S21/S23), decisões de IA (`ai_decisions`) e jobs de OCR (`jobs`). O que falta é enxergar o **caminho** até esses fatos: de onde a família chegou, onde desistiu, quanto tempo a leitura da lista leva do ponto de vista de quem espera, e em que passo a papelaria trava antes de receber o primeiro lead. Sem isso, a S28 (ADR-006) e o piloto em Cuiabá decidem melhorias sem medir funil.
 
-## Decisão (proposta)
+## Decisão (aceita em 28/09/2026)
 
 1. **PostHog Cloud** para eventos de produto, funis e (opcionalmente) session replay.
 2. **Supabase continua sendo a fonte de verdade** de leads, `lead_events`, conversão, cobrança e publicação. O PostHog recebe **espelhos de eventos** para análise; nenhuma regra de negócio, cobrança, repasse ou métrica exibida ao usuário lê o PostHog. Divergência entre os dois se resolve pelo banco.
@@ -22,10 +22,10 @@ O produto já registra o que é de negócio no próprio banco: leads e `lead_eve
    - **Proxy `/ingest`** via `rewrites` do Next (`/ingest/:path*` → host do PostHog), para não depender de domínio de terceiro bloqueável e não expor o host no cliente; o proxy não repassa cookie de sessão do app.
    - **`identify` só no login ou no envio com telefone**, sempre com o **id interno do perfil (uuid)** como `distinct_id`. O telefone e o e-mail **nunca** vão para o PostHog (nem como propriedade de pessoa); o gatilho do `identify` é o evento, o identificador é o uuid.
    - Nada de menor: nenhum evento carrega dado de estudante (S15), nem mesmo o apelido.
-5. **Encaixe proposto: S19 · Segurança e observabilidade.** A S19 já trata de observabilidade sem dado pessoal (Sentry com escopo por perfil) e de CSP; instrumentação de produto cabe no mesmo lugar, e a CSP precisa conhecer o `/ingest`. Texto proposto para acrescentar ao prompt da S19, se este ADR for aprovado:
+5. **Encaixe: S28 (decidido em 28/09/2026; a proposta original era a S19).** A S19 fechou a revisão de segurança antes da aprovação deste ADR, então a instrumentação entra na S28, que já mexe nos funis medidos (Ruling no ledger, 2026-09-28). Justificativa original para a S19: A S19 já trata de observabilidade sem dado pessoal (Sentry com escopo por perfil) e de CSP; instrumentação de produto cabe no mesmo lugar, e a CSP precisa conhecer o `/ingest`. Texto que passa a valer para a S28:
    > Instrumentação de produto com PostHog conforme ADR-007 e `docs/tracking-plan.md`: SDK no cliente com proxy `/ingest` (rewrites do Next), cookieless até o consentimento, replay com inputs mascarados e desligado nas áreas logadas sensíveis, `identify` por uuid no login e no envio com telefone, `is_internal`, projetos separados para staging e produção, eventos de servidor para os fatos que nascem no banco (`ocr_completed`, `list_auto_approved`, `list_published`, `lead_received`, `lead_converted`). Aceite: teste que falha se algum evento sair com propriedade fora do esquema ou com PII; E2E confirmando que nada é enviado antes do consentimento.
 
-   Consequência para a S28: os funis e métricas de ganho do `docs/MELHORIAS.md` passam a poder usar o PostHog, se a S19 com este ADR estiver mesclada antes.
+   Consequência para a S28: os funis e métricas de ganho do `docs/MELHORIAS.md` usam o PostHog instrumentado na própria S28. Condição do humano na aprovação: plano gratuito; nenhum dado pessoal de menor nem do responsável nos eventos, só identificadores pseudônimos (uuid).
 
 ## Alternativas rejeitadas
 

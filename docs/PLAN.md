@@ -266,7 +266,7 @@
 >
 > **Fase 4 · Refinamento (tripled-ui):** aplique blocos e microinterações na landing, no "como funciona" e em momentos-chave (onboarding da família, lista pronta, pedido enviado, estados vazios), sempre adaptados aos tokens `lc-*`. Respeite `prefers-reduced-motion` e não adicione dependência pesada sem Ruling, porque o piloto é celular de pai em 4G.
 >
-> **Fase 5 · Implementação:** implemente o top 15 com o mesmo método das outras fatias (plano, subagentes, TDD onde houver lógica, revisão). Inclua a medição de custo de IA por lista e das consultas lentas do banco, com correção do que passar do orçamento.
+> **Fase 5 · Implementação:** implemente o top 15 com o mesmo método das outras fatias (plano, subagentes, TDD onde houver lógica, revisão). Inclua a medição de custo de IA por lista e das consultas lentas do banco, com correção do que passar do orçamento, e a instrumentação de produto com PostHog conforme o ADR-007 (aceito em 28/09/2026; plano gratuito; nenhum dado pessoal de menor nem do responsável nos eventos).
 
 **Aceite:**
 - `docs/MELHORIAS.md` e `DESIGN.md` mesclados, e o top 15 implementado ou com Ruling de adiamento.

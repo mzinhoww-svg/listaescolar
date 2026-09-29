@@ -99,6 +99,9 @@ describe("/privacidade: medição de uso (ADR-007, S28)", () => {
     expect(t).toMatch(/não registram o seu login nem o seu clique de compra/);
     expect(t).toMatch(/Independentemente da sua escolha, nossos servidores registram fatos do funcionamento do serviço/);
     expect(t).toMatch(/agregados/);
+    // Revisão UX I7: o id aleatório em localStorage também é citado, com a regra de apagar ao recusar/retirar.
+    expect(t).toMatch(/lc_analytics_id/);
+    expect(t).toMatch(/apagado se você recusar ou retirar o aceite/);
     expect(t).not.toMatch(/em conformidade|compatível com a LGPD|totalmente anônim/i);
   });
 });

@@ -276,6 +276,15 @@
 - Custo de IA por lista medido e registrado no `PROGRESS.md`, abaixo de R$ 0,50.
 - Revisão final com Opus focada em UX e acessibilidade; revisão de segurança só se a fatia tocar em RLS ou dados.
 
+### S29 · Revisão total de UX e UI (ADR-008, proposta)
+**Quando:** depois da S28 e antes do go-live da S20, nas jornadas piloto (ADR-008).
+
+**Skills:** `/ui-ux-pro-max` (rubrica por tela), `/impeccable` (critique, audit, clarify, harden, polish, animate por jornada), `/tripled-ui` (microinterações com função), `/design-intelligence` (`DESIGN.md`).
+
+**Prompt:** seguir o spec `docs/superpowers/specs/2026-09-29-s29-revisao-total-ux-design.md` e o plano `docs/superpowers/plans/2026-09-29-s29-revisao-total-ux.md`: 81 rotas em 9 jornadas, ficha por tela, sistemas de botões, feedback e movimento no `DESIGN.md`, correções por jornada, verificação ponta a ponta.
+
+**Aceite:** seção 3 do spec (81/81 fichas; 9 jornadas sem beco sem saída a 390 e 1280 px; uma ação principal por região; botões e movimento no sistema com reduced-motion; vocabulário único; sem regressão de Lighthouse e axe; revisão Opus sem bloqueante).
+
 ### S20 · Produção e suíte E2E final
 **Prompt:**
 > Rodar as migrations em staging e depois em produção. Suíte agent-browser completa cobrindo os fluxos pai, escola, admin e papelaria. Checklist de go-live em `docs/GO-LIVE.md`. Importar o CSV oficial em produção e registrar a contagem real.

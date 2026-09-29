@@ -62,9 +62,10 @@ const P = {
   inep: INEP,
   serie: SERIE,
   code: encodeShortCode({ inep: INEP, gradeSlug: SERIE }),
-  cartId: psql("select id from public.carts order by created_at desc limit 1"),
+  cartId: psql("select id from public.carts where owner_id = '00000000-0000-4000-8000-0000000029a1' order by created_at desc limit 1"),
+  retailer: psql("select slug from public.retailers where is_active order by slug limit 1"),
   leadCode: psql("select code from public.leads where code like 'LC-S29%' order by created_at limit 1"),
-  submissionId: psql("select id from public.list_submissions order by created_at desc limit 1"),
+  submissionId: psql("select id from public.list_submissions where submitted_by = '00000000-0000-4000-8000-0000000029a1' order by created_at desc limit 1"),
   slug: psql("select slug from public.stationeries where slug like 's29-%' limit 1"),
 };
 

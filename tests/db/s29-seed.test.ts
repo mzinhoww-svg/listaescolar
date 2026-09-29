@@ -69,4 +69,28 @@ describe("seed das jornadas S29", () => {
       expect(partner.rows).toEqual([{ is_demo: true, st: "active" }]);
     });
   });
+
+  it("publica uma lista demo e dá à família um carrinho e um envio em revisão humana (idempotente)", async () => {
+    await runSqlFile("scripts/s29-seed-jornadas.sql");
+    await runSqlFile("scripts/s29-seed-jornadas.sql");
+    await withSuperuser(async (c) => {
+      const list = await c.query(
+        `select l.status::text as st, l.is_demo, (select count(*)::int from public.list_items i where i.version_id = l.current_version_id) as items
+           from public.school_lists l where l.school_id = '00000000-0000-4000-8000-0000000029b1' and l.school_year = 2027`,
+      );
+      expect(list.rows).toEqual([{ st: "published", is_demo: true, items: 4 }]);
+
+      const cart = await c.query(
+        `select c.is_demo, c.list_kind, (select count(*)::int from public.cart_items ci where ci.cart_id = c.id) as items
+           from public.carts c join auth.users u on u.id = c.owner_id where u.email = 'familia@listacerta.test'`,
+      );
+      expect(cart.rows).toEqual([{ is_demo: true, list_kind: "official", items: 4 }]);
+
+      const submission = await c.query(
+        `select s.status::text as st, s.is_demo, (select count(*)::int from public.parent_list_copies p where p.submission_id = s.id) as copies
+           from public.list_submissions s join auth.users u on u.id = s.submitted_by where u.email = 'familia@listacerta.test'`,
+      );
+      expect(submission.rows).toEqual([{ st: "human_review", is_demo: true, copies: 1 }]);
+    });
+  });
 });

@@ -13,7 +13,7 @@ export const JOURNEYS: Record<string, Journey> = {
   J2: {
     nome: "Família compra",
     rotas: [
-      r("/carrinho/novo", "familia"), r("/carrinho/{cartId}", "familia"), r("/ir-para/{cartId}/{retailer}", "familia", semSeed("carrinho e varejista")),
+      r("/carrinho/novo", "familia"), r("/carrinho/{cartId}", "familia"), r("/ir-para/{cartId}/{retailer}", "familia"),
       r("/carrinho/{cartId}/checkout", "familia"), r("/cotacao", "familia"), r("/cotacao/nova", "familia"), r("/cotacao/{leadCode}", "familia"), r("/conta/compras", "familia"),
     ],
   },

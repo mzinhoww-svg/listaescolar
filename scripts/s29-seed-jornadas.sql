@@ -114,4 +114,64 @@ insert into public.b2b_partner_members (partner_id, profile_id, member_role)
 values ('00000000-0000-4000-8000-0000000029b2', '00000000-0000-4000-8000-0000000029a4', 'owner')
 on conflict do nothing;
 
+-- Lista oficial DEMONSTRATIVA publicada (Escola Demo S29, 5º ano, 2027), pelas mesmas funções de domínio dos testes
+-- (list_create_candidate_version, list_transition, list_approve_version, list_publish_version); nunca por INSERT em status.
+do $$
+declare
+  v_admin uuid := '00000000-0000-4000-8000-0000000000a1';
+  v_school uuid := '00000000-0000-4000-8000-0000000029b1';
+  v_grade uuid;
+  v_list uuid;
+  v_version uuid;
+begin
+  select id into v_grade from public.grades where slug = 'ef-5';
+  select id into v_list from public.school_lists where school_id = v_school and grade_id = v_grade and school_year = 2027;
+  if v_list is null then
+    insert into public.school_lists (school_id, grade_id, school_year, is_demo) values (v_school, v_grade, 2027, true) returning id into v_list;
+    select version_id into v_version from public.list_create_candidate_version(v_list, 'admin', null, null);
+    insert into public.list_items (version_id, position, original_name, normalized_name, category, quantity, unit, confidence, alerts) values
+      (v_version, 1, 'Caderno 96 folhas', 'caderno 96 folhas', 'papelaria', 2, 'un', 0.95, '[]'::jsonb),
+      (v_version, 2, 'Lápis preto HB', 'lapis preto hb', 'papelaria', 6, 'un', 0.95, '[]'::jsonb),
+      (v_version, 3, 'Cola branca 90g', 'cola branca 90g', 'papelaria', 1, 'un', 0.95, '[]'::jsonb),
+      (v_version, 4, 'Tesoura sem ponta', 'tesoura sem ponta', 'papelaria', 1, 'un', 0.95, '[]'::jsonb);
+    perform public.list_transition(v_list, 'submitted'::public.list_status, v_admin, null);
+    perform public.list_transition(v_list, 'processing'::public.list_status, v_admin, null);
+    perform public.list_transition(v_list, 'approved'::public.list_status, v_admin, null);
+    perform public.list_approve_version(v_list, v_version, v_admin);
+    perform public.list_publish_version(v_list, v_version, v_admin);
+  end if;
+end $$;
+
+-- Carrinho da família a partir dessa lista publicada (mesmas linhas que features/cart/repository.createCart grava).
+insert into public.carts (id, owner_id, list_id, strategy, is_demo, list_kind)
+select '00000000-0000-4000-8000-0000000029d2', '00000000-0000-4000-8000-0000000029a1', l.id, 'cheapest', true, 'official'
+from public.school_lists l
+where l.school_id = '00000000-0000-4000-8000-0000000029b1' and l.school_year = 2027 and l.status = 'published'
+on conflict (id) do nothing;
+insert into public.cart_items (cart_id, list_item_id, name, quantity)
+select '00000000-0000-4000-8000-0000000029d2', i.id, i.original_name, greatest(1, round(i.quantity)::int)
+from public.carts c
+  join public.school_lists l on l.id = c.list_id
+  join public.list_items i on i.version_id = l.current_version_id
+where c.id = '00000000-0000-4000-8000-0000000029d2'
+  and not exists (select 1 from public.cart_items ci where ci.cart_id = c.id);
+
+-- Envio de lista da família parado na revisão humana (com a cópia privada dos itens, que alimenta /revisar).
+insert into public.consents (id, profile_id, purpose, text_version)
+values ('00000000-0000-4000-8000-0000000029e2', '00000000-0000-4000-8000-0000000029a1', 'list_upload', 'v1')
+on conflict (id) do nothing;
+insert into public.list_submissions (id, submitted_by, source, school_id, grade, school_year, storage_path, file_name, mime_type,
+  size_bytes, consent_id, status, is_demo)
+values ('00000000-0000-4000-8000-0000000029e3', '00000000-0000-4000-8000-0000000029a1', 'parent', '00000000-0000-4000-8000-0000000029b1',
+  '5º ano', 2027, '00000000-0000-4000-8000-0000000029a1/00000000-0000-4000-8000-0000000029e3/lista.pdf', 'lista.pdf',
+  'application/pdf', 120000, '00000000-0000-4000-8000-0000000029e2', 'submitted', true)
+on conflict (id) do nothing;
+-- O gatilho de INSERT exige `submitted`; o estado da revisão vem por UPDATE (o guard só protege a identidade do envio).
+update public.list_submissions set status = 'human_review' where id = '00000000-0000-4000-8000-0000000029e3' and status = 'submitted';
+insert into public.parent_list_copies (submission_id, owner_id, items)
+values ('00000000-0000-4000-8000-0000000029e3', '00000000-0000-4000-8000-0000000029a1',
+  '[{"name":"Caderno 96 folhas","quantity":2,"unit":"un","category":"papelaria","confidence":0.9,"alerts":[],"origin":"extracted"},
+    {"name":"Régua 30 cm","quantity":1,"unit":"un","category":"papelaria","confidence":0.6,"alerts":["low_confidence_item"],"origin":"extracted"}]'::jsonb)
+on conflict (submission_id) do nothing;
+
 commit;

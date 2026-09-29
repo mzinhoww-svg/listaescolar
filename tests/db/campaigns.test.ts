@@ -88,6 +88,9 @@ const record = (c: Client, campaignId: string, listVersionId: string | null, typ
 
 const cleanupIneps: string[] = [];
 
+// O banco grava o dia em America/Cuiaba (0503); `toISOString()` é UTC e diverge do dia do banco depois das 20h locais.
+const cuiabaToday = (): string => new Date().toLocaleDateString("en-CA", { timeZone: "America/Cuiaba" });
+
 describe("S26 · 0503 schema: campanhas B2B", () => {
   beforeAll(seedUsers);
   afterAll(async () => {
@@ -472,7 +475,7 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       await record(c, campaignId, list.versionId, "impression", key);
       await record(c, campaignId, list.versionId, "click", key);
 
-      const start = new Date().toISOString().slice(0, 10);
+      const start = cuiabaToday();
       const stId = await callAsService<{ id: string }>(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [
         IDS.admin,
         partnerId,
@@ -531,7 +534,7 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       await record(c, demoCampaign, demoList.versionId, "impression", demoKey);
       await record(c, demoCampaign, demoList.versionId, "click", demoKey);
 
-      const start = new Date().toISOString().slice(0, 10);
+      const start = cuiabaToday();
       const stId = await callAsService<{ id: string }>(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [IDS.admin, partnerId, start, null]).then(
         (r) => r[0]!.id,
       );
@@ -564,7 +567,7 @@ describe("S26 · 0503 schema: campanhas B2B", () => {
       const row = await c.query<{ accrued_total_cents: string }>("select accrued_total_cents from public.b2b_campaigns where id = $1", [campaignId]);
       expect(Number(row.rows[0]!.accrued_total_cents)).toBeCloseTo(0.003, 6);
 
-      const start = new Date().toISOString().slice(0, 10);
+      const start = cuiabaToday();
       const stId = await callAsService<{ id: string }>(c, "select public.b2b_statement_generate($1, $2, $3, $3, $4) as id", [IDS.admin, partnerId, start, null]).then(
         (r) => r[0]!.id,
       );

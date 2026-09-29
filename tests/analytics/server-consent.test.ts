@@ -6,6 +6,10 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (n: string) => (n === "lc_analytics_consent" && cookieValue ? { name: n, value: cookieValue } : undefined) }),
 }));
 
+// A conta da requisição (`is_internal`, M6) vem da sessão; sem mock o cliente Supabase lê `cookies().getAll` (ausente neste
+// stub) e a promessa interna do auth-js rejeita depois do teste (unhandled rejection no CI).
+vi.mock("@/features/auth/queries", () => ({ getCurrentUser: async () => null, getCurrentRole: async () => null }));
+
 import { captureServer, captureUserAction, emitServer } from "@/lib/analytics/server";
 
 let fetchMock: ReturnType<typeof vi.fn>;

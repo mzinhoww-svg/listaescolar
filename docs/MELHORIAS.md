@@ -159,7 +159,7 @@ Ordem: M22, M26, M30, M19, M16, M18, M24, M29, M31, M25, M27, M28, M20, M23; dep
 
 ## 7. Itens novos da auditoria impeccable (Fase 2)
 
-Origem: `docs/superpowers/evidencias/S28/auditoria-*.md` (73 achados: 0 P0, 16 P1, 33 P2, 17 P3 ao somar as seis áreas, com repetições entre áreas).
+Origem: `docs/superpowers/evidencias/S28/auditoria-*.md` (65 achados: 0 P0, 16 P1, 34 P2, 15 P3 nas seis áreas, com repetições entre elas).
 
 | ID | Melhoria | I | E | Prior. | Onde | Fatia |
 |---|---|---|---|---|---|---|

@@ -41,6 +41,7 @@ Não parece gerado por IA: marca própria, verde só onde resolve, tipografia fo
 | F-16 | P3 | Rotas com `loading.tsx` | Só 7 rotas têm carregamento; as da família usam o spinner global `app/loading.tsx`. | Task 17 (M07) |
 | F-17 | P2 | `/escolas/[inep]/[serie]` | Ação principal "Montar carrinho" só depois da tabela inteira; em lista longa a mãe rola muito. Aviso de login só depois do clique. | Task 11 (M05) e Task 9 |
 | F-18 | P3 | `/escolas/*` no desktop | Coluna de 420 px com cabeçalho escuro de largura total: alinhamento desconexo em telas grandes (referência App10/App14 é mobile). | Backlog pós-piloto |
+| F-19 | P2 | `primaryButton` e `outlineButton` em `components/auth/Screen.tsx`, `components/site/SkipLink.tsx` | Contorno de foco Verde Certo (#2FCB86) sobre Papel tem 1,9:1, abaixo dos 3:1 exigidos para indicador de foco; o `outlineButton` já usa Verde Fundo (correto). | Task 18 (M15) e Task 20 |
 
 ## Comparação com `docs/design`
 
@@ -48,4 +49,4 @@ O App03-Início mostra a home logada (Olá, aluno, lista publicada, navegação 
 
 ## Contagem
 
-P0 0, P1 5, P2 9, P3 4. Total 18.
+P0 0, P1 5, P2 10, P3 4. Total 19.

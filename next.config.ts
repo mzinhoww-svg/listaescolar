@@ -2,6 +2,7 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
 import { robotsHeaders } from "./lib/robots-header";
+import { staticAssetHeaders } from "./lib/security-headers";
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -12,7 +13,10 @@ const baseConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   // Previews e qualquer ambiente fora da produção da Vercel nunca são indexados (X-Robots-Tag: noindex).
   async headers() {
-    return robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV, SITE_INDEXING: process.env.SITE_INDEXING });
+    return [
+      ...robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV, SITE_INDEXING: process.env.SITE_INDEXING }),
+      ...staticAssetHeaders(),
+    ];
   },
   ...(dsn ? { env: { NEXT_PUBLIC_SENTRY_DSN: dsn } } : {}),
 };

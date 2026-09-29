@@ -40,7 +40,7 @@ describe("X-Robots-Tag fora da produção", () => {
       delete process.env.SITE_INDEXING;
       expect((await cfg.headers!())[0]?.headers[0]?.key).toBe("X-Robots-Tag");
       process.env.SITE_INDEXING = "1";
-      expect(await cfg.headers!()).toEqual([]);
+      expect((await cfg.headers!()).map((e) => e.source)).toEqual(["/brand/:path*"]);
     } finally {
       if (original === undefined) delete process.env.VERCEL_ENV;
       else process.env.VERCEL_ENV = original;

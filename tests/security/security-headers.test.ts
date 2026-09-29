@@ -76,3 +76,16 @@ describe("securityHeaders", () => {
     expect(h["X-Content-Type-Options"]).toBe("nosniff");
   });
 });
+
+describe("staticAssetHeaders (revisão S19, M2)", () => {
+  it("/brand/:path* (fora do matcher do proxy) recebe nosniff, base e CSP restritiva de SVG", async () => {
+    const { staticAssetHeaders } = await import("@/lib/security-headers");
+    const entries = staticAssetHeaders();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.source).toBe("/brand/:path*");
+    const map = Object.fromEntries((entries[0]?.headers ?? []).map((h) => [h.key, h.value]));
+    expect(map["X-Content-Type-Options"]).toBe("nosniff");
+    expect(map["Content-Security-Policy"]).toBe("default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    expect(map["Strict-Transport-Security"]).not.toContain("preload");
+  });
+});

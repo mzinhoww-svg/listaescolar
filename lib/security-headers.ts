@@ -78,3 +78,20 @@ export function baseSecurityHeaders(): SecurityHeaders {
 export function securityHeaders(nonce: string, origins: CspOrigins = {}): SecurityHeaders {
   return { ...baseSecurityHeaders(), "Content-Security-Policy": buildCsp(nonce, origins) };
 }
+
+export type HeaderEntry = { source: string; headers: { key: string; value: string }[] };
+
+/**
+ * Revisão S19 (M2): `/brand/*` (logos SVG) fica FORA do matcher do proxy (sem sessão, sem CSP com nonce). SVG aberto
+ * direto é documento: `default-src 'none'` + `sandbox` impedem script embutido; `style-src 'unsafe-inline'` só
+ * para os estilos internos dos próprios SVGs. Entrada estática de `headers()` do `next.config.ts`.
+ */
+export function staticAssetHeaders(): HeaderEntry[] {
+  const base = Object.entries(baseSecurityHeaders()).map(([key, value]) => ({ key, value }));
+  return [
+    {
+      source: "/brand/:path*",
+      headers: [...base, { key: "Content-Security-Policy", value: "default-src 'none'; style-src 'unsafe-inline'; sandbox" }],
+    },
+  ];
+}

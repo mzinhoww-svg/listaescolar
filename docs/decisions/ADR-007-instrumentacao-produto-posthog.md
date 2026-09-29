@@ -1,6 +1,6 @@
 # ADR-007 · Instrumentação de produto com PostHog
 
-Data: 27/09/2026 · Status: **proposta** (pedida pelo humano, Aurimar Nogueira, em mensagem de sessão; não vale até o humano aprovar, conforme o CLAUDE.md) · Não altera ADR-001 a ADR-006.
+Data: 27/09/2026 · Status: **aceito** em 28/09/2026 pelo humano (Aurimar Nogueira), no plano gratuito do PostHog, com a condição de nenhum dado pessoal de menor nem do responsável nos eventos (só identificadores pseudônimos); instrumentação na S28 (Ruling do orquestrador). Proposta original de 27/09/2026 · Não altera ADR-001 a ADR-006.
 
 Nota de numeração: o pedido citou "ADR-004", mas esse número já é o das trilhas paralelas (e ADR-005 e ADR-006 também existem). Este registro usa o próximo número livre, ADR-007.
 

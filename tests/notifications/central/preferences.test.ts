@@ -47,4 +47,18 @@ describe("parsePushSubscription (Zod da fronteira)", () => {
     expect(parsePushSubscription(lo, "development").success).toBe(true);
     for (const env of ["production", "staging", "preview", undefined]) expect(parsePushSubscription(lo, env).success, String(env)).toBe(false);
   });
+  it("D-081 (S19): normaliza o endpoint antes de gravar — host maiúsculo e porta :443 explícita, que o CHECK de push_subscriptions recusaria crus, saem canônicos", () => {
+    const upper = parsePushSubscription({ endpoint: "https://FCM.GOOGLEAPIS.COM/fcm/send/abc", keys: KEYS }, "production");
+    expect(upper.success).toBe(true);
+    if (upper.success) expect(upper.data.endpoint).toBe("https://fcm.googleapis.com/fcm/send/abc");
+
+    const withDefaultPort = parsePushSubscription({ endpoint: "https://fcm.googleapis.com:443/fcm/send/abc", keys: KEYS }, "production");
+    expect(withDefaultPort.success).toBe(true);
+    if (withDefaultPort.success) expect(withDefaultPort.data.endpoint).toBe("https://fcm.googleapis.com/fcm/send/abc");
+
+    // CHECK real de push_subscriptions (0602): mesmo padrão, para provar que o valor normalizado passaria no banco.
+    const CHECK = /^https:\/\/(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|([a-z0-9-]+\.)+push\.apple\.com|([a-z0-9-]+\.)+notify\.windows\.com)(\/[^\s@]*)?$/;
+    if (upper.success) expect(CHECK.test(upper.data.endpoint)).toBe(true);
+    if (withDefaultPort.success) expect(CHECK.test(withDefaultPort.data.endpoint)).toBe(true);
+  });
 });

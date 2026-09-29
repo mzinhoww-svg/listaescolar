@@ -2816,13 +2816,27 @@ cron-auth.ts`). Trocado para `z.string().min(1)` — o teto de 16 continua só n
 
 **Ruling 10 — triagem do resto da dívida com dono S19, sem reabrir trilhas já revisadas por segurança.**
 D-004 e D-001 resolvidas (ver acima); D-009 corrigida. Os demais itens com dono S19 (D-003, D-008, D-024, D-025,
-D-026, D-056, D-078, D-081, D-085, D-086, D-089, D-113, D-123, D-125, D-126, D-127, D-135, D-136, D-137, D-138,
+D-026, D-056, D-078, D-085, D-086, D-089, D-113, D-123, D-125, D-126, D-127, D-135, D-136, D-137, D-138,
 D-139, D-144, D-149) permanecem `aberta`: a maioria pertence a trilhas de cobrança/B2B/pipeline já revisadas por
 segurança dedicada (billing S21/S23, B2B S24/S25/S26, pipeline S07/S08) — reabrir para corrigir sem uma nova
 rodada de revisão de segurança é risco desproporcional ao ganho, mesmo raciocínio já registrado pela S18 para
 D-158. D-155 (prazo de retenção de `audit_log`) é decisão jurídica do humano, não técnica — mantida `aberta`,
 dono `Humano`, sem ação de código possível aqui. Custo se algum destes se revelar crítico: qualquer um pode virar
 uma fatia dedicada de correção + revisão de segurança, sem depender desta.
+
+**Ruling 11 — D-081 corrigida (custo baixo, teste objetivo).** `parsePushSubscription` (`features/notifications/
+preferences.ts`) validava o endpoint via `isAllowedPushEndpoint` (que usa `new URL()` internamente para decidir
+host/porta) mas devolvia a STRING CRUA para `push_subscription_upsert`; um endpoint real com host em maiúsculas
+ou porta `:443` explícita passava na validação e falhava só no CHECK de `push_subscriptions.endpoint` (0602,
+regex sensível a caixa, sem grupo de porta para https) — "Não foi possível ativar" sem o usuário entender por
+quê. Corrigido com `.transform((e) => new URL(e).toString())` encadeado depois do `.refine()`: grava sempre a
+forma canônica (host minúsculo, porta padrão omitida pela própria serialização de `URL`). Teste novo em
+`tests/notifications/central/preferences.test.ts` cobre host maiúsculo e porta `:443` explícita, confirmando o
+valor normalizado contra o mesmo regex do CHECK. Escopo deliberadamente restrito à ATIVAÇÃO (`subscribePushAction`
+→ `parsePushSubscription`); `unsubscribeSchema` (desativação) não foi tocado — o endpoint usado para desinscrever
+vem do objeto `PushSubscription` do próprio navegador na mesma sessão (sempre já canônico na prática), e D-081
+descreve especificamente a falha de ATIVAÇÃO. Custo se estiver errado: normalizar também o `unsubscribeSchema` é
+aditivo, mesma técnica.
 
 Gate desta fatia: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
 verdes em cada task (ver `docs/superpowers/logs/s19-task*.txt` e o relatório final). E2E em

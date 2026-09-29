@@ -1,0 +1,34 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.1 [39m[90m/Users/aurimar.nogueira@latam.com/projetos/listaescolar-wt/T3-comercio[39m
+
+ [31m❯[39m tests/notifications/central/preferences.test.ts [2m([22m[2m8 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 8[2mms[22m[39m
+   [31m❯[39m parsePushSubscription (Zod da fronteira) [2m(3)[22m
+[31m     [31m×[31m D-081 (S19): normaliza o endpoint antes de gravar — host maiúsculo e porta :443 explícita, que o CHECK de push_subscriptions recusaria crus, saem canônicos[39m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/notifications/central/preferences.test.ts[2m > [22mparsePushSubscription (Zod da fronteira)[2m > [22mD-081 (S19): normaliza o endpoint antes de gravar — host maiúsculo e porta :443 explícita, que o CHECK de push_subscriptions recusaria crus, saem canônicos
+[31m[1mAssertionError[22m: expected 'https://FCM.GOOGLEAPIS.COM/fcm/send/a…' to be 'https://fcm.googleapis.com/fcm/send/a…' // Object.is equality[39m
+
+Expected: [32m"https://[7mfcm.googleapis.com[27m/fcm/send/abc"[39m
+Received: [31m"https://[7mFCM.GOOGLEAPIS.COM[27m/fcm/send/abc"[39m
+
+[36m [2m❯[22m tests/notifications/central/preferences.test.ts:[2m53:52[22m[39m
+    [90m 51|[39m     const upper = parsePushSubscription({ endpoint: "https://FCM.GOOGL…
+    [90m 52|[39m     expect(upper.success).toBe(true);
+    [90m 53|[39m     if (upper.success) expect(upper.data.endpoint).toBe("https://fcm.g…
+    [90m   |[39m                                                    [31m^[39m
+    [90m 54|[39m
+    [90m 55|[39m     const withDefaultPort = parsePushSubscription({ endpoint: "https:/…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (8)[39m
+[2m   Start at [22m 22:58:15
+[2m   Duration [22m 658ms[2m (environment 76%, setup 13%, import 5%, transform 4%, tests 1%)[22m
+

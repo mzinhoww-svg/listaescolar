@@ -4,14 +4,20 @@ import { describe, expect, it } from "vitest";
 import { withSuperuser } from "./helpers";
 
 // Não há `runSqlFile` em helpers: o arquivo roda inteiro numa conexão superuser (simple query aceita vários comandos).
-async function runSqlFile(rel: string): Promise<void> {
+async function runSqlFile(rel: string, opts: { localMarker?: boolean } = { localMarker: true }): Promise<void> {
   const sql = readFileSync(resolve(process.cwd(), rel), "utf8");
   await withSuperuser(async (c) => {
+    if (opts.localMarker) await c.query("select set_config('app.local_seed', 'on', false)");
     await c.query(sql);
   });
 }
 
 describe("seed das jornadas S29", () => {
+  it("aborta sem o marcador app.local_seed e não grava nada", async () => {
+    await expect(runSqlFile("scripts/s29-seed-jornadas.sql", { localMarker: false })).rejects.toThrow(/recusado/);
+  });
+
+
   it("cria uma conta por público, todas demo, e um lead para a papelaria (idempotente)", async () => {
     await runSqlFile("scripts/s29-seed-jornadas.sql");
     await runSqlFile("scripts/s29-seed-jornadas.sql");

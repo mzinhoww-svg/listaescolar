@@ -4,6 +4,20 @@
 -- padrão (admin@listacerta.test, já criado por supabase/seed.sql). Todo display_name começa com "S29 ".
 -- Contas: familia@ (parent), escola@ (school_member aprovado), papelaria@ (stationery_member, dono),
 --         admin@ (admin, do seed padrão), parceiro@ (parent + membro owner de parceiro B2B ativo).
+-- GUARDA: aborta a menos que a sessão declare que o banco é local E o seed padrão local exista (admin@listacerta.test
+-- só é criado por supabase/seed.sql em `db reset`). Como rodar: na MESMA sessão, antes deste arquivo,
+--   set app.local_seed = 'on';   (mesma sessão que roda o arquivo)
+-- Alternativa: PGOPTIONS="-c app.local_seed=on" psql "$URL_LOCAL" -f scripts/s29-seed-jornadas.sql. Nunca em staging/produção.
+do $$
+begin
+  if coalesce(current_setting('app.local_seed', true), '') <> 'on' then
+    raise exception 's29-seed: recusado. Seed só para banco LOCAL; defina app.local_seed=on na sessão (ver cabeçalho).';
+  end if;
+  if not exists (select 1 from auth.users where email = 'admin@listacerta.test') then
+    raise exception 's29-seed: recusado. admin@listacerta.test ausente: não parece um banco local com supabase/seed.sql.';
+  end if;
+end $$;
+
 insert into auth.users (instance_id, id, aud, role, email, email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
   confirmation_token, recovery_token, email_change, email_change_token_new, email_change_token_current,
   phone_change, phone_change_token, reauthentication_token, created_at, updated_at)

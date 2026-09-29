@@ -1,3 +1,5 @@
+import { safeEmit, type Emit } from "../../supabase/functions/_shared/analytics/capture";
+import { itemsCountBucket } from "../../supabase/functions/_shared/analytics/schema";
 import type { SessionActor } from "@/features/stationeries/actor";
 
 import { LEAD_CONSENT_TEXT_VERSION } from "./consent";
@@ -17,6 +19,8 @@ export type LeadServiceDeps = {
   notifier: LeadNotifier;
   now: () => Date;
   siteOrigin: () => string;
+  /** Medição (ADR-007): `lead_received` e `purchase_clicked`. Nunca altera o resultado do pedido. */
+  analytics?: { emit: Emit; billingSource(leadId: string): Promise<"free_lead" | "pass_lead" | "lead_debit" | null> };
 };
 
 const STATIONERY_SIDE_ROLES: readonly string[] = ["stationery_member", "parent", "admin"];
@@ -64,8 +68,25 @@ export class LeadService {
       idempotencyKey: input.idempotencyKey,
       isDemo,
     });
-    if (created.created) await this.notify(stationery.id, created.leadId, created.code);
+    if (created.created) {
+      await this.notify(stationery.id, created.leadId, created.code);
+      await this.track(created.leadId, cart.items.length);
+    }
     return created;
+  }
+
+  /** Fatos do lead recém-criado para o funil da papelaria. Só código e faixa; nunca dado do pedido ou da pessoa. */
+  private async track(leadId: string, itemsCount: number): Promise<void> {
+    const a = this.deps.analytics;
+    if (!a) return;
+    let billing: "free_lead" | "pass_lead" | "lead_debit" | null = null;
+    try {
+      billing = await a.billingSource(leadId);
+    } catch {
+      billing = null;
+    }
+    safeEmit(a.emit, "lead_received", { items_count_bucket: itemsCountBucket(itemsCount), ...(billing ? { billing_source: billing } : {}) });
+    safeEmit(a.emit, "purchase_clicked", { canal: "papelaria_cotacao" });
   }
 
   private async notify(stationeryId: string, leadId: string, code: string): Promise<void> {

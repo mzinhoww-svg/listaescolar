@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { fieldInputClass } from "@/components/ui/Field";
 import { signInWithMagicLink } from "@/features/auth/actions";
+import { track } from "@/lib/analytics/track";
 import { emailSchema, type AuthActionState } from "@/features/auth/schemas";
 
 import { LinkSent } from "./LinkSent";
@@ -20,6 +21,7 @@ async function run(_prev: AuthActionState, formData: FormData): Promise<AuthActi
       email: typeof raw === "string" ? raw.trim().toLowerCase() : undefined,
     };
   }
+  track("login_started", { method: "magic_link" });
   return signInWithMagicLink(formData);
 }
 

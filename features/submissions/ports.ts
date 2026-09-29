@@ -1,3 +1,4 @@
+import type { Emit } from "../../supabase/functions/_shared/analytics/capture";
 import type { ExtractionResult } from "./schemas";
 
 export type ExtractionInput = {
@@ -82,6 +83,8 @@ export type SubmitDeps = {
   budgetMs?: number;
   /** Chamada depois de `recordSyncResult`, com teto de 3 s e erro engolido; o varredor cobre o que falhar. */
   publication?: PublicationDecider;
+  /** Gancho de medição (ADR-007): `ocr_completed` da leitura dentro do orçamento. Nunca altera o resultado do envio. */
+  emit?: Emit;
 };
 
 export type SubmitResult =

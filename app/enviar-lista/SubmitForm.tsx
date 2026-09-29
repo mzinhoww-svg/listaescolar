@@ -11,6 +11,7 @@ import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
 import { SchoolSearchPicker } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
 import { ACCEPT_ATTR, REVIEW_NOTICE } from "@/features/submissions/copy";
+import { trackUploadStarted } from "@/lib/analytics/track";
 import { idleState } from "@/features/submissions/form-schema";
 
 import { submitListAction } from "./actions";
@@ -42,6 +43,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
     if (problem) return;
     const data = new FormData(form);
     const original = pickedFile(form);
+    if (original) trackUploadStarted(original, data.get("schoolId") !== "");
     if (original) {
       setPreparing(true);
       const prepared = await prepareUpload(original);

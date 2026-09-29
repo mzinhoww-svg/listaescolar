@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { LandingViewed } from "@/components/analytics/LandingViewed";
 import { ChannelsStrip } from "@/components/site/ChannelsStrip";
 import { Faq } from "@/components/site/Faq";
 import { FeatureGrid } from "@/components/site/FeatureGrid";
@@ -20,6 +21,7 @@ export default async function Landing() {
   const { parents, schools, steps, faq } = SITE_COPY;
   return (
     <main id="conteudo" className="flex-1">
+      <LandingViewed />
       <Hero shortcuts={shortcuts} />
       <Section id={parents.id} eyebrow={parents.eyebrow} title={parents.title} tone="white">
         <FeatureGrid items={parents.items} />

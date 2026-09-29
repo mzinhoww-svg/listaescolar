@@ -5,6 +5,8 @@
 //
 // D-057 (S18): este arquivo tinha 301 linhas. A etapa de publicação (lease -> porta -> registro) foi extraída
 // para `decide-publish-stage.ts` (arquivo-irmão) — comportamento idêntico ao original.
+import { safeEmit, type Emit } from "../analytics/capture.ts";
+import { scoreBucket } from "../analytics/schema.ts";
 import { extractionResultSchema, type ExtractionResult } from "../extraction-schema.ts";
 import { REASON_CODE_PATTERN, PUBLICATION_RULES_VERSION, type ReasonCode } from "./codes.ts";
 import { failStage, publishStage } from "./decide-publish-stage.ts";
@@ -35,6 +37,8 @@ export type PublicationDeps = {
   clock: PublicationClock;
   /** Alerta operacional (ex.: `published_after_failure`); nunca derruba a decisão. */
   onAlert?: (a: { code: string; submissionId: string }) => void;
+  /** Gancho de medição (ADR-007): `list_auto_approved` e `list_published`. Nunca altera a decisão. */
+  emit?: Emit;
 };
 
 export type DecideResult =
@@ -130,6 +134,9 @@ export async function decideListPublication(submissionId: string, deps: Publicat
 
   const recorded = await deps.store.recordVerdict(submissionId, payload);
   if (recorded !== "recorded") return { status: recorded };
+  if (verdict.outcome === "auto_publish" && result) {
+    safeEmit(deps.emit, "list_auto_approved", { overall_score_bucket: scoreBucket(result.overallConfidence), rules_version: PUBLICATION_RULES_VERSION });
+  }
   if (verdict.outcome === "human_review" || !result) return { status: "human_review", reasons: verdict.reasons };
   return publishStage(submissionId, input, result, loaded.ctx, deps, deadlineAt);
 }

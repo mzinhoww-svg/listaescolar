@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { TrackView } from "@/components/analytics/TrackView";
 import { ClaimBlock, type OwnClaimSummary } from "@/components/schools/ClaimBlock";
 import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
@@ -75,6 +76,7 @@ export default async function SchoolPage({ params, searchParams }: Props) {
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
       ) : null}
+      <TrackView name="school_viewed" props={{ school_inep: school.inep, verification_status: school.verificationStatus }} />
       <ProfileHeader school={school} />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
         <ProfileNotices school={school} />

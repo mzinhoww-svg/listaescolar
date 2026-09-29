@@ -46,6 +46,7 @@ export function createPublicationDeps(o: {
   rpc: RawRpc;
   clock: PublicationDeps["clock"];
   onAlert?: PublicationDeps["onAlert"];
+  emit?: PublicationDeps["emit"];
 }): PublicationDeps {
   const fixture = publicationPortsAllowed(o.env) ? parsePublicationFixture(o.env.FAKE_PUBLICATION_FIXTURE) : null;
   const memory = fixture ? sharedPublisher(o.env.FAKE_PUBLICATION_FIXTURE ?? "") : null;
@@ -57,5 +58,6 @@ export function createPublicationDeps(o: {
     publisher: memory ?? real?.publisher ?? null,
     clock: o.clock,
     ...(o.onAlert ? { onAlert: o.onAlert } : {}),
+    ...(o.emit ? { emit: o.emit } : {}),
   };
 }

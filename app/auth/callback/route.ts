@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { callbackQuerySchema } from "@/features/auth/schemas";
+import { captureServer } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
 
 /** Redirect com Location relativo: Host/x-forwarded-host são forjáveis e não entram na URL. */
@@ -35,5 +36,6 @@ export async function GET(request: NextRequest) {
   } catch {
     return fail("codigo", headers);
   }
+  captureServer("login_completed", { method: "google" });
   return redirectTo(query.next, headers);
 }

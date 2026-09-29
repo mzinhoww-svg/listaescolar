@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { TrackView } from "@/components/analytics/TrackView";
 import { BackHeader } from "@/components/cart/CartStates";
 import { CartIntro } from "@/components/cart/CartIntro";
 import { orderOptions } from "@/components/cart/format";
@@ -25,6 +26,7 @@ export default async function CarrinhoPage({ params, searchParams }: PageProps<"
   return (
     <Screen>
       <BackHeader href="/" title="Seu carrinho" />
+      <TrackView name="cart_options_viewed" props={{ options_count: view.options.length }} />
       <CartIntro options={view.options} isDemo={anyDemo} />
       <ul className="flex flex-col gap-3" aria-label="Opções de compra">
         {orderOptions(view.options).map((o) => (

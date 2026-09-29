@@ -1,6 +1,7 @@
 import "server-only";
 
 import { buildPublicationDecider } from "@/features/publication/factory";
+import { emitServer } from "@/lib/analytics/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { getExtractionPipeline } from "./pipeline-factory";
@@ -21,5 +22,6 @@ export function buildSubmitDeps(): SubmitDeps {
     queue: createJobQueue(admin),
     clock: systemClock,
     publication: buildPublicationDecider(),
+    emit: emitServer,
   };
 }

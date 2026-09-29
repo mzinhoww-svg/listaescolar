@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { confirmQuerySchema } from "@/features/auth/schemas";
+import { captureServer } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
 
 const ERRO = "/entrar?erro=codigo";
@@ -38,5 +39,6 @@ export async function GET(request: NextRequest) {
   } catch {
     return redirectTo(ERRO, headers);
   }
+  captureServer("login_completed", { method: "magic_link" });
   return redirectTo(next, headers);
 }

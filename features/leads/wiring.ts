@@ -2,6 +2,7 @@ import "server-only";
 
 import { getCart } from "@/features/cart/repository";
 import { readServiceEnv } from "@/features/cart/service";
+import { emitServer } from "@/lib/analytics/server";
 import { getSiteOrigin } from "@/lib/site-url";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -33,6 +34,19 @@ export function createContextReader(): LeadListContextReader {
   return composeLeadContextReader(createAdminClient(), readServiceEnv());
 }
 
+/** Origem da cobrança do lead (livro-razão da S21): só o tipo de lançamento, nunca valor nem saldo. */
+async function readBillingSource(leadId: string): Promise<"free_lead" | "pass_lead" | "lead_debit" | null> {
+  const { data } = await createAdminClient()
+    .from("credit_ledger")
+    .select("entry_type")
+    .eq("lead_id", leadId)
+    .in("entry_type", ["free_lead", "pass_lead", "lead_debit"])
+    .limit(1)
+    .maybeSingle();
+  const t = data?.entry_type;
+  return t === "free_lead" || t === "pass_lead" || t === "lead_debit" ? t : null;
+}
+
 /** Composição do serviço de leads (leitor de contexto real desde a S11). */
 export function getLeadService(): LeadService {
   return new LeadService({
@@ -42,5 +56,6 @@ export function getLeadService(): LeadService {
     notifier: new KickLeadNotifier(),
     now: () => new Date(),
     siteOrigin: () => getSiteOrigin(),
+    analytics: { emit: emitServer, billingSource: readBillingSource },
   });
 }

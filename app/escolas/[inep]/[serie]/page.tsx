@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { TrackClick } from "@/components/analytics/TrackClick";
+import { TrackView } from "@/components/analytics/TrackView";
 import { ItemsTable } from "@/components/lists/ItemsTable";
 import { ListHeader } from "@/components/lists/ListHeader";
 import { SaveListButton } from "@/components/lists/SaveListButton";
@@ -96,6 +98,10 @@ export default async function ListPage({ params, searchParams }: Props) {
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
         {version && list ? (
           <>
+            <TrackView
+              name="list_viewed"
+              props={{ school_inep: school.inep, grade_slug: grade.slug, school_year: year, list_version_id: version.id, items_count: version.itemCount }}
+            />
             <ItemsTable items={version.items} />
             <p className="text-texto-2 -mb-3 text-[13px] leading-snug font-semibold">
               Preços aparecem quando a loja ou a papelaria informa.
@@ -107,12 +113,14 @@ export default async function ListPage({ params, searchParams }: Props) {
               Montar carrinho com esta lista
             </Link>
             {shareOrigin ? (
-              <WhatsAppShareButton
-                schoolName={school.name}
-                gradeLabel={grade.label}
-                year={year}
-                link={shortLinkUrl(encodeShortCode({ inep: school.inep, gradeSlug: grade.slug }), shareOrigin)}
-              />
+              <TrackClick name="list_shared" props={{ channel: "whatsapp", school_inep: school.inep, grade_slug: grade.slug }}>
+                <WhatsAppShareButton
+                  schoolName={school.name}
+                  gradeLabel={grade.label}
+                  year={year}
+                  link={shortLinkUrl(encodeShortCode({ inep: school.inep, gradeSlug: grade.slug }), shareOrigin)}
+                />
+              </TrackClick>
             ) : null}
             <SaveListButton
               listId={list.id}

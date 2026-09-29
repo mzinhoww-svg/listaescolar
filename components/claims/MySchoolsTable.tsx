@@ -3,11 +3,21 @@ import Link from "next/link";
 import { DemoBadge } from "@/components/admin/DemoBadge";
 import { formatDate } from "@/features/claims/format";
 import { STATUS_LABEL } from "@/features/claims/messages";
+import { nextStep } from "@/features/claims/next-step";
 import type { MyClaimRow, MySchoolRow } from "@/features/claims/queries-mine";
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
 const chip = "rounded-botao inline-flex w-fit px-2.5 py-1 text-[11px] font-extrabold";
 const link = "text-verde-fundo text-[14px] font-extrabold";
+
+function Step({ title, body }: { title: string; body: string }) {
+  return (
+    <span className="mt-2 block max-w-[280px]">
+      <span className="block text-[13px] font-extrabold">Próximo passo: {title}</span>
+      <span className="text-texto-2 block text-[13px] font-semibold">{body}</span>
+    </span>
+  );
+}
 
 function Cell({ name, inep, demo }: { name: string; inep: string; demo: boolean }) {
   return (
@@ -25,7 +35,7 @@ function Cell({ name, inep, demo }: { name: string; inep: string; demo: boolean 
 }
 
 /** Escola03: escolas do usuário (vínculo real) e reivindicações abertas/recusadas. Sem contagem de listas (sem fonte aqui). */
-export function MySchoolsTable({ schools, claims }: { schools: MySchoolRow[]; claims: MyClaimRow[] }) {
+export function MySchoolsTable({ schools, claims, withList = new Set() }: { schools: MySchoolRow[]; claims: MyClaimRow[]; withList?: ReadonlySet<string> }) {
   if (schools.length === 0 && claims.length === 0) {
     return (
       <div className="rounded-[24px] bg-white p-8">
@@ -53,8 +63,13 @@ export function MySchoolsTable({ schools, claims }: { schools: MySchoolRow[]; cl
                 <span className={`${chip} ${s.verificationStatus === "verified" ? "bg-verde-certo/20 text-verde-fundo" : s.verificationStatus === "suspended" ? "bg-campo text-texto-2" : "bg-aviso-fundo text-aviso-texto"}`}>
                   {s.verificationStatus === "verified" ? "Verificada" : s.verificationStatus === "suspended" ? "Suspensa" : "Cadastrada"}
                 </span>
+                <Step {...nextStep("approved", withList.has(s.schoolId))} />
               </td>
-              <td className="px-5 py-4"><Link href={`/escolas/${s.inep}`} className={link}>Abrir página pública</Link></td>
+              <td className="px-5 py-4">
+                <Link href={withList.has(s.schoolId) ? `/escolas/${s.inep}` : "/escola/listas/nova"} className={link}>
+                  {nextStep("approved", withList.has(s.schoolId)).cta}
+                </Link>
+              </td>
             </tr>
           ))}
           {claims.map((c) => (
@@ -65,9 +80,10 @@ export function MySchoolsTable({ schools, claims }: { schools: MySchoolRow[]; cl
                 <span className="text-texto-3 mt-1 block text-[12px] font-semibold">
                   {c.status === "rejected" && c.decisionReason ? `Motivo: ${c.decisionReason}` : `Enviada em ${formatDate(c.createdAt)}`}
                 </span>
+                <Step {...nextStep(c.status, false)} />
               </td>
               <td className="px-5 py-4">
-                <Link href={`/escolas/${c.school.inep}/reivindicar`} className={link}>{c.status === "rejected" ? "Ver e pedir de novo" : "Ver status"}</Link>
+                <Link href={`/escolas/${c.school.inep}/reivindicar`} className={link}>{nextStep(c.status, false).cta}</Link>
               </td>
             </tr>
           ))}

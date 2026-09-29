@@ -226,12 +226,14 @@ describe("MySchoolsTable (Escola03)", () => {
           { id: CLAIM_ID, status: "awaiting_verification", decisionReason: null, createdAt: "2026-09-10T15:00:00Z", isDemo: true, school: { inep: "99001002", name: "Escola Demonstração 2" } },
           { id: "44444444-4444-4444-8444-444444444444", status: "rejected", decisionReason: "Sem vínculo", createdAt: "2026-09-10T15:00:00Z", isDemo: true, school: { inep: "99001003", name: "Escola Demonstração 3" } },
         ]}
+        withList={new Set(["s1"])}
       />,
     );
     expect(screen.getByText("Verificada")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Abrir página pública" })).toHaveAttribute("href", "/escolas/99001004");
-    expect(screen.getByRole("link", { name: "Ver status" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
+    expect(screen.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(screen.getByRole("link", { name: "Ver o status do pedido" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
     expect(screen.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ver e pedir de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver o motivo e pedir de novo" })).toBeInTheDocument();
+    expect(screen.getAllByText(/Próximo passo:/)).toHaveLength(3);
   });
 });

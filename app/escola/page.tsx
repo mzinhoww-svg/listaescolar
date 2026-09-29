@@ -4,7 +4,7 @@ import { MySchoolsTable } from "@/components/claims/MySchoolsTable";
 import { SchoolPanelShell } from "@/components/claims/SchoolPanelShell";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
-import { listMyPendingClaims, listMySchools, type MyClaimRow, type MySchoolRow } from "@/features/claims/queries-mine";
+import { listMyPendingClaims, listMySchools, listSchoolIdsWithPublishedList, type MyClaimRow, type MySchoolRow } from "@/features/claims/queries-mine";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Minhas escolas · ListaCerta" };
@@ -12,7 +12,7 @@ export const metadata = { title: "Minhas escolas · ListaCerta" };
 /** Escola03. Papel `school_member`/`admin` (o acesso é decidido em `features/auth/access.ts`, que a S06 não altera). */
 export default async function Page() {
   const { user } = await requireAccess("/escola");
-  let data: { schools: MySchoolRow[]; claims: MyClaimRow[] } | null = null;
+  let data: { schools: MySchoolRow[]; claims: MyClaimRow[]; withList: ReadonlySet<string> } | null = null;
   try {
     const actor = await getSessionActor();
     if (actor) {
@@ -21,7 +21,7 @@ export default async function Page() {
       const seen = new Set<string>();
       // Só a reivindicação mais recente de cada escola, e nenhuma de escola que o usuário já administra.
       const latest = claims.filter((c) => !linked.has(c.school.inep) && !seen.has(c.school.inep) && seen.add(c.school.inep));
-      data = { schools, claims: latest };
+      data = { schools, claims: latest, withList: await listSchoolIdsWithPublishedList(schools.map((s) => s.schoolId)) };
     }
   } catch (error) {
     console.error("minhas escolas", error instanceof Error ? error.message : "erro");
@@ -34,7 +34,7 @@ export default async function Page() {
       actions={<Link href="/escolas" className="bg-tinta text-papel rounded-botao px-6 py-3 text-[15px] font-extrabold">Pedir para administrar outra escola</Link>}
     >
       {data ? (
-        <MySchoolsTable schools={data.schools} claims={data.claims} />
+        <MySchoolsTable schools={data.schools} claims={data.claims} withList={data.withList} />
       ) : (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Não foi possível carregar suas escolas. <Link href="/escola" className="underline">Tentar de novo</Link>

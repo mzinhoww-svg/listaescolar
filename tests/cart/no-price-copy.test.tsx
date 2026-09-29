@@ -51,6 +51,7 @@ describe("carrinho sem preço (M05)", () => {
 
 describe("carrinho com preço em parte das opções (revisão UX I3)", () => {
   const priced = option();
+  const four = STRATEGIES.map(none);
   const mixed = [priced, none("fewest_stores"), none("balanced"), none("local_stationery")];
 
   it("o título conta só as opções com preço", () => {

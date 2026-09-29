@@ -12,7 +12,6 @@ import { Screen } from "@/components/auth/Screen";
 import { getListOriginByVersion, listOriginHref } from "@/features/lists/queries";
 import { chooseOption, parseStrategy, requireCartView } from "@/features/cart/page-data";
 
-import { getListOriginByVersion, listOriginHref } from "@/features/lists/queries";
 import { chooseOptionAction } from "./actions";
 
 export const metadata: Metadata = { title: "Seu carrinho · ListaCerta" };

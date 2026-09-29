@@ -9,7 +9,7 @@ Fonte da verdade do esquema: `supabase/functions/_shared/analytics/schema.ts` (u
 - **Nada sai do navegador antes do aceite** (`SEND_BEFORE_CONSENT = false`). Antes da escolha, os eventos ficam numa fila em memória (no máximo 50, descartável), sem cookie, sem `localStorage`, sem `identify`; só são liberados se o aceite vier na mesma página.
 - Aceitar grava a escolha e o identificador anônimo em `localStorage`; recusar ou revogar descarta a fila, apaga o identificador e para o envio. O aviso é `components/analytics/ConsentNotice.tsx` (dois botões de 48 px).
 - Eventos de **servidor** (fatos gravados no banco) não passam pelo navegador: saem com `distinct_id` de entidade ou aleatório e `$process_person_profile: false`, nunca ligados a uma pessoa nem ao comportamento no navegador.
-- O navegador fala só com `/ingest` (rewrite do Next para `NEXT_PUBLIC_POSTHOG_HOST`), com `credentials: "omit"`; `proxy.ts` deixa `/ingest` fora da sessão.
+- O navegador fala só com `/ingest` (Route Handler `app/ingest/[...path]`, destino fixo `NEXT_PUBLIC_POSTHOG_HOST`; só POST em `i/v0/e` e `batch`, corpo até 64 KB, repassa apenas `content-type`), com `credentials: "omit"` e `referrerPolicy: "no-referrer"`; `proxy.ts` deixa `/ingest` fora da sessão.
 
 ## Eventos acrescentados na S28
 

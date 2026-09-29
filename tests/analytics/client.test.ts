@@ -79,6 +79,7 @@ describe("cliente de eventos", () => {
     expect(props).not.toHaveProperty("query");
     expect(JSON.stringify(sent[0]!.body)).not.toMatch(/escola maria/);
     expect(sent[0]!.init.credentials).toBe("omit");
+    expect(sent[0]!.init.referrerPolicy).toBe("no-referrer");
     expect(idStore.save).toHaveBeenCalledTimes(1);
   });
 

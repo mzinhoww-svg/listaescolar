@@ -62,10 +62,12 @@ export function createAnalyticsClient(deps: Deps): AnalyticsClient {
     const wire = batch.map((e) => ({ api_key: config.key, ...e, properties: { token: config.key, ...e.properties } }));
     const body = one ? wire[0] : { api_key: config.key, batch: wire };
     try {
-      // `keepalive` cobre o `pagehide`; `credentials: "omit"` impede o cookie de sessão do app de ir ao proxy.
+      // `keepalive` cobre o `pagehide`; `credentials: "omit"` e `referrerPolicy: "no-referrer"` impedem cookie e URL da página de irem ao proxy
+      // (e o proxy ainda só repassa `content-type`).
       void doFetch(`${INGEST_PATH}${one ? "/i/v0/e" : "/batch"}`, {
         method: "POST",
         credentials: "omit",
+        referrerPolicy: "no-referrer",
         keepalive: true,
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { config as proxyConfig } from "@/proxy";
 
@@ -15,22 +15,13 @@ describe("proxy.ts e /ingest", () => {
   });
 });
 
-describe("rewrites do next.config", () => {
-  async function load(env: Record<string, string>) {
+describe("next.config", () => {
+  it("não há rewrite para /ingest (o proxy é Route Handler que repassa só content-type)", async () => {
     vi.resetModules();
-    for (const k of ["NEXT_PUBLIC_POSTHOG_KEY", "NEXT_PUBLIC_POSTHOG_HOST", "SENTRY_DSN"]) vi.stubEnv(k, env[k] ?? "");
-    const mod = await import("../../next.config");
-    return mod.default;
-  }
-  afterEach(() => vi.unstubAllEnvs());
-
-  it("sem chave: nenhum rewrite (proxy inexistente)", async () => {
-    const cfg = await load({});
-    expect(await cfg.rewrites?.()).toEqual([]);
-  });
-
-  it("com chave: /ingest/:path* vai para o host configurado", async () => {
-    const cfg = await load({ NEXT_PUBLIC_POSTHOG_KEY: "phc_x", NEXT_PUBLIC_POSTHOG_HOST: "https://eu.i.posthog.com" });
-    expect(await cfg.rewrites?.()).toEqual([{ source: "/ingest/:path*", destination: "https://eu.i.posthog.com/:path*" }]);
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_x");
+    vi.stubEnv("SENTRY_DSN", "");
+    const cfg = (await import("../../next.config")).default;
+    expect(cfg.rewrites).toBeUndefined();
+    vi.unstubAllEnvs();
   });
 });

@@ -11,7 +11,7 @@
 export const SEND_BEFORE_CONSENT = false as const;
 
 /**
- * Caminho do proxy (rewrite do Next). O cliente nunca conhece o host do PostHog. Os endpoints são chamados SEM barra
+ * Caminho do proxy (Route Handler `app/ingest`). O cliente nunca conhece o host do PostHog. Os endpoints são chamados SEM barra
  * final (`/i/v0/e`, `/batch`): com barra, o Next redirecionaria (308) e desligar isso vale para o site inteiro.
  */
 export const INGEST_PATH = "/ingest";

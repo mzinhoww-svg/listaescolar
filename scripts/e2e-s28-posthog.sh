@@ -2,7 +2,8 @@
 # E2E da medição de uso da S28 (ADR-007) com agent-browser, build de produção local da trilha 2 (porta 3002) e um
 # receptor local no lugar do PostHog. Cobre: sem chave nada existe; com chave, NADA persistente nem enviado antes do
 # aceite (localStorage, cookie, requisições a /ingest, receptor); recusar não envia nada; aceitar libera os eventos da
-# página (landing_viewed, school_searched) pelo proxy /ingest, sem cookie e sem PII.
+# página (landing_viewed, school_searched) pelo proxy /ingest, sem cookie e sem PII; o proxy não repassa
+# referer, cookie, x-forwarded-for nem user-agent do usuário.
 # Uso: set -a; source .env.local; set +a; bash scripts/e2e-s28-posthog.sh   (faz o build com a chave falsa; SKIP_BUILD=1 pula)
 set -u
 cd "$(dirname "$0")/.."
@@ -68,6 +69,34 @@ eq "$(grep -c '"hasCookie":true' "$LOG")" "0" "nenhuma requisição levou cookie
 eq "$(ev accept "localStorage.getItem('lc_analytics_consent_v1')")" "granted" "escolha 'granted' guardada só depois do aceite"
 eq "$(ev accept "!!localStorage.getItem('lc_analytics_id')")" "true" "identificador anônimo guardado só depois do aceite"
 has "$raw" '"query_length":5' "query_length numérico, sem o texto"
+
+echo "== 4) o proxy /ingest não repassa cabeçalho do usuário (revisão I1/I2/M1/M2)"
+curl -s -X POST "$BASE/ingest/batch" -H 'content-type: application/json' -H 'cookie: sb-canary=segredo123' \
+  -H 'referer: https://listacerta.test/lista/CANARIO-REFERER' -H 'x-forwarded-for: 203.0.113.77' -H 'x-real-ip: 203.0.113.77' \
+  -H 'authorization: Bearer canario' -H 'user-agent: UsuarioReal/9.9 CANARIO-UA' --data '{"api_key":"phc_fake","batch":[]}' >/dev/null
+sleep 1
+last=$(tail -n 1 "$LOG")
+has "$last" '"url":"/batch"' "a requisição direta chegou ao receptor (o destino foi o /batch)"
+lacks "$last" "CANARIO-REFERER" "referer do usuário não chegou ao receptor"
+lacks "$last" "segredo123" "cookie do usuário não chegou ao receptor"
+lacks "$last" "203.0.113.77" "x-forwarded-for e x-real-ip do usuário não chegaram ao receptor"
+lacks "$last" "CANARIO-UA" "user-agent do usuário não chegou ao receptor"
+lacks "$last" "canario" "authorization do usuário não chegou ao receptor"
+eq "$(python3 -c "
+import json
+d=json.loads(open('$LOG').read().splitlines()[-1]); h=d['headers']
+print(sum(1 for k in ('cookie','referer','origin','authorization','x-forwarded-for','x-real-ip') if k in h))")" "0" "nenhum cabeçalho de identificação no receptor"
+eq "$(python3 -c "
+import json
+bad=0
+for l in open('$LOG'):
+    h=json.loads(l).get('headers',{})
+    ua=h.get('user-agent','')
+    bad+= any(k in h for k in ('cookie','referer','x-forwarded-for','x-real-ip','authorization')) or 'Mozilla' in ua or 'Chrome' in ua
+print(bad)")" "0" "em nenhuma requisição (inclusive as do navegador) chegou cookie, referer, IP ou user-agent do navegador"
+eq "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/ingest/decide")" "404" "caminho fora da lista (/ingest/decide) responde 404"
+eq "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/ingest/batch")" "405" "GET em /ingest/batch responde 405"
+eq "$(head -c 70000 /dev/zero | tr '\0' x | curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/ingest/batch" -H 'content-type: application/json' --data-binary @-)" "413" "corpo acima de 64 KB responde 413"
 
 echo; echo "RESULTADO: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = 0 ]

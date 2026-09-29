@@ -25,8 +25,21 @@ export function formatCheckedAt(date: Date): string {
   return dateFormat.format(date);
 }
 
+/** Origens de preço conhecidas (ver `price_snapshots.source` e `CATALOG_PRICE_SOURCE`). Acrescentar uma exige o rótulo aqui. */
+export const PRICE_SOURCES = ["demo", "informed_by_stationery", "manual_admin"] as const;
+export type PriceSource = (typeof PRICE_SOURCES)[number];
+
+export const SOURCE_LABEL: Record<PriceSource, string> = {
+  demo: "demonstração",
+  informed_by_stationery: "informado pela papelaria",
+  manual_admin: "cadastro da equipe ListaCerta",
+};
+
+/** Nunca mostra o código técnico: feeds (`retailer_feed:<nome>`) e origens novas caem em rótulos genéricos em pt-BR. */
 export function sourceLabel(source: string): string {
-  return source === "demo" ? "demonstração" : source;
+  if ((PRICE_SOURCES as readonly string[]).includes(source)) return SOURCE_LABEL[source as PriceSource];
+  if (source.startsWith("retailer_feed:")) return "informado pela loja";
+  return "fonte informada";
 }
 
 export function moneyOrUnavailable(cents: number | null): string {

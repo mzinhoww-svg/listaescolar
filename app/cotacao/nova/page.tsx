@@ -6,11 +6,13 @@ import { z } from "zod";
 
 import { Screen } from "@/components/auth/Screen";
 import { BackHeader, EmptyState } from "@/components/cart/CartStates";
+import { NoStationeries } from "@/components/leads/NoStationeries";
 import { StationeryCard } from "@/components/leads/StationeryCard";
 import { requireAccess } from "@/features/auth/guard";
 import { filterByMode, novaHref } from "@/features/leads/filters";
 import { errorMessageForCode } from "@/features/leads/messages";
 import { buildLeadMessage, leadListUrl } from "@/features/leads/message";
+import { getListOriginByVersion, listOriginHref } from "@/features/lists/queries";
 import { loadQuoteView } from "@/features/leads/queries";
 import { getSessionActor } from "@/features/stationeries/actor";
 import { getSiteOrigin } from "@/lib/site-url";
@@ -21,7 +23,7 @@ import { ConsentForm } from "./ConsentForm";
 export const metadata: Metadata = { title: "Pedir cotação · ListaCerta" };
 
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
-const chip = (on: boolean) => `${on ? "bg-verde-certo text-tinta" : "bg-campo text-tinta"} rounded-botao px-4 py-2 text-[14px] font-extrabold`;
+const chip = (on: boolean) => `${on ? "bg-verde-certo text-tinta" : "bg-campo text-tinta"} focus-visible:outline-verde-fundo rounded-botao inline-flex min-h-11 items-center px-4 text-[14px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2`;
 
 function previewFor(schoolName: string, gradeLabel: string, schoolYear: number): string | null {
   try {
@@ -56,6 +58,15 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
   const picked = view.options.find((o) => o.id === one(sp.papelaria));
   const options = filterByMode(view.options, { entrega, retirada });
   const base = { carrinho: cart.data, bairro, entrega, retirada };
+  const hasFilter = Boolean(bairro) || entrega || retirada;
+  let shareHref: string | null = null;
+  if (options.length === 0 && view.cart.listId) {
+    try {
+      shareHref = listOriginHref(await getListOriginByVersion(view.cart.listId));
+    } catch {
+      shareHref = null;
+    }
+  }
 
   return (
     <Screen>
@@ -77,15 +88,18 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
       ) : (
         <>
           <nav aria-label="Filtros" className="flex flex-wrap gap-2">
-            <Link href={novaHref({ ...base, entrega: !entrega })} className={chip(entrega)} aria-pressed={entrega}>Entrega</Link>
-            <Link href={novaHref({ ...base, retirada: !retirada })} className={chip(retirada)} aria-pressed={retirada}>Retirada</Link>
+            <Link href={novaHref({ ...base, entrega: !entrega })} className={chip(entrega)} aria-current={entrega ? "true" : undefined}>Entrega</Link>
+            <Link href={novaHref({ ...base, retirada: !retirada })} className={chip(retirada)} aria-current={retirada ? "true" : undefined}>Retirada</Link>
           </nav>
-          <form method="get" action="/cotacao/nova" className="flex gap-2">
+          <form method="get" action="/cotacao/nova" className="flex items-end gap-2">
             <input type="hidden" name="carrinho" value={cart.data} />
             {entrega ? <input type="hidden" name="entrega" value="1" /> : null}
             {retirada ? <input type="hidden" name="retirada" value="1" /> : null}
-            <input name="bairro" defaultValue={bairro} maxLength={120} placeholder="Seu bairro (opcional)" aria-label="Seu bairro" className="bg-campo rounded-campo h-12 min-w-0 flex-1 px-4 text-[14px] font-semibold" />
-            <button type="submit" className="bg-tinta text-papel rounded-botao h-12 px-5 text-[14px] font-extrabold">Filtrar</button>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label htmlFor="bairro" className="text-texto-3 text-xs font-semibold">Seu bairro (opcional)</label>
+              <input id="bairro" name="bairro" defaultValue={bairro} maxLength={120} className="bg-campo focus-visible:outline-verde-fundo rounded-campo h-12 min-w-0 px-4 text-[14px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2" />
+            </div>
+            <button type="submit" className="bg-tinta text-papel focus-visible:outline-verde-fundo rounded-botao h-12 px-5 text-[14px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">Filtrar</button>
           </form>
           <p className="text-texto-2 text-[13px] font-semibold">
             {options.length} {options.length === 1 ? "papelaria atende" : "papelarias atendem"} {bairro ? `o bairro ${bairro}` : "a região"} para a lista de {view.context.gradeLabel} ({view.context.schoolYear}).
@@ -93,7 +107,12 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
             {view.truncated ? " Mostrando as primeiras; refine pelo bairro para ver outras." : null}
           </p>
           {options.length === 0 ? (
-            <p className="text-texto-2 text-[15px] font-medium" data-testid="no-stationeries">Nenhuma papelaria cadastrada atende esta região com os filtros escolhidos.</p>
+            <NoStationeries
+              hasFilter={hasFilter}
+              cartHref={`/carrinho/${cart.data}`}
+              clearFiltersHref={novaHref({ carrinho: cart.data })}
+              shareHref={shareHref}
+            />
           ) : (
             <ul className="flex flex-col gap-3" aria-label="Papelarias">
               {options.map((o) => (

@@ -13,13 +13,15 @@ type Props = {
   /** Campo Bairro visível (padrão). A landing o omite. */
   showNeighborhood?: boolean;
   submitLabel?: string;
+  /** Botão abaixo do campo (celular): o campo ocupa a largura toda e o texto do botão cabe inteiro. */
+  stacked?: boolean;
 };
 
 /**
  * Busca como `<form method="get">`: funciona sem JS. O JS só acrescenta o botão de limpar.
  * Não envia `pagina`: uma nova busca sempre começa na página 1.
  */
-export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}, showNeighborhood = true, submitLabel = "Buscar" }: Props) {
+export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}, showNeighborhood = true, submitLabel = "Buscar", stacked = false }: Props) {
   const [value, setValue] = useState(defaultValue);
   return (
     <form method="get" action="/escolas" role="search">
@@ -54,10 +56,17 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
             <CloseIcon />
           </button>
         ) : null}
-        <button type="submit" className="bg-tinta text-papel rounded-botao h-10 shrink-0 px-4 text-sm font-extrabold">
+        {stacked ? null : (
+          <button type="submit" className="bg-tinta text-papel rounded-botao h-10 shrink-0 px-4 text-sm font-extrabold">
+            {submitLabel}
+          </button>
+        )}
+      </div>
+      {stacked ? (
+        <button type="submit" className="bg-tinta text-papel rounded-botao mt-2.5 flex h-12 w-full items-center justify-center text-[15px] font-extrabold">
           {submitLabel}
         </button>
-      </div>
+      ) : null}
       {showNeighborhood ? (
       <div className="mt-3 flex flex-col gap-1">
         <label htmlFor="bairro" className="text-texto-3 text-xs font-semibold">

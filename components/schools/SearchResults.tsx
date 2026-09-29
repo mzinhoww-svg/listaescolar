@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { SearchInput, SearchResult } from "@/features/schools/search/types";
 
 import { foundLabel } from "./format";
@@ -5,6 +7,8 @@ import { Pagination } from "./Pagination";
 import { SchoolCard } from "./SchoolCard";
 
 type Results = Extract<SearchResult, { kind: "results" }>;
+
+const EXIT = "text-verde-fundo focus-visible:outline-verde-fundo flex min-h-11 items-center text-[14px] font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2";
 
 export function EmptyState({ tooShort }: { tooShort: boolean }) {
   return (
@@ -15,6 +19,20 @@ export function EmptyState({ tooShort }: { tooShort: boolean }) {
           ? "Use pelo menos 2 letras do nome da escola, ou o INEP de 8 números."
           : "Confira a grafia, tente só parte do nome ou o INEP de 8 números, ou remova o filtro de rede."}
       </p>
+      {tooShort ? null : (
+        <ul className="mt-1 flex flex-col">
+          <li>
+            <Link href="/enviar-lista" className={EXIT}>
+              Enviar a lista da escola
+            </Link>
+          </li>
+          <li>
+            <Link href="/escolas" className={EXIT}>
+              Ver escolas de Cuiabá
+            </Link>
+          </li>
+        </ul>
+      )}
     </div>
   );
 }

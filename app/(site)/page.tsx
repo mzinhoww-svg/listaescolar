@@ -8,6 +8,7 @@ import { Hero } from "@/components/site/Hero";
 import { Section } from "@/components/site/Section";
 import { StepsSection } from "@/components/site/StepsSection";
 import { SITE_COPY, pageMetadata } from "@/features/site/copy";
+import { listPublishedListShortcuts } from "@/features/schools/published-lists";
 import { getPurchaseChannels } from "@/features/site/channels";
 
 export const metadata: Metadata = pageMetadata("home");
@@ -15,11 +16,11 @@ export const revalidate = 3600;
 
 /** Landing (design Landing, 1440 → 390). Sem número, parceria ou prazo sem fonte. */
 export default async function Landing() {
-  const channels = await getPurchaseChannels();
+  const [channels, shortcuts] = await Promise.all([getPurchaseChannels(), listPublishedListShortcuts()]);
   const { parents, schools, steps, faq } = SITE_COPY;
   return (
     <main id="conteudo" className="flex-1">
-      <Hero />
+      <Hero shortcuts={shortcuts} />
       <Section id={parents.id} eyebrow={parents.eyebrow} title={parents.title} tone="white">
         <FeatureGrid items={parents.items} />
       </Section>

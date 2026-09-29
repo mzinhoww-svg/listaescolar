@@ -12,7 +12,7 @@ export function SiteHeader() {
         <Link href="/" aria-label="ListaCerta, página inicial" className={`order-1 block w-40 rounded ${FOCUS}`}>
           <Logo variant="horizontal" height={36} priority />
         </Link>
-        <nav aria-label="Seções" className="order-3 w-full overflow-x-auto md:order-2 md:ml-auto md:w-auto md:overflow-visible">
+        <nav aria-label="Seções" className="order-3 w-full overflow-x-auto [mask-image:linear-gradient(to_right,#000_88%,transparent)] md:order-2 md:ml-auto md:w-auto md:overflow-visible md:[mask-image:none]">
           <ul className="flex gap-1 whitespace-nowrap">
             {NAV_LINKS.map((l) => (
               <li key={l.href}>

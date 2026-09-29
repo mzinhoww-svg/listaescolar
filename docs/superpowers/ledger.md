@@ -2719,3 +2719,111 @@ pedidos, todos corrigidos ou verificados nesta rodada, worktree T3.
 Gate desta rodada: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
 verdes (ver relatório da rodada). E2E das partes tocadas (`/conta`, `/admin/denuncias/[id]`) repetido com
 `scripts/e2e-s18.sh` — PASS, capturas `S18-03`/`S18-04` confirmadas diferentes por md5 dentro do próprio roteiro.
+
+## S19 · Segurança e observabilidade
+
+Branch `slice/S19-seguranca-observabilidade` (worktree T3, trilha 3), criada de `main` em `f90e236` (S00–S18 e
+S21–S27 dentro). Plano em `docs/superpowers/plans/2026-09-27-s19-seguranca-observabilidade.md`. Seis tasks:
+rate limit (D-001), CSP/cabeçalhos de segurança + fonte local (D-072), Sentry sem PII + escopo por papel (D-005),
+alertas de fila morta/taxa de erro de IA, dívida de banco (D-093/D-094/D-096) + D-158, triagem do resto da dívida
+com dono S19.
+
+**Ruling 1 — rate limit em memória, primeira camada (D-001).** `lib/net/client-ip.ts` generalizado para aceitar
+qualquer `Headers`-like (`Request.headers` ou `ReadonlyHeaders` de `next/headers`) e três novos guardas
+(`features/{auth,leads,submissions}/rate-limit.ts`) usando o mesmo balde em memória por instância já aceito nas
+S24/S25 (`lib/rate-limit/memory-bucket.ts`). Motivo: coerência com o resto do produto — login (5/min/IP), lead
+(10/10min/IP+ator) e envio de lista/OCR (5/10min/IP+ator) não têm custo de terceiro alto o bastante para
+justificar contador no banco nesta fatia; o Supabase Auth já limita por e-mail independentemente. Custo se
+errado: trocar por contador no Postgres numa fatia futura, sem mudar a assinatura pública das três funções de
+guarda (`*RateLimited(headers, ...)`) nem os call sites.
+
+**Ruling 2 — CSP com nonce embutida no `proxy.ts` existente, não num `middleware.ts` novo.** O Next 16 renomeou
+"middleware" para "proxy" e só aceita UM arquivo; havia um `proxy.ts` preexistente (S02, sessão/controle de
+rota). `lib/security-headers.ts` (função pura, testável) gera o CSP com nonce por requisição; `proxy.ts` gera o
+nonce, encaminha em `x-nonce` (header da REQUISIÇÃO — é assim que o Next aplica o nonce aos próprios scripts que
+gera) e aplica os cabeçalhos na resposta de `updateSession`, sem alterar a lógica de sessão/rota. Confirmado por
+curl num build de produção local: o Next aplicou o nonce até no `Link` de preload da fonte. `frame-ancestors
+'self'`: pesquisado o `public/widget.js` (S25) e confirmado que NÃO usa iframe — desenha DOM na página do
+PARCEIRO via `fetch`/CORS `*`. Por isso nenhuma exceção de `frame-ancestors` foi necessária (ao contrário do que
+o prompt original sugeria); `/api/widget/**` e `/widget.js` só ficam FORA do CSP (não faria efeito útil em
+JSON/JS servido por CORS a terceiros, e evita duplicar cabeçalho com o CORS já definido rota a rota). Custo se
+algum HTML precisar ser embutido por iframe no futuro (nenhum caso hoje): ajustar o matcher/CSP, sem tocar no
+resto.
+
+**Ruling 3 — ADR-007 (PostHog) continua PROPOSTA; CSP/`next.config` preparados sem abrir domínio de terceiro.**
+Nenhum código de tracking foi adicionado. `connect-src`/`script-src` do CSP (`lib/security-headers.ts`) não têm
+nenhuma exceção para `*.posthog.com`/`i.posthog.com` — se o ADR-007 for aprovado, a fatia que o implementar
+adiciona essas duas diretivas junto com o SDK, sem precisar reabrir a estrutura do CSP em si (já é uma lista
+explícita por diretiva).
+
+**Ruling 4 — Sentry: defesa em profundidade sobre o `dataCollection` já desligado.**
+`lib/observability/sentry-redact.ts` (função pura) redige e-mail/telefone/IP de texto livre (mensagem, `extra`,
+migalhas) e remove por completo `request.data`/`query_string`/`cookies`/`headers` residuais, ligada via
+`beforeSend`/`beforeSendTransaction` nos dois `sentry.*.config.ts` — sem `SENTRY_DSN`, tudo isso continua inerte
+(o `if (dsn)` já existente). Escopo por PAPEL (`lib/observability/scope.ts::setRoleScope`, `Sentry.setTag("role",
+...)`, nunca `setUser`) chamado de um único ponto central (`features/auth/queries.ts::getCurrentRole`, `cache()`
+por requisição) — não espalhado pelo código. D-005 fechada: `app/auth/callback` e `app/auth/confirm` agora
+registram o erro do provedor/exchange no Sentry (sem a mensagem crua do provedor, só o código HTTP).
+
+**Ruling 5 — alertas (fila morta + taxa de erro de IA) só in-app, sem canal externo novo.** Migration `0606`
+acrescenta o evento `system_alert` e as chaves fechadas `alert_kind`/`alert_count` a `notifications` (S11) e a
+função `system_alert_notify` (SECURITY DEFINER, `search_path=''`, EXECUTE só `service_role`), que notifica todo
+perfil `admin`, deduplicado por dia. `p_in_app_only = true` de propósito: abrir push/e-mail para este evento
+exigiria também estender o CHECK de `notification_preferences` (evento fora da lista fechada) — fora do escopo
+desta fatia; o admin já vê o alerta na central (sino) ao entrar. Limiares (`features/health/thresholds.ts`):
+fila morta = qualquer `jobs.status = 'dead'` (sem tentativa restante, já é falha definitiva do pipeline S07/S09);
+taxa de erro de IA = `ai_decisions.decision = 'failed'` acima de 20% nas últimas 24h, com amostra mínima de 5
+decisões (evita alerta por 1 falha isolada). São limiares de OPERAÇÃO, não preço/prazo de produto — ajustáveis
+por Ruling futuro se a operação real pedir outro número. `/api/cron/health-check` reaproveita o mesmo contrato de
+segredo dos outros crons (`features/leads/cron-auth.ts`, 503 sem `CRON_SECRET`, 401 errado).
+
+**Ruling 6 — D-072 (fonte local): um único arquivo variável, não 4 arquivos estáticos.** Ao pedir os pesos
+500+600+700+800 juntos, o próprio Google Fonts respondeu com um ÚNICO arquivo woff2 variável (confirmado:
+mesma URL para os 4 pesos quando pedidos juntos; URLs diferentes quando pedidos um a um) — `assets/fonts/
+PlusJakartaSans-latin.woff2` (27 KB, só subconjunto `latin`, igual ao que `next/font/google` já usava).
+`app/layout.tsx` troca para `next/font/local` com `weight: "500 800"`. Build testado sem depender de rede.
+
+**Ruling 7 — D-093/D-094/D-096: verificação em vez de mudança de schema, migration `0607` só para D-094.**
+D-093 (view `stationery_public` "SECURITY DEFINER"): o SQL da 0302 já só expõe colunas públicas de papelaria
+`active` (sem contato privado nem dado de menor) — a segunda alternativa que o próprio item admite já está
+satisfeita; trocar para `security_invoker = true` quebraria a leitura pública (a tabela base não tem grant/
+policy para `anon`, de propósito, comentário original da 0302). D-096: `auth_role()` e `stationery_is_active
+(uuid)` são concedidas a `anon`/`authenticated` DE PROPÓSITO (nenhuma devolve dado sensível — papel do próprio
+chamador; booleano de status); `rls_auto_enable()` é função DA PLATAFORMA Supabase, fora de qualquer migration
+deste repositório — não pode ser versionada aqui; ação real (revogar EXECUTE de anon) só pelo humano/sessão com
+acesso ao Supabase Studio do staging. D-094 (pg_net em `public`): a extensão não é criada por NENHUMA migration
+deste repositório (instalada manualmente no staging); migration `0607_security_advisors.sql` traz um bloco
+idempotente que só age se a extensão já existir — NO-OP neste banco local, pronto para quando uma sessão futura
+aplicar no staging. Nenhuma migration desta fatia foi aplicada ao staging (inviolável desta tarefa).
+
+**Ruling 8 — D-158 fechada com o mesmo padrão de D-057 (S18).** Os 7 módulos citados pelo D-158 foram divididos
+em arquivos-irmãos por responsabilidade (billing/repository.ts e service.ts; b2b/api/handler.ts; payouts/
+repository.ts; conversion/repository.ts; b2b/repository.ts; campaigns/repository.ts) — movimento puro, nenhum
+comportamento mudou, `pnpm check:sizes` confirma 0 arquivos acima de 250 linhas. Achado no caminho (corrigido
+antes do commit, não uma mudança de comportamento): `features/b2b/repository-keys.ts::getKeyEnvironment` tinha
+copiado `failMasked` em vez de `fail` do original — conferido linha a linha contra o arquivo antes da divisão e
+corrigido. `features/billing/service.ts` e `features/b2b/api/handler.ts` precisaram de um arquivo `*-types.ts`/
+`handler-types.ts` à parte para os tipos compartilhados, evitando import circular entre o arquivo principal e o
+irmão que ele próprio chama (`service-pix.ts`, `deps-real.ts`); `features/b2b/api/with-api-key.ts` (a função que
+os `route.ts` usam) não pôde ser reexportada de volta por `handler.ts` pelo mesmo motivo — os 6 `route.ts` de
+`/v1/*` e o teste de banco (`tests/db/b2b-api.test.ts`) passam a importar `withApiKey` direto de
+`@/features/b2b/api/with-api-key` (`otherMethods` continua vindo de `@/features/b2b/api/handler`).
+
+**Ruling 9 — D-009 corrigida.** `CRON_SECRET` em `lib/env.ts` tinha `z.string().min(16)`: um segredo curto
+configurado por engano derrubava `getServerEnv()` inteiro (500 em QUALQUER rota que o chame, ex. o pepper B2B),
+em vez do 503 pontual que só a própria rota de cron implementa (`CRON_SECRET_MIN_LENGTH`, `features/leads/
+cron-auth.ts`). Trocado para `z.string().min(1)` — o teto de 16 continua só no contrato de cada rota de cron.
+
+**Ruling 10 — triagem do resto da dívida com dono S19, sem reabrir trilhas já revisadas por segurança.**
+D-004 e D-001 resolvidas (ver acima); D-009 corrigida. Os demais itens com dono S19 (D-003, D-008, D-024, D-025,
+D-026, D-056, D-078, D-081, D-085, D-086, D-089, D-113, D-123, D-125, D-126, D-127, D-135, D-136, D-137, D-138,
+D-139, D-144, D-149) permanecem `aberta`: a maioria pertence a trilhas de cobrança/B2B/pipeline já revisadas por
+segurança dedicada (billing S21/S23, B2B S24/S25/S26, pipeline S07/S08) — reabrir para corrigir sem uma nova
+rodada de revisão de segurança é risco desproporcional ao ganho, mesmo raciocínio já registrado pela S18 para
+D-158. D-155 (prazo de retenção de `audit_log`) é decisão jurídica do humano, não técnica — mantida `aberta`,
+dono `Humano`, sem ação de código possível aqui. Custo se algum destes se revelar crítico: qualquer um pode virar
+uma fatia dedicada de correção + revisão de segurança, sem depender desta.
+
+Gate desta fatia: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
+verdes em cada task (ver `docs/superpowers/logs/s19-task*.txt` e o relatório final). E2E em
+`docs/superpowers/e2e/S19.md`.

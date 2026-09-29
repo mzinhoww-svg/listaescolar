@@ -63,4 +63,10 @@ describe("getServerEnv", () => {
     expect(() => getServerEnv()).toThrow(/SUPABASE_SECRET_KEY/);
     expect(() => getServerEnv()).toThrow(/OPENROUTER_KEY/);
   });
+
+  it("D-009 (S19): CRON_SECRET curto não derruba getServerEnv() — o contrato de 503 é da própria rota de cron", () => {
+    stub({ ...PUBLIC, ...SERVER, CRON_SECRET: "curto" });
+    expect(() => getServerEnv()).not.toThrow();
+    expect(getServerEnv().CRON_SECRET).toBe("curto");
+  });
 });

@@ -41,7 +41,7 @@ export function Tela({
         <button
           type="button"
           onClick={onVoltar}
-          className="text-texto-2 focus-visible:outline-verde-fundo hover:text-tinta -ml-2 flex h-12 items-center gap-1 self-start rounded-full px-2 text-sm font-bold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
+          className="text-texto-2 focus-visible:outline-verde-fundo hover:text-tinta -ml-2 flex h-12 items-center gap-1 self-start rounded-full px-2 text-sm font-bold transition-colors duration-mov-rapido focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
         >
           <svg
             aria-hidden
@@ -74,7 +74,7 @@ export function Tela({
             <button
               type="button"
               onClick={onPular}
-              className="text-texto-2 focus-visible:outline-verde-fundo hover:text-tinta flex h-12 items-center rounded-full px-4 text-sm font-bold underline underline-offset-4 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
+              className="text-texto-2 focus-visible:outline-verde-fundo hover:text-tinta flex h-12 items-center rounded-full px-4 text-sm font-bold underline underline-offset-4 transition-colors duration-mov-rapido focus-visible:outline-2 focus-visible:outline-offset-2 active:opacity-70"
             >
               Pular
             </button>

@@ -116,7 +116,7 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
           style={{ position: "absolute", left: "-9999px", width: 0, height: 0, opacity: 0 }}
         />
         <label
-          className={`rounded-campo has-focus-visible:outline-verde-fundo flex cursor-pointer items-start gap-3 border-[1.5px] px-4 py-3.5 text-sm leading-relaxed font-semibold transition-colors duration-150 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
+          className={`rounded-campo has-focus-visible:outline-verde-fundo flex cursor-pointer items-start gap-3 border-[1.5px] px-4 py-3.5 text-sm leading-relaxed font-semibold transition-colors duration-mov-rapido has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
             aceite ? "border-verde-fundo bg-white" : "border-linha bg-white"
           }`}
         >

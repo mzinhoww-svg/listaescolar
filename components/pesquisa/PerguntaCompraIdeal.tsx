@@ -45,7 +45,7 @@ export function PerguntaCompraIdeal({
         className="border-linha text-tinta rounded-campo focus-visible:border-verde-fundo focus-visible:ring-verde-fundo/25 placeholder:text-texto-3 w-full resize-none border-[1.5px] bg-white px-4 py-3.5 text-base leading-relaxed font-medium shadow-[0_1px_2px_rgba(15,27,45,0.04)] outline-none focus-visible:ring-4"
       />
       <label
-        className={`rounded-campo has-focus-visible:outline-verde-fundo flex cursor-pointer items-center gap-3 border-[1.5px] bg-white px-4 py-3.5 text-sm font-semibold transition-colors duration-150 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
+        className={`rounded-campo has-focus-visible:outline-verde-fundo flex cursor-pointer items-center gap-3 border-[1.5px] bg-white px-4 py-3.5 text-sm font-semibold transition-colors duration-mov-rapido has-focus-visible:outline-2 has-focus-visible:outline-offset-2 ${
           podeCitar ? "border-verde-fundo" : "border-linha hover:border-linha-tracejada"
         }`}
       >

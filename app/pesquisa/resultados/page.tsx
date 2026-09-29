@@ -51,14 +51,14 @@ export default async function ResultadosPage() {
           <a
             href="/api/pesquisa/export?tipo=respostas"
             download
-            className="border-tinta text-tinta rounded-botao focus-visible:outline-verde-fundo flex h-12 items-center justify-center border-[1.5px] px-5 text-sm font-extrabold transition-colors duration-150 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="border-tinta text-tinta rounded-botao focus-visible:outline-verde-fundo flex h-12 items-center justify-center border-[1.5px] px-5 text-sm font-extrabold transition-colors duration-mov-rapido hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Baixar respostas (CSV)
           </a>
           <a
             href="/api/pesquisa/export?tipo=leads"
             download
-            className="border-tinta text-tinta rounded-botao focus-visible:outline-verde-fundo flex h-12 items-center justify-center border-[1.5px] px-5 text-sm font-extrabold transition-colors duration-150 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="border-tinta text-tinta rounded-botao focus-visible:outline-verde-fundo flex h-12 items-center justify-center border-[1.5px] px-5 text-sm font-extrabold transition-colors duration-mov-rapido hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Baixar leads (CSV)
           </a>

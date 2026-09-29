@@ -47,7 +47,7 @@ export function OpcaoUnica({ nomeGrupo, opcoes, valorSelecionado, onEscolher }: 
             role="radio"
             aria-checked={ativo}
             onClick={() => selecionar(o.slug)}
-            className={`rounded-campo focus-visible:outline-verde-fundo flex min-h-14 w-full items-center justify-between gap-3 border-[1.5px] px-4 py-3.5 text-left text-base font-semibold transition-[background-color,border-color,color,transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.985] ${
+            className={`rounded-campo focus-visible:outline-verde-fundo flex min-h-14 w-full items-center justify-between gap-3 border-[1.5px] px-4 py-3.5 text-left text-base font-semibold transition-[background-color,border-color,color,transform,box-shadow] duration-mov-rapido focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.985] ${
               ativo
                 ? "bg-verde-fundo border-verde-fundo text-white shadow-[0_6px_18px_rgba(11,107,74,0.28)]"
                 : "border-linha text-tinta hover:border-linha-tracejada bg-white shadow-[0_1px_2px_rgba(15,27,45,0.04)]"
@@ -56,7 +56,7 @@ export function OpcaoUnica({ nomeGrupo, opcoes, valorSelecionado, onEscolher }: 
             <span>{o.rotulo}</span>
             <span
               aria-hidden
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-150 ${
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors duration-mov-rapido ${
                 ativo ? "border-white bg-white" : "border-texto-3/50 bg-transparent"
               }`}
             >

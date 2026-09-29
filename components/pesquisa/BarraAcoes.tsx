@@ -23,7 +23,7 @@ export function BarraAcoes({ onPrimario, primarioLabel, primarioDesabilitado, se
             type="button"
             onClick={onPrimario}
             disabled={primarioDesabilitado}
-            className="bg-tinta text-papel rounded-botao focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center text-base font-extrabold shadow-[0_8px_24px_rgba(15,27,45,0.18)] transition-[transform,opacity,filter] duration-150 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.99] disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
+            className="bg-tinta text-papel rounded-botao focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center text-base font-extrabold shadow-[0_8px_24px_rgba(15,27,45,0.18)] transition-[transform,opacity,filter] duration-mov-rapido hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.99] disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
           >
             {primarioLabel}
           </button>

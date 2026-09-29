@@ -12,7 +12,7 @@ export function Faq({ items }: Props) {
                 {i.text}
               </span>
             </span>
-            <span aria-hidden className="text-tinta text-xl transition-transform group-open:rotate-45 motion-reduce:transition-none">
+            <span aria-hidden className="text-tinta text-xl transition-transform duration-mov-rapido group-open:rotate-45 motion-reduce:transition-none">
               +
             </span>
           </summary>

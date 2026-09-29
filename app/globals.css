@@ -20,6 +20,12 @@
   --radius-card: 24px;
   --radius-botao: 999px;
   --radius-campo: 14px;
+  /* S29 · sistema de movimento (DESIGN.md §7): só estas três durações e duas curvas. */
+  --mov-rapido: 120ms;
+  --mov-base: 200ms;
+  --mov-entrada: 320ms;
+  --mov-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --mov-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @theme inline {
@@ -96,6 +102,39 @@ body {
 }
 
 /* S28 · movimento leve (DESIGN.md §7): só opacity e transform, sempre com alternativa para movimento reduzido. */
+/* Utilitários duration-mov-*: mesmo contrato do `duration-*` do Tailwind (definem --tw-duration). */
+@utility duration-mov-rapido {
+  --tw-duration: var(--mov-rapido);
+  transition-duration: var(--mov-rapido);
+}
+@utility duration-mov-base {
+  --tw-duration: var(--mov-base);
+  transition-duration: var(--mov-base);
+}
+@utility duration-mov-entrada {
+  --tw-duration: var(--mov-entrada);
+  transition-duration: var(--mov-entrada);
+}
+@utility ease-mov-in {
+  --tw-ease: var(--mov-ease-in);
+  transition-timing-function: var(--mov-ease-in);
+}
+@utility ease-mov-out {
+  --tw-ease: var(--mov-ease-out);
+  transition-timing-function: var(--mov-ease-out);
+}
+
+/* Movimento reduzido vale para tudo, inclusive animação de terceiros: conteúdo nunca depende de animação. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @keyframes reveal-in {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: none; }
@@ -115,7 +154,7 @@ body {
   }
   /* Só o ícone pulsa: texto com opacidade < 1 durante a animação reprova o contraste (axe/Lighthouse). */
   .tick-loop > :first-child {
-    animation: tick-loop 9s ease-out infinite;
+    animation: tick-loop 9s ease-out 3;
     animation-delay: calc(var(--i, 0) * 0.9s);
   }
 }

@@ -36,7 +36,7 @@ export function TelaBoasVindas({ onComecar }: Props) {
           Não pedimos nenhum dado do seu filho. Suas respostas são anônimas.{" "}
           <Link
             href="/pesquisa/privacidade"
-            className="text-verde-fundo focus-visible:outline-verde-fundo hover:text-tinta rounded-sm underline underline-offset-4 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="text-verde-fundo focus-visible:outline-verde-fundo hover:text-tinta rounded-sm underline underline-offset-4 transition-colors duration-mov-rapido focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             Como usamos seus dados
           </Link>

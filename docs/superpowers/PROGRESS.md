@@ -110,6 +110,8 @@ para este implementador. Depende de `0501`/`0502` (S24/S25, já no staging) e de
 nova para a faixa 04xx (Cobrança). Aplicar via Supabase MCP na sequência normal (0403 e 0603 já foram aplicadas
 por outras sessões — ver a tabela de migrations acima).
 
+Só local, ainda NÃO aplicada no staging: `0800_s28_ai_usage.sql` (S28: tokens e custo por decisão em `ai_decisions`, `ai_settings.usd_brl_rate`, view `ai_cost_per_entity`; aditiva, `ai_record_decision` recriada com a mesma assinatura). A aplicação no staging é da Task 32 da S28.
+
 Produção: nenhuma migration (o projeto não existe).
 
 ## Trilhas
@@ -187,6 +189,7 @@ Ambiente e deploy:
 - Vercel (S17, LGPD): `/api/cron/retention-purge` agendado em `vercel.json` (diário, `0 11 * * *`), mesmo `CRON_SECRET` já usado pelos outros crons — precisa do aceite no plano da conta, igual ao S14/S24; sem isso o job de retenção (D-012) só roda manual/local.
 - Vercel (S25, Widget e webhooks): `B2B_WEBHOOK_ENCRYPTION_KEY` (32 bytes em hex, ex. `openssl rand -hex 32`, diferente por ambiente, nunca commitado) em Production/Preview/Development — sem ele criar/rotacionar/revelar segredo de webhook e o despacho respondem "indisponível" (nunca enviam sem poder assinar). `WEBHOOKS_DISPATCH_SECRET` (ou reaproveitar `CRON_SECRET`, já existente) para `/api/webhooks/dispatch`; cron de 1 min (pg_cron ou Vercel Cron) precisa do aceite no plano da conta, mesmo modelo do despacho de notificações da S11 — sem ele, webhooks ficam só na fila (`queued`), nunca entregues.
 - Vercel (S28, Task 19): `B2B_CAMPAIGN_TRACKING_SECRET` (mínimo de 32 caracteres, `openssl rand -hex 32`, diferente por ambiente, nunca commitado). **Obrigatório com `APP_ENV=production`**: sem ele o app recusa subir em produção, salvo com o desligamento explícito `B2B_CAMPAIGN_TRACKING=0`.
+- Custo de IA por lista (S28, Task 28): **indisponível** até haver leitura por provedor real. Ação do humano na S20: cadastrar a taxa BRL por USD em `/admin/ia` (campo "Taxa de câmbio"), rodar `scripts/ai-smoke.ts` (confirma que o OpenRouter devolve `usage.cost`) e enviar listas reais no staging; o bloco "Custo por lista" de `/admin/ia` mostra média, p95 e máximo. Meta < R$ 0,50 por lista NÃO verificada (Ruling no ledger). Relatório: `docs/superpowers/evidencias/S28/depois/custo-ia.md`.
 
 Credenciais e contas:
 - Provedor real de e-mail (S11) e credencial de WhatsApp (tokens de reivindicação da S06 e notificações).

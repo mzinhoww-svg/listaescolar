@@ -25,6 +25,7 @@ export async function updateAiSettingsAction(formData: FormData): Promise<void> 
     criticalAlerts: formData.getAll("criticalAlerts").filter((v): v is string => typeof v === "string"),
     maxEscalations: formData.get("maxEscalations"),
     pipelineVersion: formData.get("pipelineVersion"),
+    usdBrlRate: formData.get("usdBrlRate"),
   });
   if (!parsed.success) redirect(`${NEXT}?erro=invalido`);
 
@@ -37,6 +38,7 @@ export async function updateAiSettingsAction(formData: FormData): Promise<void> 
       critical_alerts: parsed.data.criticalAlerts,
       max_escalations: parsed.data.maxEscalations,
       pipeline_version: parsed.data.pipelineVersion,
+      usd_brl_rate: parsed.data.usdBrlRate,
     })
     .eq("scope", "default");
   if (error) {

@@ -28,6 +28,8 @@ export type AiSettingsView = {
   maxEscalations: number;
   pipelineVersion: string;
   autoPublishEnabled: boolean;
+  /** BRL por USD do operador (S28); nulo = conversão para reais indisponível. */
+  usdBrlRate: number | null;
   routes: unknown;
   updatedAt: Date;
 };

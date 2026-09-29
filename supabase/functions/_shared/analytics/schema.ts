@@ -43,8 +43,6 @@ export const EVENTS = {
     utm_source: UTM.optional(),
     utm_medium: UTM.optional(),
     utm_campaign: UTM.optional(),
-    utm_content: UTM.optional(),
-    utm_term: UTM.optional(),
     referrer_domain: DOMAIN.optional(),
   }),
   school_searched: z.object({ query_length: COUNT, results_count: COUNT, has_filters: z.boolean() }),

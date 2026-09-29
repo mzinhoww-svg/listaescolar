@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 import { routeTemplate } from "@/lib/analytics/route";
 import { track } from "@/lib/analytics/track";
 
-const UTM = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const;
+// Só estes três (revisão M4): `utm_content` e `utm_term` costumam levar texto livre (criativo, termo de busca, nome).
+const UTM = ["utm_source", "utm_medium", "utm_campaign"] as const;
 
-/** `landing_viewed`: caminho normalizado, só os cinco `utm_*` e só o domínio do referrer. Nada mais da URL. */
+/** `landing_viewed`: caminho normalizado, só três `utm_*` e só o domínio do referrer. Nada mais da URL. */
 export function LandingViewed() {
   const done = useRef(false);
   useEffect(() => {

@@ -54,7 +54,7 @@ Fonte da verdade do esquema: `supabase/functions/_shared/analytics/schema.ts` (u
 
 | Evento | Quando | Origem | Propriedades específicas |
 |---|---|---|---|
-| `landing_viewed` | Abertura da landing ou de página de entrada pública | cliente | `path`, `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term` (só os `utm_*`, sem outros parâmetros de URL), `referrer_domain` (só o domínio) |
+| `landing_viewed` | Abertura da landing ou de página de entrada pública | cliente | `path`, `utm_source`, `utm_medium`, `utm_campaign` (só estes três `utm_*`; `utm_content` e `utm_term` NÃO são enviados: costumam levar texto livre; sem outros parâmetros de URL), `referrer_domain` (só o domínio) |
 | `school_searched` | Busca de escola executada | cliente | `query_length` (número de caracteres, nunca o texto), `results_count`, `has_filters` |
 | `school_viewed` | Página pública da escola aberta | cliente | `school_inep`, `verification_status` |
 | `list_viewed` | Lista pública de uma série aberta | cliente | `school_inep`, `grade_slug`, `school_year`, `list_version_id`, `items_count`, `has_alerts` |

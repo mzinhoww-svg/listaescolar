@@ -93,8 +93,8 @@ describe("PII derruba o evento", () => {
     ["CNPJ cru", "12345678000190"],
   ];
   for (const [label, value] of cases) {
-    it(`${label} em campo string de qualquer evento (utm_content, path, retailer_slug, referrer_domain)`, () => {
-      expect(buildEvent("landing_viewed", { ...VALID.landing_viewed, utm_content: value }, COMMON)).toMatchObject({ ok: false });
+    it(`${label} em campo string de qualquer evento (utm_campaign, path, retailer_slug, referrer_domain)`, () => {
+      expect(buildEvent("landing_viewed", { ...VALID.landing_viewed, utm_campaign: value }, COMMON)).toMatchObject({ ok: false });
       expect(buildEvent("landing_viewed", { ...VALID.landing_viewed, referrer_domain: value }, COMMON)).toMatchObject({ ok: false });
       expect(buildEvent("landing_viewed", { ...VALID.landing_viewed, path: `/x/${value}` }, COMMON)).toMatchObject({ ok: false });
       expect(buildEvent("purchase_clicked", { ...VALID.purchase_clicked, retailer_slug: value }, COMMON)).toMatchObject({ ok: false });

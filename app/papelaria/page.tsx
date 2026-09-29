@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
 import { ActivationChecklist } from "@/components/stationeries/ActivationChecklist";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { StatusPanel } from "@/components/stationeries/StatusPanel";
@@ -11,8 +12,8 @@ import { getOwnerContext } from "@/features/stationeries/session";
 
 import { ownerStatusAction } from "./actions";
 
-const btn = "bg-tinta text-papel h-12 rounded-botao px-6 text-[15px] font-extrabold";
-const btnOutline = "border-tinta h-12 rounded-botao border-[1.5px] px-6 text-[15px] font-extrabold";
+const btn = buttonClass("primary");
+const btnOutline = buttonClass("outline");
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const { ok, erro } = await searchParams;
@@ -57,11 +58,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
         {stationery.status === "approved" ? move("active", "Publicar papelaria") : null}
         {stationery.status === "active" ? move("paused", "Pausar", true) : null}
         {stationery.status === "paused" ? move("active", "Reativar") : null}
-        <Link href="/papelaria/catalogo" className={`${btnOutline} flex items-center`}>
+        <Link href="/papelaria/catalogo" className={btnOutline}>
           Catálogo
         </Link>
         {stationery.status === "active" ? (
-          <Link href={`/papelarias/${stationery.slug}`} className={`${btnOutline} flex items-center`}>
+          <Link href={`/papelarias/${stationery.slug}`} className={btnOutline}>
             Ver perfil público
           </Link>
         ) : null}

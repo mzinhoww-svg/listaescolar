@@ -63,9 +63,9 @@ export function PageHeader({ crumb, title, children }: { crumb: string; title: s
 export function Notice({ kind, children }: { kind: "ok" | "error" | "info"; children: ReactNode }) {
   const tone =
     kind === "ok"
-      ? "bg-[#d6f3e5] text-verde-fundo"
+      ? "bg-verde-certo/20 text-verde-fundo"
       : kind === "error"
-        ? "bg-[#fde2e0] text-[#8a1c14]"
+        ? "bg-erro-fundo text-erro-texto"
         : "bg-campo text-texto-2";
   return (
     <p role={kind === "error" ? "alert" : "status"} className={`mb-4 rounded-campo px-4 py-3 text-[14px] font-bold ${tone}`}>

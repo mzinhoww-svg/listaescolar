@@ -60,7 +60,7 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
   return (
     <Screen>
       <BackHeader href={`/carrinho/${cart.data}`} title="Papelarias perto de você" />
-      {erro ? <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
+      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
       {picked ? (
         <>
           <ConsentForm

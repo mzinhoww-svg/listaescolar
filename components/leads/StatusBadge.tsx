@@ -3,11 +3,11 @@ import { LEAD_STATUS_LABEL, type LeadStatus } from "@/features/leads/state";
 const TONE: Record<LeadStatus, string> = {
   received: "bg-verde-certo text-tinta",
   viewed: "bg-tinta text-papel",
-  in_progress: "bg-[#fdebd0] text-[#7a4a06]",
-  quote_sent: "bg-[#fdebd0] text-[#7a4a06]",
-  awaiting_customer: "bg-[#fdebd0] text-[#7a4a06]",
-  converted: "bg-[#d6f3e5] text-verde-fundo",
-  declined: "bg-[#fde2e0] text-[#8a1c14]",
+  in_progress: "bg-aviso-fundo text-aviso-texto",
+  quote_sent: "bg-aviso-fundo text-aviso-texto",
+  awaiting_customer: "bg-aviso-fundo text-aviso-texto",
+  converted: "bg-verde-certo/20 text-verde-fundo",
+  declined: "bg-erro-fundo text-erro-texto",
   expired: "bg-campo text-texto-2",
   cancelled: "bg-campo text-texto-2",
 };

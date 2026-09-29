@@ -9,8 +9,8 @@ export const STOCK_LABEL: Record<CatalogRow["stock"], string> = {
   unknown: "Não informado",
 };
 const STOCK_TONE: Record<CatalogRow["stock"], string> = {
-  in_stock: "bg-[#d6f3e5] text-verde-fundo",
-  out_of_stock: "bg-[#fde2e0] text-[#8a1c14]",
+  in_stock: "bg-verde-certo/20 text-verde-fundo",
+  out_of_stock: "bg-erro-fundo text-erro-texto",
   unknown: "bg-campo text-texto-2",
 };
 export const PRICE_SOURCE_LABEL = "Informado pela papelaria";

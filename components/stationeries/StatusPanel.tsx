@@ -55,10 +55,10 @@ export function StatusPanel({ stationery, events, resubmit, submitError }: Props
       ) : null}
       <p className="text-texto-2 text-[15px]">{NEXT_STEP[status]}</p>
       {showReason ? (
-        <p className="rounded-campo bg-[#fde2e0] px-4 py-3 text-[14px] font-bold text-[#8a1c14]">Motivo informado pela equipe: {stationery.statusReason}</p>
+        <p className="rounded-campo bg-erro-fundo px-4 py-3 text-[14px] font-bold text-erro-texto">Motivo informado pela equipe: {stationery.statusReason}</p>
       ) : null}
       {submitError ? (
-        <p role="alert" className="rounded-campo bg-[#fde2e0] px-4 py-3 text-[14px] font-bold text-[#8a1c14]">
+        <p role="alert" className="rounded-campo bg-erro-fundo px-4 py-3 text-[14px] font-bold text-erro-texto">
           Não foi possível enviar para análise agora. Tente de novo.
         </p>
       ) : null}

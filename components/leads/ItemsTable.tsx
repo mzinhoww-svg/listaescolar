@@ -3,8 +3,8 @@ import type { Estimate, StockLabel } from "@/features/leads/estimate";
 import { formatWhen, moneyOrUnavailable } from "./format";
 
 const TONE: Record<StockLabel, string> = {
-  Tenho: "bg-[#d6f3e5] text-verde-fundo",
-  "Em falta": "bg-[#fde2e0] text-[#8a1c14]",
+  Tenho: "bg-verde-certo/20 text-verde-fundo",
+  "Em falta": "bg-erro-fundo text-erro-texto",
   "não informado": "bg-campo text-texto-2",
 };
 

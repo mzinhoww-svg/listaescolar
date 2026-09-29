@@ -84,13 +84,13 @@ export function UploadForm() {
       </form>
 
       {message ? (
-        <div role="alert" className="rounded-campo flex flex-wrap items-center gap-3 bg-red-50 px-5 py-4 text-[15px] text-red-900">
+        <div role="alert" className="rounded-campo flex flex-wrap items-center gap-3 bg-erro-fundo px-5 py-4 text-[15px] text-erro-texto">
           <span>{message}</span>
           {state.status === "error" && state.retryable && !localError ? (
             <button
               type="button"
               onClick={retry}
-              className="rounded-botao border-[1.5px] border-red-900 px-4 py-1.5 text-sm font-extrabold"
+              className="rounded-botao border-[1.5px] border-erro-texto px-4 py-1.5 text-sm font-extrabold"
             >
               Tentar novamente
             </button>
@@ -99,7 +99,7 @@ export function UploadForm() {
       ) : null}
 
       {state.status === "file_error" && !localError ? (
-        <div role="alert" className="rounded-campo bg-red-50 px-5 py-4 text-[15px] text-red-900">
+        <div role="alert" className="rounded-campo bg-erro-fundo px-5 py-4 text-[15px] text-erro-texto">
           <p className="font-extrabold">O arquivo não pôde ser importado.</p>
           <ul className="mt-2 list-disc pl-5">
             {state.errors.map((e, i) => (

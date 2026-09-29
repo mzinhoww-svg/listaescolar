@@ -91,7 +91,7 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
     <div className="flex flex-col gap-4 rounded-[20px] bg-white p-5">
       <h2 className="text-[16px] font-extrabold">Endpoint</h2>
       {error ? (
-        <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-3 py-2.5 text-[13px] font-bold">
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">
           {error}
         </p>
       ) : null}

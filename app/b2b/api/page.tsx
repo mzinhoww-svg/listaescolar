@@ -40,12 +40,12 @@ export default async function Page() {
         </p>
       ) : null}
       {overview.status === "rejected" ? (
-        <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Cadastro recusado{header?.statusReason ? `: ${header.statusReason}` : "."}
         </p>
       ) : null}
       {overview.status === "suspended" ? (
-        <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Conta suspensa: as chaves foram revogadas. Portal somente leitura.
         </p>
       ) : null}

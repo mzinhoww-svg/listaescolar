@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { buttonClass } from "@/components/ui/Button";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { DemoBadge } from "@/components/admin/DemoBadge";
 import { Notice } from "@/components/stationeries/PanelShell";
@@ -81,7 +82,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                   Observação (opcional, código curto, sem dado pessoal)
                   <input name="observation" maxLength={60} placeholder="denuncia_123" className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium" />
                 </label>
-                <button type="submit" className="border-[1.5px] border-[#8a1c14] bg-transparent text-[#8a1c14] rounded-botao h-11 text-[14px] font-extrabold">
+                <button type="submit" className={buttonClass("danger")}>
                   Confirmar arquivamento
                 </button>
               </form>

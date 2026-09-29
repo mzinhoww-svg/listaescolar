@@ -36,14 +36,14 @@ function StatusBanner({ status }: { status: B2bPartnerStatus }) {
   }
   if (status === "rejected") {
     return (
-      <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">
+      <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
         Cadastro recusado. Veja o motivo em Conta.
       </p>
     );
   }
   if (status === "suspended") {
     return (
-      <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">
+      <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
         Conta suspensa: as chaves foram revogadas e o portal está somente leitura.
       </p>
     );

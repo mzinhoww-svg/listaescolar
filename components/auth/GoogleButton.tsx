@@ -27,7 +27,7 @@ export function GoogleButton({ next }: { next: string }) {
         {pending ? "Aguarde…" : "Entrar com Google"}
       </button>
       {state.status === "error" && state.message ? (
-        <p role="alert" className="text-center text-[13px] font-semibold text-red-700">
+        <p role="alert" className="text-center text-[13px] font-semibold text-erro-texto">
           {state.message}
         </p>
       ) : null}

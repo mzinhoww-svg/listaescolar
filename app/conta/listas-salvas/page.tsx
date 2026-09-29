@@ -31,7 +31,7 @@ export default async function SavedListsPage() {
                 </Link>
                 <form action={removeSavedListAction}>
                   <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" className="text-[12px] font-extrabold text-[#8a1c14] underline">
+                  <button type="submit" className="text-[12px] font-extrabold text-erro-texto underline">
                     Remover
                   </button>
                 </form>

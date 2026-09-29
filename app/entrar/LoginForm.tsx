@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 
+import { fieldInputClass } from "@/components/ui/Field";
 import { signInWithMagicLink } from "@/features/auth/actions";
 import { emailSchema, type AuthActionState } from "@/features/auth/schemas";
 
@@ -61,7 +62,7 @@ export function LoginForm({ next }: { next: string }) {
         defaultValue={changing ? "" : (state.email ?? "")}
         aria-invalid={state.invalid === true}
         aria-describedby={state.status === "error" ? "email-msg" : undefined}
-        className="bg-campo text-tinta h-[52px] w-full rounded-campo px-4 text-[15px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-verde-fundo"
+        className={fieldInputClass}
       />
       <button
         type="submit"

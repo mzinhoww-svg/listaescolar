@@ -51,7 +51,7 @@ export function InsightsExplorer() {
           {pending ? "Buscando…" : "Buscar"}
         </button>
       </form>
-      {error ? <p className="text-[13px] font-bold text-[#8a1c14]">{error}</p> : null}
+      {error ? <p className="text-[13px] font-bold text-erro-texto">{error}</p> : null}
       {result ? (
         <div className="rounded-[20px] bg-white p-6">
           <p className="text-texto-2 mb-4 text-[13px] font-bold">

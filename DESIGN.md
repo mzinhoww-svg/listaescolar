@@ -56,11 +56,13 @@ Cada linha aponta o arquivo real. Componente React até 250 linhas; Server Compo
 
 | Componente | Especificação | Arquivo |
 |---|---|---|
-| Botão primário | fundo Tinta, texto Papel, pílula, 56 px, peso 800, foco com contorno de 2 px + offset 2 px | `primaryButton` em `components/auth/Screen.tsx` |
+| Botão (todas as variantes) | `Button` e `buttonClass(variant, size)`: primary, outline, danger, whatsapp; 48 px (`md`) ou 56 px (`lg`); foco em Verde Fundo, 2 px + offset 2 px | `components/ui/Button.tsx` |
+| Botão primário de tela | fundo Tinta, texto Papel, pílula, 56 px, peso 800, foco em Verde Fundo | `primaryButton` em `components/auth/Screen.tsx` |
 | Botão secundário | contorno Tinta 1,5 px, fundo transparente, 52 px | `outlineButton` em `components/auth/Screen.tsx` |
 | Botão terciário | texto Verde Fundo sublinhado, mesma área de toque de 44 px | links de `components/claims/*`, `components/stationeries/StepService.tsx` |
 | Botão de WhatsApp | fundo Verde Certo, texto Tinta, 56 px | `components/stationeries/PublicProfileView.tsx` |
-| Campo | rótulo visível acima, fundo Campo, altura 52 px, raio 14 px, `autocomplete` e `inputMode` corretos | `app/entrar/LoginForm.tsx` |
+| Campo | rótulo visível acima, fundo Campo, borda 1,5 px `texto-3` (5,3:1), altura 52 px, raio 14 px, `autocomplete` e `inputMode` corretos; `Field` + `fieldInputClass` (regra global em `app/globals.css` cobre `input.bg-campo` antigos) | `components/ui/Field.tsx`, `app/entrar/LoginForm.tsx` |
+| Confirmação destrutiva | um só padrão: `<dialog>` nativo, botão de risco por último em `erro-texto`, Esc e Cancelar fecham; nunca `window.confirm` | `components/ui/ConfirmDialog.tsx`, `components/claims/ActionForm.tsx` |
 | Seleção (chip, opção) | mínimo 44 px, marcada com contorno Tinta e ícone (nunca só cor) | `components/schools/NetworkChips.tsx`, `components/pesquisa/OpcaoUnica.tsx` |
 | Tabela responsiva | contêiner `overflow-x-auto` com `tabindex=0` e rótulo; `<caption>` e `scope="col"`; em 390 px vira lista de cartões quando há ação | `components/leads/LeadTable.tsx`, `components/stationeries/CatalogTable.tsx` |
 | Cartão | fundo branco ou branco-tonal, raio 24, sem cartão dentro de cartão | `components/cart/StoreCard.tsx` |
@@ -68,7 +70,7 @@ Cada linha aponta o arquivo real. Componente React até 250 linhas; Server Compo
 | Aviso | fundo `aviso-fundo`, texto `aviso-texto`, ícone; `role="status"` | `components/pesquisa/Pesquisa.tsx` (padrão), `components/cart/*` |
 | Erro | fundo `erro-fundo`, texto `erro-texto`, `role="alert"`, diz o que fazer | `components/claims/*`, `app/escola/page.tsx` |
 | Estado vazio | borda tracejada `linha-tracejada`, título curto, uma frase e uma ação | `components/schools/SearchResults.tsx` |
-| Skeleton | blocos `campo` com `animate-pulse` e altura reservada; sem spinner de tela cheia (novo na Task 17) | `app/papelaria/leads/(lista)/loading.tsx` (padrão), `app/loading.tsx` |
+| Skeleton | blocos `campo` com `animate-pulse` e altura reservada; sem spinner de tela cheia; sem `loading.tsx` na raiz nem em página pública indexável (soft-404) | `components/ui/Skeleton.tsx`, `app/papelaria/loading.tsx`, `app/carrinho/[id]/loading.tsx` |
 | Casca de tela | coluna 420 px, `main` com `id="conteudo"`, link "Pular para o conteúdo" | `components/auth/Screen.tsx`, `components/site/SkipLink.tsx` |
 | Casca de painel | barra escura Tinta com logo e usuário | `components/admin/AdminShell.tsx`, `components/stationeries/PanelShell.tsx`, `components/claims/SchoolPanelShell.tsx` |
 
@@ -112,13 +114,13 @@ Detalhe e severidade em `docs/superpowers/evidencias/S28/auditoria-*.md`.
 | ID | Divergência | Task que resolve |
 |---|---|---|
 | D-01 | 39 usos de `text-[11px]` (selos, notas de preço e data, cabeçalhos de tabela) | Task 20 |
-| D-02 | Erros com `text-red-700` e hex avulsos (`#fde2e0`, `#8a1c14`) em cerca de 14 arquivos | Task 18 |
+| D-02 | Erros com `text-red-700` e hex avulsos (`#fde2e0`, `#8a1c14`) em cerca de 14 arquivos | Task 18 (resolvida; teste `tests/ui/button-field.test.tsx` vigia) |
 | D-03 | Alvos de toque de 36 a 43 px (menus, `h-9`, links de rodapé, rádios de 13 a 16 px) | Task 20 |
-| D-04 | Campo em fundo Campo sem borda (limite 1,06:1) | Task 18 e Task 20 |
-| D-05 | Contorno de foco Verde Certo sobre fundo claro (1,9:1) em `primaryButton` e `SkipLink` | Task 18 |
+| D-04 | Campo em fundo Campo sem borda (limite 1,06:1) | Task 18 (resolvida) |
+| D-05 | Contorno de foco Verde Certo sobre fundo claro (1,9:1) em `primaryButton` e `SkipLink` | Task 18 (resolvida) |
 | D-06 | Sem `main` em `/enviar-lista`, `/pesquisa`, `/papelarias/[slug]`; sem `h1` em 3 rotas de `/conta` | Task 20 |
 | D-07 | Rolagem horizontal no celular em `/parceiros/docs`, `/b2b/docs`, `/b2b/widget`, `/papelaria/catalogo`, reivindicação e todo `/admin` | Task 20 e M34 |
 | D-08 | Métricas em "número grande + rótulo" e verde em zero (`/papelaria/leads`, `/b2b`) | Task 15 e Task 18 |
-| D-09 | Spinners de tela cheia e rotas sem `loading.tsx` | Task 17 |
+| D-09 | Spinners de tela cheia e rotas sem `loading.tsx` | Task 17 (resolvida nas áreas privadas) |
 | D-10 | Campo de busca da home espremido no celular | Task 13 (M33) |
-| D-11 | Dois padrões de confirmação destrutiva (`window.confirm` e `<dialog>`) | Task 18 |
+| D-11 | Dois padrões de confirmação destrutiva (`window.confirm` e `<dialog>`) | Task 18 (resolvida) |

@@ -19,7 +19,7 @@ function responseLabel(d: DeliveryRow): string {
 function responseTone(d: DeliveryRow): string {
   if (d.lastResponseStatus && d.lastResponseStatus < 300) return "bg-verde-certo text-tinta";
   if (d.status === "queued" || d.status === "sending") return "bg-campo text-texto-2";
-  return "bg-[#fde2e0] text-[#8a1c14]";
+  return "bg-erro-fundo text-erro-texto";
 }
 
 export function DeliveriesTable({ deliveries }: { deliveries: readonly DeliveryRow[] }) {

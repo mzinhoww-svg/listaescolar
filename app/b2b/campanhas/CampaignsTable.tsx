@@ -59,7 +59,7 @@ function Actions({ campaign, onDone }: { campaign: CampaignRow; onDone: () => vo
           </button>
         ) : null}
       </div>
-      {error ? <p className="text-[12px] font-bold text-[#8a1c14]">{error}</p> : null}
+      {error ? <p className="text-[12px] font-bold text-erro-texto">{error}</p> : null}
     </div>
   );
 }

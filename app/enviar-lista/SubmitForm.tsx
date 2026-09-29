@@ -66,7 +66,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
           </Link>
           <h1 className="text-base font-extrabold">Enviar lista</h1>
         </header>
-        <p className="flex items-start gap-2.5 rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-semibold text-[#7a4a0a]">
+        <p className="flex items-start gap-2.5 rounded-2xl bg-aviso-fundo p-3.5 text-[13px] leading-[1.4] font-semibold text-[#7a4a0a]">
           <ClockIcon size={16} className="mt-0.5 shrink-0" />
           {REVIEW_NOTICE}
         </p>
@@ -98,7 +98,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
         <ConsentField invalid={message !== null && /consentimento/i.test(message)} />
         <div aria-live="polite">
           {message ? (
-            <p role="alert" className="text-[13px] font-bold text-red-700">
+            <p role="alert" className="text-[13px] font-bold text-erro-texto">
               {message}
             </p>
           ) : null}

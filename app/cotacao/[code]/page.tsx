@@ -48,8 +48,8 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
   return (
     <Screen>
       <BackHeader href="/cotacao" title="Seu pedido" />
-      {ok ? <p role="status" className="bg-[#d6f3e5] text-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold">Pedido cancelado.</p> : null}
-      {erro ? <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
+      {ok ? <p role="status" className="bg-verde-certo/20 text-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold">Pedido cancelado.</p> : null}
+      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
       <section className="rounded-card flex flex-col gap-3 bg-white p-6" aria-label="Resumo do pedido">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]" data-testid="lead-code">{lead.code}</h1>

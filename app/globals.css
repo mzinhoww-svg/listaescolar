@@ -51,6 +51,16 @@ body {
   font-family: var(--font-sans);
 }
 
+/* S28 · D-04: campo de texto em fundo Campo ganha limite visível (borda 1,5 px em texto-3, 5,3:1 contra o Papel; WCAG 1.4.11).
+   Em @layer base, então utilitários (ex.: border-erro-texto em campo inválido) continuam vencendo. */
+@layer base {
+  input.bg-campo:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select.bg-campo,
+  textarea.bg-campo {
+    border: 1.5px solid var(--texto-3);
+  }
+}
+
 /* S28 · movimento leve (DESIGN.md §7): só opacity e transform, sempre com alternativa para movimento reduzido. */
 @keyframes reveal-in {
   from { opacity: 0; transform: translateY(16px); }

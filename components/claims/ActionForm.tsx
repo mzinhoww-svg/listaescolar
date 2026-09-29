@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useRef, type ReactNode } from "react";
+
+import { Button, buttonClass } from "@/components/ui/Button";
 
 import { IDLE, type ClaimActionState } from "@/features/claims/form-state";
 
@@ -16,23 +18,17 @@ type Props = {
   variant?: "primary" | "outline" | "danger";
   className?: string;
   children?: ReactNode;
-  /** D-006: pede confirmação do navegador antes de enviar — para ações terminais e imediatas (ex.: aprovar). */
+  /** D-006: pede confirmação (diálogo único do produto, `<dialog>`) antes de enviar — para ações terminais e imediatas (ex.: aprovar). */
   confirmMessage?: string;
-};
-
-const BUTTON: Record<NonNullable<Props["variant"]>, string> = {
-  primary: "bg-tinta text-papel",
-  outline: "border-tinta text-tinta border-[1.5px] bg-transparent",
-  danger: "border-[1.5px] border-[#8a1c14] bg-transparent text-[#8a1c14]",
 };
 
 /** Formulário de Server Action com estado (`useActionState`) e mensagem fixa de sucesso/erro. */
 export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, ariaLabel, variant = "primary", className, children, confirmMessage }: Props) {
   const [state, formAction, pending] = useActionState(action, IDLE);
+  const dialog = useRef<HTMLDialogElement>(null);
   return (
     <form
       action={formAction}
-      onSubmit={confirmMessage ? (e) => { if (!window.confirm(confirmMessage)) e.preventDefault(); } : undefined}
       className={className ?? "flex flex-col gap-3"}
     >
       {children}
@@ -47,13 +43,29 @@ export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabl
         </p>
       ) : null}
       <button
-        type="submit"
+        type={confirmMessage ? "button" : "submit"}
+        onClick={confirmMessage ? () => dialog.current?.showModal() : undefined}
         aria-label={ariaLabel}
         disabled={disabled || pending}
-        className={`rounded-botao focus-visible:outline-verde-fundo flex h-[52px] items-center justify-center px-6 text-base font-extrabold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50 ${BUTTON[variant]}`}
+        className={buttonClass(variant)}
       >
         {pending ? (pendingLabel ?? "Enviando...") : submitLabel}
       </button>
+      {confirmMessage ? (
+        <dialog ref={dialog} aria-label="Confirmar ação" className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
+          <div className="flex w-[min(92vw,420px)] flex-col gap-4 p-6">
+            <p className="text-[15px] font-bold">{confirmMessage}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => dialog.current?.close()}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant={variant === "danger" ? "danger" : "primary"} className="flex-1" onClick={() => dialog.current?.close()}>
+                {submitLabel}
+              </Button>
+            </div>
+          </div>
+        </dialog>
+      ) : null}
       {disabled && disabledReason ? <p className="text-texto-3 text-[12px] font-semibold">{disabledReason}</p> : null}
     </form>
   );

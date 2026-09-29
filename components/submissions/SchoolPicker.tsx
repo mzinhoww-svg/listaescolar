@@ -81,7 +81,7 @@ export function SchoolSearchPicker({
             </button>
           </div>
           <div aria-live="polite">
-            {failed ? <p role="alert" className="text-[13px] font-bold text-red-700">Não foi possível buscar agora. Tente de novo.</p> : null}
+            {failed ? <p role="alert" className="text-[13px] font-bold text-erro-texto">Não foi possível buscar agora. Tente de novo.</p> : null}
             {hits && hits.length === 0 ? <p className="text-texto-2 text-[13px] font-semibold">Nenhuma escola encontrada.</p> : null}
             {hits && hits.length > 0 ? (
               <ul className="flex flex-col gap-1.5">

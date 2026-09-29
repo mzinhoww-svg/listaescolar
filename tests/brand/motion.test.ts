@@ -9,6 +9,15 @@ describe("sistema de movimento", () => {
     expect(css).toMatch(/--mov-base:\s*200ms/);
     expect(css).toMatch(/--mov-entrada:\s*320ms/);
   });
+  it("curvas de easing fixadas em globals.css e DESIGN.md (spec 7.3)", () => {
+    const md = readFileSync("DESIGN.md", "utf8");
+    const out = "cubic-bezier(0.2, 0, 0, 1)";
+    const inn = "cubic-bezier(0.4, 0, 1, 1)";
+    expect(css).toContain(`--mov-ease-out: ${out};`);
+    expect(css).toContain(`--mov-ease-in: ${inn};`);
+    expect(md).toContain(`\`--mov-ease-out\` | \`${out}\``);
+    expect(md).toContain(`\`--mov-ease-in\` | \`${inn}\``);
+  });
   it("nenhuma duração ou atraso de animação/transição passa de 400 ms (ms e s)", () => {
     // Exceção explícita: só indicadores de carregamento, e só se a regra existir no arquivo.
     const exempt = ["animate-spin", "animate-pulse", "pesquisa-pulso"].filter((n) => css.includes(n));

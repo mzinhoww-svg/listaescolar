@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -229,11 +229,18 @@ describe("MySchoolsTable (Escola03)", () => {
         withList={new Set(["s1"])}
       />,
     );
-    expect(screen.getByText("Verificada")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
-    expect(screen.getByRole("link", { name: "Ver o status do pedido" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
-    expect(screen.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ver o motivo e pedir de novo" })).toBeInTheDocument();
-    expect(screen.getAllByText(/Próximo passo:/)).toHaveLength(3);
+    const table = within(screen.getByRole("table"));
+    expect(table.getByText("Verificada")).toBeInTheDocument();
+    expect(table.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(table.getByRole("link", { name: "Ver o status do pedido" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
+    expect(table.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
+    expect(table.getByRole("link", { name: "Ver o motivo e pedir de novo" })).toBeInTheDocument();
+    expect(table.getAllByText(/Próximo passo:/)).toHaveLength(3);
+    // Celular (revisão UX I5): os mesmos três itens viram cartões com "Próximo passo" e a ação.
+    const cards = within(screen.getByRole("list", { name: "Minhas escolas" }));
+    expect(cards.getAllByRole("listitem")).toHaveLength(3);
+    expect(cards.getAllByText(/Próximo passo:/)).toHaveLength(3);
+    expect(cards.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(cards.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
   });
 });

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
+
+import { useEscapeClose } from "@/components/ui/useEscapeClose";
 
 type Item = { href: string; label: string };
 
@@ -11,9 +13,13 @@ type Item = { href: string; label: string };
  */
 export function AdminNav({ items, active }: { items: readonly Item[]; active: string }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useEscapeClose(open, close, trigger);
   return (
     <>
       <button
+        ref={trigger}
         type="button"
         aria-expanded={open}
         aria-controls="admin-menu"

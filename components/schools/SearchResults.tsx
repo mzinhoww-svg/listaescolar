@@ -16,8 +16,8 @@ export function EmptyState({ tooShort }: { tooShort: boolean }) {
       <p className="text-[15px] font-extrabold">{tooShort ? "Digite um pouco mais" : "Nenhuma escola encontrada"}</p>
       <p className="text-texto-2 text-[13px] leading-[1.4] font-medium">
         {tooShort
-          ? "Use pelo menos 2 letras do nome da escola, ou o INEP de 8 números."
-          : "Confira a grafia, tente só parte do nome ou o INEP de 8 números, ou remova o filtro de rede."}
+          ? "Use pelo menos 2 letras do nome da escola, ou o código INEP de 8 números."
+          : "Confira a grafia, tente só parte do nome ou o código INEP de 8 números, ou remova o filtro de rede."}
       </p>
       {tooShort ? null : (
         <ul className="mt-1 flex flex-col">

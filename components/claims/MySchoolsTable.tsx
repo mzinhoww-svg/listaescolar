@@ -30,7 +30,7 @@ export function MySchoolsTable({ schools, claims }: { schools: MySchoolRow[]; cl
     return (
       <div className="rounded-[24px] bg-white p-8">
         <p className="text-[17px] font-extrabold">Você ainda não administra nenhuma escola.</p>
-        <p className="text-texto-2 mt-1 text-[14px] font-medium">Busque a escola e envie um pedido de reivindicação.</p>
+        <p className="text-texto-2 mt-1 text-[14px] font-medium">Busque a escola e envie um pedido para administrar a página.</p>
       </div>
     );
   }
@@ -67,7 +67,7 @@ export function MySchoolsTable({ schools, claims }: { schools: MySchoolRow[]; cl
                 </span>
               </td>
               <td className="px-5 py-4">
-                <Link href={`/escolas/${c.school.inep}/reivindicar`} className={link}>{c.status === "rejected" ? "Ver e reivindicar de novo" : "Ver status"}</Link>
+                <Link href={`/escolas/${c.school.inep}/reivindicar`} className={link}>{c.status === "rejected" ? "Ver e pedir de novo" : "Ver status"}</Link>
               </td>
             </tr>
           ))}

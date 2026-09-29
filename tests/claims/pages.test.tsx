@@ -89,7 +89,7 @@ describe("/escolas/[inep]/reivindicar", () => {
   it("reivindicação alheia (consulta devolve null) mostra o formulário, sem dado de terceiros", async () => {
     getMyClaimForSchool.mockResolvedValue(null);
     render(await ClaimPage(p()));
-    expect(screen.getByRole("heading", { level: 1, name: "Reivindicar escola" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Pedir para administrar a escola" })).toBeInTheDocument();
     expect(getClaimStatusView).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 /** Passos do pedido (Escola01, adaptada: a reivindicação não edita dado do INEP, então sem "Endereço"). `current` é 1-based. */
 export function ClaimStepper({ steps, current }: { steps: readonly string[]; current: number }) {
   return (
-    <ol aria-label="Etapas da reivindicação" className="flex items-center gap-3 text-sm font-bold">
+    <ol aria-label="Etapas do pedido" className="flex items-center gap-3 text-sm font-bold">
       {steps.map((label, i) => {
         const n = i + 1;
         const done = n < current;

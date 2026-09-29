@@ -31,7 +31,7 @@ export default async function Page() {
       email={user.email}
       crumb="Painel"
       title="Minhas escolas"
-      actions={<Link href="/escolas" className="bg-tinta text-papel rounded-botao px-6 py-3 text-[15px] font-extrabold">Reivindicar outra escola</Link>}
+      actions={<Link href="/escolas" className="bg-tinta text-papel rounded-botao px-6 py-3 text-[15px] font-extrabold">Pedir para administrar outra escola</Link>}
     >
       {data ? (
         <MySchoolsTable schools={data.schools} claims={data.claims} />

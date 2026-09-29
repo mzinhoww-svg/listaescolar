@@ -58,7 +58,7 @@ export function ClaimFlow({ inep, claim, actions }: { inep: string; claim: Claim
         <Link href="/escola" className="bg-tinta text-papel rounded-botao flex h-14 items-center justify-center text-base font-extrabold">Ir para Minhas escolas</Link>
       ) : null}
       {claim.status === "rejected" ? (
-        <Link href={`/escolas/${inep}/reivindicar?nova=1`} className="border-tinta text-tinta rounded-botao flex h-[52px] items-center justify-center border-[1.5px] text-base font-extrabold">Reivindicar de novo</Link>
+        <Link href={`/escolas/${inep}/reivindicar?nova=1`} className="border-tinta text-tinta rounded-botao flex h-[52px] items-center justify-center border-[1.5px] text-base font-extrabold">Pedir de novo</Link>
       ) : null}
     </div>
   );

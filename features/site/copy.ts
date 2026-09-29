@@ -85,7 +85,7 @@ export const SITE_COPY = {
     eyebrow: "Como funciona",
     title: "Encontre, compare, confira",
     items: [
-      { title: "Encontre a lista", text: "Busque a escola pelo nome ou INEP e abra a lista oficial da série." },
+      { title: "Encontre a lista", text: "Busque a escola pelo nome ou pelo código INEP (o número da escola no Censo Escolar) e abra a lista oficial da série." },
       { title: "Compare", text: "Compare lojas online ou peça orçamento à papelaria do bairro pelo WhatsApp." },
       { title: "Confira", text: "Veja a lista oficial item a item e confira o que a escola pediu antes de comprar." },
     ] satisfies Item[],

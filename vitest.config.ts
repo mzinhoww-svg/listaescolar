@@ -26,5 +26,8 @@ export default defineConfig({
       ".track-workdir/**",
     ],
     globals: false,
+    // Primeira renderização da landing (jsdom, importa busca, PostHog e seções) passa de 5 s em runner de CI de 2 vCPU sob paralelismo.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

@@ -48,7 +48,7 @@ export function CatalogTable({ rows, editHref }: { rows: readonly CatalogRow[]; 
                 <span className={`rounded-botao px-3 py-1 text-[12px] font-extrabold ${STOCK_TONE[r.stock]}`}>{STOCK_LABEL[r.stock]}</span>
               </td>
               <td className="px-5 py-3.5">
-                <a href={editHref(r.id)} className="text-verde-fundo font-extrabold">Editar</a>
+                <a href={editHref(r.id)} aria-label={`Editar ${r.name}`} className="text-verde-fundo focus-visible:outline-verde-fundo -my-2 inline-flex min-h-11 min-w-11 items-center font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2">Editar</a>
               </td>
             </tr>
           ))}

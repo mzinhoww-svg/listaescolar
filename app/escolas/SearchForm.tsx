@@ -51,19 +51,19 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
             type="button"
             onClick={() => setValue("")}
             aria-label="Limpar busca"
-            className="text-texto-2 flex size-11 shrink-0 items-center justify-center rounded-full"
+            className="text-texto-2 focus-visible:outline-verde-fundo flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <CloseIcon />
           </button>
         ) : null}
         {stacked ? null : (
-          <button type="submit" className="bg-tinta text-papel rounded-botao h-11 shrink-0 px-4 text-sm font-extrabold">
+          <button type="submit" className="bg-tinta text-papel focus-visible:outline-verde-fundo rounded-botao h-11 shrink-0 px-4 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">
             {submitLabel}
           </button>
         )}
       </div>
       {stacked ? (
-        <button type="submit" className="bg-tinta text-papel rounded-botao mt-2.5 flex h-12 w-full items-center justify-center text-[15px] font-extrabold">
+        <button type="submit" className="bg-tinta text-papel focus-visible:outline-verde-fundo rounded-botao mt-2.5 flex h-12 w-full items-center justify-center text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">
           {submitLabel}
         </button>
       ) : null}

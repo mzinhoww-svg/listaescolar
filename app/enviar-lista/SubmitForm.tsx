@@ -10,7 +10,7 @@ import { BoltIcon, CameraIcon, ChevronLeftIcon, ClockIcon } from "@/components/s
 import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
 import { SchoolSearchPicker } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
-import { ACCEPT_ATTR, REVIEW_NOTICE } from "@/features/submissions/copy";
+import { ACCEPT_ATTR, errorFieldFor, FORM_ERROR_ID, REVIEW_NOTICE } from "@/features/submissions/copy";
 import { trackUploadStarted } from "@/lib/analytics/track";
 import { idleState } from "@/features/submissions/form-schema";
 
@@ -58,6 +58,8 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
     startTransition(() => action(data));
   };
   const message = clientError ?? (state.status === "error" ? state.message : null);
+  const errorField = errorFieldFor(message);
+  const fileInvalid = errorField === "file";
 
   return (
     <>
@@ -81,8 +83,8 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
             </span>
             A IA lê a lista, identifica cada item e confere as quantidades.
           </p>
-          <input ref={camera} name="file" type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Tirar foto da lista" onChange={() => onPick(camera.current, gallery.current)} />
-          <input ref={gallery} id="file" name="file" type="file" accept={ACCEPT_ATTR} className="sr-only" tabIndex={-1} aria-label="Arquivo da lista" onChange={() => onPick(gallery.current, camera.current)} />
+          <input ref={camera} name="file" type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Tirar foto da lista" aria-invalid={fileInvalid} aria-describedby={fileInvalid ? FORM_ERROR_ID : undefined} onChange={() => onPick(camera.current, gallery.current)} />
+          <input ref={gallery} id="file" name="file" type="file" accept={ACCEPT_ATTR} className="sr-only" tabIndex={-1} aria-label="Arquivo da lista" aria-invalid={fileInvalid} aria-describedby={fileInvalid ? FORM_ERROR_ID : undefined} onChange={() => onPick(gallery.current, camera.current)} />
           <button type="button" className={`${primary} h-14`} onClick={() => camera.current?.click()}>
             <CameraIcon size={18} /> Tirar foto
           </button>
@@ -97,11 +99,11 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
         </section>
 
         <SchoolSearchPicker />
-        <SeriesFields years={years} defaultYear={defaultYear} />
-        <ConsentField invalid={message !== null && /consentimento/i.test(message)} />
+        <SeriesFields years={years} defaultYear={defaultYear} invalid={errorField === "grade"} />
+        <ConsentField invalid={errorField === "consent"} />
         <div aria-live="polite">
           {message ? (
-            <p role="alert" className="text-[13px] font-bold text-erro-texto">
+            <p id={FORM_ERROR_ID} role="alert" className="text-[13px] font-bold text-erro-texto">
               {message}
             </p>
           ) : null}

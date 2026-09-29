@@ -108,7 +108,7 @@ export default async function ListPage({ params, searchParams }: Props) {
             </p>
             <Link
               href={`/carrinho/novo?lista=${version.id}`}
-              className="bg-verde-certo text-tinta focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center rounded-botao text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="bg-tinta text-papel focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center rounded-botao text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               Montar carrinho com esta lista
             </Link>

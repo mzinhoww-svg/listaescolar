@@ -89,3 +89,23 @@ export const PUBLICATION_STATE_COPY: Record<"human_review" | "approved" | "publi
 };
 
 export const REJECTED_COPY_HINT = "Você ainda pode usar sua cópia para montar o carrinho.";
+
+export type ErrorField = "consent" | "grade" | "file";
+
+const FILE_CODES: readonly FormErrorCode[] = [
+  "no_file", "empty_file", "file_too_large", "pdf_too_large", "image_undecodable", "unsupported_type",
+  "signature_mismatch", "encrypted_pdf", "corrupt_file", "image_too_large",
+];
+
+/** Campo a que a mensagem de erro se refere (para `aria-invalid`/`aria-describedby`); erro geral (rede, perfil) → null. */
+export function errorFieldFor(message: string | null): ErrorField | null {
+  if (!message) return null;
+  const code = (Object.keys(ERROR_MESSAGES) as FormErrorCode[]).find((c) => ERROR_MESSAGES[c] === message);
+  if (!code) return null;
+  if (code === "consent_required") return "consent";
+  if (code === "invalid_input") return "grade";
+  return FILE_CODES.includes(code) ? "file" : null;
+}
+
+/** Id do parágrafo de erro do formulário, referenciado por `aria-describedby` dos campos com erro. */
+export const FORM_ERROR_ID = "form-error";

@@ -74,10 +74,11 @@ describe("página da lista", () => {
     expect(screen.getByText("Versão 1 · versão anterior")).toBeInTheDocument();
     expect(getPublishedList).toHaveBeenCalledWith("99001001", "ef-5", year);
     // D-140 (S18): a lista oficial agora linka para montar carrinho com o id da VERSÃO publicada.
-    expect(screen.getByRole("link", { name: "Montar carrinho com esta lista" })).toHaveAttribute(
-      "href",
-      `/carrinho/novo?lista=${list.version.id}`,
-    );
+    const cta = screen.getByRole("link", { name: "Montar carrinho com esta lista" });
+    expect(cta).toHaveAttribute("href", `/carrinho/novo?lista=${list.version.id}`);
+    // Regra do verde: o CTA principal da lista é Tinta, sem Verde Certo (revisão UX, menores).
+    expect(cta.className).toContain("bg-tinta");
+    expect(cta.className).not.toContain("bg-verde-certo");
   });
 
   it("metadata: noindex; título com Demonstração; inválidos viram 'não encontrada'", async () => {

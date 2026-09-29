@@ -74,6 +74,16 @@ Cada linha aponta o arquivo real. Componente React até 250 linhas; Server Compo
 | Casca de tela | coluna 420 px, `main` com `id="conteudo"`, link "Pular para o conteúdo" | `components/auth/Screen.tsx`, `components/site/SkipLink.tsx` |
 | Casca de painel | barra escura Tinta com logo e usuário | `components/admin/AdminShell.tsx`, `components/stationeries/PanelShell.tsx`, `components/claims/SchoolPanelShell.tsx` |
 
+### Botões e ações
+
+Sistema da S29 (regra para todas as telas; código em `components/ui/Button.tsx`).
+
+- Variantes: **principal** (`primary`, Tinta, uma por região), **secundária** (`outline`, contorno), **terciária** (`text`, Verde Fundo com sublinhado sempre visível), **destrutiva** (`danger`, sempre via `ConfirmDialog`), **ícone** (`icon`, com `aria-label`). `whatsapp` é exceção de canal.
+- Rótulo: verbo + objeto ("Montar carrinho", "Pedir cotação"). Proibido "OK", "Enviar" solto e "Clique aqui".
+- Carregamento: o botão mantém a largura e anuncia o estado com `aria-busy="true"`; sem spinner de tela cheia; o toque duplo é ignorado.
+- Desabilitado: sempre com o motivo visível ao lado do botão, nunca só a opacidade.
+- Verde Certo não é cor de botão principal (regra de marca da S28); o principal é Tinta.
+
 ## 5. Formulários
 
 1. Rótulo sempre visível e associado (`<label htmlFor>`); placeholder é exemplo, nunca rótulo.
@@ -93,11 +103,31 @@ Cada linha aponta o arquivo real. Componente React até 250 linhas; Server Compo
 | Vazio | frase útil e uma ação; nunca "nada aqui" |
 | Sem fonte | a palavra "indisponível", com o motivo curto; nunca zero nem estimativa |
 
+### Feedback em linha (S29)
+
+- Sucesso: mensagem em linha, próxima da ação, com `aria-live="polite"` (`role="status"`); toast só para ação que muda de tela. Componente: `InlineStatus` (`components/ui/InlineStatus.tsx`).
+- Erro: preso ao campo (`aria-invalid`, `aria-describedby`), acionável, sem código técnico; erro de ação usa `InlineStatus tone="error"` com `role="alert"`.
+- Vazio: padrão da seção 4 (Estado vazio) com uma ação que tira a pessoa do vazio.
+
 ## 7. Movimento
 
 Movimento comunica estado, não decora. Durações: 150 a 250 ms em interações; até 300 ms em barra de progresso; entradas de bloco na landing até 400 ms. Easing de saída exponencial (`ease-out`); sem bounce nem elástico. Anima só `opacity` e `transform` (e `width` de barra de progresso).
 
 `prefers-reduced-motion`: toda animação nova precisa de alternativa. Com `motion-reduce:`, giro vira estático, pulso e entradas somem e o conteúdo aparece direto; o texto "Carregando…" já basta. Conteúdo nunca depende de animação para aparecer. Padrão existente: `app/loading.tsx`, `components/site/Faq.tsx`, `components/pesquisa/pesquisa.module.css`.
+
+### Tokens de movimento (S29)
+
+Definidos em `app/globals.css`, com utilitários `duration-mov-*` e `ease-mov-*`.
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--mov-rapido` | 120 ms | feedback de toque |
+| `--mov-base` | 200 ms | transição de estado |
+| `--mov-entrada` | 320 ms | painel ou folha entrando |
+| `--mov-ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | entrada |
+| `--mov-ease-in` | `cubic-bezier(0.4, 0, 1, 1)` | saída |
+
+Permitido: feedback de ação, transição de estado, orientação espacial (de onde veio o painel), celebração pontual de marco. Proibido: loop decorativo, parallax, animação que atrase a ação, movimento em texto de leitura, qualquer coisa acima de 400 ms. `prefers-reduced-motion` troca movimento por mudança instantânea de opacidade ou nada (bloco global em `app/globals.css`, com teste). Nenhuma dependência nova de animação sem Ruling (piloto em 4G).
 
 ## 8. Acessibilidade
 

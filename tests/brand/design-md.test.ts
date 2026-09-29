@@ -24,4 +24,8 @@ describe("DESIGN.md", () => {
     expect(md).toContain("prefers-reduced-motion");
     expect(md).toContain("44 px");
   });
+
+  it("DESIGN.md tem os sistemas da S29", () => {
+    for (const t of ["botões e ações", "feedback", "movimento", "--mov-base", "aria-busy"]) expect(md).toContain(t);
+  });
 });

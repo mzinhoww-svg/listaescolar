@@ -1,0 +1,143 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { deny, getConsent, grant, resetConsentListenersForTests, revoke } from "@/lib/analytics/consent";
+import { resetAnalyticsClientForTests } from "@/lib/analytics/instance";
+import { track } from "@/lib/analytics/track";
+
+const enable = () => { vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test"); vi.stubEnv("APP_ENV", "staging"); };
+
+let fetchMock: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  localStorage.clear();
+  resetConsentListenersForTests();
+  resetAnalyticsClientForTests();
+  fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("requestIdleCallback", (cb: () => void) => setTimeout(cb, 0));
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
+
+const idle = () => act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+
+describe("consentimento", () => {
+  it("começa 'unset'; grant e deny persistem só depois da escolha; revoke limpa o id", () => {
+    expect(getConsent()).toBe("unset");
+    expect(localStorage.length).toBe(0);
+    grant();
+    expect(getConsent()).toBe("granted");
+    expect(localStorage.length).toBeGreaterThan(0);
+    revoke();
+    expect(getConsent()).toBe("denied");
+    expect(localStorage.getItem("lc_analytics_id")).toBeNull();
+    deny();
+    expect(getConsent()).toBe("denied");
+  });
+
+  it("storage indisponível não lança", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    expect(getConsent()).toBe("unset");
+    expect(() => grant()).not.toThrow();
+    vi.restoreAllMocks();
+  });
+});
+
+describe("AnalyticsProvider", () => {
+  it("sem chave: nenhum nó no DOM e nenhum fetch, mesmo com track()", async () => {
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "");
+    const { container } = render(<AnalyticsProvider />);
+    track("login_started", { method: "google" });
+    await idle();
+    expect(container).toBeEmptyDOMElement();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("com chave e sem escolha: mostra o aviso com dois botões de 48 px, não envia nem grava nada", async () => {
+    enable();
+    render(<AnalyticsProvider />);
+    await idle();
+    const region = screen.getByRole("region", { name: /medição de uso/i });
+    expect(region).toBeInTheDocument();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["Aceitar", "Recusar"]);
+    for (const b of buttons) expect(b.className).toMatch(/\bh-12\b/);
+    track("school_searched", { query_length: 3, results_count: 1, has_filters: false });
+    await idle();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("Recusar: aviso some, fila descartada, zero requisições; escolha lembrada sem novo aviso", async () => {
+    enable();
+    const { unmount } = render(<AnalyticsProvider />);
+    await idle();
+    track("school_searched", { query_length: 3, results_count: 1, has_filters: false });
+    fireEvent.click(screen.getByRole("button", { name: "Recusar" }));
+    track("school_searched", { query_length: 3, results_count: 1, has_filters: false });
+    await idle();
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getConsent()).toBe("denied");
+    unmount();
+    render(<AnalyticsProvider />);
+    await idle();
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  it("Aceitar: libera o que aconteceu antes na mesma página e passa a enviar", async () => {
+    enable();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<AnalyticsProvider />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+    track("school_searched", { query_length: 3, results_count: 1, has_filters: false });
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Aceitar" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/ingest/i/v0/e");
+    expect(String(init.body)).toContain("school_searched");
+    expect(String(init.body)).not.toContain("$identify");
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  it("consentimento já dado: sem aviso e envia; revogar depois para tudo", async () => {
+    enable();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    grant();
+    render(<AnalyticsProvider />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    track("login_started", { method: "google" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    act(() => revoke());
+    track("login_started", { method: "google" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("identify depois do aceite usa o uuid, nunca e-mail ou telefone", async () => {
+    enable();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    grant();
+    render(<AnalyticsProvider />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+    const { identify } = await import("@/lib/analytics/track");
+    identify("mae@exemplo.com");
+    identify("65999991234");
+    identify("3f2b8c1e-5a4d-4e7b-9c0a-1d2e3f4a5b6c");
+    await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    const bodies = fetchMock.mock.calls.map((c) => String((c[1] as RequestInit).body)).join("\n");
+    expect(bodies).toContain("$identify");
+    expect(bodies).toContain("3f2b8c1e-5a4d-4e7b-9c0a-1d2e3f4a5b6c");
+    expect(bodies).not.toMatch(/exemplo|65999991234/);
+  });
+});

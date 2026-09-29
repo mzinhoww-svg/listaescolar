@@ -10,7 +10,10 @@
  */
 export const SEND_BEFORE_CONSENT = false as const;
 
-/** Caminho do proxy (rewrite do Next). O cliente nunca conhece o host do PostHog. */
+/**
+ * Caminho do proxy (rewrite do Next). O cliente nunca conhece o host do PostHog. Os endpoints são chamados SEM barra
+ * final (`/i/v0/e`, `/batch`): com barra, o Next redirecionaria (308) e desligar isso vale para o site inteiro.
+ */
 export const INGEST_PATH = "/ingest";
 
 export type AppEnv = "production" | "preview" | "staging" | "local";
@@ -35,7 +38,8 @@ export function isAllowedHost(raw: string): boolean {
 }
 
 function deriveAppEnv(env: Env): AppEnv {
-  const raw = env.APP_ENV ?? env.NEXT_PUBLIC_APP_ENV ?? env.VERCEL_ENV;
+  const raw = env.APP_ENV || env.NEXT_PUBLIC_APP_ENV || env.VERCEL_ENV;
+  // Desconhecido (inclusive `development` da Vercel) cai em "local": `is_internal = true`, fora dos funis de produção.
   return (APP_ENVS as readonly string[]).includes(raw ?? "") ? (raw as AppEnv) : "local";
 }
 

@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import { DemoBadge } from "@/components/admin/DemoBadge";
 import { SITE_COPY } from "@/features/site/copy";
 
@@ -14,8 +16,12 @@ export function HeroListCard() {
       </div>
       <p className="bg-verde-certo/20 text-verde-fundo mt-4 inline-block rounded-full px-2.5 py-0.5 text-xs font-extrabold">{c.cardTag}</p>
       <ul className="mt-2 flex flex-col">
-        {c.cardItems.map((i) => (
-          <li key={i} className="flex items-center gap-3 py-2.5 text-[15px] font-semibold">
+        {c.cardItems.map((i, n) => (
+          <li
+            key={i}
+            style={{ "--i": n } as CSSProperties}
+            className="tick-loop motion-reduce:animate-none flex items-center gap-3 py-2.5 text-[15px] font-semibold"
+          >
             <TickBox />
             {i}
           </li>

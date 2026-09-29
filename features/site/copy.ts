@@ -47,6 +47,7 @@ export const SITE_COPY = {
     eyebrow: "Volta às aulas",
     title: "A lista da escola, pronta para comprar.",
     lead: "Lista oficial da escola, revisada antes de publicar, e opções de carrinho para você comparar: mais barato, recomendado, menos lojas ou papelaria local.",
+    scope: "Piloto em Cuiabá, MT",
     schoolCta: "Sou escola",
     cardTitle: "Escola de exemplo · série de exemplo",
     cardTag: "Lista oficial",
@@ -89,6 +90,7 @@ export const SITE_COPY = {
       { title: "Confira", text: "Veja a lista oficial item a item e confira o que a escola pediu antes de comprar." },
     ] satisfies Item[],
     channelsTitle: "Onde comprar",
+    onlineStores: "Lojas online",
     stationeries: "Papelarias do bairro",
   },
   faq: {

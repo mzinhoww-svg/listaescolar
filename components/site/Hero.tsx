@@ -23,6 +23,7 @@ export function Hero() {
         </h1>
         <p className="text-texto-2 text-base leading-relaxed font-medium md:text-lg">{c.lead}</p>
         <SearchForm showNeighborhood={false} submitLabel="Buscar a escola do meu filho" />
+        <p className="text-texto-3 -mt-2 text-[13px] font-semibold">{c.scope}</p>
         <nav aria-label="Buscar por rede" className="-mx-6 overflow-x-auto px-6 md:mx-0 md:px-0">
           <ul className="flex gap-2">
             {CHIPS.map((ch) => (

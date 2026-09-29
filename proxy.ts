@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { updateSession } from "@/lib/supabase/proxy";
-import { securityHeaders } from "@/lib/security-headers";
+import { baseSecurityHeaders, buildCsp, cspOriginsFromEnv } from "@/lib/security-headers";
 
 // D-072/S19: cabeçalhos de segurança e CSP com nonce por requisição, encaixados no proxy que já existia (S02,
 // renomeado de "middleware" para "proxy" pelo Next 16) para não duplicar um segundo arquivo de proxy — o Next
@@ -26,17 +26,23 @@ function generateNonce(): string {
 
 export async function proxy(request: NextRequest) {
   const skipCsp = skipsCsp(request.nextUrl.pathname);
-  const nonce = generateNonce();
-  // `x-nonce` no cabeçalho da REQUISIÇÃO (não da resposta): é assim que o Next aplica o nonce aos próprios
-  // scripts que gera (hidratação/chunks) e como `headers().get("x-nonce")` chega ao Server Component (JSON-LD).
-  if (!skipCsp) request.headers.set("x-nonce", nonce);
+  let csp: string | null = null;
+  if (!skipCsp) {
+    const nonce = generateNonce();
+    csp = buildCsp(nonce, cspOriginsFromEnv(process.env));
+    // Revisão S19 (B1): o Next 16 extrai o nonce do cabeçalho `content-security-policy` da REQUISIÇÃO (padrão
+    // `'nonce-…'`), não de `x-nonce`; sem isso os scripts do framework saem sem nonce e o `strict-dynamic` os
+    // bloqueia todos. `x-nonce` continua para o Server Component ler o nonce (JSON-LD). Mutar `request.headers`
+    // aqui vale porque `updateSession` cria as respostas com `NextResponse.next({ request })`.
+    request.headers.set("content-security-policy", csp);
+    request.headers.set("x-nonce", nonce);
+  }
 
   const response = await updateSession(request);
-  if (!skipCsp) {
-    for (const [key, value] of Object.entries(securityHeaders(nonce))) {
-      response.headers.set(key, value);
-    }
-  }
+  // Cabeçalhos base valem para TODA rota do matcher; só o CSP (que precisa do nonce/renderização dinâmica) é
+  // pulado nas rotas do widget (revisão M1).
+  for (const [key, value] of Object.entries(baseSecurityHeaders())) response.headers.set(key, value);
+  if (csp) response.headers.set("Content-Security-Policy", csp);
   return response;
 }
 

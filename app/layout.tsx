@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { connection } from "next/server";
 import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
 import { siteBase } from "@/lib/site-base";
 import "./globals.css";
@@ -26,7 +27,11 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Revisão S19 (B1): o nonce da CSP só chega às tags de script na renderização por requisição (páginas
+  // pré-renderizadas no build não têm cabeçalho de requisição). Custo aceito: sem HTML estático de CDN;
+  // as páginas seguem com cache de dados/`revalidate` onde já usavam.
+  await connection();
   return (
     <html lang="pt-BR" className={`${plusJakartaSans.variable} h-full antialiased`}>
       <body className="bg-papel text-tinta flex min-h-full flex-col font-medium">

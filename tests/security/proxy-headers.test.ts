@@ -40,6 +40,24 @@ describe("proxy: cabeçalhos de segurança e CSP (S19)", () => {
     expect(res.headers.get("Cross-Origin-Opener-Policy")).toBe("same-origin");
   });
 
+  it("encaminha o CSP com o nonce no cabeçalho da REQUISIÇÃO (é de onde o Next 16 lê o nonce; revisão B1)", async () => {
+    const res = await proxy(req("/"));
+    const csp = res.headers.get("Content-Security-Policy") as string;
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeTruthy();
+    expect(res.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    expect(res.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
+    expect(res.headers.get("x-middleware-override-headers")).toContain("content-security-policy");
+  });
+
+  it("rotas sem CSP mantêm os cabeçalhos base (revisão M1)", async () => {
+    const res = await proxy(req("/api/widget/config"));
+    expect(res.headers.get("Content-Security-Policy")).toBeNull();
+    expect(res.headers.get("x-middleware-request-content-security-policy")).toBeNull();
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Strict-Transport-Security")).toMatch(/max-age=/);
+  });
+
   it("não aplica CSP em /api/widget/** nem em /widget.js (S25, sem iframe)", async () => {
     const widgetApi = await proxy(req("/api/widget/config"));
     const widgetJs = await proxy(req("/widget.js"));

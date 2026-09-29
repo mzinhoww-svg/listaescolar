@@ -5,6 +5,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 import { createEmitter } from "../_shared/analytics/capture.ts";
+import { workerCaptureConfig } from "../_shared/analytics/host.ts";
 import { demoConfigError, demoEnabled, parseSlowMs } from "../_shared/demo-lock.ts";
 import { DemoExtractionPipeline } from "../_shared/demo-pipeline.ts";
 import { aiPipelineAvailable, createAiPipeline, type AiEnv } from "../_shared/ai/composition.ts";
@@ -111,15 +112,8 @@ Deno.serve(async (req) => {
   // Medição de produto (ADR-007): sem POSTHOG_KEY não faz nada; eventos só de fatos, sem dado pessoal.
   const posthogKey = Deno.env.get("POSTHOG_KEY");
   const appEnv = Deno.env.get("APP_ENV");
-  const analytics = createEmitter(
-    posthogKey
-      ? {
-          key: posthogKey,
-          host: (Deno.env.get("POSTHOG_HOST") ?? "https://us.i.posthog.com").replace(/\/+$/, ""),
-          appEnv: appEnv === "production" || appEnv === "preview" || appEnv === "staging" ? appEnv : "local",
-        }
-      : null,
-  );
+  // `POSTHOG_HOST` passa pela mesma regra do app (`isAllowedHost`): host fora da regra desliga a medição (revisão M5).
+  const analytics = createEmitter(workerCaptureConfig({ key: posthogKey, host: Deno.env.get("POSTHOG_HOST"), appEnv }));
   const publication = createPublicationDeps({
     env: {
       NODE_ENV: Deno.env.get("NODE_ENV"),

@@ -32,21 +32,15 @@ export type AnalyticsConfig =
   | { enabled: false }
   | { enabled: true; key: string; host: string; appEnv: AppEnv };
 
+import { isAllowedHost } from "../../supabase/functions/_shared/analytics/host";
+
 type Env = Record<string, string | undefined>;
 
 const DEFAULT_HOST = "https://us.i.posthog.com";
 const APP_ENVS: readonly AppEnv[] = ["production", "preview", "staging", "local"];
 
-/** https sempre; http só em loopback (receptor local de E2E). */
-export function isAllowedHost(raw: string): boolean {
-  try {
-    const u = new URL(raw);
-    if (u.protocol === "https:") return true;
-    return u.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
-  } catch {
-    return false;
-  }
-}
+/** Regra única (compartilhada com o `ocr-worker`): https sempre; http só em loopback. */
+export { isAllowedHost };
 
 function deriveAppEnv(env: Env): AppEnv {
   const raw = env.APP_ENV || env.NEXT_PUBLIC_APP_ENV || env.VERCEL_ENV;

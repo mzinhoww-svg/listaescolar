@@ -6,7 +6,7 @@
 // então o plano deles vai numa cópia temporária com 50 mil linhas sintéticas (mesmos índices, sem RLS).
 // Uso: set -a; source .env.local; set +a; pnpm exec tsx --conditions=react-server scripts/s28-consultas.ts
 import { execFileSync } from "node:child_process";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { createClient } from "@supabase/supabase-js";
@@ -50,7 +50,6 @@ const ms = (n: number) => `${n.toFixed(1)} ms`;
 
 type Flow = { name: string; times: number[]; note: string };
 
-const SYNTH_IBGE = "9000000"; // prefixo de 7 dígitos: 9000001..9000040
 
 /**
  * Carrega escolas sintéticas com distribuição realista: o município habilitado recebe ~3 mil (cidade grande) e o resto

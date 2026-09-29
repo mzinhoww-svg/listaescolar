@@ -156,3 +156,13 @@ Ordem: M22, M26, M30, M19, M16, M18, M24, M29, M31, M25, M27, M28, M20, M23; dep
 | Custo de IA | Colunas de uso em `ai_decisions` (tokens, custo estimado em BRL por preço configurado, latência) e relatório por lista | `PROGRESS.md` e `/admin/ia` |
 | Consultas lentas | `pg_stat_statements` no banco local (o staging só com leitura autorizada pelo orquestrador) e `EXPLAIN (ANALYZE)` das consultas quentes | Relatório em `docs/superpowers/evidencias/S28/depois/consultas.md` |
 | Texto e consistência | Auditoria impeccable por área e checklist de vocabulário | Ledger e PR |
+
+## 7. Itens novos da auditoria impeccable (Fase 2)
+
+Origem: `docs/superpowers/evidencias/S28/auditoria-*.md` (73 achados: 0 P0, 16 P1, 33 P2, 17 P3 ao somar as seis áreas, com repetições entre áreas).
+
+| ID | Melhoria | I | E | Prior. | Onde | Fatia |
+|---|---|---|---|---|---|---|
+| M33 | Campo de busca da home utilizável no celular (botão em linha própria ou ícone; placeholder legível; menu do topo com indício de rolagem) | 4 | 1 | 4,0 | `components/site/Hero.tsx`, `app/escolas/SearchForm.tsx` | S28, dentro da Task 13 (M06) |
+| M34 | Admin com menu recolhível abaixo de 768 px, grupos no menu e barra fixa | 3 | 2 | 1,5 | `components/admin/AdminShell.tsx` | S28, dentro da Task 18 (M15) se couber; senão pós-piloto |
+| M35 | Painel admin com fila de atenção (reivindicações pendentes, listas na fila, contestações abertas) e tabela de eventos legível | 3 | 3 | 1,0 | `app/admin/page.tsx`, `app/admin/eventos/page.tsx` | Pós-piloto |

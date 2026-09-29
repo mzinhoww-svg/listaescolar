@@ -11,8 +11,9 @@ describe("preferências", () => {
     expect(preferenceEnabled([{ event_type: "submission_ready", channel: "web_push", enabled: true }], "submission_ready", "email")).toBe(false);
   });
   it("só eventos com canal externo aparecem na matriz (publication_orphaned é só da central)", () => {
-    expect(externalEvents()).toHaveLength(NOTIFICATION_EVENTS.length - 1);
+    expect(externalEvents()).toHaveLength(NOTIFICATION_EVENTS.length - 2);
     expect(externalEvents()).not.toContain("publication_orphaned");
+    expect(externalEvents()).not.toContain("system_alert");
   });
   it("disponibilidade real: web push só com VAPID público; e-mail só com flag, chave e remetente", () => {
     expect(channelAvailability({})).toEqual({ web_push: false, email: false });

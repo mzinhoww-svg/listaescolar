@@ -4,6 +4,7 @@ import type { NotificationParams } from "./params";
 export const NOTIFICATION_EVENTS = [
   "submission_ready", "submission_failed", "submission_published", "submission_not_published", "list_published",
   "lead_received", "lead_quote_sent", "lead_expired", "claim_updated", "publication_orphaned",
+  "system_alert",
 ] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
@@ -23,6 +24,10 @@ const CLAIM_BODY: Record<string, string> = {
   insufficient_evidence: "Precisamos de mais evidências para concluir a reivindicação.",
   token_expired: "O link de confirmação venceu. Peça um novo para continuar.",
 };
+const ALERT_BODY: Record<string, (n: number | undefined) => string> = {
+  dead_jobs: (n) => `${n ?? "Há"} ${n === 1 ? "tarefa" : "tarefas"} da fila de leitura de listas sem tentativa restante. Abra a revisão para conferir.`,
+  ai_error_rate: (n) => `A taxa de falha da leitura por IA nas últimas 24 horas está em ${n === undefined ? "nível de alerta" : `${n}%`}. Abra a revisão para conferir.`,
+};
 const of = (p: NotificationParams): string => (p.school_name ? ` de ${p.school_name}` : "");
 
 export const EVENT_CATALOG: Record<NotificationEvent, EventEntry> = {
@@ -41,4 +46,10 @@ export const EVENT_CATALOG: Record<NotificationEvent, EventEntry> = {
   lead_expired: { external: true, pushTitle: "Seu pedido de cotação expirou", title: () => "Seu pedido de cotação expirou", body: (p) => `O pedido${p.lead_code ? ` ${p.lead_code}` : ""} passou do prazo. Você pode pedir de novo.` },
   claim_updated: { external: true, pushTitle: "Sua reivindicação teve uma atualização", title: () => "Atualização na sua reivindicação", body: (p) => (p.status_code && CLAIM_BODY[p.status_code]) || "Abra para ver o andamento." },
   publication_orphaned: { external: false, pushTitle: "Publicação para conciliar", title: () => "Publicação para conciliar", body: () => "Uma lista foi publicada sem registro no envio. Abra a revisão para conciliar." },
+  system_alert: {
+    external: false,
+    pushTitle: "Alerta do sistema",
+    title: () => "Alerta do sistema",
+    body: (p) => (p.alert_kind && ALERT_BODY[p.alert_kind]?.(p.alert_count)) || "Abra o painel para conferir.",
+  },
 };

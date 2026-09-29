@@ -7,7 +7,7 @@ import { loadPage, renderInSite } from "./helpers";
 
 /** Só o humano/jurídico preenche estes (razão social, CNPJ, contato, base legal, operadores, data, prazo de
  * auditoria — nenhuma rotina de exclusão criada para `audit_log`, que é imutável por desenho). */
-const STILL_HUMAN_OWNED = ["companyName", "cnpj", "dpoEmail", "contactEmail", "auditRetention", "legalBasis", "operators", "lastUpdated"] as const;
+const STILL_HUMAN_OWNED = ["companyName", "cnpj", "dpoEmail", "contactEmail", "auditRetention", "legalBasis", "operators", "analyticsOperator", "lastUpdated"] as const;
 /** S17 preencheu com o prazo técnico das próprias regras (retention_policies, migration 0605); ver ledger "S17". */
 const FILLED_BY_S17 = ["retention", "claimRetention"] as const;
 
@@ -20,7 +20,7 @@ describe("textos jurídicos preliminares", () => {
 
   it.each([
     ["/termos", ["data da última atualização", "e-mail do encarregado de dados"]],
-    ["/privacidade", ["razão social", "CNPJ", "prazo de guarda da trilha de auditoria", "base legal", "operadores e contratos", "data da última atualização", "e-mail do encarregado de dados"]],
+    ["/privacidade", ["razão social", "CNPJ", "prazo de guarda da trilha de auditoria", "base legal", "operadores e contratos", "operador da medição de uso (PostHog)", "data da última atualização", "e-mail do encarregado de dados"]],
   ] as const)("%s: faixa preliminar e cada placeholder ainda pendente em <mark>", async (route, labels) => {
     const Page = await loadPage(route);
     const { container } = await renderInSite(Page);
@@ -74,5 +74,20 @@ describe("textos jurídicos preliminares", () => {
     const t = container.textContent ?? "";
     expect(t).toMatch(/A compra acontece na loja escolhida, com as regras dela/);
     expect(t).toMatch(/podemos receber comissão das lojas; o preço não muda/i);
+  });
+});
+
+describe("/privacidade: medição de uso (ADR-007, S28)", () => {
+  it("descreve a medição sem afirmar conformidade e sem prometer o que não há", async () => {
+    const Page = await loadPage("/privacidade");
+    const { container } = await renderInSite(Page);
+    const t = container.textContent ?? "";
+    expect(t).toMatch(/Medição de uso/);
+    expect(t).toMatch(/Antes da sua escolha nada é enviado/);
+    expect(t).toMatch(/não levam nome, e-mail, telefone, texto digitado nem dado de estudante/);
+    expect(t).not.toMatch(/em conformidade com a LGPD/i);
+    expect(t).not.toMatch(/\bconforme (a )?LGPD\b/i);
+    const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
+    expect(marks).toContain("[a definir: operador da medição de uso (PostHog)]");
   });
 });

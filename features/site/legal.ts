@@ -9,6 +9,8 @@ export type Legal = {
   auditRetention: string | null;
   legalBasis: string | null;
   operators: string | null;
+  /** Operador da medição de uso (PostHog): a definir e validar juridicamente. */
+  analyticsOperator: string | null;
   lastUpdated: string | null;
 };
 
@@ -25,6 +27,7 @@ export const LEGAL: Legal = {
   auditRetention: null,
   legalBasis: null,
   operators: null,
+  analyticsOperator: null,
   lastUpdated: null,
 };
 
@@ -92,6 +95,16 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       ["Usamos o Supabase (banco de dados, autenticação e arquivos), a Vercel (hospedagem) e um provedor de IA, acessado pelo OpenRouter, que lê os arquivos de lista enviados para extrair os itens."],
       ["Operadores, contratos e local de tratamento: ", { key: "operators", label: "operadores e contratos" }, "."],
       ["Ao abrir um link de loja, você sai da ListaCerta e passa às regras da loja."],
+    ],
+  },
+  {
+    title: "Medição de uso",
+    paragraphs: [
+      [
+        "Se você aceitar, medimos como o site é usado (páginas vistas, busca, cliques de compra) para melhorar as listas. Os eventos não levam nome, e-mail, telefone, texto digitado nem dado de estudante; levam só identificadores como o código da escola (INEP) e a série. Antes da sua escolha nada é enviado, e recusar não tira nenhuma função do site.",
+      ],
+      ["Operador da medição de uso: ", { key: "analyticsOperator", label: "operador da medição de uso (PostHog)" }, "."],
+      ["Você pode mudar a escolha a qualquer momento nesta página, quando a medição estiver ativa."],
     ],
   },
   {

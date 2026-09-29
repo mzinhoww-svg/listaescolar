@@ -141,3 +141,27 @@ describe("AnalyticsProvider", () => {
     expect(bodies).not.toMatch(/exemplo|65999991234/);
   });
 });
+
+describe("ConsentPreferences (página de privacidade)", () => {
+  it("sem chave não renderiza nada", async () => {
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "");
+    const { ConsentPreferences } = await import("@/components/analytics/ConsentPreferences");
+    const { container } = render(<ConsentPreferences />);
+    await idle();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("com chave mostra a escolha e permite aceitar e retirar o aceite", async () => {
+    enable();
+    const { ConsentPreferences } = await import("@/components/analytics/ConsentPreferences");
+    render(<ConsentPreferences />);
+    await idle();
+    expect(screen.getByText(/ainda não escolheu/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Aceitar medição" }));
+    expect(screen.getByText("Medição de uso aceita.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retirar o aceite" }));
+    expect(screen.getByText(/recusada/i)).toBeInTheDocument();
+    expect(localStorage.getItem("lc_analytics_id")).toBeNull();
+    expect(getConsent()).toBe("denied");
+  });
+});

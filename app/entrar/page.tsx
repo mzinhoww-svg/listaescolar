@@ -8,11 +8,12 @@ import { getCurrentUser } from "@/features/auth/queries";
 import { safeNextPath } from "@/features/auth/redirect";
 
 import { LoginForm } from "./LoginForm";
+import { LoginIntro } from "./LoginIntro";
 
 export const metadata: Metadata = { title: "Entrar · ListaCerta" };
 
 const ERRORS: Record<string, string> = {
-  codigo: "Não foi possível entrar. O link expirou ou já foi usado. Tente de novo.",
+  codigo: "Não foi possível entrar. O link expirou ou já foi usado. Peça um novo link abaixo e abra o e-mail neste aparelho.",
 };
 
 export default async function EntrarPage({ searchParams }: PageProps<"/entrar">) {
@@ -29,17 +30,12 @@ export default async function EntrarPage({ searchParams }: PageProps<"/entrar">)
         <div className="flex flex-col gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/simbolo.svg" alt="ListaCerta" width={64} height={64} />
-          <h1 className="text-[30px] leading-[1.1] font-extrabold tracking-[-0.035em]">
-            Entre para acompanhar a lista de cada aluno
-          </h1>
-          <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">
-            Um acesso só para todos os alunos da família. Sem senha para lembrar.
-          </p>
+          <LoginIntro next={next} />
         </div>
         <div className="flex-1" />
         <div className="flex flex-col gap-3.5">
           {erroMsg ? (
-            <p role="alert" className="text-sm font-semibold text-red-700">
+            <p role="alert" className="text-erro-texto text-sm font-semibold">
               {erroMsg}
             </p>
           ) : null}

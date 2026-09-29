@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { signInWithMagicLink } from "@/features/auth/actions";
 import { emailSchema, type AuthActionState } from "@/features/auth/schemas";
+
+import { LinkSent } from "./LinkSent";
 
 const initial: AuthActionState = { status: "idle" };
 
@@ -22,9 +24,30 @@ async function run(_prev: AuthActionState, formData: FormData): Promise<AuthActi
 
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState(run, initial);
-  const sent = state.status === "sent";
+  const [sends, setSends] = useState(0);
+  const [changing, setChanging] = useState(false);
+  const [typed, setTyped] = useState("");
+  const submit = (formData: FormData) => {
+    setChanging(false);
+    const raw = formData.get("email");
+    if (typeof raw === "string") setTyped(raw.trim().toLowerCase());
+    setSends((n) => n + 1);
+    action(formData);
+  };
+  if (state.status === "sent" && !changing) {
+    return (
+      <LinkSent
+        key={sends}
+        email={state.email ?? typed}
+        next={next}
+        pending={pending}
+        resend={submit}
+        onChangeEmail={() => setChanging(true)}
+      />
+    );
+  }
   return (
-    <form action={action} noValidate className="flex flex-col gap-2.5">
+    <form action={submit} noValidate className="flex flex-col gap-2.5">
       <input type="hidden" name="next" value={next} />
       <label htmlFor="email" className="text-texto-2 text-[13px] font-semibold">
         E-mail
@@ -35,9 +58,9 @@ export function LoginForm({ next }: { next: string }) {
         type="email"
         autoComplete="email"
         inputMode="email"
-        defaultValue={state.email ?? ""}
+        defaultValue={changing ? "" : (state.email ?? "")}
         aria-invalid={state.invalid === true}
-        aria-describedby={state.status === "error" ? "email-msg" : sent ? "email-msg" : undefined}
+        aria-describedby={state.status === "error" ? "email-msg" : undefined}
         className="bg-campo text-tinta h-[52px] w-full rounded-campo px-4 text-[15px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-verde-fundo"
       />
       <button
@@ -45,16 +68,13 @@ export function LoginForm({ next }: { next: string }) {
         disabled={pending}
         className="bg-tinta text-papel flex h-14 w-full items-center justify-center rounded-botao text-base font-extrabold disabled:opacity-60"
       >
-        {pending ? "Enviando…" : sent ? "Reenviar link" : "Receber link por e-mail"}
+        {pending ? "Enviando…" : "Receber link por e-mail"}
       </button>
       <div aria-live="polite">
         {state.status === "error" && state.message ? (
-          <p id="email-msg" role="alert" className="text-[13px] font-semibold text-red-700">
+          <p id="email-msg" role="alert" className="text-erro-texto text-[13px] font-semibold">
             {state.message}
           </p>
-        ) : null}
-        {sent ? (
-          <p id="email-msg" className="text-verde-fundo text-[13px] font-semibold">{state.message}</p>
         ) : null}
       </div>
     </form>

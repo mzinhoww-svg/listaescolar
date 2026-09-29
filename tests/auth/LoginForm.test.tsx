@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const signInWithMagicLink = vi.fn();
@@ -8,6 +8,7 @@ vi.mock("@/features/auth/actions", () => ({
 }));
 
 import { LoginForm } from "@/app/entrar/LoginForm";
+import { LoginIntro } from "@/app/entrar/LoginIntro";
 
 function submit(email: string) {
   fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: email } });
@@ -24,29 +25,40 @@ describe("LoginForm", () => {
     expect(signInWithMagicLink).not.toHaveBeenCalled();
   });
 
-  it("mostra o estado enviado", async () => {
-    signInWithMagicLink.mockResolvedValue({ status: "sent", message: "Verifique seu e-mail." });
-    render(<LoginForm next="/conta" />);
-    submit("a@b.co");
-    expect(await screen.findByText("Verifique seu e-mail.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reenviar link" })).toBeEnabled();
+  it("depois de enviado mostra o e-mail digitado e trava o reenvio por 30 s", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      signInWithMagicLink.mockResolvedValue({ status: "sent", message: "Verifique seu e-mail.", email: "a@b.co" });
+      render(<LoginForm next="/conta" />);
+      submit("A@b.co");
+      expect(await screen.findByText(/Enviamos o link para/)).toHaveTextContent("a@b.co");
+      expect(screen.getByText(/Abra o e-mail neste aparelho/)).toBeInTheDocument();
+      const resend = screen.getByRole("button", { name: /Reenviar link/ });
+      expect(resend).toBeDisabled();
+      for (let i = 0; i < 30; i += 1) {
+        await act(async () => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
+      await waitFor(() => expect(screen.getByRole("button", { name: "Reenviar link" })).toBeEnabled());
+      fireEvent.click(screen.getByRole("button", { name: "Reenviar link" }));
+      await waitFor(() => expect(signInWithMagicLink).toHaveBeenCalledTimes(2));
+      const second = signInWithMagicLink.mock.calls[1]?.[0] as FormData;
+      expect(second.get("email")).toBe("a@b.co");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("após enviado mantém o e-mail e o reenvio dispara a action", async () => {
-    signInWithMagicLink.mockResolvedValue({
-      status: "sent",
-      message: "Verifique seu e-mail.",
-      email: "a@b.co",
-    });
+  it("Trocar e-mail volta ao formulário com o campo vazio", async () => {
+    signInWithMagicLink.mockResolvedValue({ status: "sent", message: "Verifique seu e-mail.", email: "a@b.co" });
     render(<LoginForm next="/conta" />);
-    submit("A@b.co");
-    await screen.findByText("Verifique seu e-mail.");
-    expect(screen.getByLabelText("E-mail")).toHaveValue("a@b.co");
-    fireEvent.click(screen.getByRole("button", { name: "Reenviar link" }));
-    await waitFor(() => expect(signInWithMagicLink).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    const second = signInWithMagicLink.mock.calls[1]?.[0] as FormData;
-    expect(second.get("email")).toBe("a@b.co");
+    submit("a@b.co");
+    await screen.findByText(/Enviamos o link para/);
+    fireEvent.click(screen.getByRole("button", { name: "Trocar e-mail" }));
+    expect(screen.getByLabelText("E-mail")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /link por e-mail/i })).toBeEnabled();
   });
 
   it("após erro de rate limit mantém o e-mail, sem aria-invalid", async () => {
@@ -91,6 +103,17 @@ describe("LoginForm", () => {
     const btn = await screen.findByRole("button", { name: "Enviando…" });
     expect(btn).toBeDisabled();
     resolve({ status: "sent" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Reenviar link" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByText(/Enviamos o link para/)).toBeInTheDocument());
+  });
+});
+
+describe("LoginIntro", () => {
+  it("com next de carrinho o título menciona carrinho", () => {
+    render(<LoginIntro next="/carrinho/novo?lista=x" />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/carrinho/i);
+  });
+  it("sem contexto mantém o título padrão", () => {
+    render(<LoginIntro next="/conta" />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Entre para acompanhar a lista de cada aluno");
   });
 });

@@ -63,6 +63,12 @@ export function isSelectable(option: CartOption): boolean {
   return option.status !== "unavailable" && option.totalCents !== null;
 }
 
+/** Sem nenhuma opção com preço, a cotação da papelaria local vem primeiro: é o caminho que resta. */
+export function orderOptions(options: readonly CartOption[]): CartOption[] {
+  if (options.some(isSelectable)) return [...options];
+  return [...options].sort((a, b) => Number(b.strategy === "local_stationery") - Number(a.strategy === "local_stationery"));
+}
+
 export function storesText(option: CartOption): string {
   if (!isSelectable(option)) return "sem lojas com preço";
   return option.stores.length === 1 ? "1 loja" : `${option.stores.length} lojas`;

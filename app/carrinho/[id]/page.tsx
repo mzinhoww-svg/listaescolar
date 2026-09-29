@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { BackHeader } from "@/components/cart/CartStates";
+import { CartIntro } from "@/components/cart/CartIntro";
+import { orderOptions } from "@/components/cart/format";
 import { ItemsList } from "@/components/cart/ItemsList";
 import { OptionCard } from "@/components/cart/OptionCard";
 import { OptionDetail } from "@/components/cart/OptionDetail";
@@ -23,24 +25,9 @@ export default async function CarrinhoPage({ params, searchParams }: PageProps<"
   return (
     <Screen>
       <BackHeader href="/" title="Seu carrinho" />
-      <h1 className="text-[26px] leading-[1.1] font-extrabold tracking-[-0.035em]">
-        {usable.length === 0
-          ? "Nenhuma opção com preço disponível"
-          : `Montamos ${usable.length} ${usable.length === 1 ? "opção" : "opções"} para a lista`}
-      </h1>
-      {anyDemo ? (
-        <p className="text-texto-2 text-xs font-semibold">
-          Carrinho criado a partir de uma lista de demonstração (itens de exemplo).
-        </p>
-      ) : null}
-      {usable.length === 0 ? (
-        <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">
-          Ainda não há preço de fonte identificada para estes itens. Não estimamos valores: tudo
-          aparece como indisponível até haver uma fonte.
-        </p>
-      ) : null}
+      <CartIntro options={view.options} isDemo={anyDemo} />
       <ul className="flex flex-col gap-3" aria-label="Opções de compra">
-        {view.options.map((o) => (
+        {orderOptions(view.options).map((o) => (
           <OptionCard
             key={o.strategy}
             option={o}

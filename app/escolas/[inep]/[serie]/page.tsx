@@ -97,6 +97,9 @@ export default async function ListPage({ params, searchParams }: Props) {
         {version && list ? (
           <>
             <ItemsTable items={version.items} />
+            <p className="text-texto-2 -mb-3 text-[13px] leading-snug font-semibold">
+              Preços aparecem quando a loja ou a papelaria informa.
+            </p>
             <Link
               href={`/carrinho/novo?lista=${version.id}`}
               className="bg-verde-certo text-tinta focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center rounded-botao text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"

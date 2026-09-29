@@ -1,6 +1,6 @@
 # Mapa de fluxos · S29
 
-Um diagrama por jornada (spec §4). Cada nó é uma rota (`app/**/page.tsx`) ou um estado global; cada aresta é a ação que leva de uma à outra. Linha tracejada e nó em hexágono `{{ }}` marcam **costura entre públicos**: quem age muda (família, escola, papelaria, equipe) ou a ação acontece fora do produto (e-mail, WhatsApp, loja). Rotas com `{x}` recebem dado do banco. As rotas dos passos foram conferidas contra `lib/ux-checks/journeys.ts`; as arestas de J1, J2 e J9 foram percorridas no navegador (fichas em `fichas/`), as demais vêm do código e serão percorridas nas Tasks 6 a 9.
+Um diagrama por jornada (spec §4). Cada nó é uma rota (`app/**/page.tsx`) ou um estado global; cada aresta é a ação que leva de uma à outra. Linha tracejada e nó em hexágono `{{ }}` marcam **costura entre públicos**: quem age muda (família, escola, papelaria, equipe) ou a ação acontece fora do produto (e-mail, WhatsApp, loja). Rotas com `{x}` recebem dado do banco. As rotas dos passos foram conferidas contra `lib/ux-checks/journeys.ts`; as arestas de J1, J2, J3, J4 e J9 foram percorridas no navegador (fichas em `fichas/`), as demais vêm do código e serão percorridas nas Tasks 7 a 9.
 
 Legenda: retângulo = tela; losango = decisão; hexágono = costura com outro público ou com sistema externo; seta tracejada = passagem sem clique da mesma pessoa (aviso, e-mail, ação de outro papel).
 
@@ -53,37 +53,53 @@ flowchart LR
 
 ## J3 · Família entra e cuida da conta (piloto)
 
+Percorrida no navegador (fichas/J3.md). O link de acesso chegou pelo Mailpit local e voltou à rota de origem; o Google não está configurado localmente.
+
 ```mermaid
 flowchart LR
   qualquer["Qualquer rota protegida"] -.->|"sem sessão, ?next="| entrar["/entrar"]
-  entrar -->|"E-mail: link de acesso"| email{{"E-mail com link de acesso"}}
-  entrar -->|"Continuar com Google"| google{{"Google"}}
+  entrar -->|"E-mail: Receber link por e-mail"| email{{"E-mail com link de acesso"}}
+  entrar -->|"Entrar com Google"| google{{"Google (não exercitado localmente: JSON cru do Auth)"}}
   email -.->|"abre o link neste aparelho"| retorno["Rota de origem (next)"]
-  google -.-> retorno
+  email -.->|"link usado ou expirado"| entrar
+  entrar -. "SEM VOLTA hoje (J3-01): nem logo, nem link ao site" .-> home["/ (início)"]
   retorno --> conta["/conta"]
   conta -->|"Adicionar aluno"| novoaluno["/conta/alunos/novo"]
-  conta -->|"Editar"| editar["/conta/alunos/[id]/editar"]
-  conta --> salvas["/conta/listas-salvas"]
-  conta --> carrinhos["/conta/carrinhos"]
-  conta --> notif["/conta/notificacoes"]
-  conta --> priv["/conta/privacidade"]
-  priv -->|"Excluir conta (ConfirmDialog)"| exclusao{{"Exclusão da conta"}}
-  notif -.->|"aviso de lista pronta / cotação"| destino["Rota do aviso"]
+  novoaluno -->|"Salvar aluno"| conta
+  conta -->|"toca no aluno"| editar["/conta/alunos/[id]/editar"]
+  editar -->|"Excluir aluno (ConfirmDialog)"| conta
+  conta -->|"Ver todas"| salvas["/conta/listas-salvas"]
+  conta -->|"Ver todos"| carrinhos["/conta/carrinhos"]
+  conta -->|"sino"| notif["/conta/notificacoes"]
+  conta -->|"Privacidade e dados"| priv["/conta/privacidade"]
+  priv -->|"Excluir minha conta (digitar excluir)"| exclusao{{"Exclusão da conta (não executada)"}}
+  conta -. "AUSENTE hoje (J3-03): Enviar a lista e Minhas compras" .-> enviar["/enviar-lista (J4)"]
+  notif -. "SEM VOLTA hoje (J3-10): só o sino, que leva a si mesmo" .-> conta
+  priv -. "SEM VOLTA hoje (J3-10)" .-> conta
+  notif -.->|"aviso de lista pronta / cotação (nenhum canal ativo localmente)"| destino["Rota do aviso"]
 ```
 
 ## J4 · Família envia a lista da escola (piloto)
 
+Percorrida no navegador (fichas/J4.md) com foto real de 7,5 MB. Sem `OPENROUTER_KEY` local, o envio termina em "Leitura automática indisponível"; os estados "lendo" e "lista lida com itens" não foram exercitados.
+
 ```mermaid
 flowchart LR
-  conta["/conta ou lista sem publicação"] -->|"Enviar a lista"| enviar["/enviar-lista"]
-  enviar -->|"escolhe escola, série, arquivo, aceita consentimento"| status["/enviar-lista/[id] (processando)"]
-  status -->|"leitura terminou"| revisar["/enviar-lista/[id]/revisar"]
-  status -->|"falhou"| enviar
+  busca["/escolas (busca vazia)"] -->|"Enviar a lista da escola"| enviar["/enviar-lista"]
+  conta["/conta"] -. "AUSENTE hoje (J4-01): nenhum link para enviar a lista" .-> enviar
+  semlista["Lista sem publicação (J1)"] -. "AUSENTE hoje (J1-04)" .-> enviar
+  enviar -->|"foto ou PDF, escola, série, consentimento, Enviar para revisão"| status["/enviar-lista/[id] (processando)"]
+  status -->|"leitura terminou"| lida["/enviar-lista/[id] (Lista lida)"]
+  status -->|"sem leitura automática / falhou"| aviso2["Aviso sem itens"]
+  aviso2 -->|"Enviar outro arquivo"| enviar
+  lida -->|"Revisar meus itens"| revisar["/enviar-lista/[id]/revisar"]
   status -.->|"cai em revisão humana"| admin{{"/admin/revisao (J7)"}}
   admin -.->|"aprova e publica"| aviso{{"Aviso: lista publicada (central e push)"}}
-  revisar -->|"Salvar meus itens"| salvo["Cópia privada salva"]
-  revisar -->|"Montar carrinho"| carrinho["/carrinho/novo (J2)"]
+  revisar -->|"Salvar minha lista"| salvo["Cópia privada salva"]
+  salvo -->|"Montar carrinho com esta lista"| carrinho["/carrinho/novo (J2)"]
   aviso -.-> lista["/escolas/[inep]/[serie] (J1)"]
+  status -. "SEM VOLTA hoje (J4-05): nenhum link para /conta nem para o início" .-> conta
+  conta -. "AUSENTE hoje (J4-02): não há lista dos meus envios" .-> status
 ```
 
 ## J5 · Escola assume e publica (piloto)

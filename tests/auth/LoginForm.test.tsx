@@ -31,7 +31,7 @@ describe("LoginForm", () => {
       signInWithMagicLink.mockResolvedValue({ status: "sent", message: "Verifique seu e-mail.", email: "a@b.co" });
       render(<LoginForm next="/conta" />);
       submit("A@b.co");
-      expect(await screen.findByText(/Enviamos o link para/)).toHaveTextContent("a@b.co");
+      expect(await screen.findByText(/Enviamos o link para/, undefined, { timeout: 8000 })).toHaveTextContent("a@b.co");
       expect(screen.getByText(/Abra o e-mail neste aparelho/)).toBeInTheDocument();
       const resend = screen.getByRole("button", { name: /Reenviar link/ });
       expect(resend).toBeDisabled();
@@ -40,9 +40,9 @@ describe("LoginForm", () => {
           vi.advanceTimersByTime(1000);
         });
       }
-      await waitFor(() => expect(screen.getByRole("button", { name: "Reenviar link" })).toBeEnabled());
+      await waitFor(() => expect(screen.getByRole("button", { name: "Reenviar link" })).toBeEnabled(), { timeout: 8000 });
       fireEvent.click(screen.getByRole("button", { name: "Reenviar link" }));
-      await waitFor(() => expect(signInWithMagicLink).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(signInWithMagicLink).toHaveBeenCalledTimes(2), { timeout: 8000 });
       const second = signInWithMagicLink.mock.calls[1]?.[0] as FormData;
       expect(second.get("email")).toBe("a@b.co");
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();

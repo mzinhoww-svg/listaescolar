@@ -160,7 +160,7 @@ describe("reduceToLimit", () => {
 
 ### Bloco D · PostHog (M01, ADR-007)
 
-- [ ] **Task 22 · Núcleo de eventos.** **Files:** Create `lib/analytics/schema.ts`, `lib/analytics/sanitize.ts`, `lib/analytics/config.ts`; Test `tests/analytics/sanitize.test.ts`.
+- [x] **Task 22 · Núcleo de eventos.** **Files:** Create `lib/analytics/schema.ts`, `lib/analytics/sanitize.ts`, `lib/analytics/config.ts`; Test `tests/analytics/sanitize.test.ts`.
 
 ```ts
 // lib/analytics/sanitize.ts (núcleo; schema.ts exporta EVENTS: Record<nome, ZodObject> e COMMON)

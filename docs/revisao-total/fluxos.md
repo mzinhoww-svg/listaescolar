@@ -1,6 +1,6 @@
 # Mapa de fluxos · S29
 
-Um diagrama por jornada (spec §4). Cada nó é uma rota (`app/**/page.tsx`) ou um estado global; cada aresta é a ação que leva de uma à outra. Linha tracejada e nó em hexágono `{{ }}` marcam **costura entre públicos**: quem age muda (família, escola, papelaria, equipe) ou a ação acontece fora do produto (e-mail, WhatsApp, loja). Rotas com `{x}` recebem dado do banco. As rotas dos passos foram conferidas contra `lib/ux-checks/journeys.ts`; as arestas de J1, J2, J3, J4, J5 e J9 foram percorridas no navegador (fichas em `fichas/`), as demais vêm do código e serão percorridas nas Tasks 7 a 9.
+Um diagrama por jornada (spec §4). Cada nó é uma rota (`app/**/page.tsx`) ou um estado global; cada aresta é a ação que leva de uma à outra. Linha tracejada e nó em hexágono `{{ }}` marcam **costura entre públicos**: quem age muda (família, escola, papelaria, equipe) ou a ação acontece fora do produto (e-mail, WhatsApp, loja). Rotas com `{x}` recebem dado do banco. As rotas dos passos foram conferidas contra `lib/ux-checks/journeys.ts`; as arestas de J1, J2, J3, J4, J5, J6 e J9 foram percorridas no navegador (fichas em `fichas/`), as demais vêm do código e serão percorridas nas Tasks 7 a 9.
 
 Legenda: retângulo = tela; losango = decisão; hexágono = costura com outro público ou com sistema externo; seta tracejada = passagem sem clique da mesma pessoa (aviso, e-mail, ação de outro papel).
 
@@ -131,22 +131,31 @@ flowchart LR
 
 ## J6 · Papelaria vende (piloto)
 
+Percorrida no navegador (fichas/J6.md), inclusive a costura J2 para J6 (pedido da família, resposta, "Comprei aqui", "Vendi", contestação). A fatura não foi exercitada (sem seed).
+
 ```mermaid
 flowchart LR
-  cad["/cadastrar-papelaria"] -->|"envia cadastro"| aprova{{"/admin/papelarias (J7)"}}
-  aprova -.-> painel["/papelaria (checklist)"]
-  painel --> areas["/papelaria/areas"]
-  painel --> catalogo["/papelaria/catalogo"]
-  painel --> creditos["/papelaria/creditos"]
-  creditos -->|"abre fatura"| fatura["/papelaria/creditos/faturas/[id]"]
-  painel --> leads["/papelaria/leads"]
-  familia{{"Cotação enviada pela família (J2)"}} -.-> leads
-  leads -->|"abre o pedido"| lead["/papelaria/leads/[code]"]
-  lead -->|"Responder com preço"| resposta{{"Família recebe aviso (J2)"}}
-  lead -->|"Registrar venda"| venda["Venda registrada"]
-  lead -->|"Contestar cobrança"| contest{{"/admin/contestacoes (J7)"}}
-  painel --> desempenho["/papelaria/desempenho"]
-  painel -->|"ver página pública"| publica["/papelarias/[slug]"]
+  site["Site público (home, rodapé, /parceiros)"] -. "AUSENTE hoje (J6-01): nenhum link para o cadastro" .-> cad["/cadastrar-papelaria"]
+  cad -->|"Continuar (3 passos), Enviar para análise"| emanalise["/cadastrar-papelaria (Em análise)"]
+  emanalise -. "SEM VOLTA hoje (J6-12): sem logo, conta nem home" .-> site
+  emanalise -.->|"equipe aprova"| aprova{{"/admin/papelarias (J7)"}}
+  aprova -.-> painel["/papelaria (visão geral)"]
+  painel -->|"menu"| areas["/papelaria/areas"]
+  painel -->|"menu"| catalogo["/papelaria/catalogo"]
+  painel -->|"menu"| creditos["/papelaria/creditos"]
+  creditos -->|"abre fatura (sem seed)"| fatura["/papelaria/creditos/faturas/[id]"]
+  painel -->|"menu"| leads["/papelaria/leads"]
+  familia{{"Família: Confirmar pedido de cotação (J2)"}} -.->|"lead chega, status Novo"| leads
+  leads -->|"Abrir e responder o pedido"| lead["/papelaria/leads/[code]"]
+  lead -->|"Orçamento enviado (1 clique, valor opcional)"| resposta{{"/cotacao/[code] (J2): 'informou o valor' sem valor (J6-02)"}}
+  lead -->|"Vendi (1 clique, encerra)"| venda["Venda declarada"]
+  compras{{"/conta/compras (J2): Comprei aqui"}} -.->|"2º sinal: pedido vira converted"| venda
+  venda --> desempenho["/papelaria/desempenho (Declarado × confirmado)"]
+  lead -->|"Contestar (motivo)"| contest{{"/admin/contestacoes (J7)"}}
+  painel -->|"Ver perfil público"| publica["/papelarias/[slug]"]
+  publica -. "SEM VOLTA hoje (J6-13): sem cabeçalho; WhatsApp fora do fluxo da cotação" .-> site
+  painel -->|"Pausar (sem confirmar)"| pausada["/papelaria (Pausada, some das famílias)"]
+  painel -->|"menu"| desempenho
 ```
 
 ## J7 · Equipe opera (núcleo piloto)

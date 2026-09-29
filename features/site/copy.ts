@@ -6,17 +6,17 @@ export const SITE_PAGES = {
   home: {
     title: "ListaCerta · Lista de material escolar",
     description:
-      "Encontre a lista oficial de material da escola e compare as opções de carrinho. Piloto em Cuiabá, MT.",
+      "Encontre a lista oficial de material da escola e peça o preço à papelaria do bairro. Piloto em Cuiabá, MT.",
     path: "/",
   },
   comoFunciona: {
     title: "Como funciona · ListaCerta",
-    description: "Da lista oficial à compra certa: encontre a escola, veja a lista item a item e compare as opções de carrinho.",
+    description: "Da lista oficial à compra certa: encontre a escola, veja a lista item a item e peça o preço à papelaria do bairro.",
     path: "/como-funciona",
   },
   sobre: {
     title: "Sobre · ListaCerta",
-    description: "A ListaCerta organiza as listas oficiais de material escolar e ajuda a família a comparar lojas.",
+    description: "A ListaCerta organiza as listas oficiais de material escolar e ajuda a família a pedir preço à papelaria do bairro.",
     path: "/sobre",
   },
   termos: {
@@ -46,14 +46,14 @@ export const SITE_COPY = {
   hero: {
     eyebrow: "Volta às aulas",
     title: "A lista da escola, pronta para comprar.",
-    lead: "Lista oficial da escola, revisada antes de publicar, e opções de carrinho para você comparar: mais barato, recomendado, menos lojas ou papelaria local.",
+    lead: "Lista oficial da escola, revisada antes de publicar, e o pedido de preço à papelaria do bairro. Quando houver preço de loja, você compara as opções de carrinho.",
     scope: "Piloto em Cuiabá, MT",
     schoolCta: "Sou escola",
     cardTitle: "Escola de exemplo · série de exemplo",
     cardTag: "Lista oficial",
     cardItems: ["Caderno universitário", "Lápis preto", "Borracha macia", "Régua de 30 cm", "Cola bastão"],
-    cardFoot: "Mais barato",
-    cardPrice: "Preço com origem e data na sua lista",
+    cardFoot: "Pedir preço à papelaria do bairro",
+    cardPrice: "Sem preço aqui: ele aparece quando a papelaria ou a loja informa.",
   },
   parents: {
     id: "pais",
@@ -62,7 +62,7 @@ export const SITE_COPY = {
     items: [
       { title: "Lista certa", text: "A lista vem da escola, não de foto no grupo." },
       { title: "Veja item a item", text: "A lista oficial da escola, com cada item e a quantidade pedida." },
-      { title: "Monte o carrinho", text: "Compare as opções de compra e abra a loja que preferir; cada preço com origem e data." },
+      { title: "Peça o preço", text: "Peça a cotação à papelaria do bairro pelo WhatsApp. Quando houver preço de loja, compare as opções de carrinho; cada preço com origem e data." },
     ] satisfies Item[],
   },
   schools: {
@@ -83,10 +83,10 @@ export const SITE_COPY = {
   steps: {
     id: "como-funciona",
     eyebrow: "Como funciona",
-    title: "Encontre, compare, confira",
+    title: "Encontre, peça o preço, confira",
     items: [
       { title: "Encontre a lista", text: "Busque a escola pelo nome ou pelo código INEP (o número da escola no Censo Escolar) e abra a lista oficial da série." },
-      { title: "Compare", text: "Compare lojas online ou peça orçamento à papelaria do bairro pelo WhatsApp." },
+      { title: "Peça o preço", text: "Peça orçamento à papelaria do bairro pelo WhatsApp. Quando houver preço de loja online, você compara as opções de carrinho." },
       { title: "Confira", text: "Veja a lista oficial item a item e confira o que a escola pediu antes de comprar." },
     ] satisfies Item[],
     channelsTitle: "Onde comprar",
@@ -122,9 +122,9 @@ export const SITE_COPY = {
       },
       {
         n: "2",
-        title: "Compare",
-        text: "Veja as opções de carrinho e abra a loja que preferir.",
-        screen: { head: "Carrinho · Mais barato", sub: "Total da lista", items: ["Loja online A", "Loja online B", "Papelaria do bairro · WhatsApp"], foot: "Preço com origem e data na sua lista. Links de loja: podemos receber comissão; o preço não muda." },
+        title: "Peça o preço",
+        text: "Peça a cotação à papelaria do bairro; com preço de loja, veja as opções de carrinho.",
+        screen: { head: "Cotação · Papelaria do bairro", sub: "Pedido pelo WhatsApp", items: ["Escolha a papelaria do bairro", "Envie o pedido pelo WhatsApp", "A papelaria informa o preço"], foot: "Quando houver preço de loja, aparecem as opções de carrinho, com origem e data. Links de loja: podemos receber comissão; o preço não muda." },
       },
       {
         n: "3",
@@ -140,8 +140,8 @@ export const SITE_COPY = {
     steps: [
       { title: "A escola publica", text: "Lista oficial por série, revisada antes de ir ao ar." },
       { title: "A família encontra", text: "Busca pela escola e abre a lista oficial da série." },
-      { title: "A família compara", text: "Opções de carrinho: mais barato, recomendado, menos lojas ou papelaria local." },
+      { title: "A família pede o preço", text: "Cotação com a papelaria do bairro e, quando houver preço de loja, opções de carrinho." },
     ] satisfies Item[],
-    neutral: "A ListaCerta não vende material escolar: organiza, compara e leva você à loja que escolher.",
+    neutral: "A ListaCerta não vende material escolar: organiza a lista, ajuda a pedir preço e leva você à loja que escolher.",
       },
 } as const;

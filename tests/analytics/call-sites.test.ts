@@ -41,7 +41,7 @@ function findSites(): Site[] {
       // o próprio módulo de medição e o seu contrato ficam de fora (definem `track`, não o chamam com evento)
       if (rel.startsWith("lib/analytics/") || rel.includes("_shared/analytics/")) continue;
       const src = readFileSync(f, "utf8");
-      for (const m of src.matchAll(/\b(?:track|captureServer)\(\s*(["'])([^"']+)\1/g)) {
+      for (const m of src.matchAll(/\b(?:track|captureServer|captureUserAction)\(\s*(["'])([^"']+)\1/g)) {
         sites.push({ file: rel, name: m[2]!, args: balanced(src, src.indexOf("(", m.index), "(", ")") });
       }
       for (const m of src.matchAll(/\bsafeEmit\(\s*[^,]+,\s*(["'])([^"']+)\1/g)) {

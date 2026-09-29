@@ -86,7 +86,8 @@ export class LeadService {
       billing = null;
     }
     safeEmit(a.emit, "lead_received", { items_count_bucket: itemsCountBucket(itemsCount), ...(billing ? { billing_source: billing } : {}) });
-    safeEmit(a.emit, "purchase_clicked", { canal: "papelaria_cotacao" });
+    // Ação do responsável: o emissor só a envia com o cookie de consentimento (revisão I3).
+    await safeEmit(a.emit, "purchase_clicked", { canal: "papelaria_cotacao" });
   }
 
   private async notify(stationeryId: string, leadId: string, code: string): Promise<void> {

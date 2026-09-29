@@ -5,14 +5,16 @@ import { buildEvent } from "./sanitize.ts";
 import type { EventName } from "./schema.ts";
 
 export type CaptureConfig = { key: string; host: string; appEnv: "production" | "preview" | "staging" | "local" };
-export type Emit = (name: EventName, props: Record<string, unknown>) => void;
+export type Emit = (name: EventName, props: Record<string, unknown>) => void | Promise<unknown>;
 
 const TIMEOUT_MS = 3_000;
 
 /** Chama o gancho de medição sem nunca deixar a exceção subir (medição não altera o resultado do fluxo). */
-export function safeEmit(emit: Emit | undefined, name: EventName, props: Record<string, unknown>): void {
+export function safeEmit(emit: Emit | undefined, name: EventName, props: Record<string, unknown>): void | Promise<void> {
   try {
-    emit?.(name, props);
+    const r = emit?.(name, props);
+    // Emissor assíncrono (consentimento lido na requisição): quem quiser pode esperar; a rejeição nunca sobe.
+    if (r && typeof (r as Promise<unknown>).then === "function") return (r as Promise<unknown>).then(() => undefined, () => undefined);
   } catch {
     // ignorado de propósito
   }

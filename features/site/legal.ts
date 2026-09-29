@@ -101,7 +101,10 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     title: "Medição de uso",
     paragraphs: [
       [
-        "Se você aceitar, medimos como o site é usado (páginas vistas, busca, cliques de compra) para melhorar as listas. Os eventos não levam nome, e-mail, telefone, texto digitado nem dado de estudante; levam só identificadores como o código da escola (INEP) e a série. Antes da sua escolha nada é enviado, e recusar não tira nenhuma função do site.",
+        "Se você aceitar, medimos como o site é usado (páginas vistas, busca, cliques de compra) para melhorar as listas. Os eventos não levam nome, e-mail, telefone, texto digitado nem dado de estudante; levam só identificadores como o código da escola (INEP) e a série. Antes da sua escolha nada é enviado do seu navegador, e recusar não tira nenhuma função do site. Ao aceitar, guardamos no navegador um cookie que diz apenas \"aceito\", sem identificador; sem ele, nossos servidores não registram o seu login nem o seu clique de compra.",
+      ],
+      [
+        "Independentemente da sua escolha, nossos servidores registram fatos do funcionamento do serviço, como uma lista publicada ou um pedido de cotação recebido por uma papelaria. Esses registros são agregados (por exemplo, faixa de quantidade de itens), levam um código aleatório e não trazem dado seu, de estudante ou da papelaria.",
       ],
       ["Operador da medição de uso: ", { key: "analyticsOperator", label: "operador da medição de uso (PostHog)" }, "."],
       ["Você pode mudar a escolha a qualquer momento nesta página, quando a medição estiver ativa."],

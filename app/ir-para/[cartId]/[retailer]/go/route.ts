@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { captureServer } from "@/lib/analytics/server";
+import { captureUserAction } from "@/lib/analytics/server";
 import { getCurrentUser } from "@/features/auth/queries";
 import { buildRetailerRedirect } from "@/features/cart/affiliate";
 import { RedirectTargetError } from "@/features/cart/redirect-target";
@@ -81,7 +81,7 @@ export async function GET(
     });
   }
 
-  captureServer("purchase_clicked", { canal: "carrinho", retailer_slug: retailer.slug });
+  await captureUserAction("purchase_clicked", { canal: "carrinho", retailer_slug: retailer.slug });
   const headers = new Headers(cookieHeaders);
   headers.set("Location", target.url);
   headers.set("Cache-Control", "no-store");

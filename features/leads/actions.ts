@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { captureServer } from "@/lib/analytics/server";
+import { captureUserAction } from "@/lib/analytics/server";
 import { getSessionActor } from "@/features/stationeries/actor";
 
 import { normalizeLeadCode } from "./code";
@@ -71,7 +71,7 @@ export async function openWhatsappAction(formData: FormData): Promise<void> {
     console.error("abrir WhatsApp", "URL fora do wa.me");
     redirect(`/cotacao/${code}?erro=whatsapp_unavailable`);
   }
-  captureServer("purchase_clicked", { canal: "papelaria_whatsapp" });
+  await captureUserAction("purchase_clicked", { canal: "papelaria_whatsapp" });
   revalidatePath(`/cotacao/${code}`);
   redirect(url);
 }

@@ -90,4 +90,15 @@ describe("/privacidade: medição de uso (ADR-007, S28)", () => {
     const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
     expect(marks).toContain("[a definir: operador da medição de uso (PostHog)]");
   });
+
+  it("/privacidade: medição de uso diz com precisão o que depende do aceite e o que não depende, sem afirmar conformidade", async () => {
+    const Page = await loadPage("/privacidade");
+    const { container } = await renderInSite(Page);
+    const t = container.textContent ?? "";
+    expect(t).toMatch(/cookie que diz apenas "aceito", sem identificador/);
+    expect(t).toMatch(/não registram o seu login nem o seu clique de compra/);
+    expect(t).toMatch(/Independentemente da sua escolha, nossos servidores registram fatos do funcionamento do serviço/);
+    expect(t).toMatch(/agregados/);
+    expect(t).not.toMatch(/em conformidade|compatível com a LGPD|totalmente anônim/i);
+  });
 });

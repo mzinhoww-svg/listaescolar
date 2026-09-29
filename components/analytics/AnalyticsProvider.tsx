@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { getAnalyticsConfigFromProcess } from "@/lib/analytics/config";
-import { deny, getConsent, grant, subscribe } from "@/lib/analytics/consent";
+import { deny, getConsent, grant, listenForConsentChanges, subscribe, syncConsentCookie } from "@/lib/analytics/consent";
 import { getAnalyticsClient } from "@/lib/analytics/instance";
 import type { Consent } from "@/lib/analytics/client";
 
@@ -26,6 +26,7 @@ export function AnalyticsProvider() {
     if (!enabled) return;
     let alive = true;
     let unsubscribe = () => {};
+    let stopStorage = () => {};
     const onHide = () => getAnalyticsClient()?.flush();
     whenIdle(() => {
       if (!alive) return;
@@ -34,6 +35,9 @@ export function AnalyticsProvider() {
       const initial = getConsent();
       client.setConsent(initial);
       setConsent(initial);
+      // Renova (aceite) ou remove (recusa/limpeza) o cookie de estado lido pelo servidor.
+      syncConsentCookie(initial);
+      stopStorage = listenForConsentChanges();
       unsubscribe = subscribe((c) => {
         client.setConsent(c);
         setConsent(c);
@@ -43,6 +47,7 @@ export function AnalyticsProvider() {
     return () => {
       alive = false;
       unsubscribe();
+      stopStorage();
       window.removeEventListener("pagehide", onHide);
     };
   }, [enabled]);

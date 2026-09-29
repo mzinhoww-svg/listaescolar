@@ -16,6 +16,17 @@ export const SEND_BEFORE_CONSENT = false as const;
  */
 export const INGEST_PATH = "/ingest";
 
+/**
+ * Cookie de ESTADO do consentimento (revisão de segurança I3): `granted` e nada mais, sem identificador. O cliente o
+ * grava ao aceitar e o apaga ao recusar/revogar; o servidor só emite eventos que nascem de ação do usuário
+ * (`USER_ACTION_EVENTS`) se ele existir. Sem ele, esses eventos não saem, porque o navegador ainda não aceitou a medição.
+ */
+export const CONSENT_COOKIE = "lc_analytics_consent";
+/** Eventos de servidor que nascem de uma ação da pessoa (não de um fato de negócio): exigem o consentimento. */
+export const USER_ACTION_EVENTS: readonly string[] = ["login_completed", "purchase_clicked"];
+/** Validade do cookie de estado (renovada a cada visita com aceite). */
+export const CONSENT_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
 export type AppEnv = "production" | "preview" | "staging" | "local";
 export type AnalyticsConfig =
   | { enabled: false }

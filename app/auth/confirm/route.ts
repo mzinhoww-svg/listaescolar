@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { confirmQuerySchema } from "@/features/auth/schemas";
-import { captureUserAction } from "@/lib/analytics/server";
+import { captureLogin } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
 
 const ERRO = "/entrar?erro=codigo";
@@ -29,16 +29,18 @@ export async function GET(request: NextRequest) {
   const { token_hash, type, code, next } = query.data;
   if (!(token_hash && type) && !code) return redirectTo(ERRO, headers);
 
+  let session: { supabase: unknown; user: { id: string; email?: string | null } | null };
   try {
     const supabase = await createClient(headers);
-    const { error } =
+    const { data, error } =
       token_hash && type
         ? await supabase.auth.verifyOtp({ token_hash, type })
         : await supabase.auth.exchangeCodeForSession(code ?? "");
     if (error) return redirectTo(ERRO, headers);
+    session = { supabase, user: data?.user ?? null };
   } catch {
     return redirectTo(ERRO, headers);
   }
-  await captureUserAction("login_completed", { method: "magic_link" });
+  if (session.user) await captureLogin("magic_link", session.supabase, session.user);
   return redirectTo(next, headers);
 }

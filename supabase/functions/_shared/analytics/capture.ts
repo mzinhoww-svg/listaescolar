@@ -24,10 +24,10 @@ export async function capture(
   cfg: CaptureConfig,
   name: EventName,
   props: Record<string, unknown>,
-  opts: { distinctId?: string; fetchImpl?: typeof fetch } = {},
+  opts: { distinctId?: string; isInternal?: boolean; fetchImpl?: typeof fetch } = {},
 ): Promise<boolean> {
   try {
-    const built = buildEvent(name, props, { is_internal: cfg.appEnv !== "production", app_env: cfg.appEnv });
+    const built = buildEvent(name, props, { is_internal: cfg.appEnv !== "production" || opts.isInternal === true, app_env: cfg.appEnv });
     if (!built.ok) return false;
     const doFetch = opts.fetchImpl ?? fetch;
     const res = await doFetch(`${cfg.host}/i/v0/e`, {

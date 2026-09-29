@@ -44,6 +44,10 @@ function findSites(): Site[] {
       for (const m of src.matchAll(/\b(?:track|captureServer|captureUserAction)\(\s*(["'])([^"']+)\1/g)) {
         sites.push({ file: rel, name: m[2]!, args: balanced(src, src.indexOf("(", m.index), "(", ")") });
       }
+      // `captureLogin(método, ...)` é o helper de `login_completed` (a conta vem da autenticação, não da sessão)
+      for (const m of src.matchAll(/\bcaptureLogin\(/g)) {
+        sites.push({ file: rel, name: "login_completed", args: balanced(src, m.index + "captureLogin".length, "(", ")") });
+      }
       for (const m of src.matchAll(/\bsafeEmit\(\s*[^,]+,\s*(["'])([^"']+)\1/g)) {
         sites.push({ file: rel, name: m[2]!, args: balanced(src, src.indexOf("(", m.index), "(", ")") });
       }

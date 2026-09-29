@@ -131,6 +131,7 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -139,10 +140,10 @@ body {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: none; }
 }
+/* Uma passada só: o ícone de cada item "confirma" (0,45 -> 1) em sequência; nada repete. */
 @keyframes tick-loop {
-  0%, 8% { opacity: 0.45; }
-  14%, 70% { opacity: 1; }
-  86%, 100% { opacity: 0.45; }
+  from { opacity: 0.45; }
+  to { opacity: 1; }
 }
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
@@ -152,9 +153,9 @@ body {
       animation-range: entry 0% entry 30%;
     }
   }
-  /* Só o ícone pulsa: texto com opacidade < 1 durante a animação reprova o contraste (axe/Lighthouse). */
+  /* Só o ícone anima: texto com opacidade < 1 durante a animação reprova o contraste (axe/Lighthouse). */
   .tick-loop > :first-child {
-    animation: tick-loop 9s ease-out 3;
-    animation-delay: calc(var(--i, 0) * 0.9s);
+    animation: tick-loop var(--mov-entrada) var(--mov-ease-out) both;
+    animation-delay: min(calc(var(--i, 0) * 80ms), 400ms);
   }
 }

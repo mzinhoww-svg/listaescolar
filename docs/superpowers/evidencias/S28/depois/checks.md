@@ -1,6 +1,6 @@
 # Checagens de layout a 390 px (depois) · S28
 
-Gerado por `scripts/s28-medir.mjs` em 2026-09-29T13:45:23.042Z. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um `main` e um `h1`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
+Gerado por `scripts/s28-medir.mjs` em 2026-09-29T14:08:05.463Z. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um `main` e um `h1`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
 
 Rotas com falha: **0**
 

@@ -29,7 +29,7 @@ const MAILPIT = process.env.MAILPIT ?? "http://127.0.0.1:54524";
 const DB = process.env.DB ?? "supabase_db_listacerta-t2";
 const RUNS = Number(process.env.RUNS ?? 3);
 const CHROME = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const OUT = join("docs/superpowers/evidencias/S28", label);
+const OUT = process.env.S28_OUT ?? join("docs/superpowers/evidencias/S28", label);
 const WORK = join(tmpdir(), `s28-medir-${label}`);
 mkdirSync(OUT, { recursive: true });
 mkdirSync(WORK, { recursive: true });
@@ -154,6 +154,7 @@ function lighthouse(page) {
         lcp: a["largest-contentful-paint"].numericValue,
         cls: a["cumulative-layout-shift"].numericValue,
         tbt: a["total-blocking-time"].numericValue,
+        jsKb: (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Script").reduce((t, x) => t + (x.transferSize ?? 0), 0) / 1024,
         finalUrl: j.finalDisplayedUrl,
         failedA11y: Object.values(a).filter((x) => refs.has(x.id) && x.scoreDisplayMode === "binary" && x.score === 0).map((x) => x.id),
       });
@@ -173,21 +174,21 @@ function runLighthouse() {
     const r = lighthouse(p);
     const ok = r.filter((x) => !x.error);
     if (!ok.length) {
-      rows.push(`| ${p.key} | \`${p.path}\` | erro | | | | | | | ${r[0]?.error ?? ""} |`);
+      rows.push(`| ${p.key} | \`${p.path}\` | erro | | | | | | | | ${r[0]?.error ?? ""} |`);
       continue;
     }
     const final = ok[0].finalUrl ? new URL(ok[0].finalUrl) : null;
     const redirected = final && final.pathname !== p.path.split("?")[0] ? ` (redirecionou para \`${final.pathname}\`)` : "";
     rows.push(
-      `| ${p.key} | \`${p.path}\`${redirected} | ${median(ok.map((x) => x.perf))} | ${median(ok.map((x) => x.a11y))} | ${median(ok.map((x) => x.bp))} | ${median(ok.map((x) => x.seo))} | ${(median(ok.map((x) => x.lcp)) / 1000).toFixed(1)} s | ${median(ok.map((x) => x.cls)).toFixed(3)} | ${Math.round(median(ok.map((x) => x.tbt)))} ms | ${[...new Set(ok.flatMap((x) => x.failedA11y))].join(", ") || "-"} |`,
+      `| ${p.key} | \`${p.path}\`${redirected} | ${median(ok.map((x) => x.perf))} | ${median(ok.map((x) => x.a11y))} | ${median(ok.map((x) => x.bp))} | ${median(ok.map((x) => x.seo))} | ${(median(ok.map((x) => x.lcp)) / 1000).toFixed(1)} s | ${median(ok.map((x) => x.cls)).toFixed(3)} | ${Math.round(median(ok.map((x) => x.tbt)))} ms | ${Math.round(median(ok.map((x) => x.jsKb)))} KB | ${[...new Set(ok.flatMap((x) => x.failedA11y))].join(", ") || "-"} |`,
     );
   }
   const md = `# Lighthouse mobile (${label}) · S28
 
 Build de produção local (\`next start\`, porta ${new URL(BASE).port}), Supabase local com dados de demonstração, Lighthouse 12, emulação mobile padrão (4G simulado, CPU 4x). Mediana de ${RUNS} execuções por página. Páginas logadas usam o cookie de sessão de uma conta de demonstração (\`@listacerta.test\`). Gerado por \`scripts/s28-medir.mjs\` em ${new Date().toISOString()}.
 
-| Página | Rota | Desempenho | Acessibilidade | Boas práticas | SEO | LCP | CLS | TBT | Auditorias de a11y reprovadas |
-|---|---|---|---|---|---|---|---|---|---|
+| Página | Rota | Desempenho | Acessibilidade | Boas práticas | SEO | LCP | CLS | TBT | JS transferido | Auditorias de a11y reprovadas |
+|---|---|---|---|---|---|---|---|---|---|---|
 ${rows.join("\n")}
 `;
   writeFileSync(join(OUT, "lighthouse.md"), md);

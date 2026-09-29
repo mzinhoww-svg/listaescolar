@@ -113,7 +113,8 @@ body {
       animation-range: entry 0% entry 30%;
     }
   }
-  .tick-loop {
+  /* Só o ícone pulsa: texto com opacidade < 1 durante a animação reprova o contraste (axe/Lighthouse). */
+  .tick-loop > :first-child {
     animation: tick-loop 9s ease-out infinite;
     animation-delay: calc(var(--i, 0) * 0.9s);
   }

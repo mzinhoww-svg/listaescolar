@@ -29,7 +29,6 @@ describe("seed das jornadas S29", () => {
     await expect(runSqlFile("scripts/s29-seed-jornadas.sql", { localMarker: false })).rejects.toThrow(/recusado/);
     expect(await snapshot()).toEqual(before);
   });
-  });
 
   it("cria uma conta por público, todas demo, e um lead para a papelaria (idempotente)", async () => {
     await runSqlFile("scripts/s29-seed-jornadas.sql");

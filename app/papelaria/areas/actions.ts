@@ -9,6 +9,7 @@ import { repositoryErrorCode } from "@/features/stationeries/messages";
 import { getStationeryOfOwner } from "@/features/stationeries/queries";
 import { setAreas } from "@/features/stationeries/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorLabel } from "@/lib/log-error";
 
 const AreasSchema = z.array(z.string().trim().min(2).max(120)).max(100);
 
@@ -24,7 +25,7 @@ export async function saveAreasAction(formData: FormData): Promise<void> {
   try {
     await setAreas(createAdminClient(), actor, own.id, parsed.data);
   } catch (error) {
-    console.error("bairros", error);
+    console.error("bairros", safeErrorLabel(error));
     redirect(`/papelaria/areas?erro=${repositoryErrorCode(error)}`);
   }
   redirect("/papelaria/areas?ok=1");

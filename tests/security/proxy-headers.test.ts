@@ -2,11 +2,12 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getUser = vi.fn();
+let mockRole: string | null = null;
 
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
     auth: { getUser: async () => getUser() },
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mockRole ? { role: mockRole } : null }) }) }) }),
   }),
 }));
 
@@ -18,6 +19,7 @@ describe("proxy: cabeçalhos de segurança e CSP (S19)", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_x");
+    mockRole = null;
     getUser.mockReset();
     getUser.mockResolvedValue({ data: { user: null } });
   });
@@ -63,5 +65,17 @@ describe("proxy: cabeçalhos de segurança e CSP (S19)", () => {
     const widgetJs = await proxy(req("/widget.js"));
     expect(widgetApi.headers.get("Content-Security-Policy")).toBeNull();
     expect(widgetJs.headers.get("Content-Security-Policy")).toBeNull();
+  });
+
+  it("N1: o rewrite 403 (papel sem acesso a /admin) também leva o CSP/nonce na REQUISIÇÃO", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockRole = "parent";
+    const res = await proxy(req("/admin"));
+    expect(res.status).toBe(403);
+    const csp = res.headers.get("Content-Security-Policy") as string;
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeTruthy();
+    expect(res.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    expect(res.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
   });
 });

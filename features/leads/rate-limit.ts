@@ -1,6 +1,6 @@
 import "server-only";
 
-import { clientIp } from "@/lib/net/client-ip";
+import { clientIp, ipRateKey } from "@/lib/net/client-ip";
 import { checkRateLimit } from "@/lib/rate-limit/memory-bucket";
 
 // D-001 (S19): primeira camada de rate limit da criação de lead ("pedir cotação"), por IP + perfil autenticado.
@@ -13,6 +13,7 @@ type HeadersLike = { get(name: string): string | null };
 
 /** `true` = acima do limite (recusar); `false` = pode seguir (e já contabilizado). */
 export function leadCreateRateLimited(headers: HeadersLike, actorId: string): boolean {
-  const ip = clientIp(headers) ?? "unknown";
+  const raw = clientIp(headers);
+  const ip = raw ? ipRateKey(raw) : "unknown";
   return !checkRateLimit(`lead:${ip}:${actorId}`, LEAD_CREATE_RATE_LIMIT, LEAD_CREATE_RATE_WINDOW_MS);
 }

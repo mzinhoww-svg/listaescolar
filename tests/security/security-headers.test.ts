@@ -89,3 +89,21 @@ describe("staticAssetHeaders (revisão S19, M2)", () => {
     expect(map["Strict-Transport-Security"]).not.toContain("preload");
   });
 });
+
+describe("reverificação S19 (N3/N6)", () => {
+  const directive = (csp: string, name: string) =>
+    csp.split(";").map((d) => d.trim()).find((d) => d.startsWith(`${name} `)) ?? "";
+  it("N3: worker-src e manifest-src explícitos ('self')", () => {
+    const csp = buildCsp("n");
+    expect(directive(csp, "worker-src")).toBe("worker-src 'self'");
+    expect(directive(csp, "manifest-src")).toBe("manifest-src 'self'");
+  });
+  it("N6: img-src e frame-src só aceitam o caminho /storage/v1/ do Supabase, não a origem inteira", () => {
+    const csp = buildCsp("n", { supabaseUrl: "https://abc.supabase.co" });
+    expect(directive(csp, "img-src")).toContain("https://abc.supabase.co/storage/v1/");
+    expect(directive(csp, "frame-src")).toContain("https://abc.supabase.co/storage/v1/");
+    expect(directive(csp, "img-src")).not.toMatch(/https:\/\/abc\.supabase\.co(?!\/storage)/);
+    expect(directive(csp, "frame-src")).not.toMatch(/https:\/\/abc\.supabase\.co(?!\/storage)/);
+    expect(directive(csp, "connect-src")).toContain("https://abc.supabase.co");
+  });
+});

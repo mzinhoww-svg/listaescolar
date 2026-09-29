@@ -1,6 +1,6 @@
 import "server-only";
 
-import { clientIp } from "@/lib/net/client-ip";
+import { clientIp, ipRateKey } from "@/lib/net/client-ip";
 import { checkRateLimit } from "@/lib/rate-limit/memory-bucket";
 
 // D-001 (S19): primeira camada de rate limit do envio de lista (upload + OCR síncrono, S07), por IP + perfil
@@ -14,6 +14,7 @@ type HeadersLike = { get(name: string): string | null };
 
 /** `true` = acima do limite (recusar); `false` = pode seguir (e já contabilizado). */
 export function submitRateLimited(headers: HeadersLike, actorId: string): boolean {
-  const ip = clientIp(headers) ?? "unknown";
+  const raw = clientIp(headers);
+  const ip = raw ? ipRateKey(raw) : "unknown";
   return !checkRateLimit(`submit:${ip}:${actorId}`, SUBMIT_RATE_LIMIT, SUBMIT_RATE_WINDOW_MS);
 }

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { clientIp } from "@/lib/net/client-ip";
+import { clientIp, ipRateKey } from "@/lib/net/client-ip";
 import { checkRateLimit } from "@/lib/rate-limit/memory-bucket";
 
 // D-001 (S19): primeira camada de rate limit do link mágico. Balde em memória por instância — mesmo Ruling já
@@ -17,6 +17,10 @@ import { checkRateLimit } from "@/lib/rate-limit/memory-bucket";
 const LOGIN_EMAIL_LIMIT = 5;
 const LOGIN_IP_CEILING = 30;
 const LOGIN_NOIP_CEILING = 300;
+// Ruling (reverificação N4c): teto por e-mail SEM IP (vários IPs atacando o mesmo endereço, e-mail bomb). Mais alto
+// que o de IP+e-mail para que um atacante não consiga trancar o e-mail alheio por muito tempo: 15 por janela.
+const LOGIN_EMAIL_CEILING = 15;
+// Ruling (N4c): 30 por 10 min por IP fica; constante ajustável (NAT de operadora móvel é o risco de falso positivo).
 const LOGIN_RATE_WINDOW_MS = 10 * 60_000;
 
 type HeadersLike = { get(name: string): string | null };
@@ -27,10 +31,13 @@ function emailKey(email: string): string {
 
 /** `true` = acima do limite (recusar); `false` = pode seguir (e já contabilizado). */
 export function loginRateLimited(headers: HeadersLike, email: string): boolean {
-  const ip = clientIp(headers);
+  const rawIp = clientIp(headers);
+  const ip = rawIp ? ipRateKey(rawIp) : null;
+  const key = emailKey(email);
   const ceilingOk = ip
     ? checkRateLimit(`login-ip:${ip}`, LOGIN_IP_CEILING, LOGIN_RATE_WINDOW_MS)
     : checkRateLimit("login-noip:all", LOGIN_NOIP_CEILING, LOGIN_RATE_WINDOW_MS);
   if (!ceilingOk) return true;
-  return !checkRateLimit(`login:${ip ?? "noip"}:${emailKey(email)}`, LOGIN_EMAIL_LIMIT, LOGIN_RATE_WINDOW_MS);
+  if (!checkRateLimit(`login-email:${key}`, LOGIN_EMAIL_CEILING, LOGIN_RATE_WINDOW_MS)) return true;
+  return !checkRateLimit(`login:${ip ?? "noip"}:${key}`, LOGIN_EMAIL_LIMIT, LOGIN_RATE_WINDOW_MS);
 }

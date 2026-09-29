@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 
-import { redactBreadcrumb, redactEvent } from "@/lib/observability/sentry-redact";
+import { redactBreadcrumb, redactEvent, redactSpan } from "@/lib/observability/sentry-redact";
 
 // O next.config.ts expõe SENTRY_DSN como NEXT_PUBLIC_SENTRY_DSN só quando existe.
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
@@ -22,5 +22,6 @@ if (dsn) {
     beforeSend: redactEvent,
     beforeSendTransaction: redactEvent,
     beforeBreadcrumb: redactBreadcrumb,
+    beforeSendSpan: redactSpan,
   });
 }

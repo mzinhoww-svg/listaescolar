@@ -19,3 +19,21 @@ export function clientIp(headers: HeadersLike): string | null {
   }
   return null;
 }
+
+/**
+ * Chave de rate limit para um IP (reverificação S19, N4): IPv4 fica como está; IPv6 vira o prefixo /64 (os 4
+ * primeiros grupos, já expandindo `::`), porque um único assinante recebe um /64 inteiro e girar o sufixo
+ * contornaria o limite por IP. IPv4 mapeado em IPv6 (`::ffff:1.2.3.4`) usa o IPv4.
+ */
+export function ipRateKey(ip: string): string {
+  const v = ip.trim().toLowerCase();
+  if (!v.includes(":")) return v;
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(v);
+  if (mapped?.[1]) return mapped[1];
+  const [headPart = "", tailPart] = v.split("::");
+  const head = headPart ? headPart.split(":") : [];
+  const tail = tailPart ? tailPart.split(":") : [];
+  const missing = tailPart === undefined ? 0 : Math.max(0, 8 - head.length - tail.length);
+  const groups = [...head, ...Array<string>(missing).fill("0"), ...tail].map((g) => g.replace(/^0+(?=.)/, ""));
+  return `${groups.slice(0, 4).join(":")}::/64`;
+}

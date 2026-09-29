@@ -39,6 +39,8 @@ export function buildCsp(nonce: string, origins: CspOrigins = {}): string {
   const supabase = originOf(origins.supabaseUrl);
   const sentry = originOf(origins.sentryDsn);
   const supabaseHttp = supabase ? [supabase.origin] : [];
+  // img/frame: só o Storage (documento da revisão, via URL assinada em /storage/v1/), não a origem inteira (N6).
+  const supabaseStorage = supabase ? [`${supabase.origin}/storage/v1/`] : [];
   // Realtime do Supabase usa wss (ou ws em http local).
   const supabaseWs = supabase ? [`${supabase.protocol === "https:" ? "wss:" : "ws:"}//${supabase.host}`] : [];
   const sentryOrigin = sentry ? [sentry.origin] : [];
@@ -47,10 +49,12 @@ export function buildCsp(nonce: string, origins: CspOrigins = {}): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${origins.isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'", // Tailwind gera estilos inline em runtime (className dinâmico só via CSS já compilado; sem risco de injeção — nunca HTML de terceiro)
-    `img-src ${list(["data:", "blob:"], supabaseHttp)}`,
+    `img-src ${list(["data:", "blob:"], supabaseStorage)}`,
     "font-src 'self' data:",
     `connect-src ${list(supabaseHttp, supabaseWs, sentryOrigin)}`,
-    `frame-src ${list(supabaseHttp)}`,
+    `frame-src ${list(supabaseStorage)}`,
+    "worker-src 'self'", // service worker /sw.js do PushOptIn (N3)
+    "manifest-src 'self'",
     "frame-ancestors 'self'",
     "base-uri 'self'",
     "form-action 'self'",

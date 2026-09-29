@@ -10,6 +10,7 @@ import { registerStationery } from "@/features/stationeries/repository";
 import { submitForReview } from "@/features/stationeries/submit";
 import { canSubmitForReview } from "@/features/stationeries/submit-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorLabel } from "@/lib/log-error";
 
 const NEXT = "/cadastrar-papelaria";
 
@@ -41,7 +42,7 @@ export async function registerStationeryAction(_prev: RegisterState, formData: F
   try {
     created = await registerStationery(admin, actor, parsed.data);
   } catch (error) {
-    console.error("cadastrar papelaria", error);
+    console.error("cadastrar papelaria", safeErrorLabel(error));
     const code = error instanceof Error && "code" in error ? String((error as { code: unknown }).code) : "";
     if (code === "cnpj_taken") return fail(repositoryErrorMessage(error), { cnpj: "Já existe uma papelaria com este CNPJ." });
     return fail(repositoryErrorMessage(error));
@@ -52,7 +53,7 @@ export async function registerStationeryAction(_prev: RegisterState, formData: F
     await submitForReview(admin, actor, { id: created.id, from: "signup" });
   } catch (error) {
     // O cadastro ficou salvo; a página de credenciamento oferece o reenvio.
-    console.error("enviar para análise", error);
+    console.error("enviar para análise", safeErrorLabel(error));
     redirect(`${NEXT}?erro=envio`);
   }
   redirect(NEXT);
@@ -68,7 +69,7 @@ export async function resubmitAction(): Promise<void> {
   try {
     await submitForReview(createAdminClient(), actor, { id: own.id, from: own.status });
   } catch (error) {
-    console.error("reenviar para análise", error);
+    console.error("reenviar para análise", safeErrorLabel(error));
     redirect(`${NEXT}?erro=envio`);
   }
   redirect(NEXT);

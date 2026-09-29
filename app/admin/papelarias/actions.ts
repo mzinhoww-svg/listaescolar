@@ -8,6 +8,7 @@ import { repositoryErrorCode } from "@/features/stationeries/messages";
 import { transition } from "@/features/stationeries/repository";
 import { STATIONERY_STATUSES } from "@/features/stationeries/state";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorLabel } from "@/lib/log-error";
 
 const AdminMoveSchema = z.object({
   id: z.uuid(),
@@ -38,7 +39,7 @@ export async function adminTransitionAction(formData: FormData): Promise<void> {
   try {
     await transition(createAdminClient(), actor, { id, to, ...(reason ? { reason } : {}) });
   } catch (error) {
-    console.error("transição admin", error);
+    console.error("transição admin", safeErrorLabel(error));
     redirect(`${base}?erro=${repositoryErrorCode(error)}`);
   }
   redirect(`${base}?ok=1`);

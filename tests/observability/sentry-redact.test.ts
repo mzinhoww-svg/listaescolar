@@ -112,3 +112,61 @@ describe("redactEvent", () => {
     });
   });
 });
+
+describe("reverificação S19 (N2/N5): segredo no caminho e demais campos do evento", () => {
+  const TOKEN = "s3gr3d0-do-webhook-pix-0123456789";
+
+  it("N2: token do webhook Pix some de transaction, request.url, contexts, spans e migalhas", async () => {
+    const path = `/api/billing/pix/webhook/${TOKEN}/pix`;
+    const { redactEvent: redact, redactSpan } = await import("@/lib/observability/sentry-redact");
+    const out = redact({
+      transaction: `POST ${path}`,
+      request: { url: `https://listacerta.example${path}` },
+      contexts: { nextjs: { request_path: path } as Record<string, unknown> },
+      spans: [{ data: { "url.path": path, "http.target": path, "url.full": `https://listacerta.example${path}` } }] as never,
+      breadcrumbs: [{ message: `POST ${path}`, data: { url: path } }],
+    });
+    expect(JSON.stringify(out)).not.toContain(TOKEN);
+    expect(out.transaction).toBe("POST /api/billing/pix/webhook/[token]/pix");
+    expect(out.request?.url).toBe("https://listacerta.example/api/billing/pix/webhook/[token]/pix");
+    const span = redactSpan({ name: `POST ${path}`, attributes: { "url.full": `https://x.example${path}?a=1` } });
+    expect(JSON.stringify(span)).not.toContain(TOKEN);
+  });
+
+  it("N2: códigos de cotação/lead no caminho também são mascarados", () => {
+    const out = redactEvent({ transaction: "GET /cotacao/ABC123XYZ", message: "GET /papelaria/leads/QWE987 falhou" });
+    expect(out.transaction).toBe("GET /cotacao/[token]");
+    expect(out.message).toBe("GET /papelaria/leads/[token] falhou");
+    expect(redactEvent({ transaction: "GET /papelaria/leads" }).transaction).toBe("GET /papelaria/leads");
+  });
+
+  it("N5: tags, fingerprint, logentry e variáveis de stacktrace são redigidos", () => {
+    const out = redactEvent({
+      tags: { contato: "ana@escola.com", n: 3 },
+      fingerprint: ["falha", "joao@x.com"],
+      logentry: { message: "erro %s", params: ["maria@example.com"] },
+      exception: {
+        values: [{ type: "Error", value: "x", stacktrace: { frames: [{ vars: { email: "zé@abc.com", ip: "200.1.2.3" } }] } }],
+      },
+    });
+    const json = JSON.stringify(out);
+    expect(json).not.toMatch(/ana@escola|joao@x|maria@example|zé@abc|200\.1\.2\.3/);
+    expect(out.tags?.n).toBe(3);
+  });
+
+  it("N5: caminho relativo sem barra inicial perde a query, mas frase com '?' fica intacta", () => {
+    expect(redactEvent({ message: "falhou em auth/confirm?token_hash=SEGREDO&type=x" }).message).toBe("falhou em auth/confirm");
+    expect(redactEvent({ message: "funcionou mesmo assim?" }).message).toBe("funcionou mesmo assim?");
+  });
+
+  it("N5: redactSpan limpa name e attributes (url.path, query, e-mail)", async () => {
+    const { redactSpan } = await import("@/lib/observability/sentry-redact");
+    const span = redactSpan({
+      name: "GET /x?email=a@b.com",
+      attributes: { "url.query": "token=abc", "http.target": "/auth/confirm?token_hash=Z", nota: "fale com a@b.com" },
+    });
+    expect(span.name).toBe("GET /x");
+    expect(span.attributes?.["url.query"]).toBe("[removido]");
+    expect(JSON.stringify(span)).not.toMatch(/token_hash|a@b\.com/);
+  });
+});

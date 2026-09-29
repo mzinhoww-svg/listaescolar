@@ -45,3 +45,15 @@ describe("loginRateLimited (revisão S19, M4)", () => {
     for (let i = 0; i < 100; i++) expect(loginRateLimited(h, `u${i}@b.co`)).toBe(false);
   });
 });
+
+describe("loginRateLimited (reverificação S19, N4)", () => {
+  it("N4a: o mesmo e-mail vindo de muitos IPs diferentes esbarra no teto por e-mail (15), sem IP", () => {
+    for (let i = 0; i < 15; i++) expect(loginRateLimited(ip(`9.9.9.${i}`), "vitima@b.co")).toBe(false);
+    expect(loginRateLimited(ip("9.9.9.200"), "vitima@b.co")).toBe(true);
+    expect(loginRateLimited(ip("9.9.9.201"), "outra@b.co")).toBe(false);
+  });
+  it("N4a: IPv6 girando o sufixo dentro do mesmo /64 divide o mesmo balde de IP+e-mail", () => {
+    for (let i = 0; i < 5; i++) expect(loginRateLimited(ip(`2001:db8:1:2::${i + 1}`), "a@b.co")).toBe(false);
+    expect(loginRateLimited(ip("2001:db8:1:2:aaaa::9"), "a@b.co")).toBe(true);
+  });
+});

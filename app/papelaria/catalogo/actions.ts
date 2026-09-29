@@ -11,6 +11,7 @@ import { repositoryErrorCode, repositoryErrorMessage } from "@/features/statione
 import { getStationeryOfOwner } from "@/features/stationeries/queries";
 import { upsertCatalogItems } from "@/features/stationeries/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorLabel } from "@/lib/log-error";
 
 export type ImportState =
   | { status: "idle" }
@@ -42,7 +43,7 @@ export async function saveItemAction(formData: FormData): Promise<void> {
   try {
     await upsertCatalogItems(createAdminClient(), actor, stationery.id, [parsed.data]);
   } catch (error) {
-    console.error("salvar item", error);
+    console.error("salvar item", safeErrorLabel(error));
     redirect(`/papelaria/catalogo?erro=${repositoryErrorCode(error)}`);
   }
   redirect("/papelaria/catalogo?ok=item");
@@ -65,7 +66,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
         result.items.map((i) => ({ name: i.name, priceCents: i.priceCents, stock: i.stock })),
       );
     } catch (error) {
-      console.error("importar catálogo", error);
+      console.error("importar catálogo", safeErrorLabel(error));
       return { status: "error", message: repositoryErrorMessage(error) };
     }
     revalidatePath("/papelaria/catalogo");

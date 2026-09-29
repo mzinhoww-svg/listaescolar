@@ -1,6 +1,6 @@
 # Mapa de fluxos · S29
 
-Um diagrama por jornada (spec §4). Cada nó é uma rota (`app/**/page.tsx`) ou um estado global; cada aresta é a ação que leva de uma à outra. Linha tracejada e nó em hexágono `{{ }}` marcam **costura entre públicos**: quem age muda (família, escola, papelaria, equipe) ou a ação acontece fora do produto (e-mail, WhatsApp, loja). Rotas com `{x}` recebem dado do banco. As rotas dos passos foram conferidas contra `lib/ux-checks/journeys.ts`; as arestas de J1, J2, J3, J4 e J9 foram percorridas no navegador (fichas em `fichas/`), as demais vêm do código e serão percorridas nas Tasks 7 a 9.
+Um diagrama por jornada (spec §4). Cada nó é uma rota (`app/**/page.tsx`) ou um estado global; cada aresta é a ação que leva de uma à outra. Linha tracejada e nó em hexágono `{{ }}` marcam **costura entre públicos**: quem age muda (família, escola, papelaria, equipe) ou a ação acontece fora do produto (e-mail, WhatsApp, loja). Rotas com `{x}` recebem dado do banco. As rotas dos passos foram conferidas contra `lib/ux-checks/journeys.ts`; as arestas de J1, J2, J3, J4, J5 e J9 foram percorridas no navegador (fichas em `fichas/`), as demais vêm do código e serão percorridas nas Tasks 7 a 9.
 
 Legenda: retângulo = tela; losango = decisão; hexágono = costura com outro público ou com sistema externo; seta tracejada = passagem sem clique da mesma pessoa (aviso, e-mail, ação de outro papel).
 
@@ -104,15 +104,28 @@ flowchart LR
 
 ## J5 · Escola assume e publica (piloto)
 
+Percorrida no navegador (fichas/J5.md) com `escola@` (membro aprovado) e `familia@` (pedido de administração de uma escola sem administrador, criada só no banco local: o seed tem uma escola única, já com administrador). Confirmação por link e decisão da equipe não foram exercitadas.
+
 ```mermaid
 flowchart LR
-  escola["/escolas/[inep] (J1)"] -->|"Pedir para administrar"| reiv["/escolas/[inep]/reivindicar"]
-  reiv -->|"envia evidência e aceite"| adminclaim{{"/admin/reivindicacoes (J7)"}}
-  adminclaim -.->|"e-mail de confirmação"| confirmar["/escolas/[inep]/reivindicar/confirmar"]
-  confirmar -->|"confirma"| painel["/escola"]
-  painel -->|"Nova lista"| nova["/escola/listas/nova"]
-  nova -->|"envia arquivo"| revisaoadm{{"/admin/revisao (J7)"}}
-  revisaoadm -.->|"publica"| divulg["/escola (divulgação: link curto, QR)"]
+  escola["/escolas/[inep] (J1)"] -->|"Pedir para administrar (só escola sem administrador)"| reiv["/escolas/[inep]/reivindicar"]
+  escola -. "escola com administrador: só aviso, sem saída (J5-08)" .-> reiv
+  reiv -->|"método, nome, cargo, consentimento: Continuar"| arq["/reivindicar (enviar arquivos)"]
+  arq -->|"Enviar para análise"| analise["/reivindicar (Em análise)"]
+  analise -. "SEM VOLTA hoje (J5-09): Cancelar leva à escola; /conta e /escola 403 não citam o pedido" .-> conta{{"/conta (J3)"}}
+  analise -.->|"pedido chega à equipe"| adminclaim{{"/admin/reivindicacoes (J7)"}}
+  adminclaim -.->|"decide; aviso na central"| painel["/escola"]
+  adminclaim -.->|"e-mail com link (método e-mail)"| confirmar["/escolas/[inep]/reivindicar/confirmar"]
+  confirmar -->|"Confirmar e-mail da escola"| analise
+  painel -->|"Pedir para administrar outra escola"| busca["/escolas (busca)"]
+  painel -->|"Ver a lista publicada"| escolapub["/escolas/[inep] (J1)"]
+  painel -. "AUSENTE hoje (J5-01): com lista publicada nada leva ao envio de outra série" .-> nova["/escola/listas/nova"]
+  nova -->|"Enviar para revisão"| statusfam["/enviar-lista/[id] (tela da família, J4)"]
+  statusfam -. "SEM VOLTA hoje (J5-03): nenhum link para /escola nem lista de envios da escola" .-> painel
+  nova -. "SEM VOLTA a 390 px (J5-02): sem cabeçalho nem menu" .-> painel
+  statusfam -.->|"cai em revisão humana"| revisaoadm{{"/admin/revisao (J7)"}}
+  revisaoadm -.->|"publica; aviso"| divulg["/escolas/[inep]/[serie] (J1)"]
+  painel -. "AUSENTE hoje (J5-11): sem compartilhar (link curto, QR, WhatsApp)" .-> divulg
   divulg -.-> famlista{{"Família vê a lista (J1)"}}
 ```
 

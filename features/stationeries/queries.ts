@@ -156,3 +156,14 @@ export async function getAdminDetail(id: string): Promise<AdminDetail | null> {
     lgpdAcceptedAt: r.lgpd_accepted_at ? new Date(r.lgpd_accepted_at) : null,
   };
 }
+
+/** Itens ativos do catálogo (só contagem; a página já autorizou o dono). */
+export async function countCatalogItems(stationeryId: string): Promise<number> {
+  const { count, error } = await createAdminClient()
+    .from("catalog_items")
+    .select("id", { count: "exact", head: true })
+    .eq("stationery_id", stationeryId)
+    .eq("is_active", true);
+  if (error) throw new Error(`contar catálogo: ${error.message}`);
+  return count ?? 0;
+}

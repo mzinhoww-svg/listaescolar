@@ -1,9 +1,12 @@
 import Link from "next/link";
 
+import { ActivationChecklist } from "@/components/stationeries/ActivationChecklist";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { StatusPanel } from "@/components/stationeries/StatusPanel";
+import { listStationeryLeads } from "@/features/leads/queries";
+import { computeActivation } from "@/features/stationeries/activation";
 import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
-import { listStatusEvents } from "@/features/stationeries/queries";
+import { countCatalogItems, listOwnAreas, listStatusEvents } from "@/features/stationeries/queries";
 import { getOwnerContext } from "@/features/stationeries/session";
 
 import { ownerStatusAction } from "./actions";
@@ -24,6 +27,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   }
   const { stationery } = ctx;
   const events = await listStatusEvents(stationery.id);
+  const showActivation = stationery.status === "approved" || stationery.status === "active" || stationery.status === "paused";
+  const activation = showActivation
+    ? computeActivation({
+        hasProfile: stationery.status === "active" || stationery.status === "paused",
+        areasCount: (await listOwnAreas(stationery.id)).length,
+        catalogCount: await countCatalogItems(stationery.id),
+        leadsReceived: (await listStationeryLeads(ctx.actor, stationery.id)).rows.length,
+      })
+    : null;
   const move = (to: "active" | "paused", label: string, outline = false) => (
     <form action={ownerStatusAction}>
       <input type="hidden" name="to" value={to} />
@@ -57,6 +69,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
       {stationery.status === "approved" ? (
         <Notice kind="info">Aprovada: publique para aparecer aos pais. Preço e estoque só aparecem se você informar no catálogo.</Notice>
       ) : null}
+      {activation ? <ActivationChecklist activation={activation} /> : null}
       <StatusPanel stationery={stationery} events={events} />
     </>
   );

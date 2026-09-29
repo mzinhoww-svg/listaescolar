@@ -50,7 +50,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/papelaria/
   };
   const frozen = ctx.stationery.status === "suspended";
   return (
-    <>
+    <div className="flex flex-col">
       <PageHeader crumb="Papelaria / Leads" title="Leads da lista escolar" />
       {erro ? <Notice kind="error">{erro}</Notice> : null}
       {frozen ? <Notice kind="info">Papelaria suspensa: você só consulta o histórico.</Notice> : null}
@@ -83,11 +83,20 @@ export default async function LeadsPage({ searchParams }: PageProps<"/papelaria/
       </div>
       {shown.length === 0 ? (
         <div className="rounded-card bg-white p-8 text-center" data-testid="leads-empty">
-          <p className="text-[16px] font-extrabold">Nenhum lead ainda</p>
+          <p className="text-[16px] font-extrabold">{rows.length === 0 ? "Nenhum pedido de cotação ainda" : "Nenhum lead nesta aba"}</p>
           <p className="text-texto-2 mt-1 text-[14px] font-semibold">
-            Quando um responsável pedir cotação à sua papelaria, ele aparece aqui.{" "}
-            {ctx.stationery.status === "active" ? null : <Link href="/papelaria" className="text-verde-fundo underline">Publique a papelaria</Link>}
+            {rows.length === 0
+              ? "Quando um responsável pedir cotação à sua papelaria, o pedido aparece aqui. Para isso, deixe a papelaria publicada, com bairros e catálogo."
+              : "Troque a aba ou o filtro de escola para ver os outros pedidos."}
           </p>
+          {rows.length === 0 ? (
+            <Link
+              href="/papelaria"
+              className="bg-tinta text-papel rounded-botao mt-4 inline-flex h-12 items-center justify-center px-6 text-[15px] font-extrabold"
+            >
+              Ver o que falta para receber pedidos
+            </Link>
+          ) : null}
         </div>
       ) : (
         <>
@@ -95,6 +104,6 @@ export default async function LeadsPage({ searchParams }: PageProps<"/papelaria/
           <LeadCards rows={shown} now={now} />
         </>
       )}
-    </>
+    </div>
   );
 }

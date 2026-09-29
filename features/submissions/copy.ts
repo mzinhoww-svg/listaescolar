@@ -27,7 +27,7 @@ export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
   school_not_linked: "Você ainda não tem vínculo confirmado com esta escola. Reivindique a escola antes de enviar a lista.",
   unexpected: "Não foi possível enviar agora. Tente novamente em instantes.",
   empty_file: "O arquivo está vazio. Escolha outro.",
-  file_too_large: "O arquivo passa de 4 MB. Envie um arquivo menor.",
+  file_too_large: "Este arquivo passa de 4 MB. Tire a foto de novo com menos qualidade ou envie um PDF menor.",
   pdf_too_large: "Este PDF passa de 4 MB. Comprima o PDF ou envie fotos das páginas.",
   image_undecodable: "Não conseguimos reduzir esta foto (formatos como HEIC). Envie em JPG ou PNG, ou como PDF.",
   unsupported_type: "Tipo de arquivo não aceito. Envie PDF, JPG, PNG, WEBP ou HEIC.",

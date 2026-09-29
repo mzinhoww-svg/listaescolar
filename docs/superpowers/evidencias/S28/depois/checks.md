@@ -1,6 +1,6 @@
 # Checagens de layout a 390 px (depois) · S28
 
-Gerado por `scripts/s28-medir.mjs` em 2026-09-29T15:49:07.148Z. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um `main` e um `h1`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
+Gerado por `scripts/s28-medir.mjs` em 2026-09-29T17:42:44.621Z. Cada rota é aberta em 390x844 com a conta de demonstração do papel indicado; "redirecionou" = a conta não vê a rota (sem dado semeado ou sem papel), não conta como falha. Critérios: sem rolagem horizontal da página (largura de rolagem/viewport), exatamente um `main` e um `h1`, nenhum alvo de toque menor que 44 px (link em linha de texto isento) e nenhum texto abaixo de 12 px.
 
 Rotas com falha: **0**
 
@@ -10,7 +10,7 @@ Rotas com falha: **0**
 | busca | `/escolas?q=Demonstra` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | escola | `/escolas/99001001` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | lista | `/escolas/99001001/ef-5?ano=2027` | 390/390 | 1 | 1 | 0 | 0 | ok |
-| carrinho | `/carrinho/6613e784-fcb8-4df3-98be-1c8308ffbec5` | 390/390 | 1 | 1 | 0 | 0 | ok |
+| carrinho | `/carrinho/935fa93e-f0ee-4957-9d6f-b834c153ddf9` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | enviar-lista | `/enviar-lista` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | login | `/entrar` | 390/390 | 1 | 1 | 0 | 0 | ok |
 | papelaria | `/papelaria` | 390/390 | 1 | 1 | 0 | 0 | ok |

@@ -1,6 +1,6 @@
 # axe-core (depois) · S28
 
-axe-core 4.13.0 injetado na página com viewport 390x844, tags wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa e best-practice. Contagem por regra violada (não por elemento) e por impacto. Gerado por `scripts/s28-medir.mjs` em 2026-09-29T15:47:20.640Z.
+axe-core 4.13.0 injetado na página com viewport 390x844, tags wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa e best-practice. Contagem por regra violada (não por elemento) e por impacto. Gerado por `scripts/s28-medir.mjs` em 2026-09-29T17:40:45.065Z.
 
 | Página | Críticas | Sérias | Moderadas | Leves |
 |---|---|---|---|---|
@@ -34,7 +34,7 @@ Página avaliada: `/escolas`; regras aprovadas: 39.
 
 ## escola (`/escolas/99001001`)
 
-Página avaliada: `/escolas/99001001`; regras aprovadas: 38.
+Página avaliada: `/escolas/99001001`; regras aprovadas: 40.
 
 - Nenhuma violação.
 
@@ -44,9 +44,9 @@ Página avaliada: `/escolas/99001001/ef-5`; regras aprovadas: 37.
 
 - Nenhuma violação.
 
-## carrinho (`/carrinho/6613e784-fcb8-4df3-98be-1c8308ffbec5`)
+## carrinho (`/carrinho/935fa93e-f0ee-4957-9d6f-b834c153ddf9`)
 
-Página avaliada: `/carrinho/6613e784-fcb8-4df3-98be-1c8308ffbec5`; regras aprovadas: 34.
+Página avaliada: `/carrinho/935fa93e-f0ee-4957-9d6f-b834c153ddf9`; regras aprovadas: 34.
 
 - Nenhuma violação.
 
@@ -88,7 +88,7 @@ Página avaliada: `/conta`; regras aprovadas: 37.
 
 ## escola-painel (`/escola`)
 
-Página avaliada: `/escola`; regras aprovadas: 36.
+Página avaliada: `/escola`; regras aprovadas: 37.
 
 - Nenhuma violação.
 

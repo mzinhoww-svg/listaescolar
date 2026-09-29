@@ -37,6 +37,9 @@ print(','.join(sorted(out)))"; }
 echo "== 1) sem escolha: aviso visível, nada persistente, nada enviado"
 ab unset open "$BASE/" >/dev/null; sleep 4
 eq "$(ev unset "!!document.querySelector('[aria-label=\"Medição de uso\"]')")" "true" "aviso de medição aparece"
+eq "$(ev unset "(()=>{const b=[...document.querySelectorAll('[aria-label=\"Medição de uso\"] button')];return b.length===2&&b[0].className===b[1].className&&b.map(x=>x.textContent).join('|')==='Aceitar|Recusar'})()")" "true" "aviso na tela: Aceitar e Recusar com botões iguais (mesma classe visual)"
+eq "$(ev unset "(()=>{const r=document.querySelector('[aria-label=\"Medição de uso\"]').getBoundingClientRect();return r.bottom<=innerHeight+1&&r.height>0})()")" "true" "aviso visível na janela (390 px)"
+mkdir -p docs/superpowers/e2e/screenshots; ab unset screenshot docs/superpowers/e2e/screenshots/S28-consentimento.png >/dev/null 2>&1
 eq "$(ev unset "localStorage.length")" "0" "localStorage vazio antes do aceite"
 eq "$(ev unset "document.cookie.split(';').filter(c=>c.includes('lc_')||c.includes('ph_')).length")" "0" "nenhum cookie de medição antes do aceite"
 eq "$(ev unset "performance.getEntriesByType('resource').filter(e=>e.name.includes('/ingest')).length")" "0" "nenhuma requisição a /ingest antes do aceite"

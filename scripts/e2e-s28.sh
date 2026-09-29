@@ -142,6 +142,16 @@ lacks "$(ab anon eval "document.cookie" | tr -d '"')" "ph_" "sem chave: nenhum c
 CSP=$(curl -sI "$BASE/" | grep -i '^content-security-policy' | tr -d '\r')
 has "$CSP" "nonce-" "CSP da S19 ativa com nonce"
 
+echo "== 9) correções da revisão final de UX (B1, I8)"
+ab anon open "$BASE/escolas/$INEP" >/dev/null; wait_text anon "Listas publicadas" 20
+expect_text anon "Listas publicadas" "escola sem série escolhida: atalhos das listas publicadas"
+absent_text anon "Nenhuma lista publicada está disponível" "escola com lista: não diz que não há lista"
+eq "$(ab anon eval "[...document.querySelectorAll('nav[aria-label=\"Listas publicadas\"] a')].every(a=>a.getBoundingClientRect().height>=44)" | tr -d '"')" "true" "escola: atalhos com alvo de toque de 44 px"
+shot anon "$OUT/S28-escola-atalhos.png"
+ab anon open "$BASE/" >/dev/null; wait_text anon "Piloto em Cuiabá, MT" 20
+expect_text anon "Quando houver preço de loja" "landing: comparação só quando houver preço de loja"
+absent_text anon "Mais barato" "landing: cartão ilustrativo sem sugestão de preço"
+
 echo
 echo "RESULTADO: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

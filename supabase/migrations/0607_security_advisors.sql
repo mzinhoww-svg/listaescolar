@@ -1,5 +1,5 @@
 -- 0607_security_advisors: revisão dos achados de advisor D-093/D-094/D-096 (S19). Sem mudança de schema para
--- D-093 e D-096 (ver Ruling no ledger, seção S19) — este arquivo documenta a verificação e só age sobre D-094.
+-- D-093 e D-096 (ver Ruling no ledger, seção S19) — este arquivo só documenta a verificação (sem SQL efetivo).
 --
 -- D-093 (view `public.stationery_public` "SECURITY DEFINER"): verificado o SQL da 0302 — a view já seleciona só
 -- colunas públicas (id, slug, trade_name, municipality_id, neighborhood, offers_pickup, offers_delivery,
@@ -19,17 +19,14 @@
 -- migration nossa; ação real (revogar EXECUTE de anon) fica para o humano/sessão com acesso ao Supabase Studio
 -- do projeto de staging. D-096 permanece `aberta`, rebaixada: verificada, só falta a ação em `rls_auto_enable()`.
 --
--- D-094 (`pg_net` no schema `public`): a extensão não é criada por NENHUMA migration deste repositório (foi
--- instalada manualmente no staging pelo humano; ver PROGRESS.md). Não existe no banco local — o bloco abaixo é
--- idempotente e NO-OP aqui; só age quando esta migration for aplicada num banco que já tem `pg_net` em `public`
--- (staging). Esta migration NÃO é aplicada ao staging por esta sessão (inviolável desta tarefa); ver Ruling.
+-- D-094 (`pg_net` no schema `public`): NO-OP DE PROPÓSITO (revisão de segurança da S19, I6). A extensão não é criada
+-- por NENHUMA migration deste repositório (instalada manualmente no staging) e o `pg_net` NÃO é relocável:
+-- `ALTER EXTENSION pg_net SET SCHEMA` falha ("extension ... does not support SET SCHEMA"), e `DROP/CREATE EXTENSION`
+-- destruiria o schema `net` de que depende o job `ocr-worker-tick` do staging (`net.http_post`). O advisor
+-- "extension in public" é da plataforma Supabase para o `pg_net`; D-094 fica ACEITA como advisor conhecido (ver
+-- Ruling na seção S19 do ledger e DEBT.md). Nenhuma mudança de schema aqui.
 do $$
 begin
-  if exists (
-    select 1 from pg_extension e join pg_namespace n on n.oid = e.extnamespace
-     where e.extname = 'pg_net' and n.nspname = 'public'
-  ) then
-    execute 'alter extension pg_net set schema extensions';
-  end if;
+  null;
 end;
 $$;

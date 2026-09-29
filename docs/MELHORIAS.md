@@ -23,6 +23,10 @@ Os números agregados que existem no repositório (`docs/superpowers/e2e/pesquis
 
 Tratamento: as hipóteses abaixo que se apoiam nisso estão marcadas "hipótese da pesquisa"; devem ser recalibradas quando houver 100 respostas completas (meta da pesquisa: 31/10/2026).
 
+### Resultado da medição "antes" (build local, mediana de 3 execuções)
+
+Desempenho 93 a 99 e acessibilidade 100 em todas as 9 páginas medidas; axe sem violação em nenhuma. Os critérios numéricos do aceite já passam no build local; M08 e M09 passam a significar "não regredir e cobrir as áreas não medidas" (admin, B2B, escola, conta, cotação). O ganho esperado desta fatia está no funil (M03 a M06, M11 a M13), não nas notas. Detalhes em `docs/superpowers/evidencias/S28/antes/`.
+
 ## 2. Mapa dos funis
 
 Legenda de risco de abandono: **A** alto, **M** médio, **B** baixo. Cada linha cita a rota e o que foi observado no código da `main` e na demonstração local.

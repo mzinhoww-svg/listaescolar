@@ -80,3 +80,27 @@ describe("GradeYearPicker", () => {
     expect(form).toHaveAttribute("action", "/escolas/51001234");
   });
 });
+
+describe("GradeYearPicker · atalhos das listas publicadas (revisão UX B1)", () => {
+  const base = { inep: "99001001", serie: null, ano: null, years: [2026, 2027] } as const;
+
+  it("sem série escolhida e com lista publicada, mostra atalhos e não diz que não há lista", () => {
+    render(<GradeYearPicker {...base} publishedShortcuts={[{ gradeSlug: "ef-4", year: 2027 }]} />);
+    const link = screen.getByRole("link", { name: "4º ano · 2027" });
+    expect(link).toHaveAttribute("href", "/escolas/99001001/ef-4?ano=2027");
+    expect(link.className).toContain("min-h-11");
+    expect(screen.queryByText(/Nenhuma lista publicada/)).toBeNull();
+    expect(screen.getByText("Escolha a série para ver a lista")).toBeInTheDocument();
+  });
+
+  it('"nenhuma publicada" só quando a consulta voltou vazia', () => {
+    render(<GradeYearPicker {...base} publishedShortcuts={[]} />);
+    expect(screen.getByText(/Nenhuma lista publicada está disponível/)).toBeInTheDocument();
+  });
+
+  it("consulta não feita (undefined) não afirma que não há lista", () => {
+    render(<GradeYearPicker {...base} />);
+    expect(screen.queryByText(/Nenhuma lista publicada/)).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Listas publicadas" })).toBeNull();
+  });
+});

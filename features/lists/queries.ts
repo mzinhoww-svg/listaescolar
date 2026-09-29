@@ -168,3 +168,30 @@ export async function listVersionHistory(
   if (error) throw new Error(`lists: consulta de histórico falhou (${error.code})`);
   return (data ?? []).map((r) => toPublicVersionSummary(r));
 }
+
+export type PublishedGradeYear = { gradeSlug: string; year: number };
+
+/** Séries/anos com lista publicada de uma escola (dado real, para os atalhos da página da escola). Vazio se nenhuma. */
+export async function listPublishedGradeYears(inep: string, deps: ListQueryDeps = {}): Promise<PublishedGradeYear[]> {
+  const client = deps.client ?? createPublicClient();
+  const { data: school, error: e1 } = await client.from("schools").select("id").eq("inep", inep).maybeSingle();
+  if (e1) throw new Error(`lists: consulta de escola falhou (${e1.code})`);
+  if (!school) return [];
+  const { data: lists, error: e2 } = await client
+    .from("school_lists")
+    .select("grade_id, school_year, current_version_id")
+    .eq("school_id", school.id)
+    .eq("status", "published");
+  if (e2) throw new Error(`lists: consulta de listas falhou (${e2.code})`);
+  const rows = (lists ?? []).filter((r) => r.current_version_id);
+  if (rows.length === 0) return [];
+  const { data: grades, error: e3 } = await client.from("grades").select("id, slug");
+  if (e3) throw new Error(`lists: consulta de séries falhou (${e3.code})`);
+  const slugById = new Map((grades ?? []).map((g) => [g.id as string, g.slug as string]));
+  const out: PublishedGradeYear[] = [];
+  for (const r of rows) {
+    const slug = slugById.get(r.grade_id as string);
+    if (slug) out.push({ gradeSlug: slug, year: Number(r.school_year) });
+  }
+  return out;
+}

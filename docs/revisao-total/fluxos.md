@@ -19,7 +19,8 @@ flowchart LR
   lista -->|"QR"| qr["/l/[code]/qr"]
   curto -->|"redireciona"| lista
   lista -->|"Montar carrinho"| carrinho["/carrinho/novo (J2)"]
-  lista -->|"Pedir cotação"| cotacao["/cotacao/nova (J2)"]
+  lista -. "AUSENTE hoje: só o carrinho leva à cotação (J1-02)" .-> cotacao["/cotacao/nova (J2)"]
+  semlista -. "AUSENTE hoje: falta Enviar a lista (J1-04)" .-> enviar
   publicou{{"Escola publicou a lista (J5)"}} -.-> lista
   lista -.->|"exige login"| entrar["/entrar (J3)"]
 ```
@@ -33,9 +34,9 @@ flowchart LR
   entrar -.->|"volta ao ponto de origem"| novo
   novo -->|"Comparar opções"| cart["/carrinho/[id]"]
   cart -->|"Ir para a loja"| irpara{{"/ir-para/[id]/[loja] (site da loja)"}}
-  cart -->|"Pagar / checkout"| checkout["/carrinho/[id]/checkout"]
+  cart -->|"checkout"| checkout["/carrinho/[id]/checkout"]
   cart -->|"Pedir cotação"| nova["/cotacao/nova"]
-  lista -->|"Pedir cotação"| nova
+  lista -. "não há link direto (J1-02)" .-> nova
   cotacaoidx["/cotacao"] -->|"Nova cotação"| nova
   nova -->|"escolhe papelaria e envia"| lead{{"Lead chega à papelaria (J6)"}}
   lead -.->|"papelaria responde"| cot["/cotacao/[code]"]

@@ -8,12 +8,23 @@ export function StudentsSection({ students }: { students: readonly StudentRow[] 
     <section aria-label="Seus alunos" className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-extrabold">Seus alunos</h2>
-        <Link href="/conta/alunos/novo" className="text-verde-fundo text-[13px] font-extrabold">
+        <Link href="/conta/alunos/novo" className="text-verde-fundo flex min-h-11 items-center text-[13px] font-extrabold">
           Adicionar
         </Link>
       </div>
       {students.length === 0 ? (
-        <p className="text-texto-2 text-[13px] font-semibold">Nenhum aluno cadastrado ainda.</p>
+        <div className="bg-branco-tonal flex flex-col gap-3 rounded-[20px] p-4">
+          <p className="text-[15px] font-extrabold">Comece por aqui</p>
+          <p className="text-texto-2 text-[13px] leading-relaxed font-semibold">
+            Cadastre cada filho só pelo apelido e pela série. Assim você guarda a lista certa de cada um.
+          </p>
+          <Link
+            href="/conta/alunos/novo"
+            className="bg-tinta text-papel focus-visible:outline-verde-fundo flex h-12 items-center justify-center rounded-botao text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            Adicionar aluno
+          </Link>
+        </div>
       ) : (
         <ul className="flex flex-col gap-2.5" aria-label="Alunos">
           {students.map((s) => (

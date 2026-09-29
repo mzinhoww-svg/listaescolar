@@ -8,6 +8,7 @@ import { SaveListButton } from "@/components/lists/SaveListButton";
 import { UnpublishedState } from "@/components/lists/UnpublishedState";
 import { VersionHistory } from "@/components/lists/VersionHistory";
 import { WatchButton } from "@/components/notifications/WatchButton";
+import { WhatsAppShareButton } from "@/components/share/WhatsAppShareButton";
 import { ShareListCard } from "@/components/share/ShareListCard";
 import { getSessionActor } from "@/features/auth/actor";
 import { unwatchListAction, watchListAction } from "@/app/conta/notificacoes/actions";
@@ -18,6 +19,7 @@ import { defaultAcademicYear, findGrade, parseGradeSelection } from "@/features/
 import { getPublishedList, listVersionHistory } from "@/features/lists/queries";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { listMyStudents } from "@/features/students/queries";
+import { encodeShortCode, shortLinkUrl } from "@/features/short-links/code";
 import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
 import { siteBase } from "@/lib/site-base";
 
@@ -101,6 +103,14 @@ export default async function ListPage({ params, searchParams }: Props) {
             >
               Montar carrinho com esta lista
             </Link>
+            {shareOrigin ? (
+              <WhatsAppShareButton
+                schoolName={school.name}
+                gradeLabel={grade.label}
+                year={year}
+                link={shortLinkUrl(encodeShortCode({ inep: school.inep, gradeSlug: grade.slug }), shareOrigin)}
+              />
+            ) : null}
             <SaveListButton
               listId={list.id}
               students={myStudents.map((s) => ({ id: s.id, nickname: s.nickname }))}

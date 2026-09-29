@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Screen } from "@/components/auth/Screen";
 import { BackHeader } from "@/components/cart/CartStates";
 import { formatWhen, moneyOrUnavailable } from "@/components/leads/format";
+import { LeadNextStep } from "@/components/leads/LeadNextStep";
 import { MessagePreview } from "@/components/leads/MessagePreview";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
@@ -67,6 +68,7 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
           <div className={row}><dt className="text-texto-2">Válido até</dt><dd className="font-extrabold">{formatWhen(lead.expiresAt)}</dd></div>
         </dl>
       </section>
+      <LeadNextStep status={lead.status} />
       {preview ? <MessagePreview text={preview} /> : null}
       {open ? (
         <>

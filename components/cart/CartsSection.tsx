@@ -21,7 +21,12 @@ export function CartsSection({ carts }: { carts: readonly CartSummaryRow[] }) {
         ) : null}
       </div>
       {shown.length === 0 ? (
-        <p className="text-texto-2 text-[13px] font-semibold">Nenhum carrinho ainda.</p>
+        <p className="text-texto-2 text-[13px] font-semibold">
+          Nenhum carrinho ainda. Abra uma lista publicada e toque em Montar carrinho.{" "}
+          <Link href="/escolas" className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
+            Buscar a escola
+          </Link>
+        </p>
       ) : (
         <ul className="flex flex-col gap-2.5" aria-label="Carrinhos recentes">
           {shown.map((c) => (

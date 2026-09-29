@@ -11,6 +11,8 @@ import { listMySavedLists } from "@/features/saved-lists/queries";
 import { listMyStudents } from "@/features/students/queries";
 import { createClient } from "@/lib/supabase/server";
 
+const ROLE_LABEL: Record<string, string> = { parent: "Família", school_member: "Escola", stationery_member: "Papelaria", admin: "Equipe ListaCerta" };
+
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Minha conta · ListaCerta", robots: { index: false, follow: false } };
 
@@ -63,8 +65,8 @@ export default async function AccountHubPage() {
       <section aria-label="Perfil" className="flex flex-col gap-2 border-t border-black/10 pt-6">
         <dl className="text-texto-2 flex flex-col gap-1 text-[13px] font-semibold">
           <div className="flex gap-2">
-            <dt className="font-extrabold">Papel</dt>
-            <dd>{role}</dd>
+            <dt className="font-extrabold">Perfil</dt>
+            <dd>{ROLE_LABEL[role] ?? "Conta"}</dd>
           </div>
         </dl>
         <Link

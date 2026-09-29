@@ -31,7 +31,8 @@ export type LlmRequest = {
   temperature?: number;
   maxTokens?: number;
 };
-export type Usage = { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+/** Uso informado pelo provedor. `costUsdMicros`: custo em micros de dólar, só quando o provedor o devolveu. */
+export type Usage = { promptTokens?: number; completionTokens?: number; totalTokens?: number; costUsdMicros?: number };
 export type LlmResponse = { text: string; model: string; usage?: Usage; latencyMs: number };
 export type CallOptions = { signal?: AbortSignal };
 
@@ -67,6 +68,8 @@ export type DecisionRecord = {
   startedAt: string;
   finishedAt: string;
   latencyMs: number;
+  /** Uso desta tentativa, quando o provedor informou; ausente = nulo no banco. */
+  usage?: Usage;
 };
 export interface DecisionRecorder {
   record(decision: DecisionRecord): Promise<void>;

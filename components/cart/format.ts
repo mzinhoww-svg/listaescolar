@@ -86,3 +86,15 @@ export function storesText(option: CartOption): string {
   if (!isSelectable(option)) return "sem lojas com preço";
   return option.stores.length === 1 ? "1 loja" : `${option.stores.length} lojas`;
 }
+
+/** Opções sem preço de loja (a papelaria local fica de fora: ela tem o próprio caminho, a cotação). */
+export function unpricedStoreOptions(options: readonly CartOption[]): CartOption[] {
+  return options.filter((o) => !isSelectable(o) && o.strategy !== "local_stationery");
+}
+
+/** Opções que ganham cartão: as com preço e a papelaria local (que traz o pedido de cotação). */
+export function visibleOptions(options: readonly CartOption[]): CartOption[] {
+  return options.filter((o) => isSelectable(o) || o.strategy === "local_stationery");
+}
+
+export const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;

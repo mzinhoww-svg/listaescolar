@@ -195,3 +195,36 @@ export async function listPublishedGradeYears(inep: string, deps: ListQueryDeps 
   }
   return out;
 }
+
+export type ListOrigin = { inep: string; gradeSlug: string; year: number };
+
+/** Escola, série e ano de uma versão publicada (para "voltar à lista"). Versão inexistente, não pública ou cópia privada → null. */
+export async function getListOriginByVersion(versionId: string, deps: ListQueryDeps = {}): Promise<ListOrigin | null> {
+  const client = deps.client ?? createPublicClient();
+  const { data: version, error: e1 } = await client
+    .from("list_versions")
+    .select("list_id")
+    .eq("id", versionId)
+    .in("status", ["published", "superseded"])
+    .maybeSingle();
+  if (e1) throw new Error(`lists: consulta de versão falhou (${e1.code})`);
+  if (!version) return null;
+  const { data: list, error: e2 } = await client
+    .from("school_lists")
+    .select("school_id, grade_id, school_year")
+    .eq("id", version.list_id)
+    .maybeSingle();
+  if (e2) throw new Error(`lists: consulta de lista falhou (${e2.code})`);
+  if (!list) return null;
+  const [school, grade] = await Promise.all([
+    client.from("schools").select("inep").eq("id", list.school_id).maybeSingle(),
+    client.from("grades").select("slug").eq("id", list.grade_id).maybeSingle(),
+  ]);
+  if (school.error || grade.error || !school.data || !grade.data) return null;
+  return { inep: String(school.data.inep), gradeSlug: String(grade.data.slug), year: Number(list.school_year) };
+}
+
+/** Caminho da página da lista de origem, ou null quando não há como resolvê-la. */
+export function listOriginHref(origin: ListOrigin | null): string | null {
+  return origin ? `/escolas/${origin.inep}/${origin.gradeSlug}?ano=${origin.year}` : null;
+}

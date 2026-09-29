@@ -4,13 +4,13 @@ export type ButtonVariant = "primary" | "outline" | "text" | "danger" | "icon" |
 export type ButtonSize = "md" | "lg";
 
 const BASE =
-  "rounded-botao inline-flex shrink-0 items-center justify-center gap-2 text-base font-extrabold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-verde-fundo disabled:opacity-50";
+  "rounded-botao relative inline-flex shrink-0 items-center justify-center gap-2 text-base font-extrabold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-verde-fundo disabled:opacity-50";
 
 const VARIANT: Record<ButtonVariant, string> = {
   primary: "bg-tinta px-6 text-papel",
   outline: "border-[1.5px] border-tinta bg-transparent px-6 text-tinta",
   // Terciário: sem contorno nem fundo; alvo mínimo de 44 px (DESIGN.md, seção 3).
-  text: "bg-transparent text-tinta underline-offset-4 hover:underline min-h-11 px-2",
+  text: "bg-transparent text-verde-fundo underline underline-offset-4 min-h-11 px-2",
   // Só ícone: 44 x 44 px, sem padding lateral. Exige `aria-label`.
   icon: "h-11 w-11 p-0 px-0 bg-transparent text-tinta",
   danger: "border-[1.5px] border-erro-texto bg-transparent px-6 text-erro-texto",
@@ -57,11 +57,11 @@ export function Button({
       aria-busy={loading ? true : undefined}
       {...rest}
     >
-      {children}
+      {loading ? <span className="inline-flex items-center gap-2 opacity-0">{children}</span> : children}
       {loading ? (
         <span
           aria-hidden="true"
-          className="size-4 shrink-0 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
+          className="absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin"
         />
       ) : null}
     </button>

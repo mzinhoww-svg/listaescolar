@@ -59,7 +59,7 @@ Cada linha aponta o arquivo real. Componente React até 250 linhas; Server Compo
 | Botão (todas as variantes) | `Button` e `buttonClass(variant, size)`: primary, outline, text, danger, icon, whatsapp (`loading` desabilita e anuncia); 48 px (`md`) ou 56 px (`lg`); foco em Verde Fundo, 2 px + offset 2 px | `components/ui/Button.tsx` |
 | Botão primário de tela | fundo Tinta, texto Papel, pílula, 56 px, peso 800, foco em Verde Fundo | `primaryButton` em `components/auth/Screen.tsx` |
 | Botão secundário | contorno Tinta 1,5 px, fundo transparente, 52 px | `outlineButton` em `components/auth/Screen.tsx` |
-| Botão terciário | texto Verde Fundo sublinhado, mesma área de toque de 44 px | links de `components/claims/*`, `components/stationeries/StepService.tsx` |
+| Botão terciário | variante `text` do `Button`: texto Verde Fundo com sublinhado sempre visível, mínimo 44 px de altura | `components/ui/Button.tsx`; links de `components/claims/*`, `components/stationeries/StepService.tsx` |
 | Botão de WhatsApp | fundo Verde Certo, texto Tinta, 56 px | `components/stationeries/PublicProfileView.tsx` |
 | Campo | rótulo visível acima, fundo Campo, borda 1,5 px `texto-3` (5,3:1), altura 52 px, raio 14 px, `autocomplete` e `inputMode` corretos; `Field` + `fieldInputClass` (regra global em `app/globals.css` cobre `input.bg-campo` antigos) | `components/ui/Field.tsx`, `app/entrar/LoginForm.tsx` |
 | Confirmação destrutiva | um só padrão: `<dialog>` nativo, botão de risco por último em `erro-texto`, Esc e Cancelar fecham; nunca `window.confirm` | `components/ui/ConfirmDialog.tsx`, `components/claims/ActionForm.tsx` |

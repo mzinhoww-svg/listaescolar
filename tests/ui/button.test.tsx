@@ -43,4 +43,19 @@ describe("Button (S29)", () => {
       expect(buttonClass(v)).toContain("rounded-botao");
     }
   });
+  it("loading não altera a largura: rótulo continua no fluxo e o spinner é absoluto", () => {
+    const { container } = render(<Button loading>Pedir cotação</Button>);
+    const b = screen.getByRole("button", { name: /Pedir cotação/ });
+    expect(b.className).toContain("relative");
+    expect(b.textContent).toBe("Pedir cotação");
+    const spinner = container.querySelector('span[aria-hidden="true"]');
+    expect(spinner?.className).toContain("absolute");
+    expect(b.querySelector("span.opacity-0")).not.toBeNull();
+  });
+  it("text segue o DESIGN.md: Verde Fundo com sublinhado sempre visível", () => {
+    const c = buttonClass("text");
+    expect(c).toContain("text-verde-fundo");
+    expect(c).toMatch(/(^| )underline( |$)/);
+    expect(c).not.toContain("hover:underline");
+  });
 });

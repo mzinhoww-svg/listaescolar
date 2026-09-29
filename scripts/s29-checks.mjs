@@ -24,6 +24,7 @@ import { tsImport } from "tsx/esm/api";
 import { PROBE, createSessions } from "./lib/sessions.mjs";
 
 const { countPrimaryPerRegion, findDeadEnds, findOffSystemButtons, findOffTokenMotion } = await tsImport("../lib/ux-checks/index.ts", import.meta.url);
+const { JOURNEYS } = await tsImport("../lib/ux-checks/journeys.ts", import.meta.url);
 const { encodeShortCode } = await tsImport("../features/short-links/code.ts", import.meta.url);
 
 const argv = process.argv.slice(2);
@@ -65,41 +66,6 @@ const P = {
   leadCode: psql("select code from public.leads where code like 'LC-S29%' order by created_at limit 1"),
   submissionId: psql("select id from public.list_submissions order by created_at desc limit 1"),
   slug: psql("select slug from public.stationeries where slug like 's29-%' limit 1"),
-};
-
-const r = (path, who = "pub", extra = {}) => ({ path, who, ...extra });
-/** Rotas por jornada, em ordem (spec §4). `{x}` é trocado por P.x; sem dado semeado a rota é pulada e registrada. */
-export const JOURNEYS = {
-  J1: { nome: "Família acha a lista", rotas: [r("/"), r("/escolas"), r("/escolas/{inep}"), r("/escolas/{inep}/{serie}?ano=2027"), r("/l/{code}"), r("/l/{code}/qr")] },
-  J2: {
-    nome: "Família compra",
-    rotas: [r("/carrinho/novo", "familia"), r("/carrinho/{cartId}", "familia"), r("/carrinho/{cartId}/checkout", "familia"), r("/cotacao/nova", "familia"), r("/cotacao/{leadCode}", "familia"), r("/conta/compras", "familia")],
-  },
-  J3: {
-    nome: "Família entra e cuida da conta",
-    rotas: [r("/entrar"), r("/conta", "familia"), r("/conta/alunos/novo", "familia"), r("/conta/listas-salvas", "familia"), r("/conta/carrinhos", "familia"), r("/conta/notificacoes", "familia"), r("/conta/privacidade", "familia")],
-  },
-  J4: { nome: "Família envia a lista da escola", rotas: [r("/enviar-lista", "familia"), r("/enviar-lista/{submissionId}", "familia"), r("/enviar-lista/{submissionId}/revisar", "familia")] },
-  J5: { nome: "Escola assume e publica", rotas: [r("/escolas/{inep}/reivindicar", "familia"), r("/escolas/{inep}/reivindicar/confirmar", "familia"), r("/escola", "escola"), r("/escola/listas/nova", "escola")] },
-  J6: {
-    nome: "Papelaria vende",
-    rotas: [
-      r("/cadastrar-papelaria", "familia"), r("/papelaria", "papelaria"), r("/papelaria/areas", "papelaria"), r("/papelaria/catalogo", "papelaria"), r("/papelaria/creditos", "papelaria"),
-      r("/papelaria/leads", "papelaria"), r("/papelaria/leads/{leadCode}", "papelaria"), r("/papelaria/desempenho", "papelaria"), r("/papelarias/{slug}"),
-    ],
-  },
-  J7: {
-    nome: "Equipe opera",
-    rotas: ["", "/revisao", "/reivindicacoes", "/papelarias", "/denuncias", "/contestacoes", "/planos", "/ia", "/repasses", "/inadimplencia", "/campanhas", "/parceiros", "/importacoes", "/eventos", "/auditoria"].map((x) => r(`/admin${x}`, "admin")),
-  },
-  J8: {
-    nome: "Parceiro B2B integra",
-    rotas: [r("/parceiros"), r("/parceiros/termos"), r("/parceiros/docs"), ...["", "/api", "/docs", "/widget", "/webhooks", "/campanhas", "/insights", "/faturamento", "/conta"].map((x) => r(`/b2b${x}`, "parceiro"))],
-  },
-  J9: {
-    nome: "Sistema e bordas",
-    rotas: [r("/403", "pub", { status: 403 }), r("/rota-inexistente-s29", "pub", { status: 404 }), r("/pesquisa"), r("/pesquisa/privacidade"), r("/termos"), r("/privacidade"), r("/sobre"), r("/como-funciona")],
-  },
 };
 
 const fill = (path) => {
@@ -148,6 +114,10 @@ async function collectCss(doc, pageUrl) {
 async function checkRoute(route) {
   const { out: path, missing } = fill(route.path);
   const row = { key: route.path, path, who: route.who, fails: [], notes: [] };
+  if (route.skip) {
+    row.notes.push(`pulada: ${route.skip}`);
+    return row;
+  }
   if (missing.length) {
     row.notes.push(`pulada: sem dado semeado (${missing.join(", ")})`);
     return row;
@@ -171,7 +141,7 @@ async function checkRoute(route) {
   await collectCss(doc, res.url);
   const many = countPrimaryPerRegion(doc).filter((x) => x.count > 1);
   if (many.length) row.fails.push(`mais de uma ação principal: ${many.map((x) => `${x.region}=${x.count}`).join(", ")}`);
-  const dead = findDeadEnds(doc, finalPath);
+  const dead = findDeadEnds(doc, finalPath, new URL(BASE).origin);
   if (dead.length) row.fails.push(`beco sem saída: ${dead.join("; ")}`);
   const off = findOffSystemButtons(doc);
   if (off.length) row.fails.push(`botão fora do sistema (${off.length}): ${off.slice(0, 3).join(" | ")}`);

@@ -5,11 +5,14 @@
  */
 import { execFileSync } from "node:child_process";
 
+import { assertLocalUrls } from "./local-host.mjs";
+
 const sh = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...opts });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** @param {{ base: string, mailpit: string, sessionName: (k: string) => string }} cfg */
 export function createSessions({ base, mailpit, sessionName }) {
+  assertLocalUrls({ BASE: base, MAILPIT: mailpit });
   const ab = (k, ...a) => sh("agent-browser", ["--session", sessionName(k), ...a]);
   async function login(k, email, next) {
     const count = async () => (await (await fetch(`${mailpit}/api/v1/search?query=to:${email}`)).json()).messages_count;

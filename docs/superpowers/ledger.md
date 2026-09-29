@@ -2734,6 +2734,150 @@ Fase 1 (diagnóstico) e medição "antes", worktree `S28-excelencia`, branch `sl
 - Ruling: medição de desempenho e acessibilidade em build de produção local (`next start`) com Supabase local e dados de demonstração, não no preview da Vercel (público, apontado ao staging e sem dados de demonstração completos) — reprodutível e sem tocar staging; Lighthouse 12, mediana de 3 execuções, 4G simulado — se estiver errado, repetir no preview antes do PR (o script aceita `BASE`).
 - Ruling: `pesquisa com mães` só entra como hipótese (vocabulário das dores e canais), sem percentual, porque o repositório só tem dados de teste apagados e uma resposta real; os dados do staging da pesquisa não foram consultados nesta fase — se estiver errado, recalibrar `MELHORIAS.md` quando houver 100 respostas completas.
 
+## S19 · Segurança e observabilidade
+
+Branch `slice/S19-seguranca-observabilidade` (worktree T3, trilha 3), criada de `main` em `f90e236` (S00–S18 e
+S21–S27 dentro). Plano em `docs/superpowers/plans/2026-09-27-s19-seguranca-observabilidade.md`. Seis tasks:
+rate limit (D-001), CSP/cabeçalhos de segurança + fonte local (D-072), Sentry sem PII + escopo por papel (D-005),
+alertas de fila morta/taxa de erro de IA, dívida de banco (D-093/D-094/D-096) + D-158, triagem do resto da dívida
+com dono S19.
+
+**Ruling 1 — rate limit em memória, primeira camada (D-001).** `lib/net/client-ip.ts` generalizado para aceitar
+qualquer `Headers`-like (`Request.headers` ou `ReadonlyHeaders` de `next/headers`) e três novos guardas
+(`features/{auth,leads,submissions}/rate-limit.ts`) usando o mesmo balde em memória por instância já aceito nas
+S24/S25 (`lib/rate-limit/memory-bucket.ts`). Motivo: coerência com o resto do produto — login (5/min/IP), lead
+(10/10min/IP+ator) e envio de lista/OCR (5/10min/IP+ator) não têm custo de terceiro alto o bastante para
+justificar contador no banco nesta fatia; o Supabase Auth já limita por e-mail independentemente. Custo se
+errado: trocar por contador no Postgres numa fatia futura, sem mudar a assinatura pública das três funções de
+guarda (`*RateLimited(headers, ...)`) nem os call sites.
+
+**Ruling 2 — CSP com nonce embutida no `proxy.ts` existente, não num `middleware.ts` novo.** O Next 16 renomeou
+"middleware" para "proxy" e só aceita UM arquivo; havia um `proxy.ts` preexistente (S02, sessão/controle de
+rota). `lib/security-headers.ts` (função pura, testável) gera o CSP com nonce por requisição; `proxy.ts` gera o
+nonce, encaminha em `x-nonce` (header da REQUISIÇÃO — é assim que o Next aplica o nonce aos próprios scripts que
+gera) e aplica os cabeçalhos na resposta de `updateSession`, sem alterar a lógica de sessão/rota. Confirmado por
+curl num build de produção local: o Next aplicou o nonce até no `Link` de preload da fonte. `frame-ancestors
+'self'`: pesquisado o `public/widget.js` (S25) e confirmado que NÃO usa iframe — desenha DOM na página do
+PARCEIRO via `fetch`/CORS `*`. Por isso nenhuma exceção de `frame-ancestors` foi necessária (ao contrário do que
+o prompt original sugeria); `/api/widget/**` e `/widget.js` só ficam FORA do CSP (não faria efeito útil em
+JSON/JS servido por CORS a terceiros, e evita duplicar cabeçalho com o CORS já definido rota a rota). Custo se
+algum HTML precisar ser embutido por iframe no futuro (nenhum caso hoje): ajustar o matcher/CSP, sem tocar no
+resto.
+
+**Ruling 3 — ADR-007 (PostHog) continua PROPOSTA; CSP/`next.config` preparados sem abrir domínio de terceiro.**
+Nenhum código de tracking foi adicionado. `connect-src`/`script-src` do CSP (`lib/security-headers.ts`) não têm
+nenhuma exceção para `*.posthog.com`/`i.posthog.com` — se o ADR-007 for aprovado, a fatia que o implementar
+adiciona essas duas diretivas junto com o SDK, sem precisar reabrir a estrutura do CSP em si (já é uma lista
+explícita por diretiva).
+
+**Ruling 4 — Sentry: defesa em profundidade sobre o `dataCollection` já desligado.**
+`lib/observability/sentry-redact.ts` (função pura) redige e-mail/telefone/IP de texto livre (mensagem, `extra`,
+migalhas) e remove por completo `request.data`/`query_string`/`cookies`/`headers` residuais, ligada via
+`beforeSend`/`beforeSendTransaction` nos dois `sentry.*.config.ts` — sem `SENTRY_DSN`, tudo isso continua inerte
+(o `if (dsn)` já existente). Escopo por PAPEL (`lib/observability/scope.ts::setRoleScope`, `Sentry.setTag("role",
+...)`, nunca `setUser`) chamado de um único ponto central (`features/auth/queries.ts::getCurrentRole`, `cache()`
+por requisição) — não espalhado pelo código. D-005 fechada: `app/auth/callback` e `app/auth/confirm` agora
+registram o erro do provedor/exchange no Sentry (sem a mensagem crua do provedor, só o código HTTP).
+
+**Ruling 5 — alertas (fila morta + taxa de erro de IA) só in-app, sem canal externo novo.** Migration `0606`
+acrescenta o evento `system_alert` e as chaves fechadas `alert_kind`/`alert_count` a `notifications` (S11) e a
+função `system_alert_notify` (SECURITY DEFINER, `search_path=''`, EXECUTE só `service_role`), que notifica todo
+perfil `admin`, deduplicado por dia. `p_in_app_only = true` de propósito: abrir push/e-mail para este evento
+exigiria também estender o CHECK de `notification_preferences` (evento fora da lista fechada) — fora do escopo
+desta fatia; o admin já vê o alerta na central (sino) ao entrar. Limiares (`features/health/thresholds.ts`):
+fila morta = qualquer `jobs.status = 'dead'` (sem tentativa restante, já é falha definitiva do pipeline S07/S09);
+taxa de erro de IA = `ai_decisions.decision = 'failed'` acima de 20% nas últimas 24h, com amostra mínima de 5
+decisões (evita alerta por 1 falha isolada). São limiares de OPERAÇÃO, não preço/prazo de produto — ajustáveis
+por Ruling futuro se a operação real pedir outro número. `/api/cron/health-check` reaproveita o mesmo contrato de
+segredo dos outros crons (`features/leads/cron-auth.ts`, 503 sem `CRON_SECRET`, 401 errado).
+
+**Ruling 6 — D-072 (fonte local): um único arquivo variável, não 4 arquivos estáticos.** Ao pedir os pesos
+500+600+700+800 juntos, o próprio Google Fonts respondeu com um ÚNICO arquivo woff2 variável (confirmado:
+mesma URL para os 4 pesos quando pedidos juntos; URLs diferentes quando pedidos um a um) — `assets/fonts/
+PlusJakartaSans-latin.woff2` (27 KB, só subconjunto `latin`, igual ao que `next/font/google` já usava).
+`app/layout.tsx` troca para `next/font/local` com `weight: "500 800"`. Build testado sem depender de rede.
+
+**Ruling 7 — D-093/D-094/D-096: verificação em vez de mudança de schema, migration `0607` só para D-094.**
+D-093 (view `stationery_public` "SECURITY DEFINER"): o SQL da 0302 já só expõe colunas públicas de papelaria
+`active` (sem contato privado nem dado de menor) — a segunda alternativa que o próprio item admite já está
+satisfeita; trocar para `security_invoker = true` quebraria a leitura pública (a tabela base não tem grant/
+policy para `anon`, de propósito, comentário original da 0302). D-096: `auth_role()` e `stationery_is_active
+(uuid)` são concedidas a `anon`/`authenticated` DE PROPÓSITO (nenhuma devolve dado sensível — papel do próprio
+chamador; booleano de status); `rls_auto_enable()` é função DA PLATAFORMA Supabase, fora de qualquer migration
+deste repositório — não pode ser versionada aqui; ação real (revogar EXECUTE de anon) só pelo humano/sessão com
+acesso ao Supabase Studio do staging. D-094 (pg_net em `public`): a extensão não é criada por NENHUMA migration
+deste repositório (instalada manualmente no staging); migration `0607_security_advisors.sql` traz um bloco
+idempotente que só age se a extensão já existir — NO-OP neste banco local, pronto para quando uma sessão futura
+aplicar no staging. Nenhuma migration desta fatia foi aplicada ao staging (inviolável desta tarefa).
+
+**Ruling 8 — D-158 fechada com o mesmo padrão de D-057 (S18).** Os 7 módulos citados pelo D-158 foram divididos
+em arquivos-irmãos por responsabilidade (billing/repository.ts e service.ts; b2b/api/handler.ts; payouts/
+repository.ts; conversion/repository.ts; b2b/repository.ts; campaigns/repository.ts) — movimento puro, nenhum
+comportamento mudou, `pnpm check:sizes` confirma 0 arquivos acima de 250 linhas. Achado no caminho (corrigido
+antes do commit, não uma mudança de comportamento): `features/b2b/repository-keys.ts::getKeyEnvironment` tinha
+copiado `failMasked` em vez de `fail` do original — conferido linha a linha contra o arquivo antes da divisão e
+corrigido. `features/billing/service.ts` e `features/b2b/api/handler.ts` precisaram de um arquivo `*-types.ts`/
+`handler-types.ts` à parte para os tipos compartilhados, evitando import circular entre o arquivo principal e o
+irmão que ele próprio chama (`service-pix.ts`, `deps-real.ts`); `features/b2b/api/with-api-key.ts` (a função que
+os `route.ts` usam) não pôde ser reexportada de volta por `handler.ts` pelo mesmo motivo — os 6 `route.ts` de
+`/v1/*` e o teste de banco (`tests/db/b2b-api.test.ts`) passam a importar `withApiKey` direto de
+`@/features/b2b/api/with-api-key` (`otherMethods` continua vindo de `@/features/b2b/api/handler`).
+
+**Ruling 9 — D-009 corrigida.** `CRON_SECRET` em `lib/env.ts` tinha `z.string().min(16)`: um segredo curto
+configurado por engano derrubava `getServerEnv()` inteiro (500 em QUALQUER rota que o chame, ex. o pepper B2B),
+em vez do 503 pontual que só a própria rota de cron implementa (`CRON_SECRET_MIN_LENGTH`, `features/leads/
+cron-auth.ts`). Trocado para `z.string().min(1)` — o teto de 16 continua só no contrato de cada rota de cron.
+
+**Ruling 10 — triagem do resto da dívida com dono S19, sem reabrir trilhas já revisadas por segurança.**
+D-004 e D-001 resolvidas (ver acima); D-009 corrigida. Os demais itens com dono S19 (D-003, D-008, D-024, D-025,
+D-026, D-056, D-078, D-085, D-086, D-089, D-113, D-123, D-125, D-126, D-127, D-135, D-136, D-137, D-138,
+D-139, D-144, D-149) permanecem `aberta`: a maioria pertence a trilhas de cobrança/B2B/pipeline já revisadas por
+segurança dedicada (billing S21/S23, B2B S24/S25/S26, pipeline S07/S08) — reabrir para corrigir sem uma nova
+rodada de revisão de segurança é risco desproporcional ao ganho, mesmo raciocínio já registrado pela S18 para
+D-158. D-155 (prazo de retenção de `audit_log`) é decisão jurídica do humano, não técnica — mantida `aberta`,
+dono `Humano`, sem ação de código possível aqui. Custo se algum destes se revelar crítico: qualquer um pode virar
+uma fatia dedicada de correção + revisão de segurança, sem depender desta.
+
+**Ruling 11 — D-081 corrigida (custo baixo, teste objetivo).** `parsePushSubscription` (`features/notifications/
+preferences.ts`) validava o endpoint via `isAllowedPushEndpoint` (que usa `new URL()` internamente para decidir
+host/porta) mas devolvia a STRING CRUA para `push_subscription_upsert`; um endpoint real com host em maiúsculas
+ou porta `:443` explícita passava na validação e falhava só no CHECK de `push_subscriptions.endpoint` (0602,
+regex sensível a caixa, sem grupo de porta para https) — "Não foi possível ativar" sem o usuário entender por
+quê. Corrigido com `.transform((e) => new URL(e).toString())` encadeado depois do `.refine()`: grava sempre a
+forma canônica (host minúsculo, porta padrão omitida pela própria serialização de `URL`). Teste novo em
+`tests/notifications/central/preferences.test.ts` cobre host maiúsculo e porta `:443` explícita, confirmando o
+valor normalizado contra o mesmo regex do CHECK. Escopo deliberadamente restrito à ATIVAÇÃO (`subscribePushAction`
+→ `parsePushSubscription`); `unsubscribeSchema` (desativação) não foi tocado — o endpoint usado para desinscrever
+vem do objeto `PushSubscription` do próprio navegador na mesma sessão (sempre já canônico na prática), e D-081
+descreve especificamente a falha de ATIVAÇÃO. Custo se estiver errado: normalizar também o `unsubscribeSchema` é
+aditivo, mesma técnica.
+
+**Rulings da rodada de correções da revisão de segurança (Opus, `f90e236..0dbc6ec`).**
+
+- Ruling (B1): o nonce da CSP vai no cabeçalho `content-security-policy` da REQUISIÇÃO (além de `x-nonce`), definido em `proxy.ts` antes de `updateSession`, e o layout raiz faz `await connection()` — motivo: o Next 16 extrai o nonce do CSP da requisição na renderização por requisição (doc local `content-security-policy.md`); só `x-nonce` deixava os scripts sem nonce e `strict-dynamic` os bloqueava. Provado em `pnpm build && pnpm start`: 22 de 22 `<script>` do HTML com `nonce=` igual ao do cabeçalho de resposta, página hidrata (props/fiber do React presentes, 10 chunks executados), console sem erro de CSP (agent-browser, sessão própria) — custo se errada: páginas voltam a ser estáticas só se o nonce for abandonado (CSP por hash); hoje todo HTML é renderizado por requisição (as rotas de `revalidate` seguem com cache de dados, `/` perde o HTML estático de CDN).
+- Ruling (I3): `buildCsp(nonce, origins)` deriva do ambiente a origem de `NEXT_PUBLIC_SUPABASE_URL` (`img-src`, `frame-src`, `connect-src` e o par `wss`/`ws` do realtime) e a do DSN do Sentry (`SENTRY_DSN` ou `NEXT_PUBLIC_SENTRY_DSN`, só `connect-src`); `'unsafe-eval'` só em `next dev` — motivo: sem isso quebravam o documento da revisão (S15), o supabase-js no navegador e o Sentry do cliente — custo se errada: adicionar outra origem é uma linha em `cspOriginsFromEnv`.
+- Ruling (M1): cabeçalhos base (HSTS, nosniff etc.) valem para toda rota do matcher; só a CSP é pulada em `/api/widget/**` e `/widget.js` — custo: nenhum.
+- Ruling (M2): `/brand/:path*` (fora do matcher do proxy) ganha entrada estática em `headers()` do `next.config.ts` com os cabeçalhos base e `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` (SVG aberto direto não executa script) — custo baixo; `_next/*` fica com os cabeçalhos do próprio Next.
+- Ruling (M3): `preload` removido do HSTS; entrar na lista de preload é irreversível na prática (meses) e depende de todos os subdomínios servirem https — é decisão de go-live da S20, junto do domínio definitivo — custo se errada: reincluir a palavra em `baseSecurityHeaders` e submeter o domínio.
+- Ruling (I1): `system_alert` entra em `NOTIFICATION_EVENTS`, no catálogo (`external: false`, texto por `alert_kind`/`alert_count`) e nos params Zod (`alert_kind` fechado em `dead_jobs`/`ai_error_rate`, `alert_count` inteiro 0–999999), espelhando o validador SQL da 0606; `listNotifications` deixa de lançar para admin com alerta — custo: nenhum (teste com fixture do banco).
+- Ruling (I2): `/api/cron/health-check` agendado em `vercel.json` uma vez por dia (`0 6 * * *`) — motivo: o projeto está no plano Hobby, que só agenda diário (mesmo Ruling da S14); teste garante que todo handler de `app/api/cron/*` esteja no `vercel.json` — custo se errada: passar a horário (`0 * * * *`) ao migrar de plano ou usar pg_cron.
+- Ruling (I4/M5): `redactEvent` passa a redigir recursivamente `contexts`, `spans`, `transaction`, dados de migalha e `extra`, cortando `?query` e `#fragmento` de toda URL ou caminho encontrado (inclusive em texto livre) e removendo chaves de query/fragmento; `redactBreadcrumb` ligado como `beforeBreadcrumb` (servidor e cliente) e `beforeSendTransaction` também no cliente; CPF e CNPJ (com e sem pontuação) mascarados junto de e-mail/telefone/IP — custo: um CPF de 11 dígitos soltos pode sair rotulado `[cpf]` mesmo sendo telefone (irrelevante para o objetivo).
+- Ruling (I5): o balde em memória passa a ter um `Map` por namespace (prefixo antes do primeiro `:`), cada um com o próprio teto de 10 000 chaves e evicção da mais antiga só dentro do namespace; a poda de expiradas usa a janela de cada balde (antes usava a do chamador) — motivo: variar `partnerId` do widget expulsava as chaves de login/lead/envio e zerava os limites — custo: memória por instância pode chegar a (nº de namespaces × 10 000) chaves, ainda pequena.
+- Ruling (M4): login passa a limitar por IP + hash SHA-256 do e-mail normalizado (5 por 10 min) com teto por IP mais alto (30 por 10 min); sem IP identificável não há balde global: teto agregado num namespace próprio (`login-noip`, 300 por 10 min) e o limite por e-mail continua valendo; `submitListAction` só conta a tentativa depois que consentimento e campos passam na validação — motivo: NAT de operadora móvel em campanha escolar bloqueava famílias reais, "unknown" era um balde global e tentativas inválidas gastavam a cota — custo se errada: ajustar as três constantes em `features/auth/rate-limit.ts`. `createLeadAction` não mudou (a validação de negócio fica no serviço e já existe limite por usuário no banco).
+- Ruling (I6): a `0607` deixa de fazer `ALTER EXTENSION pg_net SET SCHEMA` e vira no-op documentado; D-094 fica aceita como advisor da plataforma — motivo: `pg_net` não é relocável e recriá-lo derrubaria o `ocr-worker-tick` do staging (`net.http_post`), então o caminho seguro é não tocar — custo se errada: baixo (advisor WARN persiste); reabrir se a Supabase passar a suportar a mudança.
+- Ruling (M6): defeitos menores da 0606 (params `alert_*` aceitos em qualquer evento; retorno de `system_alert_notify` conta admins mesmo deduplicado; job `dead` realerta todo dia) viram um único item, D-159 (baixa, dono S20), sem editar a migration agora — custo se errada: alerta diário repetido a admins até a 0608.
+- Ruling (reverificação N1): o `rewrite` 403 de `updateSession` passa `request: { headers: request.headers }` — sem isso a página /403 saía sem nonce e o `strict-dynamic` bloqueava todos os scripts — custo se errada: nenhum
+- Ruling (N2): segredo no CAMINHO: `redactText` mascara o primeiro segmento depois de `/api/billing/pix/webhook/`, `/cotacao/`, `/papelaria/leads/` e `/l/` como `[token]` (dentro de URLs absolutas ou caminhos; `request.url` também) — motivo: o token do webhook Pix vazava para `request_path`, `transaction` e atributos de span; as demais são códigos de acesso a lead/cotação — custo se errada: um prefixo a mais mascarado num evento
+- Ruling (N3/N6): CSP ganha `worker-src 'self'` e `manifest-src 'self'`; `img-src`/`frame-src` passam de "origem do Supabase" para `<origem>/storage/v1/` (a rota `/admin/revisao/documento/[id]` é same-origin e redireciona para a URL assinada em `/storage/v1/object/sign/…`) — custo se errada: documento da revisão bloqueado (E2E cobre)
+- Ruling (N4): `ipRateKey` normaliza IPv6 para /64 em todas as chaves de IP (login, lead, envio, widget); login soma `login-email:<hash>` sem IP (15 por 10 min, mais alto que o de IP+e-mail para não deixar um atacante trancar o e-mail alheio por muito tempo); widget ganha `widget-ip:<ip>` (120/min) independente do `partnerId`; o teto de 30/10 min por IP no login fica (constante `LOGIN_IP_CEILING`, ajustável) — custo se errada: falso positivo em NAT móvel grande, ajustar a constante
+- Ruling (N5): `redactEvent` também cobre `tags`, `fingerprint`, `logentry` (mensagem e params) e `exception.values[].stacktrace` (vars); caminho relativo com `chave=valor` perde a query; e-mail com letras Unicode passa a ser reconhecido. Achado: no SDK 11 o padrão é `traceLifecycle: 'stream'`, em que `beforeSendTransaction` NÃO roda e os spans saem cada um por si — por isso `redactSpan` (nome e atributos) é ligado em `beforeSendSpan` no cliente e no servidor — custo se errada: nenhum
+- Ruling (fora de escopo, resolvido): `lib/log-error.ts::safeErrorLabel` (só `code`/`name`) substitui `console.error(msg, error)` com o objeto inteiro em 10 pontos (papelaria, cadastro, catálogo, áreas, admin/papelarias) — `PostgrestError.details` pode trazer CNPJ — custo se errada: log menos detalhado (o Sentry tem a pilha)
+- Ruling (E2E): JSON-LD verificado numa escola verificada não demo (a demo não emite JSON-LD por desenho); documento da revisão verificado por Storage direto, não pelo iframe, por causa do `upgrade-insecure-requests` em http local; D-160 registra repetir no preview https — custo se errada: nenhum em produção (origem https)
+
+Gate desta fatia: `pnpm typecheck && pnpm lint && pnpm test && pnpm db:reset && pnpm test:db && pnpm build`
+verdes em cada task (ver `docs/superpowers/logs/s19-task*.txt` e o relatório final). E2E em
+`docs/superpowers/e2e/S19.md`.
+
 ## Orquestrador único e decisões do humano (2026-09-28)
 
 - Ruling: uma única sessão orquestra S19, S28 e S20; as 4 sessões pares ativas foram avisadas e confirmaram parada; WIP da D-081 (S19 Task 6) revisado e commitado (`5cc39fd`) em vez de descartado — motivo: diff pequeno, coerente com a D-081 e com teste verde — custo se estiver errada: reverter um commit isolado.

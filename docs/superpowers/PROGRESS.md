@@ -64,6 +64,7 @@ Legenda do gate: `unit` = `pnpm test` (Vitest); `db` = `pnpm test:db`; `CI` = jo
 | S22 Atribuição, conversão e contestação (Comércio) | — (sem PR, por instrução) | d774ba2 | 2026-09-26 | ✓ | ✓ | 2971 | 1558 (3 skipped) | ✓ | n/d (não enviado por PR) | n/d | build local, 21 verificações, 0 falhas (`e2e/S22.md`) |
 | S22 · correções da revisão de segurança (Opus) | — (sem PR, por instrução) | bf36686 | 2026-09-26 | ✓ | ✓ | 2971 | 1567 (3 skipped) | ✓ | n/d | n/d | build local, 21 verificações repetidas, 0 falhas; migration 0402 editada no lugar (D-103–D-107, ver ledger-comercio) |
 | S18 Estados e acessibilidade | #53 | f90e236 | 2026-09-27 | ✓ | ✓ | 3468 | 1847 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 18 verificações, 0 falhas (`e2e/S18.md`) |
+| S19 Segurança e observabilidade | a preencher (PR) | a preencher | 2026-09-29 | ✓ | ✓ | 3539 (1 timeout e 5 workers sem subir por carga da máquina; os 22 arquivos afetados passam isolados, 132 testes) | 1855 (3 skipped) | ✓ | verify ✓ db ✓ | ✓ | build local, 105 verificações, 0 falhas (`e2e/S19.md`); duas revisões de segurança (Opus) aplicadas; migrations 0606/0607 a aplicar no staging após o merge |
 
 Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das variáveis `NEXT_PUBLIC_SUPABASE_*` no projeto `listaescolare`; o humano as criou em 2026-09-25 e desde o #22 os previews ficam READY e públicos (noindex). O E2E passa a rodar no preview quando o deploy estiver verde (Ruling do ledger); a S11 ainda rodou local porque a leitura por IA no staging está bloqueada (D-077).
 
@@ -94,6 +95,8 @@ Observação: o check "Vercel" falhou em todos os PRs do #4 ao #20 por falta das
 | 0502_b2b_widget_webhooks.sql | S25 | b2b_widget_webhooks | 20260927081313 (uma chamada transacional após uma tentativa derrubada pela rede sem efeito; 7 funções reaplicadas porque comentários internos tinham sido removidos na transcrição; depois disso md5 das 18 funções, RLS, gatilhos e privilégios idênticos ao banco local) |
 | 0503_b2b_campaigns.sql | S26 | b2b_campaigns | 20260927131850 (arquivo aplicado sem alteração; md5 das 16 funções, políticas, gatilhos e privilégios idênticos ao banco local; `authenticated` sem nenhum acesso a eventos e livro-razão de campanha) |
 | 0603_family_area.sql | S15 | family_area | 20260927123525 (arquivo aplicado sem alteração; md5 das 5 funções, CHECK do apelido, 7 políticas, gatilhos e privilégios idênticos ao banco local; CHECK recusa U+3164 no staging) |
+| 0606_system_alerts.sql | S19 | system_alerts | a aplicar no staging após o merge do PR da S19 |
+| 0607_security_advisors.sql | S19 | security_advisors | a aplicar no staging após o merge do PR da S19 (no-op documentado) |
 | 0604_admin_reports.sql | S16 | admin_reports | 20260927164244 (arquivo aplicado sem alteração; recria gatilhos de auditoria de `lead_reviews`/`lead_disputes` e trava `ai_settings`; `auto_publish_enabled` continua false; fidelidade md5 com o banco local) |
 | 0605_lgpd_privacy.sql | S17 | lgpd_privacy | 20260927171400 (FKs de reivindicação para SET NULL; fidelidade md5 das 7 funções com o banco local; contagens de `survey_*` inalteradas; job de retenção e exclusão de conta não executados no staging) |
 

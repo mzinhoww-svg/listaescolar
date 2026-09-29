@@ -1,0 +1,15 @@
+$ npx vitest run tests/observability/sentry-redact.test.ts tests/auth/queries.test.ts tests/auth/routes.test.ts
+(antes de lib/observability/sentry-redact.ts, lib/observability/scope.ts, do wiring em
+sentry.server.config.ts/sentry.client.config.ts, features/auth/queries.ts e app/auth/callback|confirm/route.ts)
+
+FAIL tests/observability/sentry-redact.test.ts
+Error: Cannot find module '@/lib/observability/sentry-redact'
+FAIL tests/auth/queries.test.ts (2 novos casos D-005/S19)
+AssertionError: setRoleScope não existia/não era chamado
+FAIL tests/auth/routes.test.ts (4 novos casos D-005/S19)
+AssertionError: captureException nunca chamado nos catches de /auth/callback e /auth/confirm
+
+Depois da implementação: suíte completa verde (ver relatório final, gate da Task 3). `beforeSend`/
+`beforeSendTransaction` ligados nos dois sentry.*.config.ts; `setRoleScope` chamado de um único ponto
+(`features/auth/queries.ts::getCurrentRole`, cache por requisição); D-005 (erro do provedor de auth/exchange sem
+registro no Sentry) fechada em app/auth/callback/route.ts e app/auth/confirm/route.ts.

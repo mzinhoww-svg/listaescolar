@@ -8,6 +8,7 @@ import { repositoryErrorCode } from "@/features/stationeries/messages";
 import { getStationeryOfOwner } from "@/features/stationeries/queries";
 import { transition } from "@/features/stationeries/repository";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorLabel } from "@/lib/log-error";
 
 const OwnerMoveSchema = z.object({ to: z.enum(["active", "paused"]) });
 
@@ -23,7 +24,7 @@ export async function ownerStatusAction(formData: FormData): Promise<void> {
   try {
     await transition(createAdminClient(), actor, { id: own.id, to: parsed.data.to, as: "owner" });
   } catch (error) {
-    console.error("status da papelaria", error);
+    console.error("status da papelaria", safeErrorLabel(error));
     redirect(`/papelaria?erro=${repositoryErrorCode(error)}`);
   }
   redirect("/papelaria?ok=1");

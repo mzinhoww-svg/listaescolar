@@ -41,8 +41,11 @@ const serverSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   MELI_AFFILIATE_ID: z.string().min(1).optional(),
   AMAZON_ASSOCIATE_TAG: z.string().min(1).optional(),
-  /** Autentica o cron de expiração de leads (Bearer). Ausente = o cron responde 503. */
-  CRON_SECRET: z.string().min(16).optional(),
+  /** Autentica os crons (Bearer). D-009 (S19): sem `min()` aqui de propósito — o contrato de "curto demais = 503"
+   * é de cada rota de cron (`CRON_SECRET_MIN_LENGTH`, `features/leads/cron-auth.ts`), não deste schema; um valor
+   * curto aqui antes derrubava `getServerEnv()` inteiro (500 em toda rota que o chama, ex. o pepper B2B), em vez
+   * do 503 pontual só na rota de cron. */
+  CRON_SECRET: z.string().min(1).optional(),
   // S21 (cobrança): Pix atrás de flag, sem nenhuma credencial fixa. Validação fina (config COMPLETA ou nada) é de
   // `features/billing/payments/factory.ts`; aqui só os tipos, para o Next não reclamar de variável desconhecida.
   PAYMENTS_PIX_ENABLED: flag,

@@ -3,6 +3,7 @@ import "server-only";
 import type { User } from "@supabase/supabase-js";
 import { cache } from "react";
 
+import { setRoleScope } from "@/lib/observability/scope";
 import { createClient } from "@/lib/supabase/server";
 
 import type { UserRole } from "./access";
@@ -18,9 +19,15 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 /** Papel vem de `profiles` (RLS), nunca de `user_metadata`. Um só select por request. */
 export const getCurrentRole = cache(async (): Promise<UserRole | null> => {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user) {
+    // D-005/S19: escopo do Sentry por PAPEL (nunca por pessoa) num único ponto central.
+    setRoleScope(null);
+    return null;
+  }
   const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   const parsed = roleSchema.safeParse(data?.role);
-  return parsed.success ? parsed.data : null;
+  const role = parsed.success ? parsed.data : null;
+  setRoleScope(role);
+  return role;
 });

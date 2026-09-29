@@ -2,6 +2,7 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
 import { robotsHeaders } from "./lib/robots-header";
+import { staticAssetHeaders } from "./lib/security-headers";
 
 const dsn = process.env.SENTRY_DSN;
 // Ambiente que o navegador enxerga (marca `app_env` e `is_internal` nos eventos); APP_ENV não é público.
@@ -14,7 +15,10 @@ const baseConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   // Previews e qualquer ambiente fora da produção da Vercel nunca são indexados (X-Robots-Tag: noindex).
   async headers() {
-    return robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV, SITE_INDEXING: process.env.SITE_INDEXING });
+    return [
+      ...robotsHeaders({ VERCEL_ENV: process.env.VERCEL_ENV, SITE_INDEXING: process.env.SITE_INDEXING }),
+      ...staticAssetHeaders(),
+    ];
   },
   // Proxy de medição (ADR-007): Route Handler `app/ingest/[...path]/route.ts` (não é rewrite: um rewrite repassaria
   // cookie, referer e IP do usuário ao PostHog; ver ledger, revisão de segurança PostHog).

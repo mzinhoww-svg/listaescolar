@@ -17,6 +17,7 @@ export type FormErrorCode =
   | "unexpected"
   | "pdf_too_large"
   | "image_undecodable"
+  | "rate_limited"
   | UploadErrorCode;
 
 export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
@@ -26,6 +27,7 @@ export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
   forbidden: "Seu perfil não pode enviar listas por aqui.",
   school_not_linked: "Você ainda não tem vínculo confirmado com esta escola. Reivindique a escola antes de enviar a lista.",
   unexpected: "Não foi possível enviar agora. Tente novamente em instantes.",
+  rate_limited: "Muitos envios em pouco tempo. Aguarde um pouco e tente de novo.",
   empty_file: "O arquivo está vazio. Escolha outro.",
   file_too_large: "Este arquivo passa de 4 MB. Tire a foto de novo com menos qualidade ou envie um PDF menor.",
   pdf_too_large: "Este PDF passa de 4 MB. Comprima o PDF ou envie fotos das páginas.",

@@ -16,6 +16,7 @@ vi.mock("@/features/lists/queries", () => ({
   listVersionHistory: vi.fn().mockResolvedValue([]),
 }));
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: vi.fn().mockResolvedValue(null) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-nonce": "test-nonce" }) }));
 vi.mock("@/features/claims/queries", () => ({ getMyClaimForSchool: vi.fn().mockResolvedValue(null) }));
 vi.mock("react", async (orig) => ({
   ...(await orig<typeof import("react")>()),

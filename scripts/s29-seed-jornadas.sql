@@ -7,7 +7,9 @@
 -- GUARDA: aborta a menos que a sessão declare que o banco é local E o seed padrão local exista (admin@listacerta.test
 -- só é criado por supabase/seed.sql em `db reset`). Como rodar: na MESMA sessão, antes deste arquivo,
 --   set app.local_seed = 'on';   (mesma sessão que roda o arquivo)
--- Alternativa: PGOPTIONS="-c app.local_seed=on" psql "$URL_LOCAL" -f scripts/s29-seed-jornadas.sql. Nunca em staging/produção.
+-- Alternativa: PGOPTIONS="-c app.local_seed=on" psql -v ON_ERROR_STOP=1 "$URL_LOCAL" -f scripts/s29-seed-jornadas.sql. Nunca em staging/produção.
+begin;
+
 do $$
 begin
   if coalesce(current_setting('app.local_seed', true), '') <> 'on' then
@@ -111,3 +113,5 @@ on conflict (id) do nothing;
 insert into public.b2b_partner_members (partner_id, profile_id, member_role)
 values ('00000000-0000-4000-8000-0000000029b2', '00000000-0000-4000-8000-0000000029a4', 'owner')
 on conflict do nothing;
+
+commit;

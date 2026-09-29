@@ -14,9 +14,22 @@ async function runSqlFile(rel: string, opts: { localMarker?: boolean } = { local
 
 describe("seed das jornadas S29", () => {
   it("aborta sem o marcador app.local_seed e não grava nada", async () => {
+    // O banco pode já ter o seed de rodadas anteriores: compara antes/depois (nada novo pode ser gravado).
+    const snapshot = () =>
+      withSuperuser(async (c) => {
+        const r = await c.query(
+          `select (select count(*)::int from public.profiles where display_name like 'S29 %') as profiles,
+                  (select count(*)::int from auth.users where email like '%@listacerta.test') as users,
+                  (select count(*)::int from public.stationeries where is_demo) as stationeries,
+                  (select count(*)::int from public.plans) as plans`,
+        );
+        return r.rows[0];
+      });
+    const before = await snapshot();
     await expect(runSqlFile("scripts/s29-seed-jornadas.sql", { localMarker: false })).rejects.toThrow(/recusado/);
+    expect(await snapshot()).toEqual(before);
   });
-
+  });
 
   it("cria uma conta por público, todas demo, e um lead para a papelaria (idempotente)", async () => {
     await runSqlFile("scripts/s29-seed-jornadas.sql");

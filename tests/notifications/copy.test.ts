@@ -7,15 +7,16 @@ const FULL = { school_name: "Escola Modelo", grade_label: "4º ano", school_year
 const PII = [/[\w.+-]+@[\w-]+\.[\w.]+/, /\(?\d{2}\)?\s?9?\d{4}-?\d{4}/, /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/];
 
 describe("catálogo", () => {
-  it("os dez eventos do SPEC §6 mais system_alert (S19); o catálogo é exaustivo por tipo", () => {
-    expect([...NOTIFICATION_EVENTS].sort()).toEqual(["claim_updated", "lead_expired", "lead_quote_sent", "lead_received", "list_published", "publication_orphaned", "submission_failed", "submission_not_published", "submission_published", "submission_ready", "system_alert"]);
+  it("os dez eventos do SPEC §6 mais system_alert (S19) e as três decisões da equipe (S29); o catálogo é exaustivo por tipo", () => {
+    expect([...NOTIFICATION_EVENTS].sort()).toEqual(["claim_updated", "lead_expired", "lead_quote_sent", "lead_received", "list_published", "publication_orphaned", "submission_failed", "submission_not_published", "submission_published", "submission_ready", "system_alert", "stationery_decided", "dispute_decided", "partner_decided"].sort());
     const all: Record<NotificationEvent, unknown> = EVENT_CATALOG; // evento novo sem entrada quebra o typecheck
     expect(Object.keys(all)).toHaveLength(NOTIFICATION_EVENTS.length);
   });
   it("publication_orphaned é só da central (sem canal externo); os demais aceitam push e e-mail", () => {
     expect(EVENT_CATALOG.publication_orphaned.external).toBe(false);
     expect(EVENT_CATALOG.system_alert.external).toBe(false);
-    expect(NOTIFICATION_EVENTS.filter((e) => EVENT_CATALOG[e].external)).toHaveLength(9);
+    expect(NOTIFICATION_EVENTS.filter((e) => EVENT_CATALOG[e].external)).toHaveLength(11); // decisões de papelaria e contestação aceitam canal externo se o dono ligar
+    expect(EVENT_CATALOG.partner_decided.external).toBe(false);
   });
 });
 

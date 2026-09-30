@@ -4,7 +4,7 @@ import type { NotificationParams } from "./params";
 export const NOTIFICATION_EVENTS = [
   "submission_ready", "submission_failed", "submission_published", "submission_not_published", "list_published",
   "lead_received", "lead_quote_sent", "lead_expired", "claim_updated", "publication_orphaned",
-  "system_alert",
+  "system_alert", "stationery_decided", "dispute_decided", "partner_decided",
 ] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
@@ -23,6 +23,19 @@ const CLAIM_BODY: Record<string, string> = {
   rejected: "O pedido para administrar a escola não foi aprovado.",
   insufficient_evidence: "Precisamos de mais evidências para concluir o pedido para administrar a escola.",
   token_expired: "O link de confirmação venceu. Peça um novo para continuar.",
+};
+const STATIONERY_BODY: Record<string, string> = {
+  approved: "O cadastro da papelaria foi aprovado. Abra o painel para ver os próximos passos.",
+  rejected: "O cadastro da papelaria não foi aprovado. Abra o painel para ver o andamento.",
+};
+const DISPUTE_BODY: Record<string, string> = {
+  accepted: "A equipe aceitou a contestação de um pedido. Abra o pedido para ver o motivo registrado.",
+  rejected: "A equipe não aceitou a contestação de um pedido. Abra o pedido para ver o motivo registrado.",
+};
+const PARTNER_BODY: Record<string, string> = {
+  sandbox: "O cadastro de parceiro foi aprovado para testes (sandbox). Abra a conta para ver o andamento.",
+  active: "O cadastro de parceiro foi aprovado para produção. Abra a conta para ver o andamento.",
+  rejected: "O cadastro de parceiro não foi aprovado. Abra a conta para ver o andamento.",
 };
 const ALERT_BODY: Record<string, (n: number | undefined) => string> = {
   dead_jobs: (n) => `${n ?? "Há"} ${n === 1 ? "tarefa" : "tarefas"} da fila de leitura de listas sem tentativa restante. Abra a revisão para conferir.`,
@@ -46,6 +59,10 @@ export const EVENT_CATALOG: Record<NotificationEvent, EventEntry> = {
   lead_expired: { external: true, pushTitle: "Seu pedido de cotação expirou", title: () => "Seu pedido de cotação expirou", body: () => "O pedido passou do prazo. Você pode pedir de novo." },
   claim_updated: { external: true, pushTitle: "Seu pedido para administrar teve uma atualização", title: () => "Atualização no seu pedido para administrar", body: (p) => (p.status_code && CLAIM_BODY[p.status_code]) || "Abra para ver o andamento." },
   publication_orphaned: { external: false, pushTitle: "Publicação para conciliar", title: () => "Publicação para conciliar", body: () => "Uma lista foi publicada sem registro no envio. Abra a revisão para conciliar." },
+  // Títulos GENÉRICOS (sem status, escola, código nem motivo): o motivo da decisão fica atrás do login, na página do pedido.
+  stationery_decided: { external: true, pushTitle: "Atualização no cadastro da sua papelaria", title: () => "Atualização no cadastro da sua papelaria", body: (p) => (p.status_code && STATIONERY_BODY[p.status_code]) || "Abra o painel para ver o andamento." },
+  dispute_decided: { external: true, pushTitle: "Atualização em uma contestação", title: () => "Atualização em uma contestação", body: (p) => (p.status_code && DISPUTE_BODY[p.status_code]) || "Abra o pedido para ver a decisão." },
+  partner_decided: { external: false, pushTitle: "Atualização no cadastro de parceiro", title: () => "Atualização no cadastro de parceiro", body: (p) => (p.status_code && PARTNER_BODY[p.status_code]) || "Abra a conta para ver o andamento." },
   system_alert: {
     external: false,
     pushTitle: "Alerta do sistema",

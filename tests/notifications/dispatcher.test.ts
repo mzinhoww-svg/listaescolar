@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { EVENT_CATALOG, type NotificationEvent } from "@/features/notifications/catalog";
+import { pushPayload, renderNotification } from "@/features/notifications/copy";
 import { runDispatch } from "@/features/notifications/dispatcher";
 import { MemoryNotifier, type DeliveryOutcome, type DeliveryPayload, type NotificationRepo } from "@/features/notifications/ports";
 
@@ -49,5 +51,43 @@ describe("runDispatch", () => {
     expect(marks.map((m) => m[0])).toEqual(["1", "2"]); // após 20 s de trabalho o orçamento de 15 s acabou
     expect(s.sent).toBe(2);
     expect(s.claimed).toBe(3);
+  });
+});
+
+// S29 UX-109: cada decisão da equipe passa pelo despacho com título genérico e sem o motivo da decisão.
+describe("decisões da equipe (UX-109)", () => {
+  const cases: [NotificationEvent, string, string][] = [
+    ["stationery_decided", "approved", "/papelaria"],
+    ["stationery_decided", "rejected", "/papelaria"],
+    ["dispute_decided", "accepted", "/papelaria/leads/LC-5TJ1"],
+    ["dispute_decided", "rejected", "/papelaria/leads/LC-5TJ1"],
+  ];
+  it.each(cases)("%s (%s): a entrega segue o caminho normal e o push leva só título genérico e o link", async (event, status, link) => {
+    const item = { ...d("1"), eventType: event, linkPath: link };
+    const seen: DeliveryPayload[] = [];
+    const push = new MemoryNotifier("web_push", async (x) => { seen.push(x); return { kind: "sent" }; });
+    const { r, marks } = repo([item]);
+    const s = await runDispatch({ repo: r, notifiers: [push], limit: 5 });
+    expect(s).toEqual({ claimed: 1, sent: 1, failed: 0, skipped: 0 });
+    expect(marks).toEqual([["1", "L1", "sent", null, []]]);
+    expect(seen[0]?.eventType).toBe(event);
+    const payload = pushPayload(event, link);
+    expect(payload).toEqual({ title: EVENT_CATALOG[event].pushTitle, url: link });
+    expect(JSON.stringify(payload)).not.toMatch(new RegExp(`${status}|aceit|aprovad|recus|motivo`, "i"));
+    const central = renderNotification(event, { status_code: status });
+    expect(central.title).toBe(EVENT_CATALOG[event].pushTitle);
+  });
+
+  it("partner_decided é só da central: título genérico, corpo por status e nunca canal externo no catálogo", () => {
+    expect(EVENT_CATALOG.partner_decided.external).toBe(false);
+    for (const status of ["sandbox", "active", "rejected"]) {
+      const r = renderNotification("partner_decided", { status_code: status });
+      expect(r.title).toBe("Atualização no cadastro de parceiro");
+      expect(r.body.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("params com motivo em texto livre são recusados nas decisões", () => {
+    expect(() => renderNotification("dispute_decided", { status_code: "accepted", reason: "nota interna" })).toThrow();
   });
 });

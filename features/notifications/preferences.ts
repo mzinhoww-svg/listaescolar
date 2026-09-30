@@ -19,7 +19,7 @@ export const externalEvents = (): NotificationEvent[] => NOTIFICATION_EVENTS.fil
 const FAMILY_EVENTS: readonly NotificationEvent[] = ["submission_ready", "submission_failed", "submission_published", "submission_not_published", "list_published", "lead_quote_sent", "lead_expired"];
 export function eventsForRole(role: string): NotificationEvent[] {
   const external = externalEvents();
-  const extra: NotificationEvent[] = role === "stationery_member" ? ["lead_received"] : role === "school_member" ? ["claim_updated"] : [];
+  const extra: NotificationEvent[] = role === "stationery_member" ? ["lead_received", "stationery_decided", "dispute_decided"] : role === "school_member" ? ["claim_updated"] : [];
   if (role === "admin" || role === "system") return external;
   return external.filter((e) => FAMILY_EVENTS.includes(e) || extra.includes(e));
 }

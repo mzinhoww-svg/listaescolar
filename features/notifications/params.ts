@@ -6,6 +6,7 @@ export const STATUS_CODES = [
   "draft", "submitted", "processing", "processing_async", "review_needed", "human_review", "approved", "published", "archived", "rejected",
   "awaiting_verification", "token_expired", "insufficient_evidence",
   "received", "viewed", "in_progress", "quote_sent", "awaiting_customer", "converted", "declined", "expired", "cancelled",
+  "accepted", "sandbox", "active",
 ] as const;
 
 export const ALERT_KINDS = ["dead_jobs", "ai_error_rate"] as const;

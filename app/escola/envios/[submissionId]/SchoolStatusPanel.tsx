@@ -20,6 +20,8 @@ function copyFor(data: StatusPayload, phase: string, lost: boolean): Copy {
   if (phase === "failed") return { title: "Não foi possível ler este arquivo", body: "A leitura não terminou e este envio não vale como lista. Envie outro arquivo: um PDF gerado no computador costuma ler melhor que foto." };
   if (phase === "unavailable") return { title: "Leitura automática indisponível no momento", body: "O arquivo está guardado. Sem a leitura automática não mostramos os itens agora. Não precisa enviar de novo: reenviar cria outro envio." };
   if (phase === "reading") return { title: "Recebemos o arquivo da escola", body: "A leitura automática está identificando os itens e as quantidades. Você pode sair desta página: o andamento fica guardado." };
+  // `approved` também é o estado da aprovação automática (migration 0203): não diz "pela equipe".
+  if (data.status === "approved") return { title: "Aprovada; publicação em andamento", body: "A lista foi aprovada e a publicação ainda não terminou." };
   const key = data.status === "published" ? (data.publishedBy === "auto" ? "published_auto" : "published") : data.status === "human_review" || data.status === "approved" || data.status === "rejected" ? data.status : null;
   if (key) return PUBLICATION_STATE_COPY[key];
   return { title: "Leitura concluída", body: "A leitura terminou. A ListaCerta confere a lista antes de publicar; se precisar, a equipe revisa." };

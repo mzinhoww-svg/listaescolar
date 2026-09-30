@@ -46,6 +46,29 @@ describe("UX-090 · andamento do envio da escola (dentro do painel)", () => {
     expect(screen.getAllByText(/se precisar, a equipe revisa/).length).toBeGreaterThan(0);
   });
 
+  it("aprovada (pode ser automática): sem 'pela equipe'", () => {
+    render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "approved", jobStatus: "succeeded", result }} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Aprovada; publicação em andamento" })).toBeInTheDocument();
+    expect(screen.queryByText(/pela equipe/)).toBeNull();
+  });
+
+  it("publicada automaticamente: título 'Lista publicada (automática)' ou equivalente do catálogo", () => {
+    render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "published", jobStatus: "succeeded", result, publishedBy: "auto" }} />);
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toMatch(/publicada/i);
+  });
+
+  it("recusada com leitura: mostra o estado da equipe", () => {
+    render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "rejected", jobStatus: "succeeded", result }} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Lista não publicada" })).toBeInTheDocument();
+  });
+
+  it("perda de conexão: pede para recarregar", async () => {
+    fetchMock.mockRejectedValue(new TypeError("x"));
+    render(<SchoolStatusPanel submissionId={ID} initial={base} />);
+    await act(() => vi.advanceTimersByTimeAsync(120_000));
+    expect(screen.getByRole("heading", { level: 2, name: "Não conseguimos atualizar o andamento" })).toBeInTheDocument();
+  });
+
   it("publicada automaticamente: diz que foi automática e não menciona revisão pela equipe", () => {
     render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "published", jobStatus: "succeeded", result, publishedBy: "auto", listHref: "/escolas/99029001/ef-5?ano=2027" }} origin="https://listacerta.test" />);
     expect(screen.queryByText(/revisa a lista antes/)).toBeNull();
@@ -66,6 +89,7 @@ describe("UX-090 · andamento do envio da escola (dentro do painel)", () => {
 
   it("falhou: pede outro arquivo e leva ao envio da escola, não ao da família", () => {
     render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "rejected", jobStatus: "dead" }} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Não foi possível ler este arquivo" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Enviar outro arquivo" })).toHaveAttribute("href", "/escola/listas/nova");
   });
 

@@ -72,6 +72,11 @@ fi
 if [ -n "${ADMIN_COOKIE:-}" ]; then
   checkc "$ADMIN_COOKIE" 404 "/admin/reivindicacoes/$NOID" "admin: pedido inexistente"
   checkc "$ADMIN_COOKIE" 404 "/admin/revisao/$NOID" "admin: revisão inexistente"
+  # S29 T17a: detalhes do admin com id inexistente ou malformado = 404 de verdade (denúncias e listas davam 200 com "não encontrada").
+  for base in denuncias revisao reivindicacoes papelarias listas importacoes parceiros; do
+    checkc "$ADMIN_COOKIE" 404 "/admin/$base/$NOID" "admin: $base inexistente"
+    checkc "$ADMIN_COOKIE" 404 "/admin/$base/abc" "admin: $base com id malformado"
+  done
 fi
 # S29 T15: papelaria. `app/papelaria/loading.tsx` e `creditos/loading.tsx` davam 200 para lead e fatura inexistentes (D-043);
 # os carregando agora vivem em grupos de rota que não cobrem as páginas com `notFound()`. `PAPELARIA_COOKIE` = Cookie de papelaria@listacerta.test.

@@ -3,7 +3,7 @@ import { LEAD_STATUS_LABEL } from "@/features/leads/state";
 /** Rótulos em pt-BR das 5 categorias do dashboard (Admin01-Visao). Só apresentação; a contagem vem de `dashboard.ts`. */
 export const SCHOOL_STATE_LABEL: Record<string, string> = {
   registered: "Cadastrada (INEP)",
-  claimed: "Reivindicada",
+  claimed: "Em verificação",
   verified: "Verificada",
   suspended: "Suspensa",
 };

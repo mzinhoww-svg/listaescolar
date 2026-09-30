@@ -35,6 +35,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     console.error("denúncia (admin)", error instanceof Error ? error.message : "erro");
     failed = true;
   }
+  if (!failed && !report) notFound();
   const list = report?.targetType === "school_list" && actor ? await getListSummaryForAdmin(actor, report.targetId).catch(() => null) : null;
 
   return (

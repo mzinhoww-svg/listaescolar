@@ -39,6 +39,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     console.error("lista (admin)", error instanceof Error ? error.message : "erro");
     failed = true;
   }
+  if (!failed && !list) notFound();
   return (
     <AdminShell active="/admin/listas" email={user.email} breadcrumb="Admin / Listas" title="Lista">
       {sp.ok ? <Notice kind="ok">Lista arquivada.</Notice> : null}

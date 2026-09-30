@@ -100,4 +100,22 @@ describe("S29 T15 · loading.tsx da papelaria não reabre o soft-404 (D-043)", (
       expect(existsSync(f), f).toBe(true);
     }
   });
+
+  // S29 T17a (D-043): admin. Nenhum `loading.tsx` sob `app/admin/**` cobre página com `notFound()`; detalhes com id inexistente chamam `notFound()`.
+  it("admin: loading.tsx só onde a página não tem notFound(); denúncias e listas dão 404 para id inexistente", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
+    const files = walk("app/admin");
+    for (const loading of files.filter((f) => f.endsWith("/loading.tsx"))) {
+      const dir = loading.replace(/\/loading\.tsx$/, "");
+      for (const f of files.filter((x) => x.startsWith(`${dir}/`) && /\/page\.tsx$/.test(x))) {
+        expect(readFileSync(f, "utf8"), `${loading} cobre ${f}`).not.toMatch(/notFound\(/);
+      }
+    }
+    for (const f of ["app/admin/denuncias/[id]/page.tsx", "app/admin/listas/[id]/page.tsx"]) {
+      expect(readFileSync(f, "utf8"), f).toMatch(/if \(!failed && !(report|list)\) notFound\(\)/);
+    }
+  });
 });

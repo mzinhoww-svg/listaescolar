@@ -17,7 +17,11 @@ const LABEL_TONE: Readonly<Record<Tone, string>> = {
 export function KpiCard({ value, label, tone = "light" }: { value: string; label: string; tone?: Tone }) {
   return (
     <div className={`rounded-[20px] p-5 ${TONE_CLASS[tone]}`}>
-      <p className="text-[32px] leading-none font-extrabold tracking-[-0.03em]">{value}</p>
+      {value === "indisponível" ? (
+        <p className="text-[16px] leading-tight font-bold">{value}</p>
+      ) : (
+        <p className="text-[32px] leading-none font-extrabold tracking-[-0.03em]">{value}</p>
+      )}
       <p className={`mt-2 text-[13px] font-semibold ${LABEL_TONE[tone]}`}>{label}</p>
     </div>
   );

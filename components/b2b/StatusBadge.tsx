@@ -8,7 +8,7 @@ export type BadgeTone = "neutral" | "ok" | "warn" | "error" | "info";
 const TONE_CLASS: Readonly<Record<BadgeTone, string>> = {
   neutral: "bg-campo text-texto-2",
   ok: "bg-verde-certo text-tinta",
-  warn: "bg-[#FDEBD3] text-[#6B3A00]",
+  warn: "bg-aviso-fundo text-aviso-texto",
   error: "bg-erro-fundo text-erro-texto",
   info: "bg-tinta text-papel",
 };

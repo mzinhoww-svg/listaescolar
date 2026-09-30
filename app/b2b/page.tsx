@@ -1,5 +1,8 @@
+import Link from "next/link";
+
 import { KpiCard } from "@/components/b2b/KpiCard";
 import { UsageChart } from "@/components/b2b/UsageChart";
+import { buttonClass } from "@/components/ui/Button";
 import { getSessionActor } from "@/features/auth/actor";
 import { getMyPartnerOverview } from "@/features/b2b/queries";
 
@@ -26,7 +29,9 @@ export default async function Page() {
   const listsAvailable = env === "live" ? overview.listsAvailableLive : env === "test" ? overview.listsAvailableTest : null;
   const rateDay = env === "live" ? overview.limits.liveRatePerDay : env === "test" ? overview.limits.testRatePerDay : null;
   const matchPct = overview.matchTotal > 0 ? `${Math.round((overview.matchMatched / overview.matchTotal) * 100)}%` : "indisponível";
-  const hasLiveKey = overview.keys.some((k) => k.environment === "live" && k.status === "active");
+  const wantedEnv = env ?? "live";
+  const hasKey = overview.keys.some((k) => k.environment === wantedEnv && k.status === "active");
+  const canCreateKey = overview.status === "active" || overview.status === "sandbox";
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,11 +39,11 @@ export default async function Page() {
         <h1 className="text-[30px] leading-[1.1] font-extrabold tracking-[-0.035em]">Visão geral</h1>
         <div className="flex flex-wrap gap-2">
           <span className="bg-tinta text-papel rounded-botao px-3 py-1 text-[13px] font-extrabold">
-            Plano {overview.plan ? PLAN_LABEL[overview.plan] ?? overview.plan : "sem plano"}
+            {overview.plan ? `Plano ${PLAN_LABEL[overview.plan] ?? overview.plan}` : "Plano ainda não definido"}
             {overview.coverageUfs ? ` · ${overview.coverageUfs.join(", ")}` : " · Nacional"}
           </span>
           {env ? (
-            <span className="bg-verde-certo text-tinta rounded-botao px-3 py-1 text-[13px] font-extrabold">
+            <span className={`rounded-botao px-3 py-1 text-[13px] font-extrabold ${env === "live" ? "bg-verde-certo text-tinta" : "bg-campo text-texto-2"}`}>
               {env === "live" ? "Produção" : "Sandbox"}
             </span>
           ) : null}
@@ -47,7 +52,7 @@ export default async function Page() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard tone="dark" value={String(overview.callsMonth)} label="chamadas de API no mês" />
-        <KpiCard value={listsAvailable === null ? "indisponível" : String(listsAvailable)} label="listas disponíveis na sua região" />
+        <KpiCard value={listsAvailable === null ? "indisponível" : String(listsAvailable)} label={`${listsAvailable === 1 ? "lista disponível" : "listas disponíveis"} na sua região`} />
         <KpiCard value={matchPct} label="itens casados com seus SKUs" />
         <KpiCard value={rateDay === null ? "indisponível" : String(rateDay)} label="limite do plano por dia" />
       </div>
@@ -63,9 +68,14 @@ export default async function Page() {
         <div className="flex flex-col gap-3 rounded-[20px] bg-white p-5">
           <h2 className="text-[16px] font-extrabold">Integração</h2>
           <div className="flex items-center gap-2.5 text-[14px] font-semibold">
-            <span aria-hidden className={`inline-block size-2.5 rounded-full ${hasLiveKey ? "bg-verde-certo" : "bg-linha"}`} />
-            {hasLiveKey ? "Chave de produção ativa" : "Nenhuma chave de produção"}
+            <span aria-hidden className={`inline-block size-2.5 rounded-full ${hasKey ? "bg-verde-certo" : "bg-linha"}`} />
+            {hasKey ? (env === "test" ? "Chave de teste ativa" : "Chave de produção ativa") : env === "test" ? "Nenhuma chave de teste" : "Nenhuma chave de produção"}
           </div>
+          {!hasKey && canCreateKey ? (
+            <Link href="/b2b/api" className={buttonClass("primary", "md", "w-full")}>
+              Criar a chave
+            </Link>
+          ) : null}
         </div>
       </div>
     </div>

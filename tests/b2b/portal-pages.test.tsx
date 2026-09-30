@@ -115,6 +115,24 @@ describe("/b2b (B2B01, Visão geral)", () => {
     expect(screen.getByText("indisponível")).toBeInTheDocument();
   });
 
+  it("UX-127: singular em '1 lista', 'indisponível' em corpo normal e próximo passo 'Criar a chave'", async () => {
+    getMyPartnerOverview.mockResolvedValue({ ...OVERVIEW_BASE, listsAvailableLive: 1, matchTotal: 0, matchMatched: 0, keys: [] });
+    render(await B2bPage());
+    expect(screen.getByText(/lista disponível na sua região/)).toBeInTheDocument();
+    expect(screen.queryByText(/1 listas/)).toBeNull();
+    const nd = screen.getByText("indisponível");
+    expect(nd.className).not.toMatch(/text-\[32px\]/);
+    expect(screen.getByRole("link", { name: "Criar a chave" })).toHaveAttribute("href", "/b2b/api");
+  });
+
+  it("UX-127: sandbox não usa o verde de 'resolvido' e plano ausente não vira 'sem plano'", async () => {
+    getMyPartnerOverview.mockResolvedValue({ ...OVERVIEW_BASE, status: "sandbox", plan: null });
+    render(await B2bPage());
+    expect(screen.getByText("Sandbox").className).not.toMatch(/bg-verde-certo/);
+    expect(screen.queryByText(/sem plano/i)).toBeNull();
+    expect(screen.getByText(/Plano ainda não definido/)).toBeInTheDocument();
+  });
+
   it("overview indisponível: mensagem de erro, não quebra a página", async () => {
     getMyPartnerOverview.mockResolvedValue(null);
     render(await B2bPage());
@@ -144,7 +162,7 @@ describe("/b2b/api (B2B02)", () => {
     getMyPartnerHeader.mockResolvedValue(HEADER_BASE);
     render(await B2bApiPage());
     expect(screen.getByRole("button", { name: "Nova chave" })).toBeInTheDocument();
-    expect(screen.getByText((t) => t.includes("lc_live_") && t.includes("7f2a"))).toBeInTheDocument();
+    expect(screen.getAllByText((t) => t.includes("lc_live_") && t.includes("7f2a")).length).toBeGreaterThan(0);
   });
 });
 

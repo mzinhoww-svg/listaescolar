@@ -109,3 +109,54 @@ describe("ParentCopyEditor", () => {
     expect(screen.getByRole("button", { name: "Salvar minha lista" })).toBeEnabled();
   });
 });
+
+describe("UX-065 e UX-072 · revisão da família com rótulo visível, alerta e desfazer", () => {
+  const editor = (items: ReviewItem[]) => <ParentCopyEditor copyId={COPY} submissionId={SUB} initialVersion={1} initialItems={items} grade="5º ano" schoolYear={2027} action={async () => PARENT_IDLE} />;
+  const uncertain = item({ name: "Régua 30 cm", alerts: ["low_confidence_item"] });
+
+  it("nome, quantidade e unidade têm rótulo visível (não só aria-label) e nome acessível com o número do item", () => {
+    render(editor([item(), item({ name: "Lápis" })]));
+    expect(screen.getAllByText("Nome do item")).toHaveLength(2);
+    expect(screen.getAllByText("Quantidade")).toHaveLength(2);
+    expect(screen.getAllByText("Unidade")).toHaveLength(2);
+    expect(screen.getByLabelText("Nome do item 2")).toHaveValue("Lápis");
+    expect(screen.getByLabelText("Unidade do item 1")).toBeInTheDocument();
+    for (const el of document.querySelectorAll("input")) expect(el.hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("unidade editável vai no payload (vazia = sem unidade)", async () => {
+    const save = vi.fn<Act>(async () => ({ kind: "saved", message: "Lista salva.", version: 2 }));
+    render(<ParentCopyEditor copyId={COPY} submissionId={SUB} initialVersion={1} initialItems={[item({ unit: "cx" })]} grade={null} schoolYear={null} action={save} />);
+    expect(screen.getByLabelText("Unidade do item 1")).toHaveValue("cx");
+    fireEvent.change(screen.getByLabelText("Unidade do item 1"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar minha lista" }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(JSON.parse(String(save.mock.calls[0]![1].get("payload"))).items[0].unit).toBeNull();
+  });
+
+  it("item de leitura incerta mostra o alerta junto do item; os demais não", () => {
+    render(editor([uncertain, item({ name: "Lápis" })]));
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Leitura incerta: confira o nome e a quantidade deste item.");
+    expect(rows[1]).not.toHaveTextContent("Leitura incerta");
+  });
+
+  it("foco visível do sistema nos campos (sem foco azul do navegador)", () => {
+    render(editor([item()]));
+    for (const label of ["Nome do item 1", "Quantidade do item 1", "Unidade do item 1"]) {
+      expect(screen.getByLabelText(label).className).toMatch(/focus-visible:ring-2/);
+    }
+    expect(screen.getByRole("button", { name: "Remover item 1" }).className).toMatch(/focus-visible:outline-2/);
+  });
+
+  it("remover avisa e 'Desfazer' devolve o item na mesma posição", () => {
+    render(editor([item({ name: "A" }), item({ name: "B" }), item({ name: "C" })]));
+    fireEvent.click(screen.getByRole("button", { name: "Remover item 2" }));
+    expect(screen.queryByDisplayValue("B")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Item removido");
+    fireEvent.click(screen.getByRole("button", { name: "Desfazer" }));
+    const names = screen.getAllByLabelText(/^Nome do item/).map((el) => (el as HTMLInputElement).value);
+    expect(names).toEqual(["A", "B", "C"]);
+    expect(screen.queryByRole("button", { name: "Desfazer" })).toBeNull();
+  });
+});

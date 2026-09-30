@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { PARENT_IDLE, type ParentCopyState } from "@/app/enviar-lista/[submissionId]/revisar/state";
+import { Button, buttonClass } from "@/components/ui/Button";
 import type { ReviewItem } from "@/features/review/schemas";
 
 import { ParentItemRow } from "./ParentItemRow";
@@ -28,6 +29,7 @@ export function ParentCopyEditor({ copyId, submissionId, initialVersion, initial
   const [version, setVersion] = useState(initialVersion);
   const [seen, setSeen] = useState(result);
   const [submitted, setSubmitted] = useState<string | null>(null);
+  const [removed, setRemoved] = useState<{ item: ReviewItem; index: number } | null>(null);
   if (result !== seen) {
     setSeen(result);
     if (result.kind === "saved" && result.version !== undefined) setVersion(result.version);
@@ -40,6 +42,16 @@ export function ParentCopyEditor({ copyId, submissionId, initialVersion, initial
 
   const setItem = (i: number, patch: Partial<ReviewItem>) => setItems((cur) => cur.map((it, k) => (k === i ? { ...it, ...patch, origin: it.origin === "extracted" ? "edited" : it.origin } : it)));
 
+  const remove = (i: number) => {
+    setRemoved({ item: items[i]!, index: i });
+    setItems((cur) => cur.filter((_, k) => k !== i));
+  };
+  const undo = () => {
+    if (!removed) return;
+    setItems((cur) => [...cur.slice(0, removed.index), removed.item, ...cur.slice(removed.index)]);
+    setRemoved(null);
+  };
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
       <Link href={`/enviar-lista/${submissionId}`} className="text-texto-2 inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Voltar ao andamento</Link>
@@ -49,20 +61,26 @@ export function ParentCopyEditor({ copyId, submissionId, initialVersion, initial
       </p>
       <p className="bg-aviso-fundo text-aviso-texto rounded-2xl p-3.5 text-[13px] leading-[1.4] font-extrabold">Não escreva o nome da criança nos itens.</p>
       <p className="text-texto-2 text-[14px] font-bold">Série: {grade ?? "indisponível"} · Ano letivo: {schoolYear ?? "indisponível"}</p>
-      <form action={formAction} noValidate onSubmit={() => setSubmitted(snapshot)} aria-label="Meus itens" className="flex flex-col gap-3">
+      <form action={formAction} noValidate onSubmit={() => { setSubmitted(snapshot); setRemoved(null); }} aria-label="Meus itens" className="flex flex-col gap-3">
         <input type="hidden" name="copyId" value={copyId} />
         <input type="hidden" name="payload" value={JSON.stringify({ items, expectedVersion: version })} />
         {items.length === 0 ? <p className="text-texto-2 text-[15px] font-semibold">Nenhum item na sua lista.</p> : null}
         <ul className="flex flex-col gap-2">
           {items.map((it, i) => (
-            <ParentItemRow key={i} item={it} index={i} error={errors[i] ?? null} onChange={(p) => setItem(i, p)} onRemove={() => setItems((cur) => cur.filter((_, k) => k !== i))} />
+            <ParentItemRow key={i} item={it} index={i} error={errors[i] ?? null} onChange={(p) => setItem(i, p)} onRemove={() => remove(i)} />
           ))}
         </ul>
-        <button type="button" onClick={() => setItems((cur) => [...cur, NEW_ITEM])} className="bg-campo rounded-botao min-h-11 px-5 text-[14px] font-extrabold">Adicionar item</button>
+        {removed ? (
+          <p role="status" className="bg-campo flex items-center justify-between gap-3 rounded-campo px-3 py-1 text-[14px] font-semibold">
+            Item removido.
+            <button type="button" onClick={undo} className="text-verde-fundo min-h-11 px-2 font-extrabold underline underline-offset-4">Desfazer</button>
+          </p>
+        ) : null}
+        <Button variant="outline" className="w-full" onClick={() => setItems((cur) => [...cur, NEW_ITEM])}>Adicionar item</Button>
         {namesOk ? null : <p role="status" className="text-erro-texto text-[13px] font-bold">Escreva o nome de todos os itens antes de salvar.</p>}
-        <button type="submit" disabled={pending || invalid} className="bg-tinta text-papel rounded-botao h-14 text-base font-extrabold disabled:opacity-50">
-          {pending ? "Salvando..." : "Salvar minha lista"}
-        </button>
+        <Button type="submit" size="lg" loading={pending} disabled={invalid} className="w-full">
+          Salvar minha lista
+        </Button>
       </form>
       {result.kind !== "idle" ? (
         <p role={result.kind === "saved" ? "status" : "alert"} className={`${result.kind === "saved" ? "bg-campo" : "bg-erro-fundo text-erro-texto"} rounded-2xl p-3.5 text-[14px] font-bold`}>
@@ -71,7 +89,7 @@ export function ParentCopyEditor({ copyId, submissionId, initialVersion, initial
         </p>
       ) : null}
       {savedNow ? (
-        <Link href={`/carrinho/novo?lista=${copyId}`} className="border-tinta text-tinta flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold">
+        <Link href={`/carrinho/novo?lista=${copyId}`} className={buttonClass("outline", "md", "w-full")}>
           Montar carrinho com esta lista
         </Link>
       ) : null}

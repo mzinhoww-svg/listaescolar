@@ -47,7 +47,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       email={user.email}
       breadcrumb="Admin / Papelarias"
       title={detail.tradeName}
-      actions={<Link href="/admin/papelarias" className="text-verde-fundo text-[14px] font-extrabold underline">Voltar à fila</Link>}
+      actions={<Link href="/admin/papelarias" className="text-verde-fundo inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Voltar à fila</Link>}
     >
       {sp.ok ? <Notice kind="ok">Status atualizado.</Notice> : null}
       {sp.erro ? <Notice kind="error">{errorMessageForCode(sp.erro)}</Notice> : null}

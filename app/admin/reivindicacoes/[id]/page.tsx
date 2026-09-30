@@ -36,7 +36,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   }
   if (!failed && !claim) notFound();
   return (
-    <AdminShell active="/admin/reivindicacoes" email={user.email} breadcrumb="Admin / Reivindicações / Detalhe" title="Reivindicação" actions={<Link href="/admin/reivindicacoes" className="text-[14px] font-extrabold underline">Voltar à fila</Link>}>
+    <AdminShell active="/admin/reivindicacoes" email={user.email} breadcrumb="Admin / Reivindicações / Detalhe" title="Reivindicação" actions={<Link href="/admin/reivindicacoes" className="inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Voltar à fila</Link>}>
       {failed || !claim ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Não foi possível carregar. <Link href={`/admin/reivindicacoes/${id.data}`} className="underline">Tentar de novo</Link>
@@ -69,7 +69,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                   {claim.evidence.map((e) => (
                     <li key={e.id} className="bg-campo rounded-campo flex items-center justify-between gap-3 px-4 py-2.5 text-[14px] font-bold">
                       <span className="truncate">{e.originalName} <span className="text-texto-3 text-[12px]">· {formatBytes(e.sizeBytes)}</span></span>
-                      <a href={`/admin/reivindicacoes/evidencia/${e.id}`} target="_blank" rel="noopener noreferrer" className="text-verde-fundo shrink-0 font-extrabold">Abrir (link de 60 s)</a>
+                      <a href={`/admin/reivindicacoes/evidencia/${e.id}`} target="_blank" rel="noopener noreferrer" className="text-verde-fundo inline-flex min-h-11 shrink-0 items-center font-extrabold underline">Abrir (link de 60 s)</a>
                     </li>
                   ))}
                 </ul>

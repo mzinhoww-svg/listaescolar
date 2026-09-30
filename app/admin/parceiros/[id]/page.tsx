@@ -64,7 +64,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   if (!failed && (!overview || !header)) notFound();
 
   return (
-    <AdminShell active="/admin/parceiros" email={user.email} breadcrumb="Admin / Parceiros B2B / Detalhe" title={header?.tradeName ?? "Parceiro"} actions={<Link href="/admin/parceiros" className="text-[14px] font-extrabold underline">Voltar à lista</Link>}>
+    <AdminShell active="/admin/parceiros" email={user.email} breadcrumb="Admin / Parceiros B2B / Detalhe" title={header?.tradeName ?? "Parceiro"} actions={<Link href="/admin/parceiros" className="inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Voltar à lista</Link>}>
       {failed || !overview || !header ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Não foi possível carregar. <Link href={`/admin/parceiros/${id.data}`} className="underline">Tentar de novo</Link>

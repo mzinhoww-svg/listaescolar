@@ -83,7 +83,7 @@ describe("PreferencesForm", () => {
     const { container } = render(<PreferencesForm events={eventsForRole("parent")} prefs={[]} availability={{ web_push: true, email: true }} save={vi.fn(async () => ({ status: "ok" as const }))} />);
     expect(container.querySelectorAll("ul").length).toBe(1);
     expect(container.querySelectorAll("fieldset").length).toBe(eventsForRole("parent").length);
-    for (const f of container.querySelectorAll("fieldset")) expect(f.className).toMatch(/\bpy-3\b/);
+    for (const li of container.querySelectorAll("ul.rounded-\\[20px\\] > li")) expect(li.className).toMatch(/\bpy-3\b/);
     expect(container.querySelector("ul.rounded-\\[20px\\]")?.className).toMatch(/\bpx-4\b/);
     expect(container.querySelectorAll(".rounded-\\[20px\\]").length).toBe(1);
   });

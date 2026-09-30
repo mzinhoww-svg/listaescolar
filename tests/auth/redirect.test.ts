@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideAccess } from "@/features/auth/decide-access";
+import { decideAccess, hasSessionCookie } from "@/features/auth/decide-access";
 import { loginPathFor, safeNextPath } from "@/features/auth/redirect";
 
 describe("safeNextPath", () => {
@@ -74,5 +74,12 @@ describe("loginPathFor · retorno à rota atual", () => {
   it("sem cookie de sessão não diz que a sessão terminou", () => {
     const d = decideAccess({ pathname: "/conta", search: "?a=1", userId: null, role: null });
     expect(d).toEqual({ action: "redirect-login", location: "/entrar?next=%2Fconta%3Fa%3D1" });
+  });
+
+  it("só o cookie de sessão conta (não o verificador PKCE de quem só pediu o link)", () => {
+    expect(hasSessionCookie(["sb-127-auth-token"])).toBe(true);
+    expect(hasSessionCookie(["sb-abc-auth-token.0", "sb-abc-auth-token.1"])).toBe(true);
+    expect(hasSessionCookie(["sb-127-auth-token-code-verifier"])).toBe(false);
+    expect(hasSessionCookie(["outro", "theme"])).toBe(false);
   });
 });

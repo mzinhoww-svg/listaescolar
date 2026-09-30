@@ -5,18 +5,18 @@ Uma seção por jornada; regenerada por `node scripts/s29-checks.mjs --jornada <
 <!-- J3:start -->
 ## J3 · Família entra e cuida da conta
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:15:17.867Z contra `http://127.0.0.1:3003`. Rotas com falha: **5** de 8.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T02:27:26.365Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 8.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|
-| `/entrar` | pub | 200 | falha | beco sem saída: sem caminho de volta |
-| `/conta` | familia | 200 | falha | beco sem saída: sem caminho de volta |
+| `/entrar` | pub | 200 | ok | - |
+| `/conta` | familia | 200 | ok | - |
 | `/conta/alunos/novo` | familia | 200 | ok | - |
-| `/conta/alunos//editar` | familia | - | pulada | pulada: sem dado no seed (aluno); o seed cresce na Task 5 |
-| `/conta/listas-salvas` | familia | 200 | falha | botão fora do sistema (1): button.text-[12px].font-extrabold.text-erro-texto.underline "Remover"<br>alvo < 44 px (1): a.text-[16px].font-extrabold 196x24 |
+| `/conta/alunos/00000000-0000-4000-8000-000000290a01/editar` | familia | 200 | ok | - |
+| `/conta/listas-salvas` | familia | 200 | ok | - |
 | `/conta/carrinhos` | familia | 200 | ok | - |
-| `/conta/notificacoes` | familia | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/conta/privacidade` | familia | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.text-erro-texto.text-[12px].font-extrabold.underline "Revogar" |
+| `/conta/notificacoes` | familia | 200 | ok | - |
+| `/conta/privacidade` | familia | 200 | ok | - |
 <!-- J3:end -->
 
 <!-- movimento:start -->

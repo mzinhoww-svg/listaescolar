@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { protectedPrefix } from "@/features/auth/access";
-import { decideAccess } from "@/features/auth/decide-access";
+import { decideAccess, hasSessionCookie } from "@/features/auth/decide-access";
 import { roleSchema } from "@/features/auth/schemas";
 import { getPublicEnv } from "@/lib/env.public";
 
@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   // Cookie de sessão presente + `getUser` sem usuário = sessão expirada (a tela de entrada diz "sua sessão terminou").
-  const hadSession = userId === null && request.cookies.getAll().some((c) => /^sb-.+-auth-token/.test(c.name));
+  const hadSession = userId === null && hasSessionCookie(request.cookies.getAll().map((c) => c.name));
   const decision = decideAccess({ pathname, search, userId, role, hadSession });
   if (decision.action === "next") return response;
 

@@ -37,3 +37,8 @@ export function decideAccess({
     ? { action: "next" }
     : { action: "rewrite-403", location: "/403" };
 }
+
+/** Havia cookie de sessão do Supabase (`sb-<ref>-auth-token`, inclusive em pedaços `.0`, `.1`)? O verificador PKCE não conta. */
+export function hasSessionCookie(names: readonly string[]): boolean {
+  return names.some((n) => /^sb-.+-auth-token(\.\d+)?$/.test(n));
+}

@@ -65,8 +65,8 @@ export function PreferencesForm({ prefs, availability, save, events }: {
         {list.map((e) => {
           const title = EVENT_CATALOG[e].title({});
           return (
-            <li key={e}>
-              <fieldset className="py-3">
+            <li key={e} className="py-3">
+              <fieldset>
                 <legend className="pb-1 text-[14px] font-extrabold">{title}</legend>
                 <div className="flex flex-wrap gap-x-6 gap-y-1">
                   {CHANNELS.map((c) => {

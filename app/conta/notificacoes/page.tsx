@@ -45,7 +45,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
         <section aria-labelledby="pref" className="flex flex-col gap-3">
           <h2 id="pref" className="text-[18px] font-extrabold">Preferências</h2>
           <PreferencesForm events={eventsForRole(role)} prefs={prefs} availability={availability} save={savePreferenceAction} />
-          <PushOptIn publicKey={availability.web_push ? (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null) : null} subscribe={subscribePushAction} unsubscribe={unsubscribePushAction} />
+          {/* Sem canal, a nota das preferências já explica (uma vez); o botão só aparece quando existe. */}
+          {availability.web_push ? <PushOptIn publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null} subscribe={subscribePushAction} unsubscribe={unsubscribePushAction} /> : null}
           {pushCount > 0 ? <p className="text-texto-3 text-[12px] font-semibold">Aparelhos com aviso ligado: {pushCount}.</p> : null}
         </section>
         <section aria-labelledby="watch" className="flex flex-col gap-3">

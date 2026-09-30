@@ -91,6 +91,10 @@ describe("apoios", () => {
     expect(filterRows(rows, "todas", "457231")).toHaveLength(1);
     expect(filterRows(rows, "todas", "jardim")).toHaveLength(1);
     expect(parseTab("x")).toBe("pendentes");
+    const approved = [{ tradeName: "Gama", cnpj: "11222333000181", neighborhood: null, status: "approved" as const }];
+    expect(parseTab("aprovadas")).toBe("aprovadas");
+    expect(filterRows(approved, "aprovadas", "")).toHaveLength(1);
+    expect(filterRows(approved, "ativas", "")).toHaveLength(0);
   });
   it("wa.me só com telefone válido", () => {
     expect(whatsappLink("(65) 99999-1234", "oi")).toBe("https://wa.me/5565999991234?text=oi");

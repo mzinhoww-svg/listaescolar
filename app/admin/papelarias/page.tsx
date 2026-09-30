@@ -30,7 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   const rows = filterRows(all, tab, q);
   const cards = [
     { n: count("under_review"), label: "aguardando aprovação", cls: "bg-tinta text-white" },
-    { n: count("active"), label: "ativas", cls: "bg-white" },
+    { n: count("active") + count("approved"), label: "ativas ou aprovadas", cls: "bg-white" },
     { n: count("paused"), label: "pausadas", cls: "bg-white" },
     { n: count("suspended"), label: "suspensas", cls: "bg-white" },
   ];

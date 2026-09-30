@@ -3,6 +3,7 @@ import type { StationeryStatus } from "./state";
 
 export const ADMIN_TABS = [
   { key: "pendentes", label: "Pendentes", statuses: ["under_review"] },
+  { key: "aprovadas", label: "Aprovadas", statuses: ["approved"] },
   { key: "ativas", label: "Ativas", statuses: ["active"] },
   { key: "pausadas", label: "Pausadas", statuses: ["paused"] },
   { key: "suspensas", label: "Suspensas", statuses: ["suspended"] },

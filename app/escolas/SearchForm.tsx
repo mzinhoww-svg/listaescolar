@@ -29,7 +29,7 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
         <input key={k} type="hidden" name={k} value={v} />
       ))}
       <label htmlFor="q" className="sr-only">
-        Buscar escola pelo nome ou INEP
+        Buscar escola pelo nome ou pelo código da escola
       </label>
       <div className="focus-within:outline-verde-fundo border-tinta flex h-[52px] items-center gap-2 rounded-full border-[1.5px] bg-white pr-1.5 pl-[18px] focus-within:outline-2 focus-within:outline-offset-2">
         <span className="text-tinta" aria-hidden>
@@ -43,7 +43,8 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
           onChange={(e) => setValue(e.target.value)}
           maxLength={100}
           autoComplete="off"
-          placeholder="Nome da escola ou INEP"
+          aria-describedby="q-hint"
+          placeholder="Nome da escola ou código INEP"
           className="placeholder:text-texto-3 h-11 min-w-0 grow bg-transparent text-[15px] font-semibold outline-none [&::-webkit-search-cancel-button]:hidden"
         />
         {value ? (
@@ -62,6 +63,9 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
           </button>
         )}
       </div>
+      <p id="q-hint" className="text-texto-3 mt-2 text-xs font-semibold">
+        Código INEP: o número da escola no Censo Escolar.
+      </p>
       {stacked ? (
         <button type="submit" className="bg-tinta text-papel focus-visible:outline-verde-fundo rounded-botao mt-2.5 flex h-12 w-full items-center justify-center text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">
           {submitLabel}

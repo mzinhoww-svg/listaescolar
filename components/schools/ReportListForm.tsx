@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { reportErrorMessage } from "@/features/reports/messages";
 import { REPORT_REASONS, REPORT_REASON_LABEL } from "@/features/reports/ports";
 
@@ -31,7 +32,7 @@ export function ReportListForm({ listId, action, ok, erro }: { listId: string; a
               <option key={r} value={r}>{REPORT_REASON_LABEL[r]}</option>
             ))}
           </select>
-          <button type="submit" className="border-tinta text-tinta rounded-botao h-11 border-[1.5px] bg-transparent font-extrabold">Denunciar</button>
+          <Button type="submit" variant="outline">Denunciar</Button>
         </form>
       </div>
     </details>

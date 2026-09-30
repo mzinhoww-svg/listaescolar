@@ -82,3 +82,30 @@ describe("createCartAction (S11)", () => {
     expect(getList).not.toHaveBeenCalled();
   });
 });
+
+describe("createCartAction com destino=cotacao (UX-013)", () => {
+  const withDestino = () => {
+    const fd = form();
+    fd.set("destino", "cotacao");
+    return fd;
+  };
+
+  it("cria o carrinho e segue direto para o pedido de cotação (sem passar pelas opções de loja)", async () => {
+    getList.mockResolvedValue({ kind: "official", isDemo: false, items });
+    await expect(createCartAction(withDestino())).rejects.toThrow(`REDIRECT:/cotacao/nova?carrinho=${CART}`);
+    expect(createCart).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem sessão o login volta para a mesma tela e mantém o destino", async () => {
+    getCurrentUser.mockResolvedValue(null);
+    const r = await createCartAction(withDestino()).catch((e: Error) => e.message);
+    expect(r).toBe(`REDIRECT:/entrar?next=${encodeURIComponent(`/carrinho/novo?lista=${LIST}&destino=cotacao`)}`);
+  });
+
+  it("valor desconhecido de destino é ignorado (segue para o carrinho)", async () => {
+    getList.mockResolvedValue({ kind: "official", isDemo: false, items });
+    const fd = form();
+    fd.set("destino", "https://exemplo.com");
+    await expect(createCartAction(fd)).rejects.toThrow(`REDIRECT:/carrinho/${CART}`);
+  });
+});

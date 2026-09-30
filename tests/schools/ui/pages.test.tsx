@@ -11,8 +11,10 @@ vi.mock("@/features/schools/search/repository", () => ({
 }));
 // `cache` do React não deduplica fora do servidor de RSC; nos testes vale a chamada direta.
 const getPublishedList = vi.fn();
+const listPublishedGradeYears = vi.fn();
 vi.mock("@/features/lists/queries", () => ({
   getPublishedList: (...a: unknown[]) => getPublishedList(...a),
+  listPublishedGradeYears: (...a: unknown[]) => listPublishedGradeYears(...a),
   listVersionHistory: vi.fn().mockResolvedValue([]),
 }));
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: vi.fn().mockResolvedValue(null) }));
@@ -32,7 +34,6 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { academicYears, defaultAcademicYear } from "@/features/grades/catalog";
 import SearchPage, { generateMetadata as searchMeta } from "@/app/escolas/page";
 import SchoolPage, { generateMetadata as schoolMeta } from "@/app/escolas/[inep]/page";
 
@@ -66,6 +67,7 @@ beforeEach(() => {
   searchSchools.mockReset();
   getSchoolByInep.mockReset();
   getPublishedList.mockReset().mockResolvedValue(null);
+  listPublishedGradeYears.mockReset().mockResolvedValue([]);
 });
 
 describe("/escolas", () => {
@@ -103,10 +105,7 @@ describe("/escolas", () => {
 });
 
 describe("/escolas/[inep]", () => {
-  const props = (inep = "51001234", q: Record<string, string> = {}) => ({
-    params: Promise.resolve({ inep }),
-    searchParams: sp(q),
-  });
+  const props = (inep = "51001234") => ({ params: Promise.resolve({ inep }) });
 
   it("404 para escola inexistente ou de município desabilitado (null)", async () => {
     getSchoolByInep.mockResolvedValue(null);
@@ -147,33 +146,56 @@ describe("/escolas/[inep]", () => {
     expect(screen.queryByRole("link", { name: "Pedir para administrar" })).toBeNull();
   });
 
-  it("falha ao consultar a lista vira 'indisponível' no bloco e não derruba o perfil", async () => {
+  it("com listas publicadas: os atalhos levam direto à lista, sem seletor de série e ano", async () => {
     getSchoolByInep.mockResolvedValue(school());
-    getPublishedList.mockRejectedValueOnce(new Error("lists: consulta de lista falhou (XX000)"));
-    render(
-      await SchoolPage(
-        props("51001234", { serie: "ef-4", ano: String(defaultAcademicYear(new Date())) }),
-      ),
-    );
-    expect(screen.getByText(/lista indisponível/)).toBeInTheDocument();
-    expect(screen.queryByText(/lista não publicada/)).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: /Escola Municipal Antônio Silva/ }),
-    ).toBeInTheDocument();
+    listPublishedGradeYears.mockResolvedValueOnce([{ gradeSlug: "ef-4", year: 2027 }]);
+    render(await SchoolPage(props()));
+    expect(screen.getByRole("link", { name: "4º ano · 2027" })).toHaveAttribute("href", "/escolas/51001234/ef-4?ano=2027");
+    expect(screen.queryByLabelText("Série")).toBeNull();
+    expect(screen.queryByLabelText("Ano letivo")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Ver lista" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Enviar a lista desta escola" })).toHaveAttribute("href", "/enviar-lista?escola=51001234");
   });
 
-  it("série e ano válidos da URL chegam ao seletor; inválidos são ignorados", async () => {
+  it("sem lista publicada: o caminho é enviar a lista (UX-012), não um beco", async () => {
     getSchoolByInep.mockResolvedValue(school());
-    const now = new Date();
-    const [y] = academicYears(now);
-    const { unmount } = render(
-      await SchoolPage(props("51001234", { serie: "ef-4", ano: String(y + 1) })),
-    );
-    expect(screen.getByLabelText("Série")).toHaveValue("ef-4");
-    expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(y + 1));
-    unmount();
-    render(await SchoolPage(props("51001234", { serie: "xx", ano: "1900" })));
-    expect(screen.getByLabelText("Série")).toHaveValue("");
-    expect(screen.getByLabelText("Ano letivo")).toHaveValue(String(defaultAcademicYear(now)));
+    listPublishedGradeYears.mockResolvedValueOnce([]);
+    render(await SchoolPage(props()));
+    expect(screen.getByText("Ainda não há lista publicada")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Enviar a lista desta escola" })).toHaveAttribute("href", "/enviar-lista?escola=51001234");
+  });
+
+  it("falha ao consultar as listas vira 'indisponível' e não derruba o perfil nem afirma 'nenhuma lista'", async () => {
+    getSchoolByInep.mockResolvedValue(school());
+    listPublishedGradeYears.mockRejectedValueOnce(new Error("lists: consulta falhou (XX000)"));
+    render(await SchoolPage(props()));
+    expect(screen.getByText(/Não foi possível consultar as listas agora/)).toBeInTheDocument();
+    expect(screen.queryByText("Ainda não há lista publicada")).toBeNull();
+    expect(screen.getByRole("heading", { name: /Escola Municipal Antônio Silva/ })).toBeInTheDocument();
+  });
+
+  it("nome de escola de 90 caracteres quebra linha (sem rolagem horizontal) no cabeçalho e no cartão (UX-024)", async () => {
+    const longName = "Escola Municipal de Educação Infantil e Ensino Fundamental Profa. Maria das Dores Rios S29";
+    expect(longName.length).toBeGreaterThanOrEqual(90);
+    getSchoolByInep.mockResolvedValue(school({ name: longName }));
+    render(await SchoolPage(props()));
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.className).toContain("[overflow-wrap:anywhere]");
+    expect(h1.parentElement?.className).toContain("min-w-0");
+  });
+
+  it("primeira menção de INEP vem explicada (UX-015)", async () => {
+    getSchoolByInep.mockResolvedValue(school());
+    const { container } = render(await SchoolPage(props()));
+    const text = container.textContent ?? "";
+    const i = text.indexOf("INEP");
+    expect(text.slice(i, i + 90)).toContain("o número da escola no Censo Escolar");
+  });
+
+  it("selo do perfil com vocabulário da marca, sem 'Com admin' nem 'vínculo do representante' (UX-021)", async () => {
+    getSchoolByInep.mockResolvedValue(school());
+    const { container } = render(await SchoolPage(props()));
+    expect(container.textContent).not.toMatch(/Com admin\b|vínculo do representante|Reivindicad/);
+    expect(container.textContent).toContain("Com administrador");
   });
 });

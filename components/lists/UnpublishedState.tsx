@@ -1,16 +1,22 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { outlineButton } from "@/components/auth/Screen";
+import { buttonClass } from "@/components/ui/Button";
+import { sendListHref } from "@/features/submissions/href";
 
-/** Sem lista publicada para escola/série/ano: nada é inventado; só o estado e o caminho de volta. */
+/**
+ * Sem lista publicada para escola/série/ano: nada é inventado. Os caminhos são "Me avise" (quando há como avisar),
+ * "Enviar a lista desta série" (a família que tem a lista pode enviá-la; a equipe revisa) e voltar às séries.
+ */
 export function UnpublishedState({
   inep,
+  gradeSlug,
   gradeLabel,
   year,
   notify,
 }: {
   inep: string;
+  gradeSlug: string;
   gradeLabel: string;
   year: number;
   /** "Me avise" (App24, S11): só quando há como avisar. */
@@ -28,7 +34,10 @@ export function UnpublishedState({
         </p>
       </div>
       {notify}
-      <Link href={`/escolas/${inep}`} className={outlineButton}>
+      <Link href={sendListHref({ inep, gradeSlug, year })} className={buttonClass("outline")}>
+        Enviar a lista desta série
+      </Link>
+      <Link href={`/escolas/${inep}`} className={buttonClass("text", "md", "self-center")}>
         Escolher outra série
       </Link>
     </section>

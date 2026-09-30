@@ -18,8 +18,10 @@ export async function createCartAction(formData: FormData): Promise<void> {
   const parsed = createCartSchema.safeParse({ listId: formData.get("listId") });
   if (!parsed.success) redirect("/carrinho/novo?erro=lista");
   const { listId } = parsed.data;
+  // Vindo de "Pedir preço à papelaria do bairro" (lista publicada): segue direto para o pedido de cotação.
+  const toQuote = formData.get("destino") === "cotacao";
   const user = await getCurrentUser();
-  if (!user) redirect(`/entrar?next=${encodeURIComponent(`/carrinho/novo?lista=${listId}`)}`);
+  if (!user) redirect(`/entrar?next=${encodeURIComponent(`/carrinho/novo?lista=${listId}${toQuote ? "&destino=cotacao" : ""}`)}`);
   const actor = await getSessionActor();
   const list = await getListReader(readServiceEnv()).getList(listId, { actor });
   if (!list || list.items.length === 0) redirect(`/carrinho/novo?lista=${listId}&erro=lista`);
@@ -34,5 +36,5 @@ export async function createCartAction(formData: FormData): Promise<void> {
   });
   // Retrato inicial das opções (preço, origem e data) para consulta posterior.
   await snapshotCartOptions(client, cartId, user.id, readServiceEnv());
-  redirect(`/carrinho/${cartId}`);
+  redirect(toQuote ? `/cotacao/nova?carrinho=${cartId}` : `/carrinho/${cartId}`);
 }

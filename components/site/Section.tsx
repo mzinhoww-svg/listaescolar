@@ -11,7 +11,7 @@ export function Section({ id, eyebrow, title, tone = "papel", children }: Props)
   return (
     <section id={id} aria-labelledby={`${id}-t`} className={BG[tone]}>
       <div className="reveal motion-reduce:animate-none mx-auto w-full max-w-[1200px] px-6 py-14 md:py-20">
-        <p className={`text-xs font-extrabold tracking-[0.14em] uppercase ${dark ? "text-verde-certo" : "text-verde-fundo"}`}>{eyebrow}</p>
+        <p className={`text-sm font-extrabold ${dark ? "text-verde-certo" : "text-verde-fundo"}`}>{eyebrow}</p>
         <h2 id={`${id}-t`} className="mt-2 text-[28px] leading-[1.1] font-extrabold tracking-[-0.03em] md:text-[40px]">
           {title}
         </h2>

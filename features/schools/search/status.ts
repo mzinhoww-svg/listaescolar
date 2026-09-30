@@ -16,13 +16,13 @@ const BASE: Record<VerificationStatus, { label: string; description: string; ver
     verified: false,
   },
   claimed: {
-    label: "Reivindicada",
+    label: "Em verificação",
     description: "Um representante pediu para administrar este perfil; a verificação ainda não foi concluída.",
     verified: false,
   },
   verified: {
     label: "Escola verificada",
-    description: "A escola teve o vínculo do representante verificado.",
+    description: "A equipe ListaCerta confirmou quem administra esta página.",
     verified: true,
   },
   suspended: {

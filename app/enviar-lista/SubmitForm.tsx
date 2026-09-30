@@ -8,7 +8,7 @@ import { prepareUpload } from "@/components/submissions/prepareUpload";
 import { ConsentField } from "@/components/submissions/ConsentField";
 import { BoltIcon, CameraIcon, ChevronLeftIcon, ClockIcon } from "@/components/submissions/icons";
 import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
-import { SchoolSearchPicker } from "@/components/submissions/SchoolPicker";
+import { SchoolSearchPicker, type SchoolHit } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
 import { ACCEPT_ATTR, errorFieldFor, FORM_ERROR_ID, REVIEW_NOTICE } from "@/features/submissions/copy";
 import { trackUploadStarted } from "@/lib/analytics/track";
@@ -20,7 +20,7 @@ const primary = "bg-tinta text-papel flex h-14 w-full items-center justify-cente
 const outline = "border-tinta text-tinta flex h-[52px] w-full items-center justify-center gap-2 rounded-botao border-[1.5px] text-base font-extrabold";
 
 /** App15-EnviarLista + App06-Foto (390×844). O arquivo vai pela Server Action; a tela App20 cobre o envio. */
-export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYear: number }) {
+export function SubmitForm({ years, defaultYear, initialSchool = null, initialGrade = "" }: { years: number[]; defaultYear: number; initialSchool?: SchoolHit | null; initialGrade?: string }) {
   const [state, action, pending] = useActionState(submitListAction, idleState);
   const [picked, setPicked] = useState<{ name: string; size: number } | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
@@ -98,8 +98,8 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
           ) : null}
         </section>
 
-        <SchoolSearchPicker />
-        <SeriesFields years={years} defaultYear={defaultYear} invalid={errorField === "grade"} />
+        <SchoolSearchPicker initial={initialSchool} />
+        <SeriesFields years={years} defaultYear={defaultYear} defaultGrade={initialGrade} invalid={errorField === "grade"} />
         <ConsentField invalid={errorField === "consent"} />
         <div aria-live="polite">
           {message ? (

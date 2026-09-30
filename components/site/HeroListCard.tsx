@@ -1,9 +1,11 @@
+import Link from "next/link";
 import type { CSSProperties } from "react";
 
 import { DemoBadge } from "@/components/admin/DemoBadge";
+import { buttonClass } from "@/components/ui/Button";
 import { SITE_COPY } from "@/features/site/copy";
 
-import { TickBox } from "./icons";
+import { EmptyBox } from "./icons";
 
 /** Cartão ilustrativo: conteúdo genérico com selo de demonstração e sem preço. */
 export function HeroListCard() {
@@ -14,7 +16,7 @@ export function HeroListCard() {
         <p className="text-sm font-extrabold">{c.cardTitle}</p>
         <DemoBadge />
       </div>
-      <p className="bg-verde-certo/20 text-verde-fundo mt-4 inline-block rounded-full px-2.5 py-0.5 text-xs font-extrabold">{c.cardTag}</p>
+      <p className="bg-campo text-texto-2 mt-4 inline-block rounded-full px-2.5 py-0.5 text-xs font-extrabold">{c.cardTag}</p>
       <ul className="mt-2 flex flex-col">
         {c.cardItems.map((i, n) => (
           <li
@@ -22,13 +24,15 @@ export function HeroListCard() {
             style={{ "--i": n } as CSSProperties}
             className="tick-loop motion-reduce:animate-none flex items-center gap-3 py-2.5 text-[15px] font-semibold"
           >
-            <TickBox />
+            <EmptyBox />
             {i}
           </li>
         ))}
       </ul>
       <div className="border-linha mt-2 border-t pt-4">
-        <p className="text-sm font-extrabold">{c.cardFoot}</p>
+        <Link href="/escolas" className={buttonClass("text", "md", "-mx-2 text-sm font-extrabold")}>
+          {c.cardFoot}
+        </Link>
         <p className="text-texto-2 text-xs font-semibold">{c.cardPrice}</p>
       </div>
     </figure>

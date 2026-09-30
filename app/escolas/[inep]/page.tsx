@@ -7,25 +7,19 @@ import { ClaimBlock, type OwnClaimSummary } from "@/components/schools/ClaimBloc
 import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
 import { ProfileNotices } from "@/components/schools/ProfileNotices";
-import { ReportListForm } from "@/components/schools/ReportListForm";
 import { getSessionActor } from "@/features/auth/actor";
 import { getMyClaimForSchool } from "@/features/claims/queries";
-import { academicYears, defaultAcademicYear, parseGradeSelection } from "@/features/grades/catalog";
-import { getPublishedList, listPublishedGradeYears } from "@/features/lists/queries";
-import { submitReportAction } from "@/features/reports/actions";
+import { listPublishedGradeYears } from "@/features/lists/queries";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { buildSchoolMetadata } from "@/features/schools/search/seo";
 import { siteBase } from "@/lib/site-base";
 
-import { GradeYearPicker } from "./GradeYearPicker";
+import { ListChooser } from "./ListChooser";
 
 export const dynamic = "force-dynamic";
 
-type Props = {
-  params: Promise<{ inep: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+type Props = { params: Promise<{ inep: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const school = await loadSchool((await params).inep);
@@ -33,8 +27,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: "Escola não encontrada · ListaCerta", robots: { index: false, follow: false } };
   return buildSchoolMetadata(school);
 }
-
-const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 /** Reivindicação do usuário logado (a própria; nunca de terceiros). Falha de consulta não derruba o perfil: sem bloco personalizado. */
 async function loadOwnClaim(inep: string): Promise<OwnClaimSummary | null> {
@@ -48,24 +40,10 @@ async function loadOwnClaim(inep: string): Promise<OwnClaimSummary | null> {
   }
 }
 
-export default async function SchoolPage({ params, searchParams }: Props) {
+export default async function SchoolPage({ params }: Props) {
   const school = await loadSchool((await params).inep);
   if (!school) notFound();
 
-  const sp = await searchParams;
-  const now = new Date();
-  const { grade, year } = parseGradeSelection(first(sp.serie), first(sp.ano), now);
-  const selectedYear = year ?? defaultAcademicYear(now);
-  let list: Awaited<ReturnType<typeof getPublishedList>> = null;
-  let listUnavailable = false;
-  if (grade) {
-    try {
-      list = await getPublishedList(school.inep, grade.slug, selectedYear);
-    } catch {
-      // Falha de consulta não derruba o perfil: o bloco mostra "indisponível".
-      listUnavailable = true;
-    }
-  }
   let shortcuts: Awaited<ReturnType<typeof listPublishedGradeYears>> | undefined;
   try {
     shortcuts = await listPublishedGradeYears(school.inep);
@@ -90,28 +68,8 @@ export default async function SchoolPage({ params, searchParams }: Props) {
       <ProfileHeader school={school} />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
         <ProfileNotices school={school} />
-        <GradeYearPicker
-          inep={school.inep}
-          serie={grade?.slug ?? null}
-          ano={selectedYear}
-          years={academicYears(now)}
-          unavailable={listUnavailable}
-          publishedShortcuts={shortcuts?.map((s) => ({ gradeSlug: s.gradeSlug, year: s.year }))}
-          published={
-            list
-              ? { versionNumber: list.version.versionNumber, itemCount: list.version.itemCount }
-              : null
-          }
-        />
+        <ListChooser inep={school.inep} publishedShortcuts={shortcuts?.map((s) => ({ gradeSlug: s.gradeSlug, year: s.year }))} />
         <ClaimBlock inep={school.inep} status={school.verificationStatus} claim={ownClaim} />
-        {list ? (
-          <ReportListForm
-            listId={list.id}
-            action={submitReportAction.bind(null, `/escolas/${school.inep}?serie=${grade?.slug ?? ""}&ano=${selectedYear}`)}
-            ok={first(sp.denunciaOk) === "1"}
-            erro={first(sp.denunciaErro) ?? null}
-          />
-        ) : null}
         <ProfileInfo school={school} />
       </main>
     </div>

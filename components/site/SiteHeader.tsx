@@ -12,8 +12,8 @@ export function SiteHeader() {
         <Link href="/" aria-label="ListaCerta, página inicial" className={`order-1 flex min-h-11 w-40 items-center rounded ${FOCUS}`}>
           <Logo variant="horizontal" height={36} priority />
         </Link>
-        <nav aria-label="Seções" className="order-3 w-full overflow-x-auto [mask-image:linear-gradient(to_right,#000_88%,transparent)] md:order-2 md:ml-auto md:w-auto md:overflow-visible md:[mask-image:none]">
-          <ul className="flex gap-1 whitespace-nowrap">
+        <nav aria-label="Seções" className="order-3 w-full md:order-2 md:ml-auto md:w-auto">
+          <ul className="flex flex-wrap gap-x-1">
             {NAV_LINKS.map((l) => (
               <li key={l.href}>
                 <Link href={l.href} className={`text-tinta flex min-h-11 items-center rounded px-3 text-[13px] font-bold ${FOCUS}`}>

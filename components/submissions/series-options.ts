@@ -16,3 +16,11 @@ export const SERIES_OPTIONS: readonly SeriesOption[] = GRADE_OPTIONS.map((value)
 
 /** Todo rótulo de ano/série existe no catálogo da página da escola (garantia de "uma palavra por conceito"). */
 export const CATALOG_LABELS: ReadonlySet<string> = new Set(GRADES.map((g) => g.label));
+
+/** Valor do seletor de `/enviar-lista` para um slug do catálogo (`ef-5` vira "5º ano"); desconhecido = `undefined`. */
+export function seriesValueForSlug(slug: string): SeriesOption["value"] | undefined {
+  const grade = GRADES.find((g) => g.slug === slug);
+  if (!grade) return undefined;
+  const value = grade.stage === "ei" ? "Educação infantil" : grade.stage === "em" ? `${grade.label} do ensino médio` : grade.label;
+  return SERIES_OPTIONS.find((o) => o.value === value)?.value;
+}

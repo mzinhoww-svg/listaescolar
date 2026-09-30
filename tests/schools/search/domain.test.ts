@@ -26,7 +26,7 @@ const school = (over: Partial<SchoolProfile> = {}): SchoolProfile => ({
 describe("statusLabel", () => {
   const cases: [VerificationStatus, boolean, string, boolean][] = [
     ["registered", false, "Cadastrada", false],
-    ["claimed", false, "Reivindicada", false],
+    ["claimed", false, "Em verificação", false],
     ["verified", false, "Escola verificada", true],
     ["suspended", false, "Suspensa", false],
     ["registered", true, "Cadastrada", false],

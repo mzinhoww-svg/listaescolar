@@ -10,7 +10,7 @@ export function PublishedShortcuts({ inep, items }: { inep: string; items: reado
   if (shown.length === 0) return null;
   return (
     <nav aria-label="Listas publicadas" className="flex flex-col gap-2">
-      <p className="text-texto-3 text-xs font-semibold">Listas publicadas</p>
+      <p className="text-texto-2 text-[13px] font-semibold">Escolha a série para abrir a lista</p>
       <ul className="flex flex-wrap gap-2">
         {shown.map((i) => (
           <li key={`${i.gradeSlug}-${i.year}`}>

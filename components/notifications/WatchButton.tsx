@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { Button, buttonClass } from "@/components/ui/Button";
+
 type Result = { status: "ok" } | { status: "error"; code: string };
 type Input = { inep: string; gradeSlug: string; year: number };
 
@@ -19,7 +21,6 @@ export function WatchButton({ inep, gradeSlug, year, loggedIn, watching, nextPat
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const input = { inep, gradeSlug, year };
-  const primary = "bg-tinta text-papel rounded-botao flex min-h-14 w-full items-center justify-center text-base font-extrabold disabled:opacity-60";
 
   const run = (fn: (i: Input) => Promise<Result>, next: boolean) =>
     start(async () => {
@@ -42,14 +43,17 @@ export function WatchButton({ inep, gradeSlug, year, loggedIn, watching, nextPat
         </ul>
       </div>
       {!loggedIn ? (
-        <Link href={`/entrar?next=${encodeURIComponent(nextPath)}`} className={primary}>Me avise</Link>
+        <>
+          <p className="text-texto-2 text-[13px] leading-[1.4] font-semibold">Para ser avisado, você entra com seu e-mail e volta para esta lista.</p>
+          <Link href={`/entrar?next=${encodeURIComponent(nextPath)}`} className={buttonClass("primary", "lg", "w-full")}>Me avise</Link>
+        </>
       ) : on ? (
         <>
           <p role="status" className="bg-campo rounded-campo px-4 py-3 text-[13px] font-bold">Você será avisado aqui no app quando a lista for publicada.</p>
-          <button type="button" disabled={pending} onClick={() => run(unwatch, false)} className="border-tinta text-tinta rounded-botao min-h-11 border-[1.5px] text-[14px] font-extrabold">Parar de avisar</button>
+          <Button variant="outline" loading={pending} onClick={() => run(unwatch, false)}>Parar de avisar</Button>
         </>
       ) : (
-        <button type="button" disabled={pending} onClick={() => run(watch, true)} className={primary}>Me avise</button>
+        <Button size="lg" loading={pending} onClick={() => run(watch, true)} className="w-full">Me avise</Button>
       )}
       <div aria-live="polite">{error ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[13px] font-bold">{error}</p> : null}</div>
     </section>

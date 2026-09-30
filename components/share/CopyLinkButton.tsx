@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { track } from "@/lib/analytics/track";
 
 /** Copia o link curto; sem Clipboard API o texto do link segue selecionável ao lado. */
@@ -17,15 +18,11 @@ export function CopyLinkButton({ link, inep, gradeSlug }: { link: string; inep?:
     }
   }
   return (
-    <button
-      type="button"
-      onClick={copy}
-      className="rounded-botao border-tinta text-tinta focus-visible:outline-verde-fundo inline-flex h-11 items-center justify-center border-[1.5px] px-4 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
-    >
+    <Button variant="outline" onClick={copy}>
       {state === "copied" ? "Link copiado" : state === "failed" ? "Selecione o link" : "Copiar link"}
       <span aria-live="polite" className="sr-only">
-        {state === "copied" ? "Link copiado." : ""}
+        {state === "copied" ? "Link copiado." : state === "failed" ? "Não foi possível copiar. Selecione o link acima." : ""}
       </span>
-    </button>
+    </Button>
   );
 }

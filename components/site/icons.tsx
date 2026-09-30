@@ -8,11 +8,11 @@ export function CheckBadge({ dark = false, size = 32 }: { dark?: boolean; size?:
   );
 }
 
-export function TickBox() {
+/** Caixa vazia (nada marcado): o cartão de exemplo não mostra item "resolvido", só a lista. */
+export function EmptyBox() {
   return (
     <svg aria-hidden width="20" height="20" viewBox="0 0 20 20" className="shrink-0">
-      <rect width="20" height="20" rx="5" className="fill-tinta" />
-      <path d="M5 10.5l3.2 3.2L15 7" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="stroke-verde-certo" />
+      <rect x="1" y="1" width="18" height="18" rx="5" fill="none" strokeWidth="1.5" className="stroke-tinta/50" />
     </svg>
   );
 }

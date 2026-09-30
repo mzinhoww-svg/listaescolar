@@ -11,7 +11,7 @@ export function SchoolCard({ school }: { school: SchoolListItem }) {
     <li>
       <Link
         href={`/escolas/${school.inep}`}
-        className="focus-visible:outline-verde-fundo flex items-center gap-3 rounded-[22px] bg-white p-3.5 focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="focus-visible:outline-verde-fundo flex min-w-0 items-center gap-3 rounded-[22px] bg-white p-3.5 focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         <span
           aria-hidden
@@ -25,8 +25,10 @@ export function SchoolCard({ school }: { school: SchoolListItem }) {
             INEP {school.inep}
             {where ? ` · ${where}` : ""}
           </span>
+          <span className="mt-1">
+            <StatusBadges status={school.verificationStatus} isDemo={school.isDemo} />
+          </span>
         </span>
-        <StatusBadges status={school.verificationStatus} isDemo={school.isDemo} />
       </Link>
     </li>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { sendListHref } from "@/features/submissions/href";
 import type { SearchInput, SearchResult } from "@/features/schools/search/types";
 
 import { foundLabel } from "./format";
@@ -22,7 +23,7 @@ export function EmptyState({ tooShort }: { tooShort: boolean }) {
       {tooShort ? null : (
         <ul className="mt-1 flex flex-col">
           <li>
-            <Link href="/enviar-lista" className={EXIT}>
+            <Link href={sendListHref()} className={EXIT}>
               Enviar a lista da escola
             </Link>
           </li>
@@ -50,6 +51,9 @@ export function SearchResults({ input, result }: { input: SearchInput; result: R
         ))}
       </ul>
       <Pagination input={input} page={result.page} pageCount={result.pageCount} />
+      <Link href={sendListHref()} className={EXIT}>
+        Não achou a sua escola? Enviar a lista da escola
+      </Link>
     </section>
   );
 }

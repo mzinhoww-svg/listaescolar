@@ -39,12 +39,16 @@ export function qrPathData(matrix: boolean[][]): string {
   return parts.join("");
 }
 
-export function renderQrSvg(matrix: boolean[][], { size, color }: { size: number; color: string }): string {
+const escapeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** `title` (opcional) vira o `<title>` do SVG: nome acessível e título da aba quando a imagem abre no navegador. */
+export function renderQrSvg(matrix: boolean[][], { size, color, title }: { size: number; color: string; title?: string }): string {
   if (!COLOR_PATTERN.test(color)) throw new Error("cor inválida");
   if (!Number.isInteger(size) || size < 16 || size > 4096) throw new Error("tamanho inválido");
   const n = qrSide(matrix);
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" width="${size}" height="${size}" shape-rendering="crispEdges">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" width="${size}" height="${size}" shape-rendering="crispEdges"${title ? ' role="img"' : ""}>` +
+    (title ? `<title>${escapeXml(title)}</title>` : "") +
     `<rect width="${n}" height="${n}" fill="#FFFFFF"/>` +
     `<path fill="${color}" d="${qrPathData(matrix)}"/></svg>`
   );

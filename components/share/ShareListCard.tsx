@@ -1,5 +1,7 @@
 import { encodeShortCode, shortLinkUrl } from "@/features/short-links/code";
 
+import { buttonClass } from "@/components/ui/Button";
+
 import { CopyLinkButton } from "./CopyLinkButton";
 import { QrSvg } from "./QrSvg";
 
@@ -22,9 +24,9 @@ export function ShareListCard({ inep, gradeSlug, origin }: Props) {
           <CopyLinkButton link={link} inep={inep} gradeSlug={gradeSlug} />
           <a
             href={`/l/${code}/qr?download=1`}
-            className="text-verde-fundo focus-visible:outline-verde-fundo inline-flex min-h-11 items-center text-sm font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className={buttonClass("text", "md", "text-sm font-extrabold")}
           >
-            Baixar QR (SVG)
+            Baixar QR da lista
           </a>
         </div>
       </div>

@@ -187,7 +187,7 @@ describe("SearchForm", () => {
     expect(form).toHaveAttribute("action", "/escolas");
     expect(container.querySelector('input[name="rede"]')).toHaveValue("privada");
     expect(container.querySelector('input[name="pagina"]')).toBeNull();
-    expect(screen.getByLabelText("Buscar escola pelo nome ou INEP")).toHaveValue("silva");
+    expect(screen.getByLabelText("Buscar escola pelo nome ou pelo código da escola")).toHaveValue("silva");
   });
 
   it("campo Bairro opcional (visível) vai no GET e mantém o valor", () => {
@@ -204,7 +204,7 @@ describe("SearchForm", () => {
   it("botão limpar esvazia o campo", () => {
     render(<SearchForm defaultValue="silva" />);
     fireEvent.click(screen.getByRole("button", { name: "Limpar busca" }));
-    expect(screen.getByLabelText("Buscar escola pelo nome ou INEP")).toHaveValue("");
+    expect(screen.getByLabelText("Buscar escola pelo nome ou pelo código da escola")).toHaveValue("");
     expect(screen.queryByRole("button", { name: "Limpar busca" })).toBeNull();
   });
 });

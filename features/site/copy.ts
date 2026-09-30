@@ -40,7 +40,7 @@ export const NAV_LINKS = [
   { label: "Perguntas", href: "/#perguntas" },
 ] as const;
 
-type Item = { title: string; text: string };
+type Item = { title: string; text: string; action?: { label: string; href: string } };
 
 export const SITE_COPY = {
   hero: {
@@ -49,6 +49,7 @@ export const SITE_COPY = {
     lead: "Lista oficial da escola, revisada antes de publicar, e o pedido de preço à papelaria do bairro. Quando houver preço de loja, você compara as opções de carrinho.",
     scope: "Piloto em Cuiabá, MT",
     schoolCta: "Sou escola",
+    stationeryCta: "Sou papelaria",
     cardTitle: "Escola de exemplo · série de exemplo",
     cardTag: "Lista oficial",
     cardItems: ["Caderno universitário", "Lápis preto", "Borracha macia", "Régua de 30 cm", "Cola bastão"],
@@ -86,7 +87,7 @@ export const SITE_COPY = {
     title: "Encontre, peça o preço, confira",
     items: [
       { title: "Encontre a lista", text: "Busque a escola pelo nome ou pelo código INEP (o número da escola no Censo Escolar) e abra a lista oficial da série." },
-      { title: "Peça o preço", text: "Peça orçamento à papelaria do bairro pelo WhatsApp. Quando houver preço de loja online, você compara as opções de carrinho." },
+      { title: "Peça o preço", text: "Faça o pedido de cotação à papelaria do bairro pelo WhatsApp. Quando houver preço de loja online, você compara as opções de carrinho." },
       { title: "Confira", text: "Veja a lista oficial item a item e confira o que a escola pediu antes de comprar." },
     ] satisfies Item[],
     channelsTitle: "Onde comprar",
@@ -107,7 +108,11 @@ export const SITE_COPY = {
         title: "A lista é mesmo a oficial?",
         text: "Ela é publicada pela escola ou enviada por famílias e revisada antes de ir ao ar. Em caso de dúvida, confirme com a escola.",
       },
-      { title: "Minha escola não aparece.", text: "Envie a lista que você recebeu. Revisamos antes de publicar." },
+      {
+        title: "Minha escola não aparece.",
+        text: "Envie a lista que você recebeu. Revisamos antes de publicar.",
+        action: { label: "Enviar a lista da escola", href: "/enviar-lista" },
+      },
     ] satisfies Item[],
   },
   how: {

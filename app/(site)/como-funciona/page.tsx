@@ -12,7 +12,7 @@ export default function ComoFunciona() {
   return (
     <main id="conteudo" className="bg-papel flex-1">
       <div className="mx-auto w-full max-w-[1200px] px-6 py-12 md:py-20">
-        <p className="text-verde-fundo text-xs font-extrabold tracking-[0.14em] uppercase">Como funciona</p>
+        <p className="text-verde-fundo text-sm font-extrabold">Como funciona</p>
         <h1 className="mt-2 max-w-[22ch] text-[34px] leading-[1.05] font-extrabold tracking-[-0.035em] md:text-[56px]">{h.title}</h1>
         <p className="text-texto-2 mt-4 max-w-[60ch] text-base leading-relaxed md:text-lg">{h.lead}</p>
         <ol className="mt-12 grid gap-14 md:mt-16 md:grid-cols-3 md:gap-20">

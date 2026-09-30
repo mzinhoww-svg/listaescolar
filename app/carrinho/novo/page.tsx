@@ -16,7 +16,8 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
   const sp = await searchParams;
   const raw = Array.isArray(sp.lista) ? sp.lista[0] : sp.lista;
   const listId = z.uuid().safeParse(raw);
-  const next = listId.success ? `/carrinho/novo?lista=${listId.data}` : "/carrinho/novo";
+  const toQuote = (Array.isArray(sp.destino) ? sp.destino[0] : sp.destino) === "cotacao";
+  const next = listId.success ? `/carrinho/novo?lista=${listId.data}${toQuote ? "&destino=cotacao" : ""}` : "/carrinho/novo";
   await requireAccess(next);
   const listError = (Array.isArray(sp.erro) ? sp.erro[0] : sp.erro) === "lista";
 
@@ -70,11 +71,12 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       <div className="flex-1" />
       <form action={createCartAction}>
         <input type="hidden" name="listId" value={listId.data} />
+        {toQuote ? <input type="hidden" name="destino" value="cotacao" /> : null}
         <SubmitButton
           pendingLabel="Montando..."
           className="bg-tinta text-papel rounded-botao flex h-14 w-full items-center justify-center text-base font-extrabold"
         >
-          Comparar opções
+          {toQuote ? "Pedir cotação a papelarias" : "Comparar opções"}
         </SubmitButton>
       </form>
     </Screen>

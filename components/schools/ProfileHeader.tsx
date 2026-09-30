@@ -10,7 +10,7 @@ export function ProfileHeader({ school }: { school: SchoolProfile }) {
   const place = [school.neighborhood, `${school.municipalityName} · ${school.uf}`].filter(Boolean).join(" · ");
   return (
     <header className="bg-tinta text-papel rounded-b-[32px] px-6 pt-14 pb-7">
-      <div className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5">
+      <div className="mx-auto flex w-full max-w-[420px] min-w-0 flex-col gap-3.5">
         <Link
           href="/escolas"
           aria-label="Voltar para a busca"
@@ -20,9 +20,9 @@ export function ProfileHeader({ school }: { school: SchoolProfile }) {
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadges status={school.verificationStatus} isDemo={school.isDemo} />
-          <span className="text-papel/80 text-xs font-semibold">INEP {school.inep}</span>
+          <span className="text-papel/80 text-xs font-semibold">Código INEP {school.inep} (o número da escola no Censo Escolar)</span>
         </div>
-        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">{school.name}</h1>
+        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em] [overflow-wrap:anywhere]">{school.name}</h1>
         <p className="text-papel/80 text-sm font-medium">{place}</p>
       </div>
     </header>

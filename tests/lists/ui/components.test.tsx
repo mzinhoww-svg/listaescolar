@@ -131,7 +131,7 @@ describe("VersionHistory", () => {
 
 describe("UnpublishedState", () => {
   it("informa lista não publicada e volta ao perfil", () => {
-    render(<UnpublishedState inep="99001001" gradeLabel="3º ano" year={2027} />);
+    render(<UnpublishedState inep="99001001" gradeSlug="ef-3" gradeLabel="3º ano" year={2027} />);
     expect(screen.getByText("3º ano · 2027: lista não publicada")).toBeInTheDocument();
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("link", { name: "Escolher outra série" })).toHaveAttribute(

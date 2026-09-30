@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   }
   // O código exibido é o canônico (normalizado), não a string recebida.
   const code = encodeShortCode(parsed);
-  const svg = renderQrSvg(qrMatrix(shortLinkUrl(code, origin)), { size: 512, color: "#0F1B2D" });
+  const svg = renderQrSvg(qrMatrix(shortLinkUrl(code, origin)), { size: 512, color: "#0F1B2D", title: `QR da lista · ListaCerta · código ${code}` });
   const headers: Record<string, string> = {
     "Content-Type": "image/svg+xml; charset=utf-8",
     "Cache-Control": "public, max-age=3600",

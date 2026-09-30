@@ -1,4 +1,8 @@
-type Props = { items: readonly { title: string; text: string }[] };
+import Link from "next/link";
+
+import { buttonClass } from "@/components/ui/Button";
+
+type Props = { items: readonly { title: string; text: string; action?: { label: string; href: string } }[] };
 
 export function Faq({ items }: Props) {
   return (
@@ -16,7 +20,16 @@ export function Faq({ items }: Props) {
               +
             </span>
           </summary>
-          <p className="text-texto-2 px-5 pb-4 text-[15px] leading-relaxed">{i.text}</p>
+          <p className="text-texto-2 px-5 pb-2 text-[15px] leading-relaxed">{i.text}</p>
+          {i.action ? (
+            <div className="px-3 pb-3">
+              <Link href={i.action.href} className={buttonClass("text")}>
+                {i.action.label}
+              </Link>
+            </div>
+          ) : (
+            <div className="pb-2" />
+          )}
         </details>
       ))}
     </div>

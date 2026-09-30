@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 
 const LINKS = [
+  { label: "Sou escola", href: "/escolas" },
+  { label: "Sou papelaria", href: "/cadastrar-papelaria" },
   { label: "Privacidade", href: "/privacidade" },
   { label: "Termos", href: "/termos" },
   { label: "Sobre", href: "/sobre" },

@@ -51,14 +51,14 @@ export function ClaimBlock({ inep, status, claim }: Props) {
   }
   if (claim?.status === "approved") {
     return (
-      <Card state="approved" eyebrow="Sua escola" tag="Com admin" title="Você administra esta escola" text="Seu pedido foi aprovado pela equipe ListaCerta.">
+      <Card state="approved" eyebrow="Sua escola" tag="Com administrador" title="Você administra esta escola" text="Seu pedido foi aprovado pela equipe ListaCerta.">
         <Link href="/escola" className={soft}>Ir para Minhas escolas</Link>
       </Card>
     );
   }
   if (status === "verified") {
     return (
-      <Card state="2" eyebrow="Página da escola" tag="Com admin" title="Esta escola já tem administrador" text="Esta página é mantida por quem administra a escola no ListaCerta." />
+      <Card state="2" eyebrow="Página da escola" tag="Com administrador" title="Esta escola já tem administrador" text="Esta página é mantida por quem administra a escola no ListaCerta." />
     );
   }
   if (claim?.status === "rejected") {
@@ -72,7 +72,7 @@ export function ClaimBlock({ inep, status, claim }: Props) {
     <Card
       state="1"
       eyebrow="Página da escola"
-      tag="Sem admin"
+      tag="Sem administrador"
       title="Você trabalha nesta escola?"
       text={status === "claimed" ? "Este perfil já tem um pedido em andamento. Se você também trabalha na escola, envie a sua." : "Ninguém administra esta página ainda."}
     >

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
 import { signOutAction } from "@/components/auth/sign-out-action";
 import { CartsSection } from "@/components/cart/CartsSection";
 import { SavedListsSection } from "@/components/saved-lists/SavedListsSection";
@@ -8,6 +9,7 @@ import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { listCartsForOwner } from "@/features/cart/repository";
 import { listMySavedLists } from "@/features/saved-lists/queries";
+import { sendListHref } from "@/features/submissions/href";
 import { listMyStudents } from "@/features/students/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,6 +51,10 @@ export default async function AccountHubPage() {
         className="bg-tinta text-papel focus-visible:outline-verde-certo flex h-14 w-full items-center justify-center gap-2 rounded-botao text-base font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         Buscar lista da escola
+      </Link>
+
+      <Link href={sendListHref()} className={buttonClass("outline", "md", "w-full")}>
+        Enviar a lista da escola
       </Link>
 
       <section aria-label="Cotações" className="flex flex-col gap-3">

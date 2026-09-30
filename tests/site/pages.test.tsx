@@ -35,7 +35,7 @@ describe("landing", () => {
       expect(container.querySelector(`#${id}`), id).not.toBeNull();
       expect(container.querySelector(`header a[href="/#${id}"]`), `nav ${id}`).not.toBeNull();
     }
-    expect(screen.getByRole("link", { name: "Sou escola" })).toHaveAttribute("href", "/escolas");
+    expect(screen.getAllByRole("link", { name: "Sou escola" })[0]).toHaveAttribute("href", "/escolas");
     expect(screen.getByRole("link", { name: "Cadastrar minha escola" })).toHaveAttribute("href", "/escolas");
     expect(screen.getByText(/Busque sua escola e peça para administrar a página/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Entrar" })).toHaveAttribute("href", "/entrar");

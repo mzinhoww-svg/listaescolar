@@ -21,7 +21,7 @@ const CHIP = "bg-papel/10 rounded-botao px-3.5 py-2 text-[13px] font-bold whites
 export function ListHeader({ schoolName, inep, gradeLabel, year, isDemo, version }: Props) {
   return (
     <header className="bg-tinta text-papel rounded-b-[32px] px-6 pt-14 pb-7">
-      <div className="mx-auto flex w-full max-w-[420px] flex-col gap-3.5">
+      <div className="mx-auto flex w-full max-w-[420px] min-w-0 flex-col gap-3.5">
         <Link
           href={`/escolas/${inep}`}
           aria-label={`Voltar para o perfil de ${schoolName}`}
@@ -35,7 +35,7 @@ export function ListHeader({ schoolName, inep, gradeLabel, year, isDemo, version
           </span>
           {isDemo ? demoBadge : null}
         </div>
-        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">{schoolName}</h1>
+        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em] [overflow-wrap:anywhere]">{schoolName}</h1>
         <p className="text-papel/80 text-sm font-medium">
           {gradeLabel} · Ano letivo {year}
         </p>

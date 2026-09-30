@@ -36,17 +36,14 @@ export function ItemsTable({ items }: { items: PublicListItem[] }) {
         Itens da lista
       </h2>
       {groups.map((group) => (
-        <div key={group.category} className="flex flex-col gap-2">
-          <h3 className="text-texto-3 text-xs font-extrabold tracking-wide uppercase">{group.category}</h3>
-          <ul className="flex flex-col gap-2">
+        <div key={group.category} className="flex flex-col gap-1.5">
+          <h3 className="text-texto-2 text-[13px] font-extrabold">{group.category}</h3>
+          <ul className="divide-linha flex flex-col divide-y rounded-[22px] bg-white px-4">
             {group.items.map((item) => {
               const qty = formatQuantity(item.quantity, item.unit);
               return (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3.5"
-                >
-                  <p className="min-w-0 text-[15px] leading-[1.3] font-bold">{item.name}</p>
+                <li key={item.id} className="flex items-center justify-between gap-3 py-3.5">
+                  <p className="min-w-0 text-[15px] leading-[1.3] font-bold [overflow-wrap:anywhere]">{item.name}</p>
                   <p className="text-texto-2 shrink-0 text-[13px] font-extrabold">
                     {qty ?? (
                       <>

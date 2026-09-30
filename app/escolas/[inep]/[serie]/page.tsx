@@ -12,6 +12,8 @@ import { VersionHistory } from "@/components/lists/VersionHistory";
 import { WatchButton } from "@/components/notifications/WatchButton";
 import { WhatsAppShareButton } from "@/components/share/WhatsAppShareButton";
 import { ShareListCard } from "@/components/share/ShareListCard";
+import { ReportListForm } from "@/components/schools/ReportListForm";
+import { buttonClass } from "@/components/ui/Button";
 import { getSessionActor } from "@/features/auth/actor";
 import { unwatchListAction, watchListAction } from "@/app/conta/notificacoes/actions";
 import { saveListAction } from "@/app/conta/listas-salvas/actions";
@@ -19,6 +21,7 @@ import { channelAvailability } from "@/features/notifications/preferences";
 import { isWatching } from "@/features/notifications/queries";
 import { defaultAcademicYear, findGrade, parseGradeSelection } from "@/features/grades/catalog";
 import { getPublishedList, listVersionHistory } from "@/features/lists/queries";
+import { submitReportAction } from "@/features/reports/actions";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { listMyStudents } from "@/features/students/queries";
 import { encodeShortCode, shortLinkUrl } from "@/features/short-links/code";
@@ -61,7 +64,8 @@ export default async function ListPage({ params, searchParams }: Props) {
   const { inep, serie } = await params;
   const now = new Date();
   const grade = findGrade(serie);
-  const year = resolveYear(first((await searchParams).ano), now);
+  const sp = await searchParams;
+  const year = resolveYear(first(sp.ano), now);
   if (!grade || year === null) notFound();
   const school = await loadSchool(inep);
   if (!school) notFound();
@@ -106,11 +110,16 @@ export default async function ListPage({ params, searchParams }: Props) {
             <p className="text-texto-2 -mb-3 text-[13px] leading-snug font-semibold">
               Preços aparecem quando a loja ou a papelaria informa.
             </p>
-            <Link
-              href={`/carrinho/novo?lista=${version.id}`}
-              className="bg-tinta text-papel focus-visible:outline-verde-fundo flex h-14 w-full items-center justify-center rounded-botao text-[15px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              Montar carrinho com esta lista
+            <div className="bg-papel/95 sticky bottom-0 z-10 -mx-6 flex flex-col gap-2 px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+              <Link href={`/carrinho/novo?lista=${version.id}`} className={buttonClass("primary", "lg", "w-full")}>
+                Montar carrinho com esta lista
+              </Link>
+              {saveActor === null ? (
+                <p className="text-texto-2 text-center text-xs font-semibold">Ao continuar, você entra com seu e-mail e volta para esta lista.</p>
+              ) : null}
+            </div>
+            <Link href={`/carrinho/novo?lista=${version.id}&destino=cotacao`} className={buttonClass("outline", "md", "w-full")}>
+              Pedir preço à papelaria do bairro
             </Link>
             {shareOrigin ? (
               <TrackClick name="list_shared" props={{ channel: "whatsapp", school_inep: school.inep, grade_slug: grade.slug }}>
@@ -131,10 +140,17 @@ export default async function ListPage({ params, searchParams }: Props) {
             />
             <VersionHistory versions={history} />
             {shareOrigin ? <ShareListCard inep={school.inep} gradeSlug={grade.slug} origin={shareOrigin} /> : null}
+            <ReportListForm
+              listId={list.id}
+              action={submitReportAction.bind(null, `/escolas/${school.inep}/${grade.slug}?ano=${year}`)}
+              ok={first(sp.denunciaOk) === "1"}
+              erro={first(sp.denunciaErro) ?? null}
+            />
           </>
         ) : (
           <UnpublishedState
             inep={school.inep}
+            gradeSlug={grade.slug}
             gradeLabel={grade.label}
             year={year}
             notify={

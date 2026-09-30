@@ -1,4 +1,7 @@
 import { requireAccess } from "@/features/auth/guard";
+import { loadSchool } from "@/features/schools/search/load-school";
+import { sendListHref, parseSendListPrefill } from "@/features/submissions/href";
+import { seriesValueForSlug } from "@/components/submissions/series-options";
 
 import { SubmitForm } from "./SubmitForm";
 
@@ -12,7 +15,21 @@ function schoolYears(now = new Date()) {
   return { years: [y, y + 1], defaultYear: now.getMonth() >= 7 ? y + 1 : y };
 }
 
-export default async function Page() {
-  await requireAccess("/enviar-lista");
-  return <SubmitForm {...schoolYears()} />;
+/** `?escola=&serie=&ano=` vêm da página da escola e da série sem lista (UX-012): pré-escolhem, a pessoa ainda pode trocar. */
+export default async function Page({ searchParams }: PageProps<"/enviar-lista">) {
+  const prefill = parseSendListPrefill(await searchParams);
+  await requireAccess(sendListHref(prefill));
+  const base = schoolYears();
+  const school = prefill.inep ? await loadSchool(prefill.inep).catch(() => null) : null;
+  const year = prefill.year !== undefined && base.years.includes(prefill.year) ? prefill.year : base.defaultYear;
+  return (
+    <SubmitForm
+      years={base.years}
+      defaultYear={year}
+      initialGrade={prefill.gradeSlug ? (seriesValueForSlug(prefill.gradeSlug) ?? "") : ""}
+      initialSchool={
+        school ? { id: school.id, name: school.name, inep: school.inep, neighborhood: school.neighborhood, municipalityName: school.municipalityName } : null
+      }
+    />
+  );
 }

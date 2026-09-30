@@ -94,7 +94,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                   <li key={d.id} className="rounded-card flex flex-wrap items-center justify-between gap-3 bg-white p-4">
                     <div>
                       <p className="text-[14px] font-extrabold">{d.stationeryName} · Pedido {d.leadCode} · {REASON_LABEL[d.reason]}</p>
-                      <p className="text-texto-3 text-[13px] font-semibold">Prazo do pai/papelaria: até {formatWhen(d.deadlineAt)}{d.detail ? ` · ${d.detail}` : ""}</p>
+                      <p className="text-texto-3 text-[13px] font-semibold">Prazo da família e da papelaria: até {formatWhen(d.deadlineAt)}{d.detail ? ` · ${d.detail}` : ""}</p>
                       <p className="text-texto-3 text-[13px] font-semibold">{signalsSummary(d)}</p>
                     </div>
                     <div className="flex gap-2">

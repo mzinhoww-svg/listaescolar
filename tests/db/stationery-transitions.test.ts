@@ -241,7 +241,7 @@ describe("S13 stationery_transition", () => {
     });
     it("a transição trava a linha com FOR NO KEY UPDATE", async () => {
       await withSuperuser(async (c) => {
-        const src = (await c.query("select prosrc from pg_proc where proname = 'stationery_transition' and pronamespace = 'public'::regnamespace")).rows[0].prosrc as string;
+        const src = (await c.query("select prosrc from pg_proc where proname = 'stationery_transition__core' and pronamespace = 'public'::regnamespace")).rows[0].prosrc as string;
         expect(src).toMatch(/for no key update/i);
         expect(src).not.toMatch(/for update/i);
       });

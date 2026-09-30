@@ -298,7 +298,7 @@ describe("0204: publicação humana (begin/complete/fail)", () => {
         for (const role of /review_items_valid/.test(f.sig) ? ["anon"] : ["anon", "authenticated"]) {
           expect((await c.query("select has_function_privilege($1, $2::regprocedure, 'execute') as ok", [role, f.sig])).rows[0].ok, `${role} ${f.sig}`).toBe(false);
         }
-        if (!/review_items_valid/.test(f.sig)) expect((await c.query("select has_function_privilege('service_role', $1::regprocedure, 'execute') as ok", [f.sig])).rows[0].ok, f.sig).toBe(/(review_items_from_result|review_assert_admin|review_last_decision|review_has_critical_alert)/.test(f.sig) ? false : true);
+        if (!/review_items_valid/.test(f.sig)) expect((await c.query("select has_function_privilege('service_role', $1::regprocedure, 'execute') as ok", [f.sig])).rows[0].ok, f.sig).toBe(/(review_items_from_result|review_assert_admin|review_last_decision|review_has_critical_alert|__core)/.test(f.sig) ? false : true);
         if (!/review_items_valid|review_items_from_result|review_has_critical_alert/.test(f.sig)) {
           expect(f.prosecdef, f.sig).toBe(true);
           expect(String(f.proconfig)).toContain("search_path=");

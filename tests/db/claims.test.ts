@@ -294,6 +294,8 @@ describe("S06 RLS e grants por perfil", () => {
     const INTERNAL = [
       "claim_school_mobile", "claim_assert_school_open", "claim_lock", "claim_sync_school", "claim_apply", "claims_guard",
       "claim_status_events_block_mutation", "schools_guard_verification",
+      // 0804: núcleo da decisão, chamado só pelo invólucro `claim_decide` (sem EXECUTE para ninguém).
+      "claim_decide__core",
     ];
     await withSuperuser(async (c) => {
       const fns = await c.query<{ oid: string; proname: string; secdef: boolean; cfg: string[] | null }>(
@@ -312,7 +314,7 @@ describe("S06 RLS e grants por perfil", () => {
         expect(f.cfg?.some((x) => x.replace(/"/g, "") === "search_path="), `search_path vazio em ${f.proname}`).toBe(true);
       }
       const definers = fns.rows.filter((f) => f.secdef).map((f) => f.proname).sort();
-      expect(definers).toEqual(PUBLIC_FNS.filter((n) => n !== "claim_transition_allowed").concat(["claim_lock", "claim_sync_school", "claim_apply"]).sort());
+      expect(definers).toEqual(PUBLIC_FNS.filter((n) => n !== "claim_transition_allowed").concat(["claim_lock", "claim_sync_school", "claim_apply", "claim_decide__core"]).sort());
     });
   });
 

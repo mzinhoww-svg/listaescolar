@@ -103,7 +103,10 @@ const ROLE_LABEL: Record<string, string> = {
   stationery_member: "Papelaria",
 };
 
-const HIDDEN_FIELDS = new Set(["id", "created_at", "updated_at"]);
+const HIDDEN_FIELDS = new Set(["id", "created_at", "updated_at", "email", "phone", "whatsapp", "idempotency_key"]);
+/** Reserva: campo com cara de segredo ou dado pessoal nunca aparece na tela, mesmo que o gatilho o tenha gravado. */
+const HIDDEN_PATTERN = /(_hash$|^pix_|^token|_token|^email|_email$|^phone|_phone$|whatsapp|secret|password|idempotency_key)/i;
+const hidden = (k: string): boolean => HIDDEN_FIELDS.has(k) || HIDDEN_PATTERN.test(k);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 const MAX = 80;
@@ -148,7 +151,7 @@ const asObject = (v: unknown): Record<string, unknown> => (v && typeof v === "ob
 export function describeChanges(action: string, before: unknown, after: unknown): ChangeRow[] {
   const b = asObject(before);
   const a = asObject(after);
-  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])].filter((k) => !HIDDEN_FIELDS.has(k));
+  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])].filter((k) => !hidden(k));
   const rows: ChangeRow[] = [];
   for (const k of keys) {
     const bv = action === "INSERT" ? null : value(b[k]);

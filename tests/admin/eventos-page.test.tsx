@@ -101,4 +101,9 @@ describe("/admin/eventos (Admin08-Eventos)", () => {
     render(await EventosPage({ searchParams: sp({ pagina: "abc" }) }));
     expect(searchAuditLog).toHaveBeenCalledWith(ACTOR, {}, { page: 1 });
   });
+
+  it("página gigante é limitada ao teto (sem deslocamento arbitrário)", async () => {
+    render(await EventosPage({ searchParams: sp({ pagina: "99999999" }) }));
+    expect(searchAuditLog).toHaveBeenCalledWith(ACTOR, {}, { page: 200 });
+  });
 });

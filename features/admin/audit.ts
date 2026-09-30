@@ -37,6 +37,8 @@ export type AuditRow = {
 };
 
 export const AUDIT_PAGE_SIZE = 50;
+/** Teto de página (10.000 linhas): a URL não pede deslocamento arbitrário; refine pelos filtros. */
+export const MAX_AUDIT_PAGE = 200;
 export type AuditPage = { rows: AuditRow[]; hasNext: boolean; page: number; pageSize: number };
 
 const rowSchema = z.object({
@@ -53,7 +55,7 @@ const rowSchema = z.object({
 
 export async function searchAuditLog(actor: SessionActor, filter: AuditFilter, opts: { page?: number } = {}): Promise<AuditPage> {
   if (actor.role !== "admin" && actor.role !== "system") throw new Error("forbidden");
-  const page = Number.isInteger(opts.page) && (opts.page ?? 0) >= 1 ? (opts.page as number) : 1;
+  const page = Number.isInteger(opts.page) && (opts.page ?? 0) >= 1 ? Math.min(opts.page as number, MAX_AUDIT_PAGE) : 1;
   const from = (page - 1) * AUDIT_PAGE_SIZE;
   const client = await createClient();
   let q = client
@@ -73,7 +75,7 @@ export async function searchAuditLog(actor: SessionActor, filter: AuditFilter, o
   const { data, error } = await q;
   if (error) throw error;
   const parsed = (data ?? []).map((r) => rowSchema.parse(r));
-  const hasNext = parsed.length > AUDIT_PAGE_SIZE;
+  const hasNext = parsed.length > AUDIT_PAGE_SIZE && page < MAX_AUDIT_PAGE;
   const shown = parsed.slice(0, AUDIT_PAGE_SIZE);
 
   const ids = [...new Set(shown.map((r) => r.actor_id).filter((v): v is string => v !== null))];

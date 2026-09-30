@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { auditFilterSchema, searchAuditLog, type AuditPage } from "@/features/admin/audit";
+import { auditFilterSchema, MAX_AUDIT_PAGE, searchAuditLog, type AuditPage } from "@/features/admin/audit";
 import { AuditFilters, AuditPager, AuditTable } from "@/components/admin/AuditTable";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
@@ -25,7 +25,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
     until: one(sp.ate) || undefined,
   };
   const pageRaw = Number(one(sp.pagina));
-  const page = Number.isInteger(pageRaw) && pageRaw >= 1 ? pageRaw : 1;
+  const page = Number.isInteger(pageRaw) && pageRaw >= 1 ? Math.min(pageRaw, MAX_AUDIT_PAGE) : 1;
   const parsedFilter = auditFilterSchema.safeParse(rawFilter);
   const actor = await getSessionActor();
   let result: AuditPage | null = null;

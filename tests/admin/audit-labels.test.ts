@@ -45,4 +45,11 @@ describe("rótulos da trilha de auditoria (UX-108)", () => {
     expect(row?.after?.length).toBeLessThanOrEqual(81);
     expect(row?.after).toMatch(/…$/);
   });
+
+  it("campos com cara de segredo ou dado pessoal ficam fora da tela (reserva)", () => {
+    const sens = { key_hash: "abc", pix_key: "x", pix_key_kind: "cpf", email: "a@b.co", contact_email: "a@b.co", phone: "1", whatsapp: "2", token_hash: "t", token: "t", idempotency_key: "k", status: "draft" };
+    const rows = describeChanges("INSERT", null, sens);
+    expect(rows).toEqual([{ label: "Situação", before: null, after: "Rascunho" }]);
+    expect(JSON.stringify(describeChanges("UPDATE", sens, { ...sens, key_hash: "novo", status: "approved" }))).not.toMatch(/novo|abc|a@b/);
+  });
 });

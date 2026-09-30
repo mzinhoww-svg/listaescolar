@@ -41,7 +41,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   }
   if (!failed && !list) notFound();
   return (
-    <AdminShell active="/admin/listas" email={user.email} breadcrumb="Admin / Listas" title="Lista">
+    <AdminShell active="/admin/listas" email={user.email} breadcrumb="Admin / Listas" title="Lista" actions={<Link href="/admin/denuncias" className="inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Voltar às denúncias</Link>}>
       {sp.ok ? <Notice kind="ok">Lista arquivada.</Notice> : null}
       {sp.erro ? <Notice kind="error">{ERROR_MESSAGE[sp.erro] ?? "Não foi possível concluir agora."}</Notice> : null}
       {failed || !list ? (
@@ -62,6 +62,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
               <div><dt className="text-texto-3 font-semibold">Série</dt><dd className="font-bold">{list.gradeName}</dd></div>
               <div><dt className="text-texto-3 font-semibold">Ano letivo</dt><dd className="font-bold">{list.schoolYear}</dd></div>
             </dl>
+            <Link href={`/escolas/${list.schoolInep}`} className="text-verde-fundo inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Ver a página pública da escola</Link>
           </section>
           <aside className="flex flex-col gap-3 rounded-[20px] bg-white p-5">
             <h2 className="text-[16px] font-extrabold">Arquivar lista</h2>

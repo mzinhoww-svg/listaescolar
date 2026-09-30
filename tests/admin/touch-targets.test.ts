@@ -27,3 +27,15 @@ describe("UX-103 coluna de ação visível a 390 px (fixa à direita)", () => {
     expect(src).toMatch(/sticky right-0/);
   });
 });
+
+describe("UX-114 caminho de volta e link público em /admin/listas/[id]; alvo em /admin/denuncias", () => {
+  it("lista: voltar às denúncias e link ao perfil público da escola", () => {
+    const src = readFileSync("app/admin/listas/[id]/page.tsx", "utf8");
+    expect(src).toMatch(/href="\/admin\/denuncias"[^>]*>Voltar às denúncias/);
+    expect(src).toMatch(/Ver a página pública da escola/);
+  });
+  it("denúncias: link Abrir com min-h-11", () => {
+    const src = readFileSync("app/admin/denuncias/page.tsx", "utf8");
+    expect(src).toMatch(/min-h-11[^"]*"[^>]*>Abrir</);
+  });
+});

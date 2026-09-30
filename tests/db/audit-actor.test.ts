@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Client } from "pg";
-import { attempt, cleanupUsers, IDS, seedStationery, seedUsers, withClaims, withSuperuser } from "./helpers";
+import { asOwner, attempt, cleanupUsers, IDS, seedStationery, seedUsers, withClaims, withSuperuser } from "./helpers";
 
 // S29 · UX-108: a trilha de auditoria registra QUEM da equipe decidiu (0804_s29_audit_actor).
 const CALL = "select public.stationery_transition($1::uuid, $2::public.stationery_status, $3::uuid, $4::text, $5::text)::text as s";
@@ -98,11 +98,12 @@ describe("S29 audit_log: ator da decisão da equipe", () => {
     });
   });
 
-  it("as 12 funções de decisão: invólucro é definer, search_path vazio, EXECUTE só service_role; núcleo sem EXECUTE", async () => {
+  it("as 17 funções de decisão: invólucro é definer, search_path vazio, EXECUTE só service_role; núcleo sem EXECUTE", async () => {
     const names = [
       "stationery_transition", "lead_dispute_resolve", "claim_decide", "review_approve", "review_reject", "list_transition",
       "list_publish_version", "list_approve_version", "b2b_partner_decide", "b2b_campaign_transition", "billing_plan_publish",
-      "payout_settings_publish",
+      "payout_settings_publish", "billing_reverse_entry", "payout_reverse_entry", "payout_batch_create", "payout_batch_mark_executed",
+      "payout_admin_validate_sale",
     ];
     await withSuperuser(async (c) => {
       for (const n of names) {
@@ -127,6 +128,39 @@ describe("S29 audit_log: ator da decisão da equipe", () => {
         );
         expect(r.rows[0]).toMatchObject({ anon: false, auth: false, pub: false, svc: f.startsWith("audit_set_actor") });
       }
+    });
+  });
+
+  it("chamada encadeada: o invólucro interno restaura o ator da função externa (escritas seguintes seguem atribuídas)", async () => {
+    await withClaims("system", async (c) => {
+      const id = await seedStationery(c, { status: "under_review" });
+      await asOwner(c, async () => {
+        await c.query(
+          `create function public.zz_chain_probe(p uuid, a uuid) returns void language plpgsql security definer set search_path = '' as $$
+           begin
+             perform public.audit_set_actor(a);
+             perform public.stationery_transition(p, 'approved', a, 'admin', null);
+             update public.stationeries set trade_name = 'Encadeado' where id = p;
+           end; $$`,
+        );
+        await c.query("grant execute on function public.zz_chain_probe(uuid, uuid) to service_role");
+      });
+      await c.query("select public.zz_chain_probe($1, $2)", [id, IDS.admin]);
+      expect(await lastAudit(c, id)).toEqual({ actor_id: IDS.admin, actor_role: "admin" });
+    });
+  });
+
+  it("wrappers têm comentário de função e os núcleos são marcados como internos", async () => {
+    await withSuperuser(async (c) => {
+      const r = await c.query(
+        `select p.proname, obj_description(p.oid, 'pg_proc') as d from pg_proc p
+          where p.pronamespace = 'public'::regnamespace and (p.proname like '%\\_\\_core' or p.proname in ('stationery_transition', 'payout_batch_create', 'billing_reverse_entry'))`,
+      );
+      expect(r.rows.length).toBe(20);
+      const cores = r.rows.filter((x) => String(x.proname).endsWith("__core"));
+      expect(cores).toHaveLength(17);
+      for (const x of r.rows) expect(x.d, x.proname).toBeTruthy();
+      for (const x of cores) expect(x.d, x.proname).toMatch(/interno|Interno/i);
     });
   });
 

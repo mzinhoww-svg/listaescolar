@@ -1,3 +1,5 @@
+import { SubmitButton } from "@/components/cart/SubmitButton";
+import { Field, fieldInputClass } from "@/components/ui/Field";
 import { openDisputeAction } from "@/features/conversion/actions";
 import { DISPUTE_REASONS, type LeadDisputeGate } from "@/features/conversion/ports";
 
@@ -52,16 +54,20 @@ export function DisputeForm({ code, gate }: { code: string; gate: LeadDisputeGat
       <input type="hidden" name="leadId" value={gate.leadId} />
       <p className="text-[15px] font-extrabold">Contestar</p>
       <p className="text-texto-3 text-[13px] font-semibold">Você pode contestar até {formatWhen(gate.deadlineAt)}.</p>
-      <select name="reason" required defaultValue="" aria-label="Motivo da contestação" className="bg-campo rounded-campo h-12 px-4 text-[14px] font-semibold">
-        <option value="" disabled>Motivo</option>
-        {DISPUTE_REASONS.map((r) => (
-          <option key={r} value={r}>{REASON_LABEL[r]}</option>
-        ))}
-      </select>
-      <textarea name="detail" maxLength={500} placeholder="Detalhe (opcional)" aria-label="Detalhe (opcional)" className="bg-campo rounded-campo min-h-16 px-4 py-3 text-[14px] font-semibold" />
-      <button type="submit" className="border-tinta text-tinta rounded-botao h-11 self-start border-[1.5px] px-5 text-[14px] font-extrabold">
-        Contestar
-      </button>
+      <Field id={`contestar-motivo-${code}`} label="Motivo da contestação">
+        <select id={`contestar-motivo-${code}`} name="reason" required defaultValue="" className={fieldInputClass}>
+          <option value="" disabled>Escolha o motivo</option>
+          {DISPUTE_REASONS.map((r) => (
+            <option key={r} value={r}>{REASON_LABEL[r]}</option>
+          ))}
+        </select>
+      </Field>
+      <Field id={`contestar-detalhe-${code}`} label="Detalhe (opcional)">
+        <textarea id={`contestar-detalhe-${code}`} name="detail" maxLength={500} className="bg-campo text-tinta border-texto-3 rounded-campo min-h-20 w-full border-[1.5px] px-4 py-3 text-[15px] font-medium" />
+      </Field>
+      <SubmitButton variant="outline" pendingLabel="Enviando contestação" className="self-start">
+        Contestar pedido
+      </SubmitButton>
     </form>
   );
 }

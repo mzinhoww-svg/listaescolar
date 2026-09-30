@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/papelaria/leads" }));
+vi.mock("@/features/conversion/actions", () => ({ openDisputeAction: vi.fn() }));
 vi.mock("@/features/leads/actions", () => ({
   closeLostAction: vi.fn(),
   declareSaleAction: vi.fn(),
@@ -27,6 +28,7 @@ import type { LeadEventRow, StationeryLead } from "@/features/leads/repository";
 import type { QuoteOptionView } from "@/features/leads/queries";
 import { ConsentForm } from "@/app/cotacao/nova/ConsentForm";
 import { StatusForm } from "@/app/papelaria/leads/[code]/StatusForm";
+import { DisputeForm } from "@/app/papelaria/leads/[code]/DisputeForm";
 
 const NOW = new Date("2026-09-25T15:00:00Z");
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -61,6 +63,16 @@ describe("UX-082/087 · texto do dono da papelaria", () => {
     const { container } = render(<LeadCards rows={[lead({ itemCount: 1 })]} now={NOW} />);
     expect(container.textContent).toContain("1 item · sem orçamento enviado");
     expect(container.textContent).not.toMatch(/enviado indisponível|1 itens/);
+  });
+});
+
+describe("UX-078 · contestar com rótulos visíveis", () => {
+  it("motivo e detalhe têm rótulo visível associado; enviar é um botão do sistema", () => {
+    render(<DisputeForm code="LC-5TJ1" gate={{ leadId: ID, canDispute: true, blockedReason: null, deadlineAt: new Date("2026-09-28T12:00:00Z"), existingDispute: null } as never} />);
+    const motivo = screen.getByLabelText("Motivo da contestação");
+    expect(motivo.tagName).toBe("SELECT");
+    expect(screen.getByLabelText("Detalhe (opcional)").tagName).toBe("TEXTAREA");
+    expect(screen.getByRole("button", { name: "Contestar pedido" }).className).toContain("rounded-botao");
   });
 });
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { signOut } from "@/features/auth/actions";
+import { loginPathFor } from "@/features/auth/redirect";
 import { getSessionActor, type SessionActor } from "@/features/auth/actor";
 import { getCurrentUser } from "@/features/auth/queries";
 import { PrivacyError } from "@/features/privacy/errors";
@@ -28,7 +29,7 @@ const DELETION_BLOCKER_MESSAGE: Record<string, string> = {
 
 async function actorOrLogin(): Promise<SessionActor> {
   const actor = await getSessionActor();
-  if (!actor) redirect(`/entrar?next=${encodeURIComponent(PATH)}`);
+  if (!actor) redirect(loginPathFor(PATH, { expired: true }));
   return actor;
 }
 

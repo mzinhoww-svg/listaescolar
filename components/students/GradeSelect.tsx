@@ -1,9 +1,7 @@
 import type { Ref } from "react";
 
+import { fieldInputClass, Field } from "@/components/ui/Field";
 import { GRADES, STAGE_LABEL, type GradeStage } from "@/features/grades/catalog";
-
-const field =
-  "bg-campo text-tinta h-[52px] w-full rounded-campo px-4 text-[15px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-verde-fundo";
 
 const STAGES: readonly GradeStage[] = ["ei", "ef", "em"];
 
@@ -17,18 +15,27 @@ export function GradeSelect({
   value,
   onChange,
   selectRef,
+  error,
 }: {
   value: string;
   onChange: (value: string) => void;
   /** Para reaplicar o valor no DOM depois de um reset nativo (ver StudentForm). */
   selectRef?: Ref<HTMLSelectElement>;
+  error?: string | undefined;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="gradeSlug" className="text-[13px] font-extrabold">
-        Série
-      </label>
-      <select ref={selectRef} id="gradeSlug" name="gradeSlug" required value={value} onChange={(e) => onChange(e.target.value)} className={field}>
+    <Field id="gradeSlug" label="Série" error={error}>
+      <select
+        ref={selectRef}
+        id="gradeSlug"
+        name="gradeSlug"
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? "gradeSlug-erro" : undefined}
+        className={fieldInputClass}
+      >
         <option value="" disabled>
           Escolha a série
         </option>
@@ -42,6 +49,6 @@ export function GradeSelect({
           </optgroup>
         ))}
       </select>
-    </div>
+    </Field>
   );
 }

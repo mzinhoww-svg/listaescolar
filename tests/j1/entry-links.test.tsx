@@ -16,17 +16,17 @@ import { SearchResults } from "@/components/schools/SearchResults";
 import { qrMatrix, renderQrSvg } from "@/features/short-links/qr";
 
 describe("hub da conta: Enviar a lista da escola (UX-012)", () => {
-  it("tem o link para enviar a lista, como ação secundária", async () => {
-    render(await AccountHubPage());
-    const link = screen.getByRole("link", { name: "Enviar a lista da escola" });
+  it("tem o link para enviar a lista, entre os atalhos (S29 T13: uma só ação principal no hub)", async () => {
+    render(await AccountHubPage({ searchParams: Promise.resolve({}) } as never));
+    const link = screen.getByRole("link", { name: /^Enviar a lista da escola/ });
     expect(link).toHaveAttribute("href", "/enviar-lista");
-    expect(link.className).toContain("border-tinta");
+    expect(link.className).not.toContain("bg-tinta");
   });
 });
 
 describe("hub da conta: Minhas compras (S29 T12, UX-025)", () => {
   it("liga /conta/compras junto das cotações, com o que a página faz", async () => {
-    render(await AccountHubPage());
+    render(await AccountHubPage({ searchParams: Promise.resolve({}) } as never));
     const link = screen.getByRole("link", { name: /Minhas compras/ });
     expect(link).toHaveAttribute("href", "/conta/compras");
     expect(link.textContent).toMatch(/Informe se comprou/);

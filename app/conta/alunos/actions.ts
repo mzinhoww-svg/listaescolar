@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { loginPathFor } from "@/features/auth/redirect";
 import { getSessionActor, type SessionActor } from "@/features/auth/actor";
 import { StudentError } from "@/features/students/errors";
 import type { StudentActionResult } from "@/features/students/form-state";
@@ -15,7 +16,7 @@ const HUB_PATH = "/conta";
 
 async function actorOrLogin(next: string): Promise<SessionActor> {
   const actor = await getSessionActor();
-  if (!actor) redirect(`/entrar?next=${encodeURIComponent(next)}`);
+  if (!actor) redirect(loginPathFor(next, { expired: true }));
   return actor;
 }
 
@@ -42,7 +43,7 @@ export async function createStudentAction(_prev: StudentActionResult, formData: 
     return { status: "error", message: dbErrorMessage(e) };
   }
   revalidatePath(HUB_PATH);
-  redirect(HUB_PATH);
+  redirect(`${HUB_PATH}?aviso=aluno-salvo`);
 }
 
 /** `id` vem de um campo oculto do formulário (não de rota), para caber no contrato de 2 argumentos do useActionState. */
@@ -58,7 +59,7 @@ export async function updateStudentAction(_prev: StudentActionResult, formData: 
     return { status: "error", message: dbErrorMessage(e) };
   }
   revalidatePath(HUB_PATH);
-  redirect(HUB_PATH);
+  redirect(`${HUB_PATH}?aviso=aluno-atualizado`);
 }
 
 /** Exclusão real (LGPD): cascade apaga as listas salvas do aluno. */
@@ -68,5 +69,5 @@ export async function deleteStudentAction(formData: FormData): Promise<void> {
   if (!id.success) return;
   await deleteStudent(await createClient(), id.data).catch(() => false);
   revalidatePath(HUB_PATH);
-  redirect(HUB_PATH);
+  redirect(`${HUB_PATH}?aviso=aluno-excluido`);
 }

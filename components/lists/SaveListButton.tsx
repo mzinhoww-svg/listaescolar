@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { Button, buttonClass } from "@/components/ui/Button";
+import { InlineStatus } from "@/components/ui/InlineStatus";
+import { loginPathFor } from "@/features/auth/redirect";
+
 type Result = { status: "ok" } | { status: "error"; message: string };
 type Student = { id: string; nickname: string };
 
@@ -18,35 +22,43 @@ export function SaveListButton({
   students: readonly Student[];
   loggedIn: boolean;
   nextPath: string;
-  save: (input: { studentId: string; listId: string }) => Promise<Result>;
+  save: (input: { studentId: string; listId: string; next?: string }) => Promise<Result>;
 }) {
   const [studentId, setStudentId] = useState(students[0]?.id ?? "");
-  const [saved, setSaved] = useState(false);
+  const [savedFor, setSavedFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   if (!loggedIn) {
     return (
-      <Link href={`/entrar?next=${encodeURIComponent(nextPath)}`} className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
+      <Link href={loginPathFor(nextPath)} className={buttonClass("text")}>
         Entrar para salvar esta lista
       </Link>
     );
   }
   if (students.length === 0) {
     return (
-      <Link href="/conta/alunos/novo" className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
+      <Link href="/conta/alunos/novo" className={buttonClass("text")}>
         Cadastrar um aluno para salvar esta lista
       </Link>
     );
   }
-  if (saved) {
-    return <p className="text-verde-fundo text-[13px] font-extrabold">Lista salva.</p>;
+  if (savedFor !== null) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <InlineStatus tone="success">Lista salva para {savedFor}.</InlineStatus>
+        <Link href="/conta/listas-salvas" className={buttonClass("text")}>
+          Ver em Minha conta
+        </Link>
+      </div>
+    );
   }
 
   const onSave = () =>
     start(async () => {
-      const r = await save({ studentId, listId });
-      if (r.status === "ok") setSaved(true);
+      setError(null);
+      const r = await save({ studentId, listId, next: nextPath });
+      if (r.status === "ok") setSavedFor(students.find((s) => s.id === studentId)?.nickname ?? "o aluno");
       else setError(r.message);
     });
 
@@ -57,7 +69,7 @@ export function SaveListButton({
           aria-label="Para qual aluno"
           value={studentId}
           onChange={(e) => setStudentId(e.target.value)}
-          className="bg-campo text-tinta h-12 flex-1 rounded-campo px-3 text-[14px] font-semibold"
+          className="bg-campo text-tinta border-texto-3 h-12 min-w-0 flex-1 rounded-campo border-[1.5px] px-3 text-[14px] font-semibold"
         >
           {students.map((s) => (
             <option key={s.id} value={s.id}>
@@ -65,16 +77,11 @@ export function SaveListButton({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={pending}
-          className="bg-tinta text-papel rounded-botao h-12 shrink-0 px-4 text-[14px] font-extrabold disabled:opacity-60"
-        >
-          {pending ? "Salvando…" : "Salvar lista"}
-        </button>
+        <Button onClick={onSave} loading={pending} className="shrink-0">
+          Salvar lista
+        </Button>
       </div>
-      <div aria-live="polite">{error ? <p role="alert" className="text-erro-texto text-[12px] font-bold">{error}</p> : null}</div>
+      {error ? <InlineStatus tone="error">{error}</InlineStatus> : null}
     </div>
   );
 }

@@ -8,6 +8,8 @@ const unreadCount = vi.fn();
 vi.mock("@/features/auth/guard", () => ({ requireAccess: (...a: unknown[]) => requireAccess(...a) }));
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: () => getSessionActor() }));
 vi.mock("@/features/notifications/queries", () => ({ unreadCount: (...a: unknown[]) => unreadCount(...a) }));
+const pathname = vi.fn(() => "/conta");
+vi.mock("next/navigation", () => ({ usePathname: () => pathname() }));
 
 requireAccess.mockResolvedValue(undefined);
 getSessionActor.mockResolvedValue(null);
@@ -24,5 +26,22 @@ describe("app/conta/layout.tsx (skip-link)", () => {
   it("tem skip-link apontando para #conteudo, antes do conteúdo", async () => {
     render(await Layout({ children: <p>conteúdo da página</p> }));
     expect(screen.getByText("Pular para o conteúdo")).toHaveAttribute("href", "#conteudo");
+  });
+});
+
+describe("app/conta/layout.tsx (cabeçalho) · UX-049", () => {
+  it("logo clicável para o início e sino que leva à central", async () => {
+    pathname.mockReturnValue("/conta");
+    render(await Layout({ children: <p>x</p> }));
+    expect(screen.getByRole("link", { name: /ListaCerta, ir para o início/ })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: /Notificações/ })).toHaveAttribute("href", "/conta/notificacoes");
+  });
+
+  it("dentro da central o sino não é link para si mesmo: aponta para a lista de avisos da própria página", async () => {
+    pathname.mockReturnValue("/conta/notificacoes");
+    render(await Layout({ children: <p>x</p> }));
+    const bell = screen.getByRole("link", { name: /Notificações/ });
+    expect(bell).toHaveAttribute("href", "#central");
+    expect(bell).toHaveAttribute("aria-current", "page");
   });
 });

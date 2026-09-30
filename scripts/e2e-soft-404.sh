@@ -35,6 +35,11 @@ check 307 "/enviar-lista" "anônimo em enviar-lista (loading.tsx de enviar-lista
 check 307 "/enviar-lista/abc" "anônimo em envio com id inválido"
 check 307 "/carrinho/novo" "anônimo em carrinho novo (loading.tsx de carrinho)"
 check 307 "/carrinho/abc" "anônimo em carrinho com id inválido"
+# S29 T13: `app/conta/notificacoes/loading.tsx` existe (a página não chama `notFound()`); anônimo em qualquer rota de conta segue 307.
+check 307 "/conta/notificacoes" "anônimo em notificações (loading.tsx de conta/notificacoes)"
+check 307 "/conta/privacidade" "anônimo em privacidade"
+check 307 "/conta/alunos/novo" "anônimo em aluno novo"
+check 307 "/conta/alunos/abc/editar" "anônimo em edição de aluno com id inválido"
 check 200 "/cadastrar-papelaria" "cadastro de papelaria não tem guard: 200 esperado (loading.tsx de cadastrar-papelaria)"
 # Logado, id inexistente = 404 de verdade. `FAMILIA_COOKIE`/`ADMIN_COOKIE` = valor do cabeçalho Cookie das contas de demonstração
 # (login por link mágico); sem eles esta parte é pulada. Foi o que pegou o soft-404 dos loading.tsx de admin/conta/cotacao/enviar-lista.
@@ -54,6 +59,12 @@ if [ -n "${FAMILIA_COOKIE:-}" ]; then
   checkc "$FAMILIA_COOKIE" 404 "/enviar-lista/$NOID" "logada: envio inexistente"
   checkc "$FAMILIA_COOKIE" 404 "/enviar-lista/$NOID/revisar" "logada: revisão de envio inexistente"
   checkc "$FAMILIA_COOKIE" 404 "/conta/alunos/$NOID/editar" "logada: aluno inexistente"
+  # S29 T13: com o `loading.tsx` de notificações, a rota real continua 200 e as vizinhas com `notFound()` continuam 404.
+  checkc "$FAMILIA_COOKIE" 200 "/conta/notificacoes" "logada: central de notificações (loading.tsx próprio)"
+  checkc "$FAMILIA_COOKIE" 200 "/conta/notificacoes?pagina=99" "logada: página alta da central não vira 404 nem erro"
+  checkc "$FAMILIA_COOKIE" 200 "/conta" "logada: hub"
+  checkc "$FAMILIA_COOKIE" 200 "/conta/privacidade" "logada: privacidade"
+  checkc "$FAMILIA_COOKIE" 404 "/conta/alunos/abc/editar" "logada: aluno com id malformado"
 fi
 if [ -n "${ADMIN_COOKIE:-}" ]; then
   checkc "$ADMIN_COOKIE" 404 "/admin/reivindicacoes/$NOID" "admin: pedido inexistente"

@@ -115,6 +115,8 @@ export type CartSummaryRow = {
   strategy: CartStrategy;
   itemCount: number;
   createdAt: Date;
+  /** Versão da lista de origem (polimórfica: pode ser cópia privada ou demonstração). */
+  listId: string | null;
 };
 
 const cartSummaryRow = z.object({
@@ -122,6 +124,7 @@ const cartSummaryRow = z.object({
   is_demo: z.boolean(),
   strategy: z.enum(CART_STRATEGIES),
   created_at: z.coerce.date(),
+  list_id: z.uuid().nullable(),
   cart_items: z.array(z.object({ id: z.uuid() })),
 });
 
@@ -132,7 +135,7 @@ const cartSummaryRow = z.object({
 export async function listCartsForOwner(client: SupabaseClient, ownerId: string, limit = 20): Promise<CartSummaryRow[]> {
   const { data, error } = await client
     .from("carts")
-    .select("id, is_demo, strategy, created_at, cart_items(id)")
+    .select("id, is_demo, strategy, created_at, list_id, cart_items(id)")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -140,7 +143,7 @@ export async function listCartsForOwner(client: SupabaseClient, ownerId: string,
   return z
     .array(cartSummaryRow)
     .parse(data ?? [])
-    .map((r) => ({ id: r.id, isDemo: r.is_demo, strategy: r.strategy, itemCount: r.cart_items.length, createdAt: r.created_at }));
+    .map((r) => ({ id: r.id, isDemo: r.is_demo, strategy: r.strategy, itemCount: r.cart_items.length, createdAt: r.created_at, listId: r.list_id }));
 }
 
 /** Carrinho com itens; sem acesso (RLS) ou inexistente → null (não distingue os dois casos). */

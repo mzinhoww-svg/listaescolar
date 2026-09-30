@@ -1,13 +1,25 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { GradeSelect } from "@/components/students/GradeSelect";
+import { Button } from "@/components/ui/Button";
+import { Field, fieldInputClass } from "@/components/ui/Field";
+import { InlineStatus } from "@/components/ui/InlineStatus";
 import type { StudentActionResult } from "@/features/students/form-state";
+import { gradeSlugSchema, nicknameSchema } from "@/features/students/schemas";
 
-const field =
-  "bg-campo text-tinta h-14 w-full rounded-campo px-4 text-[15px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-verde-fundo";
-const primary = "bg-tinta text-papel flex h-14 w-full items-center justify-center rounded-botao text-base font-extrabold disabled:opacity-60";
+type Errors = { nickname?: string; gradeSlug?: string; consent?: string };
+
+/** Erros de campo em português, iguais aos do servidor, antes de enviar (UX-055). */
+function validate(nickname: string, gradeSlug: string, consent: boolean, needsConsent: boolean): Errors {
+  const errors: Errors = {};
+  const n = nicknameSchema.safeParse(nickname);
+  if (!n.success) errors.nickname = n.error.issues[0]?.message ?? "Confira o apelido.";
+  if (!gradeSlugSchema.safeParse(gradeSlug).success) errors.gradeSlug = "Escolha a série.";
+  if (needsConsent && !consent) errors.consent = "Marque o consentimento para salvar o aluno.";
+  return errors;
+}
 
 export type StudentFormDefaults = {
   id?: string;
@@ -43,6 +55,7 @@ export function StudentForm({
   const [nickname, setNickname] = useState(defaults?.nickname ?? "");
   const [gradeSlug, setGradeSlug] = useState(defaults?.gradeSlug ?? "");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
   const gradeRef = useRef<HTMLSelectElement>(null);
   const consentRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -55,13 +68,19 @@ export function StudentForm({
     return () => clearTimeout(id);
   }, [state, gradeSlug, consentChecked]);
 
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const found = validate(nickname, gradeSlug, consentChecked, consent);
+    setErrors(found);
+    if (Object.keys(found).length === 0) return;
+    e.preventDefault();
+    const first = found.nickname ? "nickname" : found.gradeSlug ? "gradeSlug" : "consent";
+    document.getElementById(first)?.focus();
+  };
+
   return (
-    <form action={formAction} className="flex flex-1 flex-col gap-4">
+    <form action={formAction} onSubmit={onSubmit} noValidate className="flex flex-1 flex-col gap-4">
       {defaults?.id ? <input type="hidden" name="id" value={defaults.id} /> : null}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="nickname" className="text-[13px] font-extrabold">
-          Apelido do aluno
-        </label>
+      <Field id="nickname" label="Apelido do aluno" error={errors.nickname} hint="Só o apelido, sem sobrenome nem documento.">
         <input
           id="nickname"
           name="nickname"
@@ -71,40 +90,45 @@ export function StudentForm({
           placeholder="Ex.: Maria"
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
-          className={field}
+          aria-invalid={errors.nickname ? true : undefined}
+          aria-describedby={errors.nickname ? "nickname-erro" : undefined}
+          className={fieldInputClass}
         />
-        <p className="text-verde-fundo text-[12px] font-semibold">Só letras, sem sobrenome nem documento.</p>
-      </div>
+      </Field>
 
-      <GradeSelect selectRef={gradeRef} value={gradeSlug} onChange={setGradeSlug} />
+      <GradeSelect selectRef={gradeRef} value={gradeSlug} onChange={setGradeSlug} error={errors.gradeSlug} />
 
       {consent ? (
-        <label className="bg-campo flex cursor-pointer items-start gap-3 rounded-2xl p-3.5">
-          <input
-            ref={consentRef}
-            type="checkbox"
-            name="consent"
-            checked={consentChecked}
-            onChange={(e) => setConsentChecked(e.target.checked)}
-            className="accent-verde-fundo mt-0.5 size-5 shrink-0"
-          />
-          <span className="text-texto-2 text-[13px] leading-[1.4] font-semibold">
-            Sou responsável por este aluno e autorizo o uso destes dados só para montar a lista.
-          </span>
-        </label>
+        <div className="flex flex-col gap-1.5">
+          <label className="bg-campo flex cursor-pointer items-start gap-3 rounded-2xl p-3.5">
+            <input
+              ref={consentRef}
+              id="consent"
+              type="checkbox"
+              name="consent"
+              checked={consentChecked}
+              onChange={(e) => setConsentChecked(e.target.checked)}
+              aria-invalid={errors.consent ? true : undefined}
+              aria-describedby={errors.consent ? "consent-erro" : undefined}
+              className="accent-verde-fundo mt-0.5 size-5 shrink-0"
+            />
+            <span className="text-texto-2 text-[14px] leading-[1.4] font-semibold">
+              Sou responsável por este aluno e autorizo o uso destes dados só para montar a lista.
+            </span>
+          </label>
+          {errors.consent ? (
+            <p id="consent-erro" role="alert" className="text-erro-texto text-[13px] font-semibold">
+              {errors.consent}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
-      <div aria-live="polite">
-        {state.status === "error" ? (
-          <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[13px] font-bold">
-            {state.message}
-          </p>
-        ) : null}
-      </div>
+      {state.status === "error" ? <InlineStatus tone="error">{state.message}</InlineStatus> : null}
 
-      <button type="submit" disabled={pending} className={`${primary} mt-auto`}>
-        {pending ? "Salvando…" : submitLabel}
-      </button>
+      <Button type="submit" size="lg" className="mt-auto w-full" loading={pending}>
+        {submitLabel}
+      </Button>
     </form>
   );
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { loginPathFor } from "@/features/auth/redirect";
 import { getSessionActor, type SessionActor } from "@/features/auth/actor";
 import { channelAvailability, parsePushSubscription, savePreferenceSchema, unsubscribeSchema, watchSchema } from "@/features/notifications/preferences";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,7 +17,7 @@ const fail = (code: Extract<ActionResult, { status: "error" }>["code"]): ActionR
 /** Sessão obrigatória; o perfil vem SÓ dela (nenhum campo de formulário define `profile_id`). */
 async function actorOrLogin(): Promise<SessionActor> {
   const actor = await getSessionActor();
-  if (!actor) redirect(`/entrar?next=${encodeURIComponent(PATH)}`);
+  if (!actor) redirect(loginPathFor(PATH, { expired: true }));
   return actor;
 }
 const env = (): Record<string, string | undefined> => process.env;

@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { z } from "zod";
 
+import { BackHeader } from "@/components/cart/CartStates";
 import { NotificationList } from "@/components/notifications/NotificationList";
 import { PreferencesForm } from "@/components/notifications/PreferencesForm";
 import { PushOptIn } from "@/components/notifications/PushOptIn";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
-import { channelAvailability } from "@/features/notifications/preferences";
+import { channelAvailability, eventsForRole } from "@/features/notifications/preferences";
 import { activePushCount, listNotifications, listPreferences, listWatches, PAGE_SIZE, unreadCount } from "@/features/notifications/queries";
 
 import { markAllReadAction, markReadAction, savePreferenceAction, subscribePushAction, unsubscribePushAction, unwatchFormAction } from "./actions";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Notificações · ListaCerta", robots: { index: false, follow: false } };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ pagina?: string | string[] }> }) {
-  await requireAccess("/conta/notificacoes");
+  const { role } = await requireAccess("/conta/notificacoes");
   const actor = await getSessionActor();
   const raw = (await searchParams).pagina;
   const page = z.coerce.number().int().min(1).max(500).catch(1).parse(Array.isArray(raw) ? raw[0] : raw);
@@ -24,8 +25,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const data = await Promise.all([listNotifications(actor, page), unreadCount(actor), listPreferences(actor), listWatches(actor), activePushCount(actor)]).catch(() => null);
   if (!data) {
     return (
-      <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-4 px-6 pt-10">
-        <h1 className="text-[28px] font-extrabold">Notificações</h1>
+      <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-4 px-6 pt-6">
+        <BackHeader href="/conta" title="Notificações" heading />
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Não foi possível carregar. <Link href="/conta/notificacoes" className="underline">Tentar de novo</Link>
         </p>
@@ -36,12 +37,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
     const [list, unread, prefs, watches, pushCount] = data;
     const availability = channelAvailability(process.env);
     return (
-      <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-10 pb-12">
-        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Notificações</h1>
-        <NotificationList items={list.items} unread={unread} page={page} pageCount={Math.max(1, Math.ceil(list.total / PAGE_SIZE))} markRead={markReadAction} markAllRead={markAllReadAction} />
+      <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-12">
+        <BackHeader href="/conta" title="Notificações" heading />
+        <section id="central" aria-label="Seus avisos" className="scroll-mt-4">
+          <NotificationList items={list.items} unread={unread} page={page} pageCount={Math.max(1, Math.ceil(list.total / PAGE_SIZE))} markRead={markReadAction} markAllRead={markAllReadAction} />
+        </section>
         <section aria-labelledby="pref" className="flex flex-col gap-3">
           <h2 id="pref" className="text-[18px] font-extrabold">Preferências</h2>
-          <PreferencesForm prefs={prefs} availability={availability} save={savePreferenceAction} />
+          <PreferencesForm events={eventsForRole(role)} prefs={prefs} availability={availability} save={savePreferenceAction} />
           <PushOptIn publicKey={availability.web_push ? (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null) : null} subscribe={subscribePushAction} unsubscribe={unsubscribePushAction} />
           {pushCount > 0 ? <p className="text-texto-3 text-[12px] font-semibold">Aparelhos com aviso ligado: {pushCount}.</p> : null}
         </section>

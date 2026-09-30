@@ -12,6 +12,18 @@ export type ChannelAvailability = Record<PreferenceChannel, boolean>;
 /** Eventos que aceitam canal externo (o da central sozinha, como o aviso de admin, não aparece nas preferências). */
 export const externalEvents = (): NotificationEvent[] => NOTIFICATION_EVENTS.filter((e) => EVENT_CATALOG[e].external);
 
+/**
+ * Eventos que cada papel recebe (UX-050): a família não vê "Novo pedido de cotação" (papelaria) nem "pedido para
+ * administrar" (escola). Equipe vê todos.
+ */
+const FAMILY_EVENTS: readonly NotificationEvent[] = ["submission_ready", "submission_failed", "submission_published", "submission_not_published", "list_published", "lead_quote_sent", "lead_expired"];
+export function eventsForRole(role: string): NotificationEvent[] {
+  const external = externalEvents();
+  const extra: NotificationEvent[] = role === "stationery_member" ? ["lead_received"] : role === "school_member" ? ["claim_updated"] : [];
+  if (role === "admin" || role === "system") return external;
+  return external.filter((e) => FAMILY_EVENTS.includes(e) || extra.includes(e));
+}
+
 /** Ausência de linha = padrão do catálogo: web_push e e-mail desligados. */
 export function preferenceEnabled(rows: readonly PreferenceRow[], event: string, channel: PreferenceChannel): boolean {
   return rows.find((r) => r.event_type === event && r.channel === channel)?.enabled ?? false;

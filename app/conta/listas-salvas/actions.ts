@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { loginPathFor, safeNextPath } from "@/features/auth/redirect";
 import { getSessionActor, type SessionActor } from "@/features/auth/actor";
 import { SavedListError } from "@/features/saved-lists/errors";
 import { savedListErrorMessage } from "@/features/saved-lists/messages";
@@ -15,13 +16,14 @@ export type SaveListActionResult = { status: "ok" } | { status: "error"; message
 
 async function actorOrLogin(next: string): Promise<SessionActor> {
   const actor = await getSessionActor();
-  if (!actor) redirect(`/entrar?next=${encodeURIComponent(next)}`);
+  if (!actor) redirect(loginPathFor(next, { expired: true }));
   return actor;
 }
 
 /** Botão "Salvar lista" na página pública da lista publicada (S15). */
 export async function saveListAction(input: unknown): Promise<SaveListActionResult> {
-  const actor = await actorOrLogin("/conta");
+  // Sessão expirada: entra de novo e volta à lista onde tocou "Salvar lista" (UX-043).
+  const actor = await actorOrLogin(safeNextPath(typeof input === "object" && input !== null ? (input as { next?: unknown }).next : undefined, "/conta"));
   const parsed = saveListInputSchema.safeParse(input);
   if (!parsed.success) return { status: "error", message: "Escolha um aluno." };
   try {

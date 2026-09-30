@@ -5,6 +5,7 @@ import { NotificationList } from "@/components/notifications/NotificationList";
 import { PreferencesForm } from "@/components/notifications/PreferencesForm";
 import { PushOptIn } from "@/components/notifications/PushOptIn";
 import { WatchButton } from "@/components/notifications/WatchButton";
+import { eventsForRole } from "@/features/notifications/preferences";
 import type { NotificationRow } from "@/features/notifications/queries-types";
 
 vi.mock("next/link", () => ({ default: ({ href, children, ...r }: { href: string; children: React.ReactNode }) => <a href={href} {...r}>{children}</a> }));
@@ -55,7 +56,36 @@ describe("PreferencesForm", () => {
     expect(push).toBeChecked();
     const mail = screen.getAllByRole("checkbox", { name: /e-mail/i })[0]!;
     expect(mail).toBeDisabled();
-    expect(screen.getAllByText("indisponível no momento").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/canal ainda não disponível/i).length).toBe(1);
+  });
+  it("UX-050: a explicação do canal indisponível aparece UMA vez por canal e as caixas apontam para ela", () => {
+    render(<PreferencesForm prefs={[]} availability={{ web_push: false, email: false }} save={vi.fn(async () => ({ status: "ok" as const }))} />);
+    const notes = screen.getAllByText(/canal ainda não disponível/i);
+    expect(notes).toHaveLength(2);
+    const disabled = screen.getAllByRole("checkbox").filter((c) => (c as HTMLInputElement).disabled);
+    expect(disabled.length).toBeGreaterThan(2);
+    for (const c of disabled) {
+      const id = c.getAttribute("aria-describedby");
+      expect(id, "caixa desabilitada sem motivo").toBeTruthy();
+      expect(document.getElementById(id!)).not.toBeNull();
+    }
+    expect(screen.queryByText("indisponível no momento")).toBeNull();
+    expect(screen.queryByText("indisponível neste ambiente")).toBeNull();
+  });
+  it("UX-050: só os eventos recebidos para o papel (família não vê pedido de cotação nem pedido para administrar)", () => {
+    render(<PreferencesForm events={eventsForRole("parent")} prefs={[]} availability={{ web_push: true, email: true }} save={vi.fn(async () => ({ status: "ok" as const }))} />);
+    expect(screen.queryByText("Novo pedido de cotação")).toBeNull();
+    expect(screen.queryByText(/pedido para administrar/i)).toBeNull();
+    expect(screen.getByText("Sua cotação chegou")).toBeInTheDocument();
+    expect(screen.getByText("Sua lista foi lida")).toBeInTheDocument();
+  });
+  it("UX-051: um cartão só, com as legendas afastadas da borda (lista única, não 9 cartões)", () => {
+    const { container } = render(<PreferencesForm events={eventsForRole("parent")} prefs={[]} availability={{ web_push: true, email: true }} save={vi.fn(async () => ({ status: "ok" as const }))} />);
+    expect(container.querySelectorAll("ul").length).toBe(1);
+    expect(container.querySelectorAll("fieldset").length).toBe(eventsForRole("parent").length);
+    for (const f of container.querySelectorAll("fieldset")) expect(f.className).toMatch(/\bpy-3\b/);
+    expect(container.querySelector("ul.rounded-\\[20px\\]")?.className).toMatch(/\bpx-4\b/);
+    expect(container.querySelectorAll(".rounded-\\[20px\\]").length).toBe(1);
   });
   it("marcar chama a action com evento, canal e novo valor e mostra a confirmação em role=status", async () => {
     const save = vi.fn(async () => ({ status: "ok" as const }));

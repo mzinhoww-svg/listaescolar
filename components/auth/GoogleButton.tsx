@@ -6,7 +6,7 @@ import { track } from "@/lib/analytics/track";
 import { signInWithGoogle } from "@/features/auth/actions";
 import type { AuthActionState } from "@/features/auth/schemas";
 
-import { GoogleIcon } from "./icons";
+import { GoogleIcon, ShieldIcon } from "./icons";
 
 const initial: AuthActionState = { status: "idle" };
 
@@ -28,6 +28,10 @@ export function GoogleButton({ next }: { next: string }) {
         <GoogleIcon />
         {pending ? "Aguarde…" : "Entrar com Google"}
       </button>
+      <div className="flex items-start gap-2 px-1">
+        <ShieldIcon />
+        <p className="text-texto-2 text-[13px] leading-[1.4] font-semibold">Usamos só nome e e-mail da sua conta Google. Nada é publicado.</p>
+      </div>
       {state.status === "error" && state.message ? (
         <p role="alert" className="text-center text-[13px] font-semibold text-erro-texto">
           {state.message}

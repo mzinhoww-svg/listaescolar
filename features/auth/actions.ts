@@ -67,6 +67,19 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
   }
 }
 
+const GOOGLE_UNAVAILABLE = "Entrar com o Google não está disponível agora. Use o link por e-mail abaixo.";
+
+/** O endpoint de autorização do Auth responde 3xx quando o provedor está ligado; 4xx/5xx ou rede fora = indisponível. */
+async function authorizeReachable(url: string): Promise<boolean> {
+  if (!new URL(url).pathname.endsWith("/auth/v1/authorize")) return true;
+  try {
+    const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(4000) });
+    return res.status >= 300 && res.status < 400;
+  } catch {
+    return false;
+  }
+}
+
 export async function signInWithGoogle(formData: FormData): Promise<AuthActionState> {
   const parsed = googleInputSchema.parse({ next: formData.get("next") ?? undefined });
   let url: string | null = null;
@@ -83,7 +96,9 @@ export async function signInWithGoogle(formData: FormData): Promise<AuthActionSt
   } catch {
     url = null;
   }
-  if (url === null) return { status: "error", message: GENERIC_ERROR };
+  if (url === null) return { status: "error", message: GOOGLE_UNAVAILABLE };
+  // UX-045: provedor desligado no Auth responde 400 com JSON cru; a pessoa ficaria fora do produto, sem volta.
+  if (!(await authorizeReachable(url))) return { status: "error", message: GOOGLE_UNAVAILABLE };
   redirect(url);
 }
 

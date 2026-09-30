@@ -1,5 +1,5 @@
 import { canAccess, type UserRole } from "./access";
-import { safeNextPath } from "./redirect";
+import { loginPathFor } from "./redirect";
 
 export type AccessAction =
   | { action: "next" }
@@ -11,6 +11,8 @@ export type DecideAccessInput = {
   search?: string;
   userId: string | null;
   role: UserRole | null;
+  /** Havia cookie de sessão, mas `getUser` não o aceitou: a sessão terminou (a tela de entrada avisa). */
+  hadSession?: boolean;
 };
 
 /** Decisão pura do proxy. `userId` vem de `auth.getUser()`, `role` de `profiles`. */
@@ -19,11 +21,11 @@ export function decideAccess({
   search = "",
   userId,
   role,
+  hadSession = false,
 }: DecideAccessInput): AccessAction {
   if (userId === null) {
     if (canAccess(null, pathname) === "allow") return { action: "next" };
-    const next = safeNextPath(`${pathname}${search}`);
-    return { action: "redirect-login", location: `/entrar?next=${encodeURIComponent(next)}` };
+    return { action: "redirect-login", location: loginPathFor(`${pathname}${search}`, { expired: hadSession }) };
   }
   // Logado sem papel (profile ausente): só rota pública passa; o resto é 403, sem laço de login.
   if (role === null) {

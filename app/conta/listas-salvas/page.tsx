@@ -12,7 +12,7 @@ export const metadata = { title: "Listas salvas · ListaCerta", robots: { index:
 
 /** S15: listas oficiais que a família salvou, por aluno, escola e série. */
 export default async function SavedListsPage() {
-  await requireAccess("/conta");
+  await requireAccess("/conta/listas-salvas");
   const actor = await getSessionActor();
   const rows = actor ? await listMySavedLists(actor).catch(() => []) : [];
 

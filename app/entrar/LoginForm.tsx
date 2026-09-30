@@ -7,7 +7,10 @@ import { signInWithMagicLink } from "@/features/auth/actions";
 import { track } from "@/lib/analytics/track";
 import { emailSchema, type AuthActionState } from "@/features/auth/schemas";
 
+import { Button } from "@/components/ui/Button";
+
 import { LinkSent } from "./LinkSent";
+import { OpenInBrowserNote } from "./OpenInBrowserNote";
 
 const initial: AuthActionState = { status: "idle" };
 
@@ -66,13 +69,10 @@ export function LoginForm({ next }: { next: string }) {
         aria-describedby={state.status === "error" ? "email-msg" : undefined}
         className={fieldInputClass}
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="bg-tinta text-papel flex h-14 w-full items-center justify-center rounded-botao text-base font-extrabold disabled:opacity-60"
-      >
+      <Button type="submit" size="lg" className="w-full" loading={pending}>
         {pending ? "Enviando…" : "Receber link por e-mail"}
-      </button>
+      </Button>
+      <OpenInBrowserNote beforeSend />
       <div aria-live="polite">
         {state.status === "error" && state.message ? (
           <p id="email-msg" role="alert" className="text-erro-texto text-[13px] font-semibold">

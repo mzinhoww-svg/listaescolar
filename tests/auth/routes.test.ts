@@ -131,3 +131,30 @@ describe("/auth/confirm", () => {
     expect(res.headers.get("location")).toBe("/conta");
   });
 });
+
+/** UX-044 (J3-06): link vencido ou usado não faz a pessoa perder o destino. */
+describe("erro de link preserva o destino", () => {
+  beforeEach(() => {
+    verifyOtp.mockReset();
+    exchangeCodeForSession.mockReset();
+    captureException.mockReset();
+  });
+  it("/auth/confirm: link vencido volta a /entrar?erro=codigo&next=<destino>", async () => {
+    verifyOtp.mockResolvedValue({ error: { message: "expired", status: 401 } });
+    const res = await confirm(req("/auth/confirm?token_hash=h&type=email&next=/enviar-lista%3Fserie%3Def-5"));
+    expect(res.headers.get("location")).toBe("/entrar?erro=codigo&next=%2Fenviar-lista%3Fserie%3Def-5");
+  });
+  it("/auth/confirm: parâmetros inválidos também guardam o destino", async () => {
+    const res = await confirm(req("/auth/confirm?type=email&next=/conta/notificacoes"));
+    expect(res.headers.get("location")).toBe("/entrar?erro=codigo&next=%2Fconta%2Fnotificacoes");
+  });
+  it("/auth/confirm: destino externo não vira next do erro", async () => {
+    verifyOtp.mockResolvedValue({ error: { message: "x" } });
+    const res = await confirm(req("/auth/confirm?token_hash=h&type=email&next=https://evil.test"));
+    expect(res.headers.get("location")).toBe("/entrar?erro=codigo");
+  });
+  it("/auth/callback: falha do Google guarda o destino", async () => {
+    const res = await callback(req("/auth/callback?error=access_denied&next=/escolas/99001001/ef-5"));
+    expect(res.headers.get("location")).toBe("/entrar?erro=provedor&next=%2Fescolas%2F99001001%2Fef-5");
+  });
+});

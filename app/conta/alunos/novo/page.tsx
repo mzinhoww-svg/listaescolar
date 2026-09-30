@@ -8,7 +8,7 @@ export const metadata = { title: "Novo aluno · ListaCerta", robots: { index: fa
 
 /** App13-NovoAluno (S15): só apelido e série (SPEC §5). Escola e ano letivo vivem na lista salva, não no aluno. */
 export default async function NewStudentPage() {
-  await requireAccess("/conta");
+  await requireAccess("/conta/alunos/novo");
   return (
     <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
       <BackHeader href="/conta" title="Novo aluno" heading />

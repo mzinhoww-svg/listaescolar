@@ -1,11 +1,10 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { loginErrorPath } from "@/features/auth/redirect";
 import { confirmQuerySchema } from "@/features/auth/schemas";
 import { captureLogin } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
-
-const ERRO = "/entrar?erro=codigo";
 
 function redirectTo(path: string, headers: Headers) {
   const res = new NextResponse(null, { status: 307, headers: { Location: path } });
@@ -20,6 +19,8 @@ function redirectTo(path: string, headers: Headers) {
 export async function GET(request: NextRequest) {
   const p = request.nextUrl.searchParams;
   const headers = new Headers();
+  // UX-044: o erro guarda o destino para a pessoa pedir outro link e voltar ao mesmo passo.
+  const ERRO = loginErrorPath("codigo", p.get("next"));
   const query = confirmQuerySchema.safeParse({
     token_hash: p.get("token_hash"),
     type: p.get("type"),

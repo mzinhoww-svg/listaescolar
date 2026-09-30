@@ -14,8 +14,8 @@ export const metadata = { title: "Editar aluno · ListaCerta", robots: { index: 
 
 /** App13-NovoAluno reaproveitada para editar/excluir (S15). Alheio e inexistente são a mesma página 404 (RLS). */
 export default async function EditStudentPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAccess("/conta");
   const { id } = await params;
+  await requireAccess(`/conta/alunos/${encodeURIComponent(id)}/editar`);
   const parsedId = studentIdSchema.safeParse(id);
   if (!parsedId.success) notFound();
   const actor = await getSessionActor();

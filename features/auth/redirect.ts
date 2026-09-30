@@ -32,3 +32,18 @@ export function safeNextPath(input: unknown, fallback: string = FALLBACK): strin
   }
   return input;
 }
+
+/**
+ * Caminho de `/entrar` que devolve a pessoa à `route` depois do login (UX-043). `route` passa por `safeNextPath`:
+ * só caminho relativo interno; o resto vira `/conta`. `expired` avisa que havia sessão e ela terminou.
+ */
+export function loginPathFor(route: string, opts: { expired?: boolean } = {}): string {
+  const next = encodeURIComponent(safeNextPath(route));
+  return `/entrar?next=${next}${opts.expired ? "&sessao=terminou" : ""}`;
+}
+
+/** `/entrar?erro=<código>` guardando o destino original, quando ele for um caminho interno seguro (UX-044). */
+export function loginErrorPath(code: "codigo" | "provedor", rawNext: unknown): string {
+  const next = safeNextPath(rawNext, "");
+  return `/entrar?erro=${code}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+}

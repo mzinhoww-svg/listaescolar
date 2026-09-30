@@ -54,7 +54,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     role = parsed.success ? parsed.data : null;
   }
 
-  const decision = decideAccess({ pathname, search, userId, role });
+  // Cookie de sessão presente + `getUser` sem usuário = sessão expirada (a tela de entrada diz "sua sessão terminou").
+  const hadSession = userId === null && request.cookies.getAll().some((c) => /^sb-.+-auth-token/.test(c.name));
+  const decision = decideAccess({ pathname, search, userId, role, hadSession });
   if (decision.action === "next") return response;
 
   const target = request.nextUrl.clone();

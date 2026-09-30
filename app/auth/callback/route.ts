@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { loginErrorPath } from "@/features/auth/redirect";
 import { callbackQuerySchema } from "@/features/auth/schemas";
 import { captureLogin } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
@@ -12,8 +13,8 @@ function redirectTo(path: string, headers: Headers) {
   return res;
 }
 
-function fail(code: "provedor" | "codigo", headers: Headers) {
-  return redirectTo(`/entrar?erro=${code}`, headers);
+function fail(code: "provedor" | "codigo", headers: Headers, rawNext: unknown) {
+  return redirectTo(loginErrorPath(code, rawNext), headers);
 }
 
 /** Retorno do OAuth (Google): troca `code` PKCE por sessão. O link mágico usa /auth/confirm. */
@@ -27,8 +28,8 @@ export async function GET(request: NextRequest) {
   });
   const headers = new Headers();
 
-  if (query.error || query.error_description) return fail("provedor", headers);
-  if (!query.code) return fail("codigo", headers);
+  if (query.error || query.error_description) return fail("provedor", headers, p.get("next"));
+  if (!query.code) return fail("codigo", headers, p.get("next"));
 
   let session: { supabase: unknown; user: { id: string; email?: string | null } | null };
   try {
@@ -37,12 +38,12 @@ export async function GET(request: NextRequest) {
     // D-005/S19: registrado sem e-mail/PII (o redator do Sentry tira qualquer resíduo; nunca a mensagem crua).
     if (error) {
       Sentry.captureException(new Error(`auth_callback_exchange: ${error.status ?? "sem_status"}`));
-      return fail("codigo", headers);
+      return fail("codigo", headers, p.get("next"));
     }
     session = { supabase, user: data?.user ?? null };
   } catch (e) {
     Sentry.captureException(e instanceof Error ? e : new Error("auth_callback: exceção desconhecida"));
-    return fail("codigo", headers);
+    return fail("codigo", headers, p.get("next"));
   }
   if (session.user) await captureLogin("google", session.supabase, session.user);
   return redirectTo(query.next, headers);

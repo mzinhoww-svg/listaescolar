@@ -56,6 +56,39 @@ describe("actions de login", () => {
       "https://listacerta.test/auth/callback?next=%2Fconta",
     );
   });
+  it("UX-045: Google desligado no Auth (400 no authorize) vira mensagem no produto, sem sair do site", async () => {
+    signInWithOAuth.mockResolvedValue({ data: { url: "https://auth.test/auth/v1/authorize?provider=google" }, error: null });
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"code":400,"msg":"Unsupported provider"}', { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const r = await signInWithGoogle(form({ next: "/conta" }));
+      expect(r.status).toBe("error");
+      expect(r.message).toMatch(/Google/);
+      expect(r.message).toMatch(/e-mail/);
+      expect(r.message).not.toMatch(/400|Unsupported|provider/i);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("UX-045: Google configurado (302 do authorize) segue para o provedor", async () => {
+    signInWithOAuth.mockResolvedValue({ data: { url: "https://auth.test/auth/v1/authorize?provider=google" }, error: null });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://accounts.google.com/x" } })));
+    try {
+      await expect(signInWithGoogle(form({ next: "/conta" }))).rejects.toThrow("REDIRECT:https://auth.test/auth/v1/authorize?provider=google");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("UX-045: Auth fora do ar na checagem prévia também vira mensagem no produto", async () => {
+    signInWithOAuth.mockResolvedValue({ data: { url: "https://auth.test/auth/v1/authorize?provider=google" }, error: null });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("rede")));
+    try {
+      const r = await signInWithGoogle(form({ next: "/conta" }));
+      expect(r.status).toBe("error");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("rate limit (status 429) vira mensagem específica", async () => {
     signInWithOtp.mockResolvedValue({ error: { status: 429, code: "over_email_send_rate_limit" } });
     expect(await signInWithMagicLink(form({ email: "a@b.co" }))).toEqual({

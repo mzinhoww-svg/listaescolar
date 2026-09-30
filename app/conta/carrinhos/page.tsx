@@ -15,7 +15,7 @@ const dateFmt = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle
 
 /** S15: todos os carrinhos da família, mais recentes primeiro (o hub de /conta mostra só os últimos). */
 export default async function CartsPage() {
-  await requireAccess("/conta");
+  await requireAccess("/conta/carrinhos");
   const actor = await getSessionActor();
   const carts = actor ? await listCartsForOwner(await createClient(), actor.userId, 100).catch(() => []) : [];
 

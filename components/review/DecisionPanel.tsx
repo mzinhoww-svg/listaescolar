@@ -2,10 +2,14 @@
 
 import { useActionState, useState } from "react";
 
+import Link from "next/link";
+
 import { DemoBadge } from "@/components/admin/DemoBadge";
 import { IDLE, isProblem, type ReviewActionState } from "@/app/admin/revisao/state";
 import { REJECT_REASONS, type BlockerCode } from "@/features/review/codes";
 import { blockerPhrase, rejectReasonLabel } from "@/features/review/phrases";
+
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 import { useDraft } from "./DraftContext";
 
@@ -40,6 +44,7 @@ function Result({ s, demo = false }: { s: ReviewActionState; demo?: boolean }) {
   return (
     <p role={isProblem(s.kind) ? "alert" : "status"} className={`${isProblem(s.kind) ? "bg-erro-fundo text-erro-texto" : "bg-campo"} rounded-campo px-4 py-3 text-[14px] font-bold`}>
       {s.message}
+      {s.href ? <Link href={s.href} className="ml-2 inline-flex min-h-11 items-center underline">Ver a lista publicada</Link> : null}
       {s.kind === "published" && demo ? <span className="ml-2 align-middle"><DemoBadge /></span> : null}
     </p>
   );
@@ -101,30 +106,45 @@ export function DecisionPanel({ submissionId, version, status, blockers, canPubl
           {blockers === null ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível verificar as pendências desta lista. Recarregue a página antes de aprovar.</p> : null}
           {orphaned ? <p role="alert" className="text-erro-texto text-[14px] font-bold">Aprovar e publicar está bloqueado até a conciliação da publicação pendente.</p> : null}
           {dirty ? <p role="status" className="text-erro-texto text-[14px] font-bold">Salve a edição antes de aprovar.</p> : null}
-          <form action={approveAction} className="flex flex-col gap-3">
-            {hidden}
-            {needsAck ? (
-              <label className="flex items-start gap-3 text-[14px] font-bold">
-                <input type="checkbox" name="acknowledged" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5 size-5" />
-                Conferi o documento original
-              </label>
-            ) : null}
-            <button type="submit" disabled={approving || dirty || open.length > 0 || blockers === null || orphaned} className="bg-tinta text-papel rounded-botao min-h-11 px-6 text-[14px] font-extrabold disabled:opacity-50">
-              {approving ? "Publicando..." : retry ? "Tentar publicar de novo" : "Aprovar e publicar"}
-            </button>
-          </form>
+          {needsAck ? (
+            <label className="flex items-start gap-3 text-[14px] font-bold">
+              <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5 size-5" />
+              Conferi o documento original
+            </label>
+          ) : null}
+          <ConfirmDialog
+            triggerLabel={approving ? "Publicando..." : retry ? "Tentar publicar de novo" : "Aprovar e publicar"}
+            triggerStyle="button"
+            triggerVariant="primary"
+            confirmVariant="primary"
+            triggerDisabled={approving || dirty || open.length > 0 || blockers === null || orphaned}
+            title="Aprovar e publicar esta lista?"
+            body="A lista passa a valer para as famílias da escola e substitui a versão publicada anterior, se houver. Se precisar desfazer, arquive-a depois em Listas."
+            confirmLabel="Sim, aprovar e publicar"
+            action={approveAction}
+            hidden={{ submissionId, expectedVersion: String(version), acknowledged: ack ? "on" : "" }}
+          />
           <Result s={approveState} demo={demoPublication} />
-          <form action={rejectAction} className="border-campo flex flex-col gap-3 border-t pt-4">
-            {hidden}
+          <div className="border-campo flex flex-col gap-3 border-t pt-4">
             <label className="flex flex-col gap-1 text-[13px] font-extrabold">
               Motivo da recusa
-              <select name="reason" required value={reason} onChange={(e) => setReason(e.target.value)} className="bg-campo rounded-campo min-h-11 px-3 py-2 text-[14px] font-semibold">
+              <select value={reason} onChange={(e) => setReason(e.target.value)} className="bg-campo rounded-campo min-h-11 px-3 py-2 text-[14px] font-semibold">
                 <option value="">Escolha um motivo</option>
                 {REJECT_REASONS.map((r) => <option key={r} value={r}>{rejectReasonLabel(r)}</option>)}
               </select>
             </label>
-            <button type="submit" disabled={rejecting || reason === ""} className="border-erro-texto text-erro-texto rounded-botao min-h-11 border-2 bg-transparent px-6 text-[14px] font-extrabold disabled:opacity-50">Recusar</button>
-          </form>
+            <ConfirmDialog
+              triggerLabel="Recusar"
+              triggerStyle="button"
+              triggerVariant="danger"
+              triggerDisabled={rejecting || reason === ""}
+              title="Recusar esta lista?"
+              body={`A lista não será publicada e o envio fica encerrado como recusado (motivo: ${reason ? rejectReasonLabel(reason as (typeof REJECT_REASONS)[number]) : ""}). A decisão fica registrada.`}
+              confirmLabel="Sim, recusar lista"
+              action={rejectAction}
+              hidden={{ submissionId, expectedVersion: String(version), reason }}
+            />
+          </div>
           <Result s={rejectState} />
         </>
       )}

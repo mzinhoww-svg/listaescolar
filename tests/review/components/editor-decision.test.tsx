@@ -137,6 +137,7 @@ describe("DecisionPanel", () => {
     const approve = vi.fn<Act>(async () => state("unavailable", "Lista aprovada. Publicação indisponível neste ambiente até a integração."));
     const { rerender } = render(<Workbench available={false} actions={{ approveAndPublish: approve }} />);
     fireEvent.click(screen.getByRole("button", { name: "Aprovar e publicar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sim, aprovar e publicar" }));
     await waitFor(() => expect(approve).toHaveBeenCalled());
     rerender(<Workbench available={false} status="approved" canPublish actions={{ approveAndPublish: approve }} />);
     expect(screen.getAllByText(/Publicação indisponível neste ambiente até a integração/)).toHaveLength(1);
@@ -145,8 +146,9 @@ describe("DecisionPanel", () => {
   it("recusa: 'Lista recusada.' continua visível depois de o envio virar rejected (modo somente leitura)", async () => {
     const reject = vi.fn<Act>(async () => state("rejected", "Lista recusada."));
     const { rerender } = render(<Workbench actions={{ reject }} />);
-    fireEvent.change(document.querySelector("select[name=reason]")!, { target: { value: "other" } });
+    fireEvent.change(screen.getByLabelText("Motivo da recusa"), { target: { value: "other" } });
     fireEvent.click(screen.getByRole("button", { name: "Recusar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sim, recusar lista" }));
     expect(await screen.findByText("Lista recusada.")).toBeInTheDocument();
     rerender(<Workbench status="rejected" actions={{ reject }} />);
     expect(screen.getByText("Lista recusada.")).toBeInTheDocument();
@@ -160,6 +162,7 @@ describe("DecisionPanel", () => {
     const approve = vi.fn<Act>(async () => state("published", "Lista publicada."));
     const { rerender } = render(<Workbench demo actions={{ approveAndPublish: approve }} />);
     fireEvent.click(screen.getByRole("button", { name: "Aprovar e publicar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sim, aprovar e publicar" }));
     expect(await screen.findByText("Lista publicada.")).toBeInTheDocument();
     expect(screen.getByText("Demonstração")).toBeInTheDocument();
     rerender(<Workbench demo status="published" actions={{ approveAndPublish: approve }} />);
@@ -188,6 +191,7 @@ describe("DecisionPanel", () => {
     fireEvent.click(screen.getByLabelText("Conferi o documento original"));
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
+    fireEvent.click(screen.getByRole("button", { name: "Sim, aprovar e publicar" }));
     await waitFor(() => expect(approve).toHaveBeenCalled());
     const fd = approve.mock.calls[0]![1];
     expect(fd.get("acknowledged")).toBe("on");
@@ -201,6 +205,7 @@ describe("DecisionPanel", () => {
   ] as const)("resultado %s", async (kind, message, role, label) => {
     render(<Workbench actions={{ approveAndPublish: async () => state(kind, message) }} />);
     fireEvent.click(screen.getByRole("button", { name: "Aprovar e publicar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sim, aprovar e publicar" }));
     expect(await screen.findByRole(role)).toHaveTextContent(message);
     expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
   });
@@ -212,9 +217,21 @@ describe("DecisionPanel", () => {
     expect(container.querySelector("textarea")).toBeNull();
     fireEvent.change(screen.getByLabelText("Motivo da recusa"), { target: { value: "illegible_document" } });
     fireEvent.click(btn);
+    fireEvent.click(screen.getByRole("button", { name: "Sim, recusar lista" }));
     await waitFor(() => expect(reject).toHaveBeenCalled());
     expect(reject.mock.calls[0]![1].get("reason")).toBe("illegible_document");
     expect(await screen.findByRole("status")).toHaveTextContent("Lista recusada.");
+  });
+  it("aprovar e recusar pedem confirmação com o efeito escrito; ação só roda ao confirmar; link à lista publicada", async () => {
+    const approve = vi.fn<Act>(async () => state("published", "Lista publicada.", "/admin/listas/L1"));
+    const { container } = render(<Workbench actions={{ approveAndPublish: approve }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar e publicar" }));
+    expect(approve).not.toHaveBeenCalled();
+    expect(container.textContent).toMatch(/passa a valer para as famílias/);
+    expect(container.textContent).toMatch(/arquive-a depois/);
+    fireEvent.click(screen.getByRole("button", { name: "Sim, aprovar e publicar" }));
+    await waitFor(() => expect(approve).toHaveBeenCalled());
+    expect(await screen.findByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/admin/listas/L1");
   });
   it.each(["published", "rejected"])("envio %s: somente leitura, sem decisões", (status) => {
     render(<Workbench status={status} />);

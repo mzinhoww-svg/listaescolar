@@ -58,7 +58,7 @@ function publicationState(p: PublishOutcome | null): ReviewActionState {
   if (!p) return state("approved", "Lista aprovada.");
   switch (p.status) {
     case "published":
-      return state("published", "Lista publicada.");
+      return state("published", "Lista publicada.", p.listId ? `/admin/listas/${p.listId}` : undefined);
     case "publish_pending":
       return state("pending", "Lista aprovada; a publicação ainda não terminou. Use “Tentar publicar de novo”.");
     case "publish_unavailable":

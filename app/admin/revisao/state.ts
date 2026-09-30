@@ -14,10 +14,10 @@ export type ReviewActionKind =
   | "stale"
   | "error";
 
-export type ReviewActionState = { kind: ReviewActionKind; message: string };
+export type ReviewActionState = { kind: ReviewActionKind; message: string; /** Destino após a decisão (ex.: lista publicada). */ href?: string };
 
 export const IDLE: ReviewActionState = { kind: "idle", message: "" };
-export const state = (kind: ReviewActionKind, message: string): ReviewActionState => ({ kind, message });
+export const state = (kind: ReviewActionKind, message: string, href?: string): ReviewActionState => (href ? { kind, message, href } : { kind, message });
 
 /** Erros e conflitos pedem `role="alert"`; o resto é aviso de andamento (`role="status"`). */
 export const isProblem = (k: ReviewActionKind): boolean => k === "error" || k === "stale" || k === "blocked" || k === "failed";

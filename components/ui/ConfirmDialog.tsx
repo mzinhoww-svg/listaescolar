@@ -23,6 +23,8 @@ type Props = {
   triggerVariant?: ButtonVariant;
   /** Variante do botão de confirmar (padrão `danger`; `primary` para confirmar uma decisão que não destrói nada, mas tem efeito). */
   confirmVariant?: ButtonVariant;
+  /** Desabilita o gatilho (ex.: decisão bloqueada por pendências). */
+  triggerDisabled?: boolean;
 };
 
 /** Confirmar de um formulário com Server Action: durante o envio fica desabilitado e anuncia (`aria-busy`), então o segundo toque não reenvia. */
@@ -39,7 +41,7 @@ function ActionConfirm({ variant, label }: { variant: ButtonVariant; label: stri
  * Confirmação destrutiva única do produto (D-11): `<dialog>` nativo, foco preso pelo navegador, Esc fecha,
  * botão de risco por último e em `erro-texto`. Substitui `window.confirm` e os diálogos avulsos.
  */
-export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pendingLabel, onConfirm, action, hidden, triggerStyle = "link", triggerVariant = "danger", confirmVariant = "danger" }: Props) {
+export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pendingLabel, onConfirm, action, hidden, triggerStyle = "link", triggerVariant = "danger", confirmVariant = "danger", triggerDisabled = false }: Props) {
   const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const [pending, setPending] = useState(false);
@@ -66,18 +68,19 @@ export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pending
       {triggerStyle === "link" ? (
         <button
           type="button"
+          disabled={triggerDisabled}
           onClick={() => ref.current?.showModal()}
           className="text-erro-texto inline-flex min-h-11 items-center text-[13px] font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-verde-fundo"
         >
           {triggerLabel}
         </button>
       ) : (
-        <Button variant={triggerVariant} onClick={() => ref.current?.showModal()}>
+        <Button variant={triggerVariant} disabled={triggerDisabled} onClick={() => ref.current?.showModal()}>
           {triggerLabel}
         </Button>
       )}
       <dialog ref={ref} onClose={() => setError(null)} aria-labelledby={titleId} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
-        <form action={onConfirm ? undefined : action} onSubmit={onConfirm ? (e) => e.preventDefault() : undefined} className="flex w-[min(92vw,420px)] flex-col gap-4 p-6">
+        <form action={onConfirm ? undefined : action} onSubmit={onConfirm ? (e) => e.preventDefault() : () => queueMicrotask(() => ref.current?.close())} className="flex w-[min(92vw,420px)] flex-col gap-4 p-6">
           {Object.entries(hidden ?? {}).map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} />
           ))}

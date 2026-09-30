@@ -13,6 +13,7 @@ import { getSessionActor } from "@/features/stationeries/actor";
 import { formatCnpj } from "@/features/stationeries/cnpj";
 import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
 import { getAdminDetail, listStatusEvents } from "@/features/stationeries/queries";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { adminActions } from "@/features/stationeries/admin-actions";
 
 import { adminTransitionAction } from "../actions";
@@ -66,23 +67,41 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <section aria-labelledby="acoes" className="mb-6 flex flex-col gap-3 rounded-card bg-white p-5">
         <h2 id="acoes" className="text-[16px] font-extrabold">Ações</h2>
         {actions.length === 0 ? <p className="text-texto-3 text-[14px]">Sem ações disponíveis neste status.</p> : null}
-        {actions.map((a) => (
-          <form key={a.to} action={adminTransitionAction} className="flex flex-wrap items-center gap-2">
-            <input type="hidden" name="id" value={detail.id} />
-            <input type="hidden" name="to" value={a.to} />
-            <input
-              name="reason"
-              maxLength={500}
-              required={a.reasonRequired}
-              placeholder={a.reasonRequired ? "Motivo (obrigatório)" : "Motivo (opcional)"}
-              aria-label={`Motivo para ${a.label.toLowerCase()}`}
-              className="bg-campo h-11 min-w-[260px] flex-1 rounded-campo px-4 text-[14px] font-medium"
+        {actions.map((a) =>
+          a.tone === "danger" ? (
+            <ConfirmDialog
+              key={a.to}
+              triggerLabel={a.label}
+              triggerStyle="button"
+              triggerVariant="danger"
+              title={`${a.label} ${detail.tradeName}?`}
+              body={
+                <>
+                  <p>A papelaria deixa de aparecer para as famílias e o motivo fica visível para ela. Você pode reativar depois.</p>
+                  <label className="mt-3 block text-[13px] font-extrabold" htmlFor={`motivo-${a.to}`}>Motivo{a.reasonRequired ? " (obrigatório)" : " (opcional)"}</label>
+                  <textarea id={`motivo-${a.to}`} name="reason" required={a.reasonRequired} maxLength={500} rows={3} className="mt-1 w-full rounded-campo bg-campo p-3 text-[14px]" />
+                </>
+              }
+              confirmLabel={`Sim, ${a.label.toLowerCase()}`}
+              action={adminTransitionAction}
+              hidden={{ id: detail.id, to: a.to }}
             />
-            <button type="submit" className={buttonClass(a.tone === "danger" ? "danger" : "primary")}>
-              {a.label}
-            </button>
-          </form>
-        ))}
+          ) : (
+            <form key={a.to} action={adminTransitionAction} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="id" value={detail.id} />
+              <input type="hidden" name="to" value={a.to} />
+              <input
+                name="reason"
+                maxLength={500}
+                required={a.reasonRequired}
+                placeholder={a.reasonRequired ? "Motivo (obrigatório)" : "Motivo (opcional)"}
+                aria-label={`Motivo para ${a.label.toLowerCase()}`}
+                className="bg-campo h-11 min-w-[260px] flex-1 rounded-campo px-4 text-[14px] font-medium"
+              />
+              <button type="submit" className={buttonClass("primary")}>{a.label}</button>
+            </form>
+          ),
+        )}
       </section>
       <section aria-labelledby="cobranca" className="mb-6 rounded-card bg-white p-5">
         <h2 id="cobranca" className="mb-2 text-[16px] font-extrabold">Cobrança</h2>

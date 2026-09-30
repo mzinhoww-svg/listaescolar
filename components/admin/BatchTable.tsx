@@ -31,7 +31,7 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
           {batches.map((b) => (
             <tr key={b.id} className="border-linha border-b last:border-b-0">
               <td className="px-5 py-4 font-semibold">
-                <Link href={`/admin/importacoes/${b.id}`} className="underline">
+                <Link href={`/admin/importacoes/${b.id}`} className="inline-flex min-h-11 items-center underline">
                   {b.file_name}
                 </Link>{" "}
                 {b.is_demo ? <DemoBadge /> : null}
@@ -52,7 +52,7 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
               </td>
               <td className="px-5 py-4">
                 {b.rejected_count + b.duplicate_count + b.file_errors.length > 0 ? (
-                  <a href={`/admin/importacoes/${b.id}/erros.csv`} className="text-verde-fundo font-extrabold underline">
+                  <a href={`/admin/importacoes/${b.id}/erros.csv`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
                     Baixar erros
                   </a>
                 ) : (

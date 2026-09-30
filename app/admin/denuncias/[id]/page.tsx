@@ -39,7 +39,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const list = report?.targetType === "school_list" && actor ? await getListSummaryForAdmin(actor, report.targetId).catch(() => null) : null;
 
   return (
-    <AdminShell active="/admin/denuncias" email={user.email} breadcrumb="Admin / Denúncias / Detalhe" title="Denúncia" actions={<Link href="/admin/denuncias" className="text-[14px] font-extrabold underline">Voltar à fila</Link>}>
+    <AdminShell active="/admin/denuncias" email={user.email} breadcrumb="Admin / Denúncias / Detalhe" title="Denúncia" actions={<Link href="/admin/denuncias" className="inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Voltar à fila</Link>}>
       {sp.ok ? <Notice kind="ok">Denúncia atualizada.</Notice> : null}
       {sp.erro ? <Notice kind="error">{reportErrorMessage(sp.erro)}</Notice> : null}
       {failed || !report ? (
@@ -68,7 +68,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                 </p>
                 <p className="text-texto-2">{list.gradeName} · {list.schoolYear} · {LIST_STATE_LABEL[list.status] ?? list.status}</p>
                 {list.status === "published" ? (
-                  <Link href={`/admin/listas/${list.id}`} className="text-verde-fundo mt-2 inline-block font-extrabold underline">Ver lista e arquivar</Link>
+                  <Link href={`/admin/listas/${list.id}`} className="text-verde-fundo mt-2 inline-flex min-h-11 items-center font-extrabold underline">Ver lista e arquivar</Link>
                 ) : null}
               </div>
             ) : null}

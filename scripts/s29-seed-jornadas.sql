@@ -311,7 +311,7 @@ from (values
   (1, '{"inep":"99029101","nome":"Escola Importada S29"}', '{"inep":"99029101"}', '[]', 'inserted'),
   (2, '{"inep":"99029001","nome":"Escola Demo S29"}', '{"inep":"99029001"}', '[]', 'updated'),
   (3, '{"inep":"99029101","nome":"Escola Importada S29"}', '{"inep":"99029101"}', '[]', 'duplicate'),
-  (4, '{"inep":"","nome":"Sem código"}', null, '["inep_invalido"]', 'rejected')
+  (4, '{"inep":"","nome":"Sem código"}', null, '[{"code":"inep_invalido","message":"Código INEP inválido."}]', 'rejected')
 ) as v(n, raw, norm, err, action)
 where not exists (select 1 from public.import_rows where batch_id = '00000000-0000-4000-8000-000000290801');
 

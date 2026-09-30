@@ -17,13 +17,13 @@ export function PanelShell({ badge, nav, email, children }: Props) {
     <div className="flex min-h-dvh flex-1 flex-col md:flex-row">
       <SkipLink />
       <aside className="bg-tinta flex shrink-0 flex-row flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 md:w-[248px] md:flex-col md:items-stretch md:gap-5 md:px-[18px] md:py-7">
-        <header className="order-1 px-1">
+        <header className="order-1 px-1 md:order-1">
           <Link href="/" aria-label="ListaCerta, página inicial" className="flex min-h-11 items-center rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-verde-certo">
             <Logo variant="horizontal-negativo" height={32} />
           </Link>
         </header>
-        <span className="bg-verde-certo text-tinta order-2 w-fit rounded-botao px-3 py-1 text-[12px] font-extrabold md:order-none">{badge}</span>
-        <div className="order-3 ml-auto flex items-center gap-2 text-white md:order-none md:mt-auto md:ml-0 md:gap-3 md:px-1 md:pt-4">
+        <span className="bg-verde-certo text-tinta order-2 w-fit rounded-botao px-3 py-1 text-[12px] font-extrabold md:order-2">{badge}</span>
+        <div className="order-3 ml-auto flex items-center gap-2 text-white md:order-4 md:mt-auto md:ml-0 md:gap-3 md:px-1 md:pt-4">
           <span className="bg-verde-certo text-tinta grid size-10 shrink-0 place-items-center rounded-full text-[12px] font-extrabold">
             {initials}
           </span>

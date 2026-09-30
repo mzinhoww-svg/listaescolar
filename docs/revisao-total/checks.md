@@ -53,7 +53,7 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:25:26.240Z contra `http://1
 <!-- J6:start -->
 ## J6 · Papelaria vende
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-30T03:23:45.918Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 11.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T03:32:31.471Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 11.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|
@@ -73,32 +73,32 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-30T03:23:45.918Z contra `http://1
 <!-- J7:start -->
 ## J7 · Equipe opera
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:56:36.813Z contra `http://127.0.0.1:3003`. Rotas com falha: **15** de 22.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T03:33:09.737Z contra `http://127.0.0.1:3003`. Rotas com falha: **13** de 22.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|
 | `/admin` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/revisao` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/reivindicacoes` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/papelarias` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/denuncias` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/contestacoes` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/planos` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/ia` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/repasses` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/inadimplencia` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/campanhas` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/parceiros` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/importacoes` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/eventos` | admin | 200 | falha | beco sem saída: sem caminho de volta |
-| `/admin/auditoria` | admin | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
-| `/admin/revisao/` | admin | - | pulada | pulada: sem dado no seed (item de revisão); o seed cresce na Task 5 |
-| `/admin/listas/` | admin | - | pulada | pulada: sem dado no seed (lista); o seed cresce na Task 5 |
-| `/admin/reivindicacoes/` | admin | - | pulada | pulada: sem dado no seed (reivindicação); o seed cresce na Task 5 |
-| `/admin/papelarias/` | admin | - | pulada | pulada: sem dado no seed (id da papelaria); o seed cresce na Task 5 |
-| `/admin/denuncias/` | admin | - | pulada | pulada: sem dado no seed (denúncia); o seed cresce na Task 5 |
-| `/admin/importacoes/` | admin | - | pulada | pulada: sem dado no seed (lote de importação); o seed cresce na Task 5 |
-| `/admin/parceiros/` | admin | - | pulada | pulada: sem dado no seed (id do parceiro); o seed cresce na Task 5 |
+| `/admin/revisao` | admin | 200 | falha | alvo < 44 px (P2: 1): a.text-verde-fundo.inline-flex 34x44<br>ação escondida por tabela larga (1): a.text-verde-fundo.inline-flex "Abrir revisão de Escola " (fora da tela, x=838 de 374) |
+| `/admin/reivindicacoes` | admin | 200 | falha | beco sem saída: sem ação adiante |
+| `/admin/papelarias` | admin | 200 | falha | ação escondida por tabela larga (2): a.min-h-11.inline-flex "Recusar" (fora da tela, x=843 de 374); button.min-h-11.inline-flex "Aprovar" (fora da tela, x=937 de 374) |
+| `/admin/denuncias` | admin | 200 | falha | alvo < 44 px (P1: 1): a.text-verde-fundo.font-extrabold 32x16<br>ação escondida por tabela larga (1): a.text-verde-fundo.font-extrabold "Abrir" (fora da tela, x=668 de 374) |
+| `/admin/contestacoes` | admin | 200 | ok | - |
+| `/admin/planos` | admin | 200 | ok | - |
+| `/admin/ia` | admin | 200 | ok | - |
+| `/admin/repasses` | admin | 200 | falha | rolagem horizontal 677/390 (form.flex.flex-wrap 677 pos=static; label.flex.flex-col 677 pos=static) |
+| `/admin/inadimplencia` | admin | 200 | ok | - |
+| `/admin/campanhas` | admin | 200 | ok | - |
+| `/admin/parceiros` | admin | 200 | falha | alvo < 44 px (P1: 23): a.text-verde-fundo.font-extrabold 34x18; a.text-verde-fundo.font-extrabold 34x18; a.text-verde-fundo.font-extrabold 34x18<br>ação escondida por tabela larga (20): a.text-verde-fundo.font-extrabold "Gerir" (fora da tela, x=707 de 374); a.text-verde-fundo.font-extrabold "Gerir" (fora da tela, x=707 de 374); a.text-verde-fundo.font-extrabold "Gerir" (fora da tela, x=707 de 374) |
+| `/admin/importacoes` | admin | 200 | falha | alvo < 44 px (P1: 2): a.underline 147x19; a.text-verde-fundo.font-extrabold 87x19<br>ação escondida por tabela larga (1): a.text-verde-fundo.font-extrabold "Baixar erros" (fora da tela, x=756 de 374) |
+| `/admin/eventos` | admin | 200 | ok | - |
+| `/admin/auditoria` | admin | 200 | ok | - |
+| `/admin/revisao/00000000-0000-4000-8000-0000000029e3` | admin | 200 | ok | - |
+| `/admin/listas/b6a33b44-bafe-4ae4-ac9e-26f73e6a739b` | admin | 200 | ok | - |
+| `/admin/reivindicacoes/00000000-0000-4000-8000-000000290201` | admin | 200 | falha | alvo < 44 px (P1: 1): a.text-[14px].font-extrabold 75x21 |
+| `/admin/papelarias/00000000-0000-4000-8000-000000290301` | admin | 200 | falha | alvo < 44 px (P1: 1): a.text-verde-fundo.text-[14px] 75x21<br>ação irreversível sem confirmação (1): button.rounded-botao.relative.inline-flex.shrink-0 "Suspender" |
+| `/admin/denuncias/00000000-0000-4000-8000-000000290701` | admin | 200 | falha | alvo < 44 px (P1: 2): a.text-[14px].font-extrabold 75x21; a.text-verde-fundo.mt-2 124x21 |
+| `/admin/importacoes/00000000-0000-4000-8000-000000290801` | admin | 500 | falha | HTTP 500 (esperado 200)<br>beco sem saída: sem caminho de volta |
+| `/admin/parceiros/00000000-0000-4000-8000-000000290b02` | admin | 200 | falha | alvo < 44 px (P1: 1): a.text-[14px].font-extrabold 83x21<br>beco sem saída: sem ação adiante |
 <!-- J7:end -->
 
 <!-- J8:start -->

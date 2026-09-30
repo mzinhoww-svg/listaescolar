@@ -73,7 +73,7 @@ describe("UX-004 · carregando padrão das árvores privadas", () => {
 });
 
 describe("S29 T15 · loading.tsx da papelaria não reabre o soft-404 (D-043)", () => {
-  it("nenhum loading.tsx de app/papelaria cobre uma página com notFound()/redirect; os detalhes com id ficam sem loading acima", async () => {
+  it("nenhum loading.tsx de app/papelaria cobre uma página com notFound() (o guard `redirect` fica no layout, que o teste não trata); os detalhes com id ficam sem loading acima", async () => {
     const { existsSync, readFileSync, readdirSync, statSync } = await import("node:fs");
     const { join } = await import("node:path");
     const walk = (dir: string): string[] =>

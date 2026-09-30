@@ -37,6 +37,12 @@ describe("skip-link e landmark #conteudo nas cascas autenticadas", () => {
     expect(aside.className).toMatch(/flex-row/);
     expect(aside.className).toMatch(/md:flex-col/);
     expect(screen.getByRole("navigation", { name: "Navegação" }).className).toMatch(/mask-image/);
+    // Ordem no desktop: logo, selo, menu, conta (no fim). No celular: logo, selo, conta, menu.
+    const cls = (el: Element | null) => el?.className ?? "";
+    expect(cls(aside.querySelector("header"))).toMatch(/md:order-1/);
+    expect(cls(aside.querySelector("span.bg-verde-certo"))).toMatch(/md:order-2/);
+    expect(cls(screen.getByRole("navigation", { name: "Navegação" }))).toMatch(/md:order-3/);
+    expect(cls(screen.getByRole("button", { name: "Sair" }).closest("div.order-3"))).toMatch(/md:order-4[\s\S]*md:mt-auto/);
     const sair = screen.getByRole("button", { name: "Sair" });
     expect(sair.className).toMatch(/h-11/);
     expect(sair.className).toMatch(/rounded-botao/);

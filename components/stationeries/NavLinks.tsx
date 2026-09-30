@@ -12,13 +12,13 @@ export function NavLinks({ items }: { items: readonly NavItem[] }) {
     .sort((a, b) => b.href.length - a.href.length)
     .find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))?.href;
   return (
-    <nav aria-label="Navegação" className="order-4 flex w-full flex-row gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)] md:order-none md:w-auto md:flex-col md:[mask-image:none]">
+    <nav aria-label="Navegação" className="order-4 flex w-full flex-row gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)] md:order-3 md:w-auto md:flex-col md:[mask-image:none]">
       {items.map((i) => (
         <Link
           key={i.href}
           href={i.href}
           aria-current={i.href === active ? "page" : undefined}
-          className={`min-h-11 inline-flex items-center justify-center focus-visible:outline-verde-certo rounded-campo px-3.5 py-2.5 text-[15px] font-bold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 ${
+          className={`min-h-11 inline-flex items-center justify-center md:justify-start focus-visible:outline-verde-certo rounded-campo px-3.5 py-2.5 text-[15px] font-bold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 ${
             i.href === active ? "bg-white/10 text-white" : "text-white/70 hover:text-white"
           }`}
         >

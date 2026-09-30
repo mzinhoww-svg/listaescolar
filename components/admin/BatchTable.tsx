@@ -24,7 +24,7 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
             <th className={TH}>Arquivo e data</th>
             <th className={TH}>Status</th>
             <th className={TH}>Resultado</th>
-            <th className={TH}>Erros</th>
+            <th className={`${TH} sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]`}>Erros</th>
           </tr>
         </thead>
         <tbody>
@@ -50,7 +50,7 @@ export function BatchTable({ batches }: { batches: BatchListItem[] }) {
                   {b.unchanged_count} sem alteração · {b.duplicate_count} duplicadas · {b.rejected_count} rejeitadas
                 </span>
               </td>
-              <td className="px-5 py-4">
+              <td className="px-5 py-4 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]">
                 {b.rejected_count + b.duplicate_count + b.file_errors.length > 0 ? (
                   <a href={`/admin/importacoes/${b.id}/erros.csv`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
                     Baixar erros

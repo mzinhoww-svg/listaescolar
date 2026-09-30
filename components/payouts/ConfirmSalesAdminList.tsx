@@ -32,15 +32,15 @@ export function ConfirmSalesAdminList({ sales, schools }: { sales: readonly Conf
                 <p className="text-[14px] font-extrabold">{s.leadCode} · {s.stationeryName} · {formatBrl(s.amountCents)}</p>
                 <p className="text-texto-3 text-[13px] font-semibold">Escola informada pela papelaria: {s.schoolNameHint}</p>
                 {s.awaitingValidation ? (
-                  <p className="text-verde-fundo text-[12px] font-extrabold uppercase">Confirmada pela papelaria · aguardando validação</p>
+                  <p className="text-verde-fundo text-[13px] font-extrabold">Confirmada pela papelaria · aguardando validação</p>
                 ) : null}
               </div>
-              <form action={confirmSaleAction} className="flex flex-wrap items-end gap-2">
+              <form action={confirmSaleAction} className="flex w-full min-w-0 flex-wrap items-end gap-2">
                 <input type="hidden" name="leadId" value={s.leadId} />
                 <input type="hidden" name="back" value="/admin/repasses" />
-                <label className="flex flex-col gap-1 text-[12px] font-extrabold uppercase">
+                <label className="flex min-w-0 max-w-full flex-1 flex-col gap-1 text-[13px] font-extrabold">
                   Escola (repasse)
-                  <select name="schoolId" defaultValue="" className="bg-white h-10 rounded-campo border border-linha px-3 text-[13px] font-bold normal-case">
+                  <select name="schoolId" defaultValue="" className="bg-white h-11 w-full min-w-0 rounded-campo border border-linha px-3 text-[13px] font-bold">
                     <option value="">Sem repasse (só comissão)</option>
                     {schools.map((sc) => (
                       <option key={sc.id} value={sc.id}>{sc.name}</option>

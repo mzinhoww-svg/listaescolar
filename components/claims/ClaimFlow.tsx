@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
 import { STATUS_HINT, STATUS_LABEL } from "@/features/claims/messages";
 import type { ClaimStatusView } from "@/features/claims/types";
 import type { ClaimActionState } from "@/features/claims/form-state";
@@ -20,7 +21,7 @@ export function ClaimFlow({ inep, claim, actions }: { inep: string; claim: Claim
   return (
     <div className="flex flex-col gap-5">
       <ClaimStatusBadge status={claim.status} />
-      <h2 className="text-[24px] leading-[1.1] font-extrabold tracking-[-0.03em]">{STATUS_LABEL[claim.status]}</h2>
+      <h2 className="text-[24px] leading-[1.1] font-extrabold tracking-[-0.03em]">{claim.status === "submitted" ? "Conclua o pedido" : STATUS_LABEL[claim.status]}</h2>
       <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">{STATUS_HINT[claim.status]}</p>
       {claim.decisionReason && (claim.status === "rejected" || claim.status === "insufficient_evidence" || claim.status === "approved") ? (
         <p className="bg-campo rounded-campo px-4 py-3 text-[14px] font-semibold">Motivo: {claim.decisionReason}</p>
@@ -55,10 +56,10 @@ export function ClaimFlow({ inep, claim, actions }: { inep: string; claim: Claim
         />
       ) : null}
       {claim.status === "approved" ? (
-        <Link href="/escola" className="bg-tinta text-papel rounded-botao flex h-14 items-center justify-center text-base font-extrabold">Ir para Minhas escolas</Link>
+        <Link href="/escola" className={buttonClass("primary", "lg")}>Ir para Minhas escolas</Link>
       ) : null}
       {claim.status === "rejected" ? (
-        <Link href={`/escolas/${inep}/reivindicar?nova=1`} className="border-tinta text-tinta rounded-botao flex h-[52px] items-center justify-center border-[1.5px] text-base font-extrabold">Pedir de novo</Link>
+        <Link href={`/escolas/${inep}/reivindicar?nova=1`} className={buttonClass("outline")}>Pedir de novo</Link>
       ) : null}
     </div>
   );

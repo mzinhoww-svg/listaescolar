@@ -48,13 +48,13 @@ export function EvidenceUploader({ inep, claimId, evidence, evidenceNote, editab
         <input type="hidden" name="inep" value={inep} />
         <input type="hidden" name="claimId" value={claimId} />
         <label className="flex flex-col gap-1.5 text-[14px] font-bold">
-          Adicionar arquivo (PDF, JPG ou PNG, até 4 MB)
+          Escolha o arquivo (PDF, JPG ou PNG, até 4 MB)
           <input ref={input} type="file" name="file" accept="application/pdf,image/jpeg,image/png" disabled={full} className="bg-campo rounded-campo p-3 text-[14px] font-semibold" />
         </label>
         {message ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">{message}</p> : null}
         {state.status === "ok" && !clientError ? <p role="status" className="text-verde-fundo text-[13px] font-bold">{state.message}</p> : null}
         <button type="submit" disabled={pending || full} className="border-tinta text-tinta rounded-botao h-[52px] border-[1.5px] px-6 text-base font-extrabold disabled:opacity-50">
-          {pending ? "Enviando arquivo..." : full ? `Limite de ${MAX_FILES} arquivos` : "Adicionar arquivo"}
+          {pending ? "Enviando arquivo..." : full ? `Limite de ${MAX_FILES} arquivos` : "Anexar arquivo"}
         </button>
       </form>
 

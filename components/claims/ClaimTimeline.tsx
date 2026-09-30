@@ -16,7 +16,7 @@ export function ClaimTimeline({ events, status }: { events: ClaimEventView[]; st
             ✓
           </span>
           <div>
-            <p className="text-[15px] leading-tight font-extrabold">{STATUS_LABEL[e.toStatus]}</p>
+            <p className="text-[15px] leading-tight font-extrabold">{e.toStatus === "submitted" ? "Pedido criado" : STATUS_LABEL[e.toStatus]}</p>
             <p className="text-texto-3 text-[13px] font-semibold">
               {formatDateTime(e.createdAt)} · {ACTOR[e.actorKind]}
             </p>

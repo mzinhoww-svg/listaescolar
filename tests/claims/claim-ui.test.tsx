@@ -83,7 +83,7 @@ describe("MethodPicker e CreateClaimForm", () => {
     fireEvent.click(screen.getByLabelText(/Aceito que a ListaCerta/));
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     expect(await screen.findByText("Revise os campos destacados.")).toBeInTheDocument();
-    expect(screen.getByText(/claim-v1/)).toBeInTheDocument();
+    expect(screen.queryByText(/claim-v1/)).toBeNull(); // o id interno do texto não aparece (UX-100)
   });
 });
 
@@ -106,7 +106,7 @@ describe("EvidenceUploader", () => {
   it("recusa arquivo vazio no navegador sem chamar o servidor", async () => {
     const upload = vi.fn(async (): Promise<ClaimActionState> => ok("x"));
     render(<EvidenceUploader {...props} upload={upload} evidence={[]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Adicionar arquivo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Anexar arquivo" }));
     expect(await screen.findByText("Escolha um arquivo PDF, PNG ou JPEG.")).toBeInTheDocument();
     expect(upload).not.toHaveBeenCalled();
   });
@@ -231,7 +231,7 @@ describe("MySchoolsTable (Escola03)", () => {
     );
     const table = within(screen.getByRole("table"));
     expect(table.getByText("Verificada")).toBeInTheDocument();
-    expect(table.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(table.getByRole("link", { name: "Ver a lista oficial" })).toHaveAttribute("href", "/escolas/99001004");
     expect(table.getByRole("link", { name: "Ver o status do pedido" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
     expect(table.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
     expect(table.getByRole("link", { name: "Ver o motivo e pedir de novo" })).toBeInTheDocument();
@@ -240,7 +240,7 @@ describe("MySchoolsTable (Escola03)", () => {
     const cards = within(screen.getByRole("list", { name: "Minhas escolas" }));
     expect(cards.getAllByRole("listitem")).toHaveLength(3);
     expect(cards.getAllByText(/Próximo passo:/)).toHaveLength(3);
-    expect(cards.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(cards.getByRole("link", { name: "Ver a lista oficial" })).toHaveAttribute("href", "/escolas/99001004");
     expect(cards.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
   });
 });

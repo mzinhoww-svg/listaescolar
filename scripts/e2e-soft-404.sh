@@ -90,6 +90,29 @@ if [ -n "${PAPELARIA_COOKIE:-}" ]; then
   checkc "$PAPELARIA_COOKIE" 200 "/papelaria/desempenho" "papelaria: desempenho"
   checkc "$PAPELARIA_COOKIE" 200 "/papelaria/catalogo" "papelaria: catálogo"
 fi
+# S29 T16: `app/escola/(painel)/loading.tsx` cobre só o painel e o envio; `app/escola/envios/[submissionId]` chama `notFound()` e fica
+# FORA do grupo (um `loading.tsx` acima dela daria 200 para envio inexistente, D-043). `ESCOLA_COOKIE` = Cookie de escola@listacerta.test.
+check 404 "/escolas/abc/reivindicar" "pedido de administração com INEP malformado"
+check 404 "/escolas/abc/reivindicar/confirmar?token=x" "confirmação com INEP malformado"
+check 404 "/escolas/00000000/reivindicar/confirmar" "confirmação sem token de escola inexistente"
+check 307 "/escola/listas/nova" "anônimo em enviar lista da escola"
+check 307 "/escola/envios/abc" "anônimo em andamento do envio da escola com id inválido"
+check 307 "/escola/envios/$NOID" "anônimo em andamento do envio da escola"
+if [ -n "${FAMILIA_COOKIE:-}" ]; then
+  checkc "$FAMILIA_COOKIE" 307 "/escola" "família em /escola: vai ao 403 (papel)"
+  checkc "$FAMILIA_COOKIE" 307 "/escola/envios/$NOID" "família em andamento da escola: vai ao 403 (papel)"
+  checkc "$FAMILIA_COOKIE" 404 "/escolas/00000000/reivindicar" "família logada: pedido de escola inexistente"
+  checkc "$FAMILIA_COOKIE" 404 "/escolas/abc/reivindicar" "família logada: INEP malformado"
+  checkc "$FAMILIA_COOKIE" 404 "/escolas/00000000/reivindicar/confirmar?token=x" "família logada: confirmação de escola inexistente"
+fi
+if [ -n "${ESCOLA_COOKIE:-}" ]; then
+  checkc "$ESCOLA_COOKIE" 200 "/escola" "escola: painel (loading.tsx do grupo painel)"
+  checkc "$ESCOLA_COOKIE" 200 "/escola/listas/nova" "escola: enviar lista"
+  checkc "$ESCOLA_COOKIE" 404 "/escola/envios/$NOID" "escola: envio inexistente"
+  checkc "$ESCOLA_COOKIE" 404 "/escola/envios/abc" "escola: envio com id malformado"
+  checkc "$ESCOLA_COOKIE" 404 "/escolas/00000000/reivindicar" "escola: pedido de escola inexistente"
+  checkc "$ESCOLA_COOKIE" 404 "/escolas/abc/reivindicar" "escola: INEP malformado no pedido"
+fi
 check 404 "/rota-inexistente-s29" "404 global"
 check 200 "/" "home"
 exit $((fail > 0))

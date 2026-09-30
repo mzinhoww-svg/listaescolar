@@ -125,7 +125,10 @@ describe("eventos do catálogo por gatilho", () => {
       const byStatus = Object.fromEntries(n.map((x) => [x.params.status_code, x.recipient_id]));
       expect(n.filter((x) => x.params.status_code === "rejected").map((x) => x.recipient_id)).toEqual([IDS.school_member]);
       expect(byStatus).toMatchObject({ approved: IDS.parent, insufficient_evidence: IDS.parent, token_expired: IDS.school_member });
-      expect(n.every((x) => x.link_path.startsWith("/escolas/") && !JSON.stringify(x).includes("Maria"))).toBe(true);
+      // S29 UX-089: aprovado leva ao painel da escola (push e e-mail abrem o link gravado); os demais, à página do pedido.
+      expect(n.filter((x) => x.params.status_code === "approved").every((x) => x.link_path === "/escola")).toBe(true);
+      expect(n.filter((x) => x.params.status_code !== "approved").every((x) => x.link_path.startsWith("/escolas/") && x.link_path.endsWith("/reivindicar"))).toBe(true);
+      expect(n.every((x) => !JSON.stringify(x).includes("Maria"))).toBe(true);
       void addEvidence;
     });
   });

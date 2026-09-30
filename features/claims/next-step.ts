@@ -21,7 +21,7 @@ export function nextStep(status: ClaimStatus, hasList: boolean): NextStep {
       return { title: "Pedido recusado", body: "Veja o motivo informado pela equipe. Se puder corrigir, faça um novo pedido.", cta: "Ver o motivo e pedir de novo" };
     case "approved":
       return hasList
-        ? { title: "Sua lista está publicada", body: "Compartilhe a página com as famílias e revise a lista quando a escola mudar o material.", cta: "Ver a lista publicada" }
+        ? { title: "Sua lista oficial está no ar", body: "Divulgue o link da lista para as famílias e envie a lista de outra série ou de um novo ano quando precisar.", cta: "Ver a lista oficial" }
         : { title: "Envie a lista da escola", body: "A escola já está sob a sua administração. Envie a lista para as famílias encontrarem.", cta: "Enviar a lista" };
   }
 }

@@ -40,14 +40,17 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:18:35.781Z contra `http://1
 <!-- J5:start -->
 ## J5 · Escola assume e publica
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:25:26.240Z contra `http://127.0.0.1:3003`. Rotas com falha: **4** de 4.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T05:21:42.671Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 7.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|
-| `/escolas/99029001/reivindicar` | familia | 200 | falha | beco sem saída: sem ação adiante<br>rolagem horizontal 416/390 (div.flex.flex-col 416 pos=static; ol.flex.items-center 392 pos=static)<br>alvo < 44 px (2): a.block.w-[142px] 142x32; a.text-[14px].font-extrabold 62x21 |
-| `/escolas/99029001/reivindicar/confirmar` | familia | 200 | falha | alvo < 44 px (3): a.block.w-[142px] 142x32; a.text-[14px].font-extrabold 62x21; a.text-verde-fundo.text-[14px] 294x21 |
-| `/escola` | escola | 200 | falha | beco sem saída: sem caminho de volta |
-| `/escola/listas/nova` | escola | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.text-tinta.font-bold.underline "escolha no computador" |
+| `/escolas/99029002/reivindicar` | familia | 200 | ok | - |
+| `/escolas/99029001/reivindicar` | familia | 200 | ok | - |
+| `/escolas/99029012/reivindicar` | familia | 200 | ok | - |
+| `/escolas/99029002/reivindicar/confirmar` | familia | 200 | ok | - |
+| `/escolas/99029002/reivindicar/confirmar?token=S29S29S29S29S29S29S29S29S29S29S29S29S29S29S29` | familia | 200 | ok | - |
+| `/escola` | escola | 200 | ok | - |
+| `/escola/listas/nova` | escola | 200 | ok | - |
 <!-- J5:end -->
 
 <!-- J6:start -->

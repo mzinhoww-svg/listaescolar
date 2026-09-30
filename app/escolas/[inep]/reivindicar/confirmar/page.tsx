@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { buttonClass } from "@/components/ui/Button";
 import { ClaimLayout } from "@/components/claims/ClaimLayout";
 import { ConfirmEmailPanel } from "@/components/claims/ConfirmEmailPanel";
 import { SchoolSummaryCard } from "@/components/claims/SchoolSummaryCard";
@@ -30,19 +31,22 @@ export default async function ConfirmPage({ params, searchParams }: Props) {
   const crumb = `Escola / ${context.school.name} / Confirmar e-mail`;
   const blocked = actor.role !== "parent" && actor.role !== "school_member";
   return (
-    <ClaimLayout inep={inep} title="Confirmar e-mail da escola" crumb={crumb}>
+    <ClaimLayout inep={inep} title="Confirmar e-mail da escola" crumb={crumb} exit="back">
       <SchoolSummaryCard school={context.school} />
       {blocked ? (
         <p role="alert" className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-3 text-[14px] font-bold">{ROLE_BLOCK_MESSAGE}</p>
       ) : !token.success ? (
-        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Link inválido. Peça um novo na página do pedido.</p>
+        <>
+          <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Link inválido. Peça um novo na página do pedido.</p>
+          <Link href={`/escolas/${inep}/reivindicar`} className={buttonClass("primary")}>Pedir um novo link</Link>
+        </>
       ) : (
         <>
           <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">Confirme que você recebeu este link no e-mail da escola registrado no INEP. Use a mesma conta que fez o pedido.</p>
           <ConfirmEmailPanel inep={inep} token={token.data} confirm={confirmTokenAction} />
         </>
       )}
-      <Link href={`/escolas/${inep}/reivindicar`} className="text-verde-fundo text-[14px] font-extrabold">Ver status do pedido</Link>
+      {token.success && !blocked ? <Link href={`/escolas/${inep}/reivindicar`} className={buttonClass("text")}>Ver status do pedido</Link> : null}
     </ClaimLayout>
   );
 }

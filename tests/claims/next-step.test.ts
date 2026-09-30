@@ -13,7 +13,7 @@ describe("nextStep", () => {
     ["insufficient_evidence", false, "Envie mais evidências", "Enviar evidências"],
     ["rejected", false, "Pedido recusado", "Ver o motivo e pedir de novo"],
     ["approved", false, "Envie a lista da escola", "Enviar a lista"],
-    ["approved", true, "Sua lista está publicada", "Ver a lista publicada"],
+    ["approved", true, "Sua lista oficial está no ar", "Ver a lista oficial"],
   ];
 
   it.each(table)("%s (lista: %s)", (status, hasList, title, cta) => {

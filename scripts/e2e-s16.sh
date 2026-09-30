@@ -93,8 +93,8 @@ login parent parent@listacerta.test "/admin/denuncias"
 expect_text parent "Você não tem acesso a esta página" "parent recebe 403 ao tentar abrir /admin/denuncias"
 
 echo "== 4) denúncia pública (parent, só autenticado, sobre a lista publicada)"
-ab parent open "$BASE/escolas/$INEP?serie=ef-3&ano=2027" >/dev/null
-expect_text parent "Encontrou um problema" "bloco de denúncia aparece na página da escola"
+ab parent open "$BASE/escolas/$INEP/ef-3?ano=2027" >/dev/null
+expect_text parent "Encontrou um problema" "bloco de denúncia aparece na página da lista"
 # Abrir via eval (equivalente a clicar no <summary>, que só alterna o atributo `open`): determinístico e evita
 # depender de o <summary> estar dentro do viewport.
 ab parent eval "document.querySelector('#denunciar').open = true; 'ok'" >/dev/null

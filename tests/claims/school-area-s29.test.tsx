@@ -45,3 +45,12 @@ describe("UX-090/093 · casca da escola", () => {
     expect(screen.getByRole("link", { name: /Voltar para Minhas escolas/ })).toHaveAttribute("href", "/escola");
   });
 });
+
+describe("casca da escola: a logo leva ao site", () => {
+  it("o cabeçalho da casca tem o link da logo para a página inicial (saída do painel)", () => {
+    render(<SchoolPanelShell email="e@x.com" title="T" crumb="Painel">{null}</SchoolPanelShell>);
+    const logo = screen.getByRole("link", { name: "ListaCerta, início" });
+    expect(logo).toHaveAttribute("href", "/");
+    expect(logo.closest("header")).not.toBeNull();
+  });
+});

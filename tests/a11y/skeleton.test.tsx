@@ -42,6 +42,12 @@ describe("UX-004 · carregando padrão das árvores privadas", () => {
     // Um loading.tsx acima de uma página com `requireAccess`/`notFound()` a põe em streaming e o status vira 200 (soft-404).
     for (const d of ["admin", "conta", "cotacao", "enviar-lista", "carrinho"]) expect(existsSync(`app/${d}/loading.tsx`), d).toBe(false);
     expect(existsSync("app/loading.tsx")).toBe(false);
+    // S29 T16: `/escola/envios/[submissionId]` chama `notFound()`; o carregando do painel vive no grupo `(painel)`, que não a cobre (D-043).
+    expect(existsSync("app/escola/loading.tsx")).toBe(false);
+    expect(existsSync("app/escola/(painel)/loading.tsx")).toBe(true);
+    expect(existsSync("app/escola/envios/[submissionId]/page.tsx")).toBe(true);
+    expect(existsSync("app/escola/envios/loading.tsx")).toBe(false);
+    expect(existsSync("app/escola/envios/[submissionId]/loading.tsx")).toBe(false);
     // S29 T12: `/carrinho/[id]` chama `notFound()`; o `loading.tsx` que ficou lá dava 200 para id inexistente (D-043).
     for (const f of ["app/carrinho/[id]/loading.tsx", "app/carrinho/novo/loading.tsx", "app/cotacao/[code]/loading.tsx", "app/cotacao/nova/loading.tsx"]) {
       expect(existsSync(f), f).toBe(false);

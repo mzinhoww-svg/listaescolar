@@ -75,6 +75,8 @@ describe("/escolas/[inep]/reivindicar/confirmar", () => {
     getSchoolClaimContext.mockResolvedValue(context);
     render(await ConfirmPage({ params: Promise.resolve({ inep: "99001003" }), searchParams: sp({ token: "curto" }) }));
     expect(screen.getByText(/Link inválido/)).toBeInTheDocument();
+    // UX-096: o link inválido tem saída (novo link na página do pedido), não só um aviso.
+    expect(screen.getByRole("link", { name: "Pedir um novo link" })).toHaveAttribute("href", "/escolas/99001003/reivindicar");
   });
 });
 
@@ -85,6 +87,16 @@ describe("/escolas/[inep]/reivindicar", () => {
     await expect(ClaimPage(p())).rejects.toThrow(`REDIRECT:/entrar?next=${encodeURIComponent("/escolas/99001003/reivindicar")}`);
     getSchoolClaimContext.mockResolvedValue(null);
     await expect(ClaimPage(p())).rejects.toThrow("NOT_FOUND");
+  });
+  it("escola que já tem administrador (UX-095): aviso com caminho adiante, sem o quadro que promete o contrário", async () => {
+    getSchoolClaimContext.mockResolvedValue({ ...context, blockedReason: "Esta escola já tem administrador." });
+    getMyClaimForSchool.mockResolvedValue(null);
+    render(await ClaimPage(p()));
+    expect(screen.getByText("Esta escola já tem administrador.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Voltar ao perfil da escola" })).toHaveAttribute("href", "/escolas/99001003");
+    expect(screen.getByRole("link", { name: "Buscar outra escola" })).toHaveAttribute("href", "/escolas");
+    expect(screen.queryByText(/Por que administrar/)).toBeNull();
+    expect(screen.queryByRole("list", { name: "Etapas do pedido" })).toBeNull();
   });
   it("reivindicação alheia (consulta devolve null) mostra o formulário, sem dado de terceiros", async () => {
     getMyClaimForSchool.mockResolvedValue(null);

@@ -8,19 +8,19 @@ const HINT: Record<ClaimMethod, string> = {
   documents: "Envie documentos que mostrem seu vínculo com a escola. A equipe ListaCerta revisa.",
 };
 
-/** As três opções de método. Indisponível vem desabilitada com o motivo (sem revelar o contato). */
+/** As três opções de método: as disponíveis primeiro ("Documentos" na frente); indisponível vem desabilitada, depois, com o motivo (sem revelar o contato). */
 export function MethodPicker({ methods, error }: { methods: SchoolClaimContext["methods"]; error?: string }) {
   return (
     <fieldset className="flex flex-col gap-2.5">
       <legend className="mb-1 text-[15px] font-extrabold">Como confirmar seu vínculo</legend>
-      {CLAIM_METHODS.map((m) => {
+      {[...CLAIM_METHODS].sort((x, y) => Number(methods[y].available) - Number(methods[x].available) || Number(y === "documents") - Number(x === "documents")).map((m) => {
         const a = methods[m];
         return (
           <label
             key={m}
-            className={`rounded-campo flex items-start gap-3 border-[1.5px] p-3.5 ${a.available ? "border-linha bg-white" : "border-linha bg-campo text-texto-3"}`}
+            className={`rounded-campo flex items-start gap-3 border-[1.5px] p-3.5 ${a.available ? "border-tinta bg-white" : "border-linha bg-campo text-texto-3"}`}
           >
-            <input type="radio" name="method" value={m} required disabled={!a.available} defaultChecked={m === "documents"} className="accent-tinta mt-1 size-4" />
+            <input type="radio" name="method" value={m} required disabled={!a.available} defaultChecked={m === "documents"} className="accent-tinta border-texto-3 focus-visible:outline-verde-fundo mt-0.5 size-6 shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2" />
             <span className="flex flex-col gap-0.5">
               <span className="text-[15px] font-extrabold">{METHOD_LABEL[m]}</span>
               <span className="text-[13px] font-medium">{a.available ? HINT[m] : `Indisponível: ${a.reason}`}</span>

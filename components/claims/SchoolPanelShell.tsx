@@ -32,8 +32,10 @@ export function SchoolPanelShell({ email, title, crumb, actions, active = "escol
     <div className="flex min-h-dvh flex-1 flex-col lg:flex-row">
       <SkipLink />
       <aside className="bg-tinta text-papel flex shrink-0 flex-wrap items-center gap-3 px-[18px] py-4 lg:w-[248px] lg:flex-col lg:items-stretch lg:py-6">
-        <Link href="/escola" aria-label="ListaCerta, painel da escola" className="focus-visible:outline-verde-certo inline-flex min-h-11 items-center focus-visible:outline-2 focus-visible:outline-offset-2"><Logo variant="horizontal-negativo" height={34} /></Link>
-        <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[12px] font-extrabold">Escola</span>
+        <header className="contents">
+          <Link href="/" aria-label="ListaCerta, início" className="focus-visible:outline-verde-certo flex min-h-11 w-[150px] shrink-0 items-center focus-visible:outline-2 focus-visible:outline-offset-2"><Logo variant="horizontal-negativo" height={34} /></Link>
+          <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[12px] font-extrabold">Escola</span>
+        </header>
         <SchoolPanelNav items={NAV.map((n) => ({ label: n.label, href: n.href, current: n.key === active }))} />
         <p className="mt-auto hidden items-center gap-3 text-xs font-semibold lg:flex">
           <span className="bg-verde-certo text-tinta grid size-10 place-items-center rounded-full font-extrabold">{(email ?? "?").slice(0, 2).toUpperCase()}</span>

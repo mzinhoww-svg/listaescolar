@@ -119,3 +119,26 @@ describe("S29 T15 · loading.tsx da papelaria não reabre o soft-404 (D-043)", (
     }
   });
 });
+
+// S29 T18 (UX-136, D-043): o carregando do portal B2B é esqueleto, sem hex avulso, e a árvore não tem `notFound()` nem rota dinâmica.
+describe("UX-136 · carregando do portal B2B", () => {
+  it("app/b2b/loading.tsx usa Skeleton (sem spinner) e a árvore /b2b não tem notFound() nem [param]", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const loading = readFileSync("app/b2b/loading.tsx", "utf8");
+    expect(loading).toContain("@/components/ui/Skeleton");
+    expect(loading).not.toContain("animate-spin");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => {
+        const p = join(dir, n);
+        return statSync(p).isDirectory() ? [p, ...walk(p)] : [p];
+      });
+    const files = walk("app/b2b");
+    expect(files.filter((f) => /[[]/.test(f))).toEqual([]);
+    for (const f of files.filter((x) => x.endsWith(".tsx"))) {
+      const src = readFileSync(f, "utf8");
+      expect(src, f).not.toMatch(/notFound\(/);
+      expect(src, f).not.toMatch(/divide-\[#|bg-\[#|text-\[#/);
+    }
+  });
+});

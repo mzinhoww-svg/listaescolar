@@ -39,7 +39,7 @@ export default async function Page() {
                     <th className="py-2">Valor</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#EFEBE2]">
+                <tbody className="divide-y divide-linha">
                   {s.lineItems.map((li, i) => (
                     <tr key={i}>
                       <td className="py-2">{li.label}</td>

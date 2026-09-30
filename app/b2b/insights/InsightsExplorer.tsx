@@ -68,7 +68,7 @@ export function InsightsExplorer() {
                 <th className="py-2">Escolas distintas</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#EFEBE2]">
+            <tbody className="divide-y divide-linha">
               {result.cities.map((c) => (
                 <tr key={c.id}>
                   <td className="py-2">{c.label}</td>

@@ -29,7 +29,7 @@ export const JOURNEYS: Record<string, Journey> = {
     rotas: [
       r("/escolas/{inepLivre}/reivindicar", "familia"), r("/escolas/{inep}/reivindicar", "familia"), r("/escolas/{inepVerificando}/reivindicar", "familia"),
       r("/escolas/{inepLivre}/reivindicar/confirmar", "familia"), r("/escolas/{inepLivre}/reivindicar/confirmar?token={tokenFalso}", "familia"),
-      r("/escola", "escola"), r("/escola/listas/nova", "escola"),
+      r("/escola", "escola"), r("/escola/listas/nova", "escola"), r("/escola/envios/{submissionId}", "escola"),
     ],
   },
   J6: {

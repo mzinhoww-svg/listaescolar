@@ -16,7 +16,12 @@ export const metadata = { title: "Campanhas · Portal B2B · ListaCerta" };
 
 export default async function Page() {
   const actor = await getSessionActor();
-  if (!actor) return <p className="text-texto-2 text-[15px] font-bold">Não foi possível carregar seu parceiro agora.</p>;
+  if (!actor)
+    return (
+      <p className="text-texto-2 text-[15px] font-bold">
+        Não foi possível carregar seu parceiro agora.
+      </p>
+    );
   const header = await getMyPartnerHeader(actor);
   if (header && header.partnerType !== "brand") {
     return (
@@ -37,11 +42,14 @@ export default async function Page() {
         </Link>
       </div>
       <p className="text-texto-2 max-w-2xl text-[14px] font-semibold">
-        Toda campanha aparece para as famílias como <strong>&ldquo;Sugestão patrocinada&rdquo;</strong>, separada da lista oficial, e nunca substitui um item cuja marca a escola exige. Passa por
-        aprovação do admin antes de servir.
+        Toda campanha aparece para as famílias como{" "}
+        <strong>&ldquo;Sugestão patrocinada&rdquo;</strong>, separada da lista oficial, e nunca
+        substitui um item cuja marca a escola exige. Passa por aprovação do admin antes de servir.
       </p>
       {campaigns.length === 0 ? (
-        <p className="text-texto-2 rounded-[20px] bg-white p-6 text-[15px] font-bold">Nenhuma campanha ainda.</p>
+        <p className="text-texto-2 rounded-[20px] bg-white p-6 text-[15px] font-bold">
+          Nenhuma campanha ainda.
+        </p>
       ) : (
         <CampaignsTable campaigns={campaigns} />
       )}

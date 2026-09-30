@@ -10,6 +10,7 @@ export function RevokeButton({ keyId }: { keyId: string }) {
   return (
     <ConfirmDialog
       triggerLabel="Revogar"
+      triggerStyle="button"
       title="Revogar chave"
       body="A chave para de funcionar imediatamente. Esta ação não pode ser desfeita."
       confirmLabel="Revogar agora"

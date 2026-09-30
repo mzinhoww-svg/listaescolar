@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { rotateKeyAction } from "@/features/b2b/actions";
 import type { GeneratedApiKey } from "@/features/b2b/keys/format";
 import { KEY_ROTATION_GRACE_DAYS } from "@/features/b2b/limits";
@@ -38,16 +39,26 @@ export function RotateDialog({ keyId }: { keyId: string }) {
 
   return (
     <>
-      <button type="button" onClick={() => ref.current?.showModal()} className="text-verde-fundo text-[13px] font-extrabold underline">
+      <Button variant="outline" onClick={() => ref.current?.showModal()}>
         Rotacionar
-      </button>
-      <dialog ref={ref} onClose={close} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
+      </Button>
+      <dialog
+        ref={ref}
+        onClose={close}
+        className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40"
+      >
         <div className="flex w-[min(92vw,440px)] flex-col gap-4 p-6">
           {result ? (
             <>
-              <h2 className="text-[18px] font-extrabold">Copie agora: esta chave não será mostrada de novo.</h2>
-              <code className="bg-tinta text-papel rounded-campo block overflow-x-auto p-3 text-[13px] font-bold">{result.plaintext}</code>
-              <p className="text-texto-3 text-[12px] font-semibold">A chave anterior continua válida por {graceDays} dia(s).</p>
+              <h2 className="text-[18px] font-extrabold">
+                Copie agora: esta chave não será mostrada de novo.
+              </h2>
+              <code className="bg-tinta text-papel rounded-campo block overflow-x-auto p-3 text-[13px] font-bold">
+                {result.plaintext}
+              </code>
+              <p className="text-texto-3 text-[12px] font-semibold">
+                A chave anterior continua válida por {graceDays} dia(s).
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -59,7 +70,11 @@ export function RotateDialog({ keyId }: { keyId: string }) {
                 >
                   {copied ? "Copiado" : "Copiar"}
                 </button>
-                <button type="button" onClick={close} className="bg-tinta text-papel rounded-botao flex h-11 flex-1 items-center justify-center text-[14px] font-extrabold">
+                <button
+                  type="button"
+                  onClick={close}
+                  className="bg-tinta text-papel rounded-botao flex h-11 flex-1 items-center justify-center text-[14px] font-extrabold"
+                >
                   Já copiei
                 </button>
               </div>
@@ -67,24 +82,51 @@ export function RotateDialog({ keyId }: { keyId: string }) {
           ) : (
             <>
               <h2 className="text-[18px] font-extrabold">Rotacionar chave</h2>
-              <p className="text-texto-2 text-[14px] font-semibold">Rotação sem downtime: a chave anterior vale pelos dias de carência escolhidos.</p>
-              {error ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">{error}</p> : null}
+              <p className="text-texto-2 text-[14px] font-semibold">
+                Rotação sem downtime: a chave anterior vale pelos dias de carência escolhidos.
+              </p>
+              {error ? (
+                <p
+                  role="alert"
+                  className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold"
+                >
+                  {error}
+                </p>
+              ) : null}
               <fieldset className="flex flex-col gap-2">
                 <legend className="text-[13px] font-bold">Carência da chave anterior</legend>
                 <div className="flex gap-2">
                   {GRACE_OPTIONS.map((d) => (
-                    <label key={d} className={`rounded-botao border-tinta flex-1 border-[1.5px] px-3 py-2 text-center text-[13px] font-bold ${graceDays === d ? "bg-verde-certo" : ""}`}>
-                      <input type="radio" name="graceDays" className="sr-only" checked={graceDays === d} onChange={() => setGraceDays(d)} />
+                    <label
+                      key={d}
+                      className={`rounded-botao border-tinta flex-1 border-[1.5px] px-3 py-2 text-center text-[13px] font-bold ${graceDays === d ? "bg-verde-certo" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="graceDays"
+                        className="sr-only"
+                        checked={graceDays === d}
+                        onChange={() => setGraceDays(d)}
+                      />
                       {d} dia{d > 1 ? "s" : ""}
                     </label>
                   ))}
                 </div>
               </fieldset>
               <div className="flex gap-2">
-                <button type="button" onClick={close} className="border-tinta rounded-botao flex h-11 flex-1 items-center justify-center border-[1.5px] text-[14px] font-extrabold">
+                <button
+                  type="button"
+                  onClick={close}
+                  className="border-tinta rounded-botao flex h-11 flex-1 items-center justify-center border-[1.5px] text-[14px] font-extrabold"
+                >
                   Cancelar
                 </button>
-                <button type="button" onClick={submit} disabled={pending} className="bg-tinta text-papel rounded-botao flex h-11 flex-1 items-center justify-center text-[14px] font-extrabold disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={pending}
+                  className="bg-tinta text-papel rounded-botao flex h-11 flex-1 items-center justify-center text-[14px] font-extrabold disabled:opacity-50"
+                >
                   {pending ? "Rotacionando..." : "Confirmar rotação"}
                 </button>
               </div>

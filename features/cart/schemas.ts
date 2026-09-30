@@ -14,6 +14,8 @@ export const cartItemInputSchema = z
 export const createCartSchema = z.object({
   listId: z.uuid(),
   strategy: z.enum(CART_STRATEGIES).default("cheapest"),
+  /** Chave por renderização do formulário: reenvio devolve o mesmo carrinho. */
+  idempotencyKey: z.uuid(),
 });
 
 export const redirectParamsSchema = z.object({

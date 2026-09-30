@@ -190,8 +190,9 @@ describe("money, item-key e schemas", () => {
     expect(cartItemInputSchema.safeParse({ name: "", quantity: 1 }).success).toBe(false);
     expect(cartItemInputSchema.safeParse({ name: "x", quantity: 0 }).success).toBe(false);
     expect(cartItemInputSchema.safeParse({ name: "x", quantity: 1.5 }).success).toBe(false);
-    expect(createCartSchema.parse({ listId: DEMO_LIST_ID }).strategy).toBe("cheapest");
+    expect(createCartSchema.parse({ listId: DEMO_LIST_ID, idempotencyKey: DEMO_LIST_ID }).strategy).toBe("cheapest");
     expect(createCartSchema.safeParse({ listId: "nao-uuid" }).success).toBe(false);
+    expect(createCartSchema.safeParse({ listId: DEMO_LIST_ID }).success).toBe(false);
     expect(
       redirectParamsSchema.safeParse({ cartId: DEMO_LIST_ID, retailer: "../etc" }).success,
     ).toBe(false);

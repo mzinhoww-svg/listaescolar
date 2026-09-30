@@ -44,7 +44,31 @@ export type NewCartInput = {
   /** Origem de `listId` (S11): official | parent_copy | demo. Omitido = default do banco (`demo`). */
   listKind?: ListKind;
   items: { listItemId?: string | null; name: string; quantity: number }[];
+  /** Uma chave por renderização do formulário: o mesmo (dono, chave) devolve o mesmo carrinho (`createCartOnce`). */
+  idempotencyKey?: string;
 };
+
+/**
+ * Criação idempotente por (dono, `idempotencyKey`): a segunda chamada (mesmo dono e chave, mesmo simultânea) não cria outro
+ * carrinho e devolve o do primeiro com `created: false`; quem recebe `false` não repete o que só a criação faz (itens, retrato).
+ */
+export async function createCartOnce(client: SupabaseClient, input: NewCartInput & { idempotencyKey: string }): Promise<{ cartId: string; created: boolean }> {
+  try {
+    return { cartId: await createCart(client, input), created: true };
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } }).code ?? (error as { cause?: { code?: string } }).cause?.code;
+    const dup = code === "23505" || /carts_owner_idempotency_key_uidx/.test(error instanceof Error ? error.message : "");
+    if (!dup) throw error;
+    const { data, error: readError } = await client
+      .from("carts")
+      .select("id")
+      .eq("owner_id", input.ownerId)
+      .eq("idempotency_key", input.idempotencyKey)
+      .single();
+    if (readError) fail("ler carrinho já criado", readError);
+    return { cartId: z.uuid().parse(data.id), created: false };
+  }
+}
 
 export async function createCart(client: SupabaseClient, input: NewCartInput): Promise<string> {
   const { data, error } = await client
@@ -55,6 +79,7 @@ export async function createCart(client: SupabaseClient, input: NewCartInput): P
       strategy: input.strategy ?? "cheapest",
       is_demo: input.isDemo ?? false,
       ...(input.listKind ? { list_kind: input.listKind } : {}),
+      ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
     })
     .select("id")
     .single();

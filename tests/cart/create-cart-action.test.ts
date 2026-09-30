@@ -11,7 +11,7 @@ vi.mock("@/features/auth/queries", () => ({ getCurrentUser: () => getCurrentUser
 const getSessionActor = vi.fn();
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: () => getSessionActor() }));
 const createCart = vi.fn();
-vi.mock("@/features/cart/repository", () => ({ createCart: (...a: unknown[]) => createCart(...a) }));
+vi.mock("@/features/cart/repository", () => ({ createCartOnce: (...a: unknown[]) => createCart(...a) }));
 const getList = vi.fn();
 const snapshotCartOptions = vi.fn();
 vi.mock("@/features/cart/service", () => ({
@@ -27,9 +27,11 @@ const ME = "22222222-2222-4222-8222-222222222222";
 const LIST = "66666666-6666-4666-8666-666666666666";
 const CART = "55555555-5555-4555-8555-555555555555";
 const ACTOR = { userId: ME, role: "parent" };
-const form = (listId: string = LIST) => {
+const KEY = "88888888-8888-4888-8888-888888888888";
+const form = (listId: string = LIST, key: string = KEY) => {
   const fd = new FormData();
   fd.set("listId", listId);
+  fd.set("idempotencyKey", key);
   return fd;
 };
 const items = [
@@ -41,7 +43,7 @@ beforeEach(() => {
   for (const m of [getCurrentUser, getSessionActor, createCart, getList, snapshotCartOptions]) m.mockReset();
   getCurrentUser.mockResolvedValue({ id: ME });
   getSessionActor.mockResolvedValue(ACTOR);
-  createCart.mockResolvedValue(CART);
+  createCart.mockResolvedValue({ cartId: CART, created: true });
 });
 
 describe("createCartAction (S11)", () => {
@@ -107,5 +109,55 @@ describe("createCartAction com destino=cotacao (UX-013)", () => {
     const fd = form();
     fd.set("destino", "https://exemplo.com");
     await expect(createCartAction(fd)).rejects.toThrow(`REDIRECT:/carrinho/${CART}`);
+  });
+});
+
+describe("createCartAction: idempotência por chave (S29 T12)", () => {
+  // Repositório em memória com a mesma regra do banco: (dono, chave) devolve o mesmo carrinho.
+  function onceStore() {
+    const byKey = new Map<string, string>();
+    createCart.mockImplementation(async (_c: unknown, input: { ownerId: string; idempotencyKey: string }) => {
+      await Promise.resolve();
+      const k = `${input.ownerId}:${input.idempotencyKey}`;
+      if (byKey.has(k)) return { cartId: byKey.get(k), created: false };
+      byKey.set(k, `cart-${byKey.size + 1}`);
+      return { cartId: byKey.get(k), created: true };
+    });
+    return byKey;
+  }
+  const twice = (mk: () => FormData) => Promise.all([createCartAction(mk()).catch((e: Error) => e.message), createCartAction(mk()).catch((e: Error) => e.message)]);
+
+  it("dois envios simultâneos com a mesma chave: um carrinho, um retrato, mesmo destino", async () => {
+    getList.mockResolvedValue({ kind: "official", isDemo: false, items });
+    const store = onceStore();
+    const [a, b] = await twice(() => form());
+    expect(store.size).toBe(1);
+    expect(a).toBe(b);
+    expect(a).toBe("REDIRECT:/carrinho/cart-1");
+    expect(snapshotCartOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("com destino=cotacao os dois envios vão ao mesmo carrinho", async () => {
+    getList.mockResolvedValue({ kind: "official", isDemo: false, items });
+    onceStore();
+    const [a, b] = await twice(() => {
+      const fd = form();
+      fd.set("destino", "cotacao");
+      return fd;
+    });
+    expect(a).toBe(b);
+    expect(a).toBe("REDIRECT:/cotacao/nova?carrinho=cart-1");
+  });
+
+  it("chaves diferentes criam carrinhos diferentes; chave ausente ou inválida é recusada", async () => {
+    getList.mockResolvedValue({ kind: "official", isDemo: false, items });
+    const store = onceStore();
+    await createCartAction(form(LIST, KEY)).catch(() => undefined);
+    await createCartAction(form(LIST, "99999999-9999-4999-8999-999999999999")).catch(() => undefined);
+    expect(store.size).toBe(2);
+    const fd = form();
+    fd.delete("idempotencyKey");
+    await expect(createCartAction(fd)).rejects.toThrow("REDIRECT:/carrinho/novo?erro=lista");
+    await expect(createCartAction(form(LIST, "nope"))).rejects.toThrow("REDIRECT:/carrinho/novo?erro=lista");
   });
 });

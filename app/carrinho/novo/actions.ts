@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { getSessionActor } from "@/features/auth/actor";
 import { getCurrentUser } from "@/features/auth/queries";
-import { createCart } from "@/features/cart/repository";
+import { createCartOnce } from "@/features/cart/repository";
 import { createCartSchema } from "@/features/cart/schemas";
 import { getListReader, readServiceEnv, snapshotCartOptions } from "@/features/cart/service";
 import { createClient } from "@/lib/supabase/server";
@@ -15,9 +15,9 @@ import { createClient } from "@/lib/supabase/server";
  * e lista inexistente têm a mesma resposta ("lista não encontrada").
  */
 export async function createCartAction(formData: FormData): Promise<void> {
-  const parsed = createCartSchema.safeParse({ listId: formData.get("listId") });
+  const parsed = createCartSchema.safeParse({ listId: formData.get("listId"), idempotencyKey: formData.get("idempotencyKey") });
   if (!parsed.success) redirect("/carrinho/novo?erro=lista");
-  const { listId } = parsed.data;
+  const { listId, idempotencyKey } = parsed.data;
   // Vindo de "Pedir preço à papelaria do bairro" (lista publicada): segue direto para o pedido de cotação.
   const toQuote = formData.get("destino") === "cotacao";
   const user = await getCurrentUser();
@@ -26,7 +26,8 @@ export async function createCartAction(formData: FormData): Promise<void> {
   const list = await getListReader(readServiceEnv()).getList(listId, { actor });
   if (!list || list.items.length === 0) redirect(`/carrinho/novo?lista=${listId}&erro=lista`);
   const client = await createClient();
-  const cartId = await createCart(client, {
+  const { cartId, created } = await createCartOnce(client, {
+    idempotencyKey,
     ownerId: user.id,
     listId,
     listKind: list.kind,
@@ -35,6 +36,7 @@ export async function createCartAction(formData: FormData): Promise<void> {
     items: list.items.map((i) => ({ listItemId: list.kind === "official" ? i.id : null, name: i.name, quantity: i.quantity })),
   });
   // Retrato inicial das opções (preço, origem e data) para consulta posterior.
-  await snapshotCartOptions(client, cartId, user.id, readServiceEnv());
+  // Reenvio (toque duplo, duas abas): o carrinho é o do primeiro envio, que já faz o retrato; não repete.
+  if (created) await snapshotCartOptions(client, cartId, user.id, readServiceEnv());
   redirect(toQuote ? `/cotacao/nova?carrinho=${cartId}` : `/carrinho/${cartId}`);
 }

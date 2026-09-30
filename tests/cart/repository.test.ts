@@ -1,10 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildCartOptions } from "@/features/cart/options-engine";
 import {
   createCart,
+  createCartOnce,
   getActiveRetailerBySlug,
   getCart,
   getPriceSnapshots,
@@ -346,5 +348,30 @@ describe("features/cart/repository (Postgres local, RLS)", () => {
     // bob não vê os carrinhos da alice.
     expect((await listCartsForOwner(bob.client, alice.id)).length).toBe(0);
     expect((await listCartsForOwner(bob.client, bob.id)).some((r) => r.id === newer || r.id === older)).toBe(false);
+  });
+});
+
+describe("S29 T12: criação de carrinho idempotente por (dono, chave)", () => {
+  const items = [{ name: "Caderno", quantity: 2 }, { name: "Lápis", quantity: 1 }];
+
+  it("duas criações simultâneas com a mesma chave dão um carrinho só, com os itens uma vez", async () => {
+    const idempotencyKey = randomUUID();
+    const input = { ownerId: alice.id, listId: null, items, idempotencyKey };
+    const [a, b] = await Promise.all([createCartOnce(alice.client, input), createCartOnce(alice.client, input)]);
+    expect(a.cartId).toBe(b.cartId);
+    expect([a.created, b.created].filter(Boolean)).toHaveLength(1);
+    const { data } = await admin.from("carts").select("id").eq("owner_id", alice.id).eq("idempotency_key", idempotencyKey);
+    expect(data).toHaveLength(1);
+    const { count } = await admin.from("cart_items").select("id", { count: "exact", head: true }).eq("cart_id", a.cartId);
+    expect(count).toBe(items.length);
+  });
+
+  it("chave nova cria outro carrinho; a mesma chave de outro dono não colide", async () => {
+    const key = randomUUID();
+    const first = await createCartOnce(alice.client, { ownerId: alice.id, listId: null, items, idempotencyKey: key });
+    const other = await createCartOnce(alice.client, { ownerId: alice.id, listId: null, items, idempotencyKey: randomUUID() });
+    const bobs = await createCartOnce(bob.client, { ownerId: bob.id, listId: null, items, idempotencyKey: key });
+    expect(new Set([first.cartId, other.cartId, bobs.cartId]).size).toBe(3);
+    expect([first.created, other.created, bobs.created]).toEqual([true, true, true]);
   });
 });

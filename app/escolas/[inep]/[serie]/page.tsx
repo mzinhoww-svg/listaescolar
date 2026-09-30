@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -122,6 +124,7 @@ export default async function ListPage({ params, searchParams }: Props) {
             </div>
             {/* Cria o carrinho no servidor e cai direto no pedido de cotação (UX-040: sem a tela intermediária). */}
             <form action={createCartAction}>
+              <input type="hidden" name="idempotencyKey" value={randomUUID()} />
               <input type="hidden" name="listId" value={version.id} />
               <input type="hidden" name="destino" value="cotacao" />
               <SubmitButton variant="outline" pendingLabel="Montando o pedido" className="w-full">

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { Metadata } from "next";
 import { z } from "zod";
 
@@ -85,6 +87,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       </ul>
       <div className="flex-1" />
       <form action={createCartAction}>
+        <input type="hidden" name="idempotencyKey" value={randomUUID()} />
         <input type="hidden" name="listId" value={listId.data} />
         {toQuote ? <input type="hidden" name="destino" value="cotacao" /> : null}
         <SubmitButton pendingLabel="Montando o carrinho" size="lg" className="w-full">

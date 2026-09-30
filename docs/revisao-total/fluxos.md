@@ -38,7 +38,7 @@ flowchart LR
   irpara -->|"Abrir loja"| loja{{"Site da loja"}}
   irpara -->|"Voltar ao carrinho (leva ao checkout)"| checkout
   cart -->|"Pedir cotação a papelarias"| escolhe["/cotacao/nova?carrinho="]
-  escolhe -->|"Pedir pelo WhatsApp"| consent["/cotacao/nova?carrinho=&papelaria="]
+  escolhe -->|"Pedir cotação"| consent["/cotacao/nova?carrinho=&papelaria="]
   consent -->|"Confirmar pedido de cotação"| cot["/cotacao/[code]"]
   consent -.->|"lead chega à papelaria"| papelaria{{"/papelaria/leads (J6)"}}
   papelaria -.->|"papelaria responde"| cot

@@ -17,6 +17,7 @@ vi.mock("@/app/conta/notificacoes/actions", () => ({ watchListAction: vi.fn(), u
 vi.mock("@/app/conta/listas-salvas/actions", () => ({ saveListAction: vi.fn() }));
 vi.mock("react", async (orig) => ({ ...(await orig<typeof import("react")>()), cache: <T,>(f: T) => f }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND"); } }));
+vi.mock("@/app/carrinho/novo/actions", () => ({ createCartAction: vi.fn() }));
 
 import ListPage from "@/app/escolas/[inep]/[serie]/page";
 import { academicYears } from "@/features/grades/catalog";
@@ -48,10 +49,13 @@ beforeEach(() => {
 });
 
 describe("lista publicada: ações e feedback (UX-013, UX-014, UX-020, UX-021, UX-022, UX-024)", () => {
-  it("oferece 'Pedir preço à papelaria do bairro' como ação secundária, abrindo o fluxo de cotação", async () => {
-    render(await ListPage(props()));
-    const quote = screen.getByRole("link", { name: "Pedir preço à papelaria do bairro" });
-    expect(quote).toHaveAttribute("href", `/carrinho/novo?lista=${VERSION}&destino=cotacao`);
+  it("oferece 'Pedir preço à papelaria do bairro' como ação secundária que cria o carrinho e abre o pedido de cotação (UX-013, UX-040)", async () => {
+    const { container } = render(await ListPage(props()));
+    const quote = screen.getByRole("button", { name: "Pedir preço à papelaria do bairro" });
+    const form = quote.closest("form")!;
+    expect(form.querySelector('input[name="listId"]')).toHaveValue(VERSION);
+    expect(form.querySelector('input[name="destino"]')).toHaveValue("cotacao");
+    expect(container.querySelector(`a[href="/carrinho/novo?lista=${VERSION}&destino=cotacao"]`)).toBeNull();
     expect(quote.className).toContain("border-tinta");
     expect(quote.className).not.toContain("bg-tinta");
     const main = screen.getByRole("link", { name: "Montar carrinho com esta lista" });

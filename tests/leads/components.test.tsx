@@ -137,7 +137,7 @@ describe("escolha de papelaria e consentimento", () => {
     expect(card.textContent).not.toMatch(/km|nota|Parceira|Parcelado|Kit montado|prazo/i);
     expect(within(card).getByText("Demonstração")).toBeInTheDocument();
     expect(within(card).getByText(/Pix, Cartão de crédito/)).toBeInTheDocument();
-    expect(within(card).getByRole("link", { name: /Pedir pelo WhatsApp/ })).toHaveAttribute("href", "/x");
+    expect(within(card).getByRole("link", { name: /Pedir cotação a/ })).toHaveAttribute("href", "/x");
   });
   it("consentimento: checkbox desmarcado, botão desabilitado até aceitar, ids e chave no form", () => {
     render(<ConsentForm action={vi.fn()} cartId={ID} stationeryId={ID} stationeryName="Papelaria Demo" neighborhood="Centro" idempotencyKey="77777777-7777-4777-8777-777777777777" preview={"Olá!\nCódigo: LC-XXXX"} />);

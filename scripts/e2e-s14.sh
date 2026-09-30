@@ -83,7 +83,7 @@ shot p "$OUT/S14-app21-papelarias.png"
 ab p open "$BASE/cotacao/nova?carrinho=$CART&entrega=1" >/dev/null; wait_text p "Papelaria Demo A" 15
 expect_no_text p "Papelaria Demo B" "filtro Entrega tira a B (só retirada)"
 ab p open "$BASE/cotacao/nova?carrinho=$CART" >/dev/null; wait_text p "Papelaria Demo A" 15
-clicktext p "Pedir pelo WhatsApp a Papelaria Demo A"
+clicktext p "Pedir cotação a Papelaria Demo A"
 wait_text p "Confirmar pedido de cotação" 15; sleep 1
 expect_text p "o bairro informado" "consentimento cita o bairro"
 expect_text p "Código: LC-XXXX" "prévia da mensagem com código provisório"
@@ -97,7 +97,7 @@ ab p eval "(() => { const f = document.querySelector('form[aria-label^=Consentim
 wait_text p "consentimento" 10
 expect_text p "Para pedir a cotação é preciso marcar o consentimento." "sem aceite o servidor recusa (?erro=consent_required)"
 expect_eq "$(sql "select count(*) from public.leads")" "0" "nenhum lead criado sem aceite"
-LEAD1=$(create_lead p "$CART" "Pedir pelo WhatsApp a Papelaria Demo A")
+LEAD1=$(create_lead p "$CART" "Pedir cotação a Papelaria Demo A")
 [[ "$LEAD1" == LC-* ]] && ok "lead criado com aceite: $LEAD1" || bad "criar lead" "$LEAD1"
 expect_eq "$(sql "select count(*) from public.leads")" "1" "duplo envio do mesmo formulário: 1 lead só"
 expect_eq "$(sql "select count(*) from public.consents where purpose='lead_whatsapp_quote'")" "1" "1 consentimento gravado"
@@ -212,7 +212,7 @@ expect_eq "$(sql "select status from public.leads where code='$LEAD1'")" "conver
 grep -qF "$LEAD1" <<<"$T_FOREIGN" && bad "404 não repete o código" "eco" || ok "404 não ecoa o código"
 
 echo "== f) responsável: expirar (cron) e cancelar"
-LEAD2=$(create_lead p "$CART" "Pedir pelo WhatsApp a Papelaria Demo B")
+LEAD2=$(create_lead p "$CART" "Pedir cotação a Papelaria Demo B")
 [[ "$LEAD2" == LC-* ]] && ok "segundo lead (para a B): $LEAD2" || bad "lead 2" "$LEAD2"
 sql "update public.leads set created_at = now() - interval '8 days', expires_at = now() - interval '1 day' where code='$LEAD2'" >/dev/null
 SECRET=$(cat "$SECRET_FILE")
@@ -228,7 +228,7 @@ expect_no_text p "Abrir WhatsApp" "sem Abrir WhatsApp em lead encerrado"
 shot p "$OUT/S14-app09-expirado.png"
 ab pb open "$BASE/papelaria/leads?aba=closed" >/dev/null; wait_text pb "Leads da lista escolar" 15
 expect_text pb "$LEAD2" "B vê o lead expirado em Encerrados"
-LEAD3=$(create_lead p "$CART" "Pedir pelo WhatsApp a Papelaria Demo A")
+LEAD3=$(create_lead p "$CART" "Pedir cotação a Papelaria Demo A")
 [[ "$LEAD3" == LC-* ]] && ok "terceiro lead (para a A): $LEAD3" || bad "lead 3" "$LEAD3"
 clicktext p "Cancelar pedido"
 wait_text p "Pedido cancelado." 15

@@ -2,7 +2,11 @@ import Link from "next/link";
 
 import { outlineButton, primaryButton, Screen } from "@/components/auth/Screen";
 
-export function EmptyState({ title, text }: { title: string; text: string }) {
+export type EmptyAction = { href: string; label: string };
+
+/** Vazio com caminho: sem `actions`, só "Ir para o início"; com `actions`, a primeira é a principal e as outras, secundárias. */
+export function EmptyState({ title, text, actions }: { title: string; text: string; actions?: readonly EmptyAction[] }) {
+  const list: readonly EmptyAction[] = actions && actions.length > 0 ? actions : [{ href: "/", label: "Ir para o início" }];
   return (
     <Screen>
       <div className="flex flex-1 flex-col gap-3.5">
@@ -10,9 +14,11 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
         <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">{title}</h1>
         <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">{text}</p>
         <div className="flex-1" />
-        <Link href="/" className={primaryButton}>
-          Ir para o início
-        </Link>
+        {list.map((a, i) => (
+          <Link key={a.href} href={a.href} className={i === 0 ? primaryButton : outlineButton}>
+            {a.label}
+          </Link>
+        ))}
       </div>
     </Screen>
   );

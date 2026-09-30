@@ -45,6 +45,9 @@ export default async function CarrinhoPage({ params, searchParams }: PageProps<"
             option={o}
             cartId={id}
             selected={o.strategy === selected.strategy}
+            dominant={usable.length > 0 && o.strategy === selected.strategy}
+            quotePrimary={usable.length === 0}
+            pageStrategy={selected.strategy}
             action={chooseOptionAction}
           />
         ))}

@@ -15,6 +15,19 @@ const COPY: Record<LeadStatus, LeadNextStepCopy> = {
   cancelled: { title: "Pedido cancelado", body: "Nada foi enviado depois do cancelamento. Você pode fazer um novo pedido quando quiser." },
 };
 
-export function leadNextStep(status: LeadStatus): LeadNextStepCopy {
+/** Estados em que a família já pode dizer se comprou (a papelaria respondeu ou a compra foi combinada). */
+export const PURCHASE_QUESTION_STATUSES: readonly LeadStatus[] = ["quote_sent", "awaiting_customer", "converted"];
+
+/**
+ * `quoted`: a papelaria informou valor. Respondida sem valor (`quote_sent` com `quoted === false`), a tela não manda
+ * "conferir o valor abaixo": diz que não houve valor e como falar com a papelaria.
+ */
+export function leadNextStep(status: LeadStatus, opts: { quoted?: boolean } = {}): LeadNextStepCopy {
+  if (status === "quote_sent" && opts.quoted === false) {
+    return {
+      title: "A papelaria respondeu sem informar valor",
+      body: "Para saber o valor, fale com a papelaria pelo WhatsApp e combine a compra por lá.",
+    };
+  }
   return COPY[status];
 }

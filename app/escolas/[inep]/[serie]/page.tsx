@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { createCartAction } from "@/app/carrinho/novo/actions";
 import { TrackClick } from "@/components/analytics/TrackClick";
 import { TrackView } from "@/components/analytics/TrackView";
+import { SubmitButton } from "@/components/cart/SubmitButton";
 import { ItemsTable } from "@/components/lists/ItemsTable";
 import { ListHeader } from "@/components/lists/ListHeader";
 import { SaveListButton } from "@/components/lists/SaveListButton";
@@ -118,9 +120,14 @@ export default async function ListPage({ params, searchParams }: Props) {
                 <p className="text-texto-2 text-center text-xs font-semibold">Ao continuar, você entra com seu e-mail e volta para esta lista.</p>
               ) : null}
             </div>
-            <Link href={`/carrinho/novo?lista=${version.id}&destino=cotacao`} className={buttonClass("outline", "md", "w-full")}>
-              Pedir preço à papelaria do bairro
-            </Link>
+            {/* Cria o carrinho no servidor e cai direto no pedido de cotação (UX-040: sem a tela intermediária). */}
+            <form action={createCartAction}>
+              <input type="hidden" name="listId" value={version.id} />
+              <input type="hidden" name="destino" value="cotacao" />
+              <SubmitButton variant="outline" pendingLabel="Montando o pedido" className="w-full">
+                Pedir preço à papelaria do bairro
+              </SubmitButton>
+            </form>
             {shareOrigin ? (
               <TrackClick name="list_shared" props={{ channel: "whatsapp", school_inep: school.inep, grade_slug: grade.slug }}>
                 <WhatsAppShareButton

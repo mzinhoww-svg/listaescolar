@@ -97,6 +97,20 @@ describe("createLeadAction", () => {
     expect(await redirected(createLeadAction(form({ ...ok, carrinho: "../../evil" })))).toBe("/cotacao/nova?erro=invalid_input");
   });
 
+  it("S29 UX-029: toque duplo (duas chamadas simultâneas, mesma chave) resulta em um único pedido", async () => {
+    const store = new Map<string, string>();
+    svc.createLead.mockImplementation(async (_actor: unknown, raw: { idempotencyKey: string }) => {
+      await Promise.resolve();
+      const created = !store.has(raw.idempotencyKey);
+      if (created) store.set(raw.idempotencyKey, `LC-${store.size + 1}ABC`);
+      return { leadId: "x", code: store.get(raw.idempotencyKey), created };
+    });
+    const [a, b] = await Promise.all([redirected(createLeadAction(form(ok))), redirected(createLeadAction(form(ok)))]);
+    expect(store.size).toBe(1);
+    expect(a).toBe(b);
+    for (const call of svc.createLead.mock.calls) expect((call[1] as { idempotencyKey: string }).idempotencyKey).toBe(KEY);
+  });
+
   it("D-001: acima de 10 pedidos pelo mesmo IP+ator em 10 minutos, recusa sem chamar o serviço", async () => {
     svc.createLead.mockResolvedValue({ leadId: "x", code: "LC-5TJ1", created: true });
     for (let i = 0; i < 10; i++) await redirected(createLeadAction(form(ok)));

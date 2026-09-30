@@ -41,7 +41,7 @@ describe("StoreCard", () => {
     expect(document.body.innerHTML).not.toContain("produto-secreto");
   });
 
-  it("cada linha tem seu link de busca com o próprio item", () => {
+  it("cada linha tem seu link de busca com o próprio item; a do botão da loja não repete o destino (UX-038)", () => {
     render(
       <ul>
         <StoreCard
@@ -58,7 +58,8 @@ describe("StoreCard", () => {
       "href",
       `/ir-para/${CART}/amazon?item=id-lapis`,
     );
-    expect(screen.getByRole("link", { name: "Buscar Caderno em Amazon" })).toHaveAttribute(
+    expect(screen.queryByRole("link", { name: "Buscar Caderno em Amazon" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Abrir busca de Caderno em Amazon" })).toHaveAttribute(
       "href",
       `/ir-para/${CART}/amazon?item=id-caderno`,
     );

@@ -41,6 +41,8 @@ export async function createReviewAction(formData: FormData): Promise<void> {
   if (!actor) redirect(`/entrar?next=${encodeURIComponent(back)}`);
   const tags = formData.getAll("tags").filter((t): t is ReviewTag => typeof t === "string" && (REVIEW_TAGS as readonly string[]).includes(t));
   const ratingRaw = Number(text(formData, "rating"));
+  // Sem nota escolhida (nenhum padrão pré-marcado, UX-027): volta com mensagem própria, sem chamar o serviço.
+  if (text(formData, "rating") === "") redirect(`${back}?erro=rating_required`);
   try {
     await getConversionService().createReview(actor, {
       leadId: text(formData, "leadId"),

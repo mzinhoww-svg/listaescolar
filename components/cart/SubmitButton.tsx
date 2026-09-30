@@ -3,25 +3,34 @@
 import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
-/** Botão de envio que se desativa enquanto a Server Action roda (evita envio duplo). */
+import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
+
+/**
+ * Botão de envio do formulário: com a Server Action em andamento fica desabilitado, anuncia o carregamento (`aria-busy`) e
+ * mantém a largura. O rótulo de carregamento vai para leitores de tela; o botão não troca de texto (sem salto de layout).
+ */
 export function SubmitButton({
   children,
   pendingLabel,
-  className,
+  variant = "primary",
+  size = "md",
+  className = "",
+  disabled = false,
+  describedBy,
 }: {
   children: ReactNode;
   pendingLabel: string;
-  className: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  className?: string;
+  disabled?: boolean;
+  describedBy?: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      aria-disabled={pending}
-      className={`${className} disabled:opacity-60`}
-    >
-      {pending ? pendingLabel : children}
-    </button>
+    <Button type="submit" variant={variant} size={size} className={className} loading={pending} disabled={disabled} aria-describedby={describedBy}>
+      {children}
+      {pending ? <span className="sr-only">{pendingLabel}</span> : null}
+    </Button>
   );
 }

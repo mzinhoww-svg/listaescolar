@@ -2,7 +2,8 @@ import { CONVERSION_ERROR_CODES, ConversionError, type ConversionErrorCode } fro
 
 export { CONVERSION_ERROR_CODES };
 
-const BY_CODE: Record<ConversionErrorCode | "desconhecido", string> = {
+const BY_CODE: Record<ConversionErrorCode | "desconhecido" | "rating_required", string> = {
+  rating_required: "Escolha uma nota de 1 a 5 antes de enviar a avaliação.",
   forbidden: "Você não tem acesso a este pedido.",
   not_found: "Pedido não encontrado.",
   invalid_input: "Dados inválidos. Revise e tente de novo.",

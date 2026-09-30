@@ -5,6 +5,7 @@ import { Screen } from "@/components/auth/Screen";
 import { BackHeader } from "@/components/cart/CartStates";
 import { moneyOrUnavailable, formatWhen } from "@/components/leads/format";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
+import { InlineStatus } from "@/components/ui/InlineStatus";
 import { requireAccess } from "@/features/auth/guard";
 import { errorMessageForCode } from "@/features/leads/messages";
 import { listMyLeads } from "@/features/leads/queries";
@@ -20,11 +21,11 @@ export default async function CotacoesPage({ searchParams }: PageProps<"/cotacao
   const rows = actor ? await listMyLeads(actor) : [];
   return (
     <Screen>
-      <BackHeader href="/" title="Minhas cotações" />
+      <BackHeader href="/conta" title="Minhas cotações" />
       <h1 className="text-[26px] leading-[1.1] font-extrabold tracking-[-0.035em]">
         {rows.length === 0 ? "Nenhuma cotação ainda" : `${rows.length} ${rows.length === 1 ? "pedido de cotação" : "pedidos de cotação"}`}
       </h1>
-      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{errorMessageForCode(erro)}</p> : null}
+      {erro ? <InlineStatus tone="error">{errorMessageForCode(erro)}</InlineStatus> : null}
       <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[13px] font-semibold">
         A compra acontece no WhatsApp. Aqui aparece o andamento; o valor só aparece quando a papelaria o informa.
       </p>

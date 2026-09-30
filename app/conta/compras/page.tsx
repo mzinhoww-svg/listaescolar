@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Screen } from "@/components/auth/Screen";
+import { BackHeader } from "@/components/cart/CartStates";
+import { buttonClass } from "@/components/ui/Button";
+import { InlineStatus } from "@/components/ui/InlineStatus";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { confirmPurchaseAction, createReviewAction } from "@/features/conversion/actions";
@@ -30,16 +34,25 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
     failed = true;
   }
   return (
-    <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-12">
+    <Screen>
+      <BackHeader href="/conta" title="Minha conta" />
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Suas compras</h1>
-      {sp.ok ? <p role="status" className="bg-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold text-white">Registrado, obrigado!</p> : null}
-      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
+      <p className="text-texto-2 text-[14px] leading-[1.4] font-semibold">
+        Depois de falar com a papelaria, diga se comprou. Só a resposta “Comprei aqui” registra a venda.
+      </p>
+      {sp.ok ? <InlineStatus tone="success">Registrado, obrigado!</InlineStatus> : null}
+      {erro ? <InlineStatus tone="error">{erro}</InlineStatus> : null}
       {failed ? (
-        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
+        <InlineStatus tone="error">
           Não foi possível carregar. <Link href="/conta/compras" className="underline">Tentar de novo</Link>
-        </p>
+        </InlineStatus>
       ) : items.length === 0 ? (
-        <p className="text-texto-2 text-[14px] font-semibold">Nenhum pedido de cotação ainda.</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-texto-2 text-[14px] font-semibold">Nenhum pedido de cotação ainda.</p>
+          <Link href="/cotacao" className={buttonClass("outline", "md", "w-full")}>
+            Ver suas cotações
+          </Link>
+        </div>
       ) : (
         <ul className="flex flex-col gap-4">
           {items.map((item) => (
@@ -49,6 +62,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
           ))}
         </ul>
       )}
-    </main>
+    </Screen>
   );
 }

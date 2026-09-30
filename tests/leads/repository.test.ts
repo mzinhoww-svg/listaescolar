@@ -497,3 +497,19 @@ describe("LeadService de ponta a ponta contra o banco", () => {
     expect(await errorCode(service.openWhatsapp(await actor(parent), created.code))).toBe("invalid_state");
   });
 });
+
+describe("S29 T12 (UX-029): toque duplo em 'Pedir cotação'", () => {
+  it("duas chamadas simultâneas com a mesma chave criam um único pedido", async () => {
+    const parent = await makeUser("dup-parent");
+    const owner = await makeUser("dup-owner", "stationery_member");
+    const stationery = await newStationery(owner);
+    const cartId = await newCart(parent);
+    const rec = record(cartId, stationery);
+    const who = await actor(parent);
+    const [a, b] = await Promise.all([createLead(admin, who, rec), createLead(admin, who, rec)]);
+    expect(a.code).toBe(b.code);
+    expect([a.created, b.created].filter(Boolean)).toHaveLength(1);
+    const { count } = await admin.from("leads").select("id", { count: "exact", head: true }).eq("cart_id", cartId);
+    expect(count).toBe(1);
+  });
+});

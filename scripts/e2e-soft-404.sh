@@ -47,6 +47,10 @@ checkc() { # <cookie> <esperado> <caminho> <descrição>
 NOID="00000000-0000-4000-8000-0000000fffff"
 if [ -n "${FAMILIA_COOKIE:-}" ]; then
   checkc "$FAMILIA_COOKIE" 404 "/cotacao/LC-ZZZZ" "logada: cotação inexistente"
+  # S29 T12: carrinho inexistente = 404 de verdade (o `loading.tsx` antigo de `carrinho/[id]` dava 200, D-043).
+  checkc "$FAMILIA_COOKIE" 404 "/carrinho/$NOID" "logada: carrinho inexistente"
+  checkc "$FAMILIA_COOKIE" 404 "/carrinho/$NOID/checkout" "logada: checkout de carrinho inexistente"
+  checkc "$FAMILIA_COOKIE" 404 "/carrinho/abc" "logada: carrinho com id malformado"
   checkc "$FAMILIA_COOKIE" 404 "/enviar-lista/$NOID" "logada: envio inexistente"
   checkc "$FAMILIA_COOKIE" 404 "/enviar-lista/$NOID/revisar" "logada: revisão de envio inexistente"
   checkc "$FAMILIA_COOKIE" 404 "/conta/alunos/$NOID/editar" "logada: aluno inexistente"

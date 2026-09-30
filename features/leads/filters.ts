@@ -6,8 +6,9 @@ export function filterByMode<T extends { offersDelivery: boolean; offersPickup: 
 }
 
 /** Monta `/cotacao/nova?...` só com chaves conhecidas e valores não vazios. */
-export function novaHref(params: { carrinho: string; papelaria?: string; bairro?: string; entrega?: boolean; retirada?: boolean; erro?: string }): string {
+export function novaHref(params: { carrinho: string; opcao?: string; papelaria?: string; bairro?: string; entrega?: boolean; retirada?: boolean; erro?: string }): string {
   const q = new URLSearchParams({ carrinho: params.carrinho });
+  if (params.opcao) q.set("opcao", params.opcao);
   if (params.papelaria) q.set("papelaria", params.papelaria);
   if (params.bairro) q.set("bairro", params.bairro);
   if (params.entrega) q.set("entrega", "1");

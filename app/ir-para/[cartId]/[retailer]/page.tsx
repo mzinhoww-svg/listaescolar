@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { Screen } from "@/components/auth/Screen";
+import { buttonClass } from "@/components/ui/Button";
 import { StoreMark } from "@/components/cart/badges";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { buildRetailerRedirect } from "@/features/cart/affiliate";
@@ -61,9 +62,6 @@ export default async function IrParaPage({
       <div className="flex-1" />
       <div className="flex items-center gap-4">
         <StoreMark initials={initialsOf(retailer.name)} />
-        <span aria-hidden className="text-texto-3 text-xl font-extrabold">
-          ›
-        </span>
       </div>
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
         Levando você para {retailer.name}
@@ -88,16 +86,10 @@ export default async function IrParaPage({
       <p className="text-texto-3 text-xs font-semibold">Preço e estoque podem mudar na loja.</p>
       <div className="flex-1" />
       {/* Âncora simples: o clique registra em affiliate_clicks; Link pré-carregaria e registraria sem clique. */}
-      <a
-        href={goHref}
-        className="bg-tinta text-papel rounded-botao flex h-14 w-full items-center justify-center text-base font-extrabold"
-      >
+      <a href={goHref} className={buttonClass("primary", "lg", "w-full")}>
         Abrir loja
       </a>
-      <Link
-        href={`/carrinho/${cartId}/checkout`}
-        className="text-center text-[15px] font-extrabold"
-      >
+      <Link href={`/carrinho/${cartId}`} className={buttonClass("text", "md", "w-full justify-center text-[15px]")}>
         Voltar ao carrinho
       </Link>
     </Screen>

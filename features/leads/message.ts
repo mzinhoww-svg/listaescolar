@@ -79,7 +79,7 @@ export function leadListUrl(siteOrigin: string, code: string): string {
 }
 
 /**
- * Texto pré-preenchido do WhatsApp: código, escola, série, ano e link da lista. Nada do responsável nem de estudante.
+ * Texto pré-preenchido do WhatsApp: código, escola, série, ano e endereço do pedido na ListaCerta (painel da papelaria). Nada do responsável nem de estudante.
  * Lança `LeadError(invalid_input)` com entrada inválida (campo extra, vazio, link fora do site).
  */
 export function buildLeadMessage(input: LeadMessageInput, options: LeadMessageOptions = {}): string {
@@ -92,7 +92,7 @@ export function buildLeadMessage(input: LeadMessageInput, options: LeadMessageOp
     `Código: ${code}`,
     `Escola: ${schoolName}`,
     `Série: ${gradeLabel} (${schoolYear})`,
-    `Lista: ${listUrl}`,
+    `Pedido na ListaCerta: ${listUrl}`,
   ].join("\n");
 }
 

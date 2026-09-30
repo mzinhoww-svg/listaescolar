@@ -24,6 +24,15 @@ describe("hub da conta: Enviar a lista da escola (UX-012)", () => {
   });
 });
 
+describe("hub da conta: Minhas compras (S29 T12, UX-025)", () => {
+  it("liga /conta/compras junto das cotações, com o que a página faz", async () => {
+    render(await AccountHubPage());
+    const link = screen.getByRole("link", { name: /Minhas compras/ });
+    expect(link).toHaveAttribute("href", "/conta/compras");
+    expect(link.textContent).toMatch(/Informe se comprou/);
+  });
+});
+
 describe("resultados da busca: Enviar a lista da escola (UX-012)", () => {
   const input = { q: "silva", qTooShort: false, page: 1 } as never;
   const school = {

@@ -31,7 +31,7 @@ describe("buildLeadMessage", () => {
         "Código: LC-5TJ1",
         "Escola: Escola Demonstração",
         "Série: 5º ano (2027)",
-        "Lista: https://listacerta.example/papelaria/leads/LC-5TJ1",
+        "Pedido na ListaCerta: https://listacerta.example/papelaria/leads/LC-5TJ1",
       ].join("\n"),
     );
   });

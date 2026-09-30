@@ -1,6 +1,6 @@
 import type { CartOption } from "@/features/cart/types";
 
-import { isSelectable, plural, STRATEGY_LABEL, unpricedStoreOptions } from "./format";
+import { hasUnavailableDeliveryOrStock, isSelectable, plural, STRATEGY_LABEL, unpricedStoreOptions } from "./format";
 
 /**
  * Título e nota do carrinho. O título conta só as opções com preço; as sem preço entram num único aviso
@@ -25,6 +25,11 @@ export function CartIntro({ options, isDemo = false }: { options: readonly CartO
       ) : unpriced.length > 0 ? (
         <p className="text-texto-2 text-[13px] leading-[1.4] font-semibold">
           {`Sem preço de loja para: ${unpriced.map((o) => STRATEGY_LABEL[o.strategy]).join(", ")}.`}
+        </p>
+      ) : null}
+      {n > 0 && hasUnavailableDeliveryOrStock(options) ? (
+        <p className="text-texto-2 text-[13px] leading-[1.4] font-semibold">
+          Prazo e estoque: indisponíveis quando a fonte não informa. Confira na loja antes de comprar.
         </p>
       ) : null}
     </>

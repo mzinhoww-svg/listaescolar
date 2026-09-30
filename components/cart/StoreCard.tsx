@@ -2,6 +2,8 @@ import { formatBRL } from "@/features/cart/money";
 import type { StoreInfo } from "@/features/cart/service";
 import type { OptionLine } from "@/features/cart/types";
 
+import { buttonClass } from "@/components/ui/Button";
+
 import { AffiliateBadge, DemoBadge, StoreMark, Tag } from "./badges";
 import { BoughtToggle } from "./BoughtControls";
 import { LineRow } from "./OptionDetail";
@@ -54,7 +56,8 @@ export function StoreCard({ cartId, info, lines, itemIdFor, opened, primary }: P
             key={l.itemKey}
             line={l}
             storeLabel={info.name}
-            searchHref={hrefFor(itemIdFor(l))}
+            // O botão da loja já abre a busca do primeiro item: a linha dele não repete o mesmo destino (UX-038).
+            searchHref={l === first ? undefined : hrefFor(itemIdFor(l))}
           />
         ))}
       </ul>
@@ -66,7 +69,7 @@ export function StoreCard({ cartId, info, lines, itemIdFor, opened, primary }: P
       {/* Âncora simples (não Link): o clique é registrado no servidor e não pode ser pré-carregado. */}
       <a
         href={href}
-        className={`${primary ? "bg-tinta text-papel" : "border-tinta text-tinta border-[1.5px]"} rounded-botao flex min-h-11 w-full items-center justify-center px-4 py-2 text-center text-sm font-extrabold`}
+        className={buttonClass(primary ? "primary" : "outline", "md", "h-auto min-h-12 w-full py-2 text-center text-sm whitespace-normal")}
       >
         Abrir busca de {first?.name ?? "item"} em {info.name}
       </a>

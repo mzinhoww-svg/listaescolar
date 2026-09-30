@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useFormStatus } from "react-dom";
+import { useId, useRef, useState } from "react";
 
+import { SubmitButton } from "@/components/cart/SubmitButton";
 import { MessagePreview } from "@/components/leads/MessagePreview";
 import {
   LEAD_CONSENT_LABEL,
@@ -17,29 +17,28 @@ type Props = {
   stationeryId: string;
   stationeryName: string;
   neighborhood: string;
-  /** Uma chave por renderização: reenviar o MESMO formulário devolve o MESMO pedido. */
+  /** Uma chave por renderização: reenviar o MESMO formulário devolve o MESMO pedido (o servidor também é idempotente pela chave). */
   idempotencyKey: string;
   preview: string | null;
 };
 
-function Submit({ accepted }: { accepted: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={!accepted || pending}
-      className="bg-verde-certo text-tinta rounded-botao flex h-14 w-full items-center justify-center text-base font-extrabold disabled:opacity-50"
-    >
-      {pending ? "Enviando..." : "Confirmar pedido de cotação"}
-    </button>
-  );
-}
-
 /** Consentimento (App21): o que vai, o que a papelaria vê, prévia da mensagem e checkbox desmarcado. */
 export function ConsentForm({ action, cartId, stationeryId, stationeryName, neighborhood, idempotencyKey, preview }: Props) {
   const [accepted, setAccepted] = useState(false);
+  const reasonId = useId();
+  // Segundo envio enquanto o primeiro roda (toque duplo, Enter repetido) é ignorado; o servidor ainda garante um pedido só pela chave.
+  const sending = useRef(false);
+  async function submit(formData: FormData): Promise<void> {
+    if (sending.current) return;
+    sending.current = true;
+    try {
+      await action(formData);
+    } finally {
+      sending.current = false;
+    }
+  }
   return (
-    <form action={action} className="flex flex-col gap-4" aria-label={`Consentimento para ${stationeryName}`}>
+    <form action={submit} className="flex flex-col gap-4" aria-label={`Consentimento para ${stationeryName}`}>
       <input type="hidden" name="carrinho" value={cartId} />
       <input type="hidden" name="stationeryId" value={stationeryId} />
       <input type="hidden" name="neighborhood" value={neighborhood} />
@@ -50,8 +49,12 @@ export function ConsentForm({ action, cartId, stationeryId, stationeryName, neig
         <p>{LEAD_CONSENT_STATIONERY_SEES}</p>
         <p>{LEAD_CONSENT_NEVER}</p>
       </div>
-      {preview ? <MessagePreview text={preview} note="O código definitivo aparece depois de confirmar." /> : <p className="text-texto-3 text-[13px] font-semibold">Prévia indisponível.</p>}
-      <label className="flex items-start gap-3 text-[14px] font-bold">
+      {preview ? (
+        <MessagePreview text={preview} note="O código definitivo aparece depois de confirmar. O endereço do pedido só abre para a papelaria; você acompanha por aqui." />
+      ) : (
+        <p className="text-texto-3 text-[13px] font-semibold">Prévia indisponível.</p>
+      )}
+      <label className="flex min-h-11 items-start gap-3 text-[14px] font-bold">
         <input
           type="checkbox"
           name="consent"
@@ -61,7 +64,14 @@ export function ConsentForm({ action, cartId, stationeryId, stationeryName, neig
         />
         <span>{LEAD_CONSENT_LABEL}</span>
       </label>
-      <Submit accepted={accepted} />
+      <SubmitButton pendingLabel="Enviando o pedido" size="lg" className="w-full" disabled={!accepted} describedBy={accepted ? undefined : reasonId}>
+        Confirmar pedido de cotação
+      </SubmitButton>
+      {accepted ? null : (
+        <p id={reasonId} className="text-texto-2 -mt-2 text-center text-[13px] font-semibold">
+          Marque a caixa acima para confirmar o pedido.
+        </p>
+      )}
     </form>
   );
 }

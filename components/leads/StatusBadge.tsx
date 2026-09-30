@@ -1,7 +1,7 @@
 import { LEAD_STATUS_LABEL, type LeadStatus } from "@/features/leads/state";
 
 const TONE: Record<LeadStatus, string> = {
-  received: "bg-verde-certo text-tinta",
+  received: "bg-campo text-tinta",
   viewed: "bg-tinta text-papel",
   in_progress: "bg-aviso-fundo text-aviso-texto",
   quote_sent: "bg-aviso-fundo text-aviso-texto",

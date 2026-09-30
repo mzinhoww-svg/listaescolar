@@ -57,7 +57,7 @@ export function LineRow({
           <a
             href={searchHref}
             aria-label={`Buscar ${line.name} em ${storeLabel}`}
-            className="text-verde-fundo mt-1 inline-block text-xs font-extrabold underline"
+            className="text-verde-fundo -ml-1 inline-flex min-h-11 min-w-11 items-center px-1 text-sm font-extrabold underline"
           >
             Buscar
           </a>

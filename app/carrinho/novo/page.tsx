@@ -12,6 +12,8 @@ import { createCartAction } from "./actions";
 
 export const metadata: Metadata = { title: "Montar carrinho · ListaCerta" };
 
+const EMPTY_ACTIONS = [{ href: "/escolas", label: "Buscar escola" }, { href: "/conta/carrinhos", label: "Meus carrinhos" }] as const;
+
 export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/carrinho/novo">) {
   const sp = await searchParams;
   const raw = Array.isArray(sp.lista) ? sp.lista[0] : sp.lista;
@@ -30,6 +32,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
             ? "Não conseguimos ler os itens desta lista. Volte e tente de novo."
             : "Abra o carrinho a partir de uma lista de material para comparar as opções de compra."
         }
+        actions={EMPTY_ACTIONS}
       />
     );
   }
@@ -39,6 +42,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       <EmptyState
         title="Lista não encontrada"
         text="Não achamos itens para esta lista, ou ela não está disponível para você."
+        actions={EMPTY_ACTIONS}
       />
     );
   }
@@ -46,7 +50,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
   return (
     <Screen>
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
-        Montar carrinho com {items.length} {items.length === 1 ? "item" : "itens"}
+        {toQuote ? "Pedir cotação" : "Comparar opções de compra"} para {items.length} {items.length === 1 ? "item" : "itens"}
       </h1>
       {listError ? (
         <p role="alert" className="bg-campo rounded-campo px-3.5 py-3 text-[13px] font-bold">
@@ -72,10 +76,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
       <form action={createCartAction}>
         <input type="hidden" name="listId" value={listId.data} />
         {toQuote ? <input type="hidden" name="destino" value="cotacao" /> : null}
-        <SubmitButton
-          pendingLabel="Montando..."
-          className="bg-tinta text-papel rounded-botao flex h-14 w-full items-center justify-center text-base font-extrabold"
-        >
+        <SubmitButton pendingLabel="Montando o carrinho" size="lg" className="w-full">
           {toQuote ? "Pedir cotação a papelarias" : "Comparar opções"}
         </SubmitButton>
       </form>

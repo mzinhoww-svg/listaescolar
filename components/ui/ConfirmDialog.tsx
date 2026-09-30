@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 
-import { Button } from "./Button";
+import { Button, type ButtonVariant } from "./Button";
 
 type Props = {
   /** Texto do botão que abre a confirmação. */
@@ -18,13 +19,28 @@ type Props = {
   hidden?: Record<string, string>;
   /** `link` = texto sublinhado em `erro-texto` (linha de tabela); `button` = botão de contorno. */
   triggerStyle?: "link" | "button";
+  /** Variante do gatilho quando `triggerStyle` é `button` (padrão `danger`). */
+  triggerVariant?: ButtonVariant;
+  /** Variante do botão de confirmar (padrão `danger`; `primary` para confirmar uma decisão que não destrói nada, mas tem efeito). */
+  confirmVariant?: ButtonVariant;
 };
+
+/** Confirmar de um formulário com Server Action: durante o envio fica desabilitado e anuncia (`aria-busy`), então o segundo toque não reenvia. */
+function ActionConfirm({ variant, label }: { variant: ButtonVariant; label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" variant={variant} className="flex-1" loading={pending}>
+      {label}
+    </Button>
+  );
+}
 
 /**
  * Confirmação destrutiva única do produto (D-11): `<dialog>` nativo, foco preso pelo navegador, Esc fecha,
  * botão de risco por último e em `erro-texto`. Substitui `window.confirm` e os diálogos avulsos.
  */
-export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pendingLabel, onConfirm, action, hidden, triggerStyle = "link" }: Props) {
+export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pendingLabel, onConfirm, action, hidden, triggerStyle = "link", triggerVariant = "danger", confirmVariant = "danger" }: Props) {
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,16 +72,16 @@ export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pending
           {triggerLabel}
         </button>
       ) : (
-        <Button variant="danger" onClick={() => ref.current?.showModal()}>
+        <Button variant={triggerVariant} onClick={() => ref.current?.showModal()}>
           {triggerLabel}
         </Button>
       )}
-      <dialog ref={ref} onClose={() => setError(null)} aria-labelledby="confirm-titulo" className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
+      <dialog ref={ref} onClose={() => setError(null)} aria-labelledby={titleId} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
         <form action={onConfirm ? undefined : action} onSubmit={onConfirm ? (e) => e.preventDefault() : undefined} className="flex w-[min(92vw,420px)] flex-col gap-4 p-6">
           {Object.entries(hidden ?? {}).map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} />
           ))}
-          <h2 id="confirm-titulo" className="text-[18px] font-extrabold">
+          <h2 id={titleId} className="text-[18px] font-extrabold">
             {title}
           </h2>
           <div className="text-texto-2 text-[14px] font-semibold">{body}</div>
@@ -76,9 +92,13 @@ export function ConfirmDialog({ triggerLabel, title, body, confirmLabel, pending
           ) : null}
           <div className="flex gap-2">
             {cancel}
-            <Button type={onConfirm ? "button" : "submit"} variant="danger" className="flex-1" disabled={pending} onClick={onConfirm ? run : undefined}>
-              {pending ? (pendingLabel ?? "Aguarde…") : confirmLabel}
-            </Button>
+            {onConfirm ? (
+              <Button type="button" variant={confirmVariant} className="flex-1" disabled={pending} onClick={run}>
+                {pending ? (pendingLabel ?? "Aguarde…") : confirmLabel}
+              </Button>
+            ) : (
+              <ActionConfirm variant={confirmVariant} label={confirmLabel} />
+            )}
           </div>
         </form>
       </dialog>

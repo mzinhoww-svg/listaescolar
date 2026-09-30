@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
+
 import { moneyOrUnavailable, formatWhen } from "./format";
 import { DemoSeal } from "./StatusBadge";
 import type { QuoteOptionView } from "@/features/leads/queries";
@@ -30,7 +32,8 @@ export function StationeryCard({ option, selectHref }: { option: QuoteOptionView
         ) : (
           <>
             Estimativa pelo catálogo da papelaria: {moneyOrUnavailable(e.subtotalCents)}
-            <span className="text-texto-3 block text-[12px] font-semibold">
+            <span className="text-texto-2 block text-[13px] font-semibold">
+              {e.pricedCount < e.totalCount ? "parcial: " : ""}
               {e.pricedCount} de {e.totalCount} itens com preço · origem: informado pela papelaria{e.asOf ? ` · ${formatWhen(e.asOf)}` : ""}
             </span>
           </>
@@ -38,10 +41,10 @@ export function StationeryCard({ option, selectHref }: { option: QuoteOptionView
       </p>
       <Link
         href={selectHref}
-        className="bg-verde-certo text-tinta rounded-botao flex h-12 items-center justify-center text-[15px] font-extrabold"
-        aria-label={`Pedir pelo WhatsApp a ${option.name}`}
+        className={buttonClass("primary", "md", "w-full")}
+        aria-label={`Pedir cotação a ${option.name}`}
       >
-        Pedir pelo WhatsApp
+        Pedir cotação
       </Link>
     </li>
   );

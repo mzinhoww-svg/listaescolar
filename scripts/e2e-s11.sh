@@ -152,7 +152,7 @@ CART=$(ab p get url | sed -E 's#.*/carrinho/([0-9a-f-]{36}).*#\1#')
 eq "$(sql "select list_kind||'|'||is_demo::text from public.carts where id='$CART'")" "official|false" "4c: carrinho real (list_kind official, is_demo false)"
 ab p open "$BASE/cotacao/nova?carrinho=$CART" >/dev/null
 wait_text p "Papelaria S11" 20 && ok "4d: papelaria do município da ESCOLA listada" || bad "4d" "$(ab p get text body | head -c 200)"
-clicktext p "Pedir pelo WhatsApp a Papelaria S11"
+clicktext p "Pedir cotação a Papelaria S11"
 wait_text p "Confirmar pedido de cotação" 15; sleep 1
 ab p click 'input[type=checkbox]' >/dev/null
 ab p eval "document.querySelector('form[aria-label^=Consentimento]').requestSubmit()" >/dev/null

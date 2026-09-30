@@ -4,17 +4,22 @@ import { notFound } from "next/navigation";
 
 import { Screen } from "@/components/auth/Screen";
 import { BackHeader } from "@/components/cart/CartStates";
+import { SubmitButton } from "@/components/cart/SubmitButton";
 import { formatWhen, moneyOrUnavailable } from "@/components/leads/format";
 import { LeadNextStep } from "@/components/leads/LeadNextStep";
 import { MessagePreview } from "@/components/leads/MessagePreview";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
+import { buttonClass } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { InlineStatus } from "@/components/ui/InlineStatus";
 import { requireAccess } from "@/features/auth/guard";
 import { cancelLeadAction, openWhatsappAction } from "@/features/leads/actions";
 import { normalizeLeadCode } from "@/features/leads/code";
 import { buildLeadMessage, leadListUrl } from "@/features/leads/message";
 import { errorMessageForCode } from "@/features/leads/messages";
 import { getMyLead } from "@/features/leads/queries";
+import { PURCHASE_QUESTION_STATUSES } from "@/features/leads/next-step";
 import { isTerminal } from "@/features/leads/state";
 import { getSessionActor } from "@/features/stationeries/actor";
 import { getSiteOrigin } from "@/lib/site-url";
@@ -38,6 +43,9 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
   const erro = errorMessageForCode(one(sp.erro));
   const ok = one(sp.ok) === "cancelado";
   const open = !isTerminal(lead.status) && lead.expiresAt.getTime() > new Date().getTime();
+  // Respondida sem valor: sem prévia da mensagem nem "Cancelar" (o pedido foi atendido; o próximo passo é falar com a papelaria).
+  const answeredWithoutValue = lead.status === "quote_sent" && lead.quotedTotalCents === null;
+  const canCancel = open && !answeredWithoutValue;
   let preview: string | null = null;
   try {
     const origin = getSiteOrigin();
@@ -48,8 +56,8 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
   return (
     <Screen>
       <BackHeader href="/cotacao" title="Seu pedido" />
-      {ok ? <p role="status" className="bg-verde-certo/20 text-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold">Pedido cancelado.</p> : null}
-      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
+      {ok ? <InlineStatus tone="success">Pedido cancelado.</InlineStatus> : null}
+      {erro ? <InlineStatus tone="error">{erro}</InlineStatus> : null}
       <section className="rounded-card flex flex-col gap-3 bg-white p-6" aria-label="Resumo do pedido">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]" data-testid="lead-code">{lead.code}</h1>
@@ -68,24 +76,44 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
           <div className={row}><dt className="text-texto-2">Válido até</dt><dd className="font-extrabold">{formatWhen(lead.expiresAt)}</dd></div>
         </dl>
       </section>
-      <LeadNextStep status={lead.status} />
-      {preview ? <MessagePreview text={preview} /> : null}
+      <LeadNextStep status={lead.status} quoted={lead.quotedTotalCents !== null} />
+      {preview && !answeredWithoutValue ? <MessagePreview text={preview} /> : null}
       {open ? (
         <>
           <form action={openWhatsappAction}>
             <input type="hidden" name="code" value={lead.code} />
-            <button type="submit" className="bg-verde-certo text-tinta rounded-botao flex h-14 w-full items-center justify-center text-base font-extrabold">Abrir WhatsApp</button>
+            <SubmitButton variant="whatsapp" size="lg" className="w-full" pendingLabel="Abrindo o WhatsApp">
+              Abrir WhatsApp
+            </SubmitButton>
           </form>
-          <form action={cancelLeadAction}>
-            <input type="hidden" name="code" value={lead.code} />
-            <button type="submit" className="border-tinta text-tinta rounded-botao flex h-[52px] w-full items-center justify-center border-[1.5px] text-base font-extrabold">Cancelar pedido</button>
-          </form>
+          {PURCHASE_QUESTION_STATUSES.includes(lead.status) ? (
+            <Link href="/conta/compras" className={buttonClass("outline", "md", "w-full")}>
+              Informar a compra
+            </Link>
+          ) : null}
+          {canCancel ? (
+            <ConfirmDialog
+              triggerLabel="Cancelar este pedido de cotação"
+              triggerStyle="button"
+              title="Cancelar este pedido de cotação?"
+              body="A papelaria deixa de ver este pedido. Você pode fazer um novo pedido quando quiser."
+              confirmLabel="Cancelar pedido"
+              action={cancelLeadAction}
+              hidden={{ code: lead.code }}
+            />
+          ) : null}
         </>
       ) : (
-        <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[14px] font-bold" data-testid="lead-closed">Este pedido está encerrado.</p>
+        <>
+          <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[14px] font-bold" data-testid="lead-closed">Este pedido está encerrado.</p>
+          {PURCHASE_QUESTION_STATUSES.includes(lead.status) ? (
+            <Link href="/conta/compras" className={buttonClass("outline", "md", "w-full")}>
+              Informar a compra
+            </Link>
+          ) : null}
+        </>
       )}
       <Timeline events={events} side="requester" />
-      <Link href="/" className="text-verde-fundo flex min-h-11 items-center justify-center text-center text-[14px] font-extrabold underline">Voltar ao início</Link>
     </Screen>
   );
 }

@@ -98,3 +98,19 @@ export function visibleOptions(options: readonly CartOption[]): CartOption[] {
 }
 
 export const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/** Carrinho com a opção na URL: o "voltar" da cotação e do detalhe reencontra o que a pessoa estava vendo (estado na URL, não no React). */
+export function cartOptionHref(cartId: string, strategy: CartStrategy | null): string {
+  return strategy ? `/carrinho/${cartId}?opcao=${strategy}` : `/carrinho/${cartId}`;
+}
+
+/** Alguma opção com preço sem prazo ou sem estoque informado pela fonte: o aviso vai uma vez no topo, não em cada cartão. */
+export function hasUnavailableDeliveryOrStock(options: readonly CartOption[]): boolean {
+  return options.filter(isSelectable).some((o) => deliveryText(o) === "prazo indisponível" || stockText(o) === "estoque indisponível");
+}
+
+/** "parcial: 2 de 4 itens com preço" (a papelaria ou a loja cobre só parte da lista). */
+export function partialText(option: CartOption): string {
+  const total = option.lines.length;
+  return `parcial: ${total - option.missingItems.length} de ${total} itens com preço`;
+}

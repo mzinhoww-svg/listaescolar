@@ -57,13 +57,23 @@ export default async function AccountHubPage() {
         Enviar a lista da escola
       </Link>
 
-      <section aria-label="Cotações" className="flex flex-col gap-3">
-        <h2 className="text-[15px] font-extrabold">Cotações</h2>
+      <section aria-label="Cotações e compras" className="flex flex-col gap-3">
+        <h2 className="text-[15px] font-extrabold">Cotações e compras</h2>
         <Link
           href="/cotacao"
           className="bg-branco-tonal focus-visible:outline-verde-fundo flex items-center justify-between rounded-[20px] p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <span className="text-[14px] font-extrabold">Ver suas cotações e o status de cada uma</span>
+          <span aria-hidden="true">→</span>
+        </Link>
+        <Link
+          href="/conta/compras"
+          className="bg-branco-tonal focus-visible:outline-verde-fundo flex items-center justify-between gap-3 rounded-[20px] p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[14px] font-extrabold">Minhas compras</span>
+            <span className="text-texto-2 text-[13px] font-semibold">Informe se comprou na papelaria e avalie o atendimento</span>
+          </span>
           <span aria-hidden="true">→</span>
         </Link>
       </section>

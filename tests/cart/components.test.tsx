@@ -53,7 +53,7 @@ describe("OptionCard", () => {
     );
   });
 
-  it("mostra total, lojas e 'prazo indisponível' sem dado de prazo", () => {
+  it("mostra total e lojas; sem dado de prazo o cartão não repete 'prazo indisponível' (o aviso é um só, no topo)", () => {
     render(
       <ul>
         <OptionCard option={option()} cartId={CART} selected action={noop} />
@@ -61,7 +61,7 @@ describe("OptionCard", () => {
     );
     expect(screen.getByText("R$ 30,00")).toBeInTheDocument();
     expect(screen.getByText("1 loja")).toBeInTheDocument();
-    expect(screen.getByText("prazo indisponível")).toBeInTheDocument();
+    expect(screen.queryByText("prazo indisponível")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Escolher esta" })).toBeInTheDocument();
     expect(screen.queryByText("Demonstração")).not.toBeInTheDocument();
   });

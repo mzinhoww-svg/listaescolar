@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Screen } from "@/components/auth/Screen";
+import { buttonClass } from "@/components/ui/Button";
 import { BoughtAll } from "@/components/cart/BoughtControls";
 import { BackHeader } from "@/components/cart/CartStates";
 import { StoreCard } from "@/components/cart/StoreCard";
@@ -38,10 +39,7 @@ export default async function CheckoutPage({
         <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">
           Não há preço de fonte identificada para esta opção. Volte ao carrinho e veja as demais.
         </p>
-        <Link
-          href={back}
-          className="bg-tinta text-papel rounded-botao flex h-14 items-center justify-center text-base font-extrabold"
-        >
+        <Link href={back} className={buttonClass("primary", "lg")}>
           Voltar ao carrinho
         </Link>
       </Screen>
@@ -62,8 +60,7 @@ export default async function CheckoutPage({
 
   return (
     <Screen>
-      <BackHeader href={back} title="Comprar por loja" />
-      <h1 className="sr-only">Comprar por loja</h1>
+      <BackHeader href={back} title="Comprar por loja" heading />
       <section className="bg-tinta text-papel flex flex-col gap-2.5 rounded-[22px] p-[18px]">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-extrabold">{STRATEGY_LABEL[option.strategy]}</p>

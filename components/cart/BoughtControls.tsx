@@ -17,7 +17,7 @@ export function BoughtToggle({
       type="button"
       aria-pressed={bought}
       onClick={() => writeBought(boughtKey(cartId, slug), !bought)}
-      className={`${bought ? "bg-verde-certo text-tinta" : "bg-campo text-texto-2"} rounded-botao flex h-9 w-full items-center justify-center text-[13px] font-extrabold`}
+      className={`${bought ? "bg-verde-certo border-verde-certo text-tinta" : "border-tinta text-tinta bg-transparent"} rounded-botao focus-visible:outline-verde-fundo flex h-11 w-full items-center justify-center border-[1.5px] text-[13px] font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2`}
     >
       {bought ? <span aria-hidden="true">✓ </span> : null}
       Já comprei em {name}

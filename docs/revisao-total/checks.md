@@ -40,7 +40,7 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:18:35.781Z contra `http://1
 <!-- J5:start -->
 ## J5 · Escola assume e publica
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-30T05:21:42.671Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 7.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T07:12:00.976Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 7.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|

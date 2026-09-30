@@ -25,7 +25,7 @@ describe("S07 schema", () => {
     consents: ["id", "profile_id", "purpose", "text_version", "granted_at", "revoked_at", "created_at", "updated_at"],
     list_submissions: [
       "id", "submitted_by", "source", "school_id", "grade", "school_year", "storage_path", "file_name",
-      "mime_type", "size_bytes", "consent_id", "status", "is_demo", "created_at", "updated_at",
+      "mime_type", "size_bytes", "consent_id", "status", "is_demo", "created_at", "updated_at", "idempotency_key",
     ],
     jobs: [
       "id", "kind", "payload", "status", "attempts", "max_attempts", "last_error", "run_after", "locked_at",

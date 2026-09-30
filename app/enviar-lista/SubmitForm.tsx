@@ -37,10 +37,10 @@ async function safeSubmit(prev: SubmitState, data: FormData): Promise<SubmitStat
   }
 }
 
-type Props = { years: number[]; defaultYear: number; initialSchool?: SchoolHit | null; initialGrade?: string };
+type Props = { years: number[]; defaultYear: number; initialSchool?: SchoolHit | null; initialGrade?: string; idempotencyKey?: string; readingAvailable?: boolean };
 
 /** App15-EnviarLista + App06-Foto (390×844). O arquivo vai pela Server Action; a tela App20 cobre o envio. */
-export function SubmitForm({ years, defaultYear, initialSchool = null, initialGrade = "" }: Props) {
+export function SubmitForm({ years, defaultYear, initialSchool = null, initialGrade = "", idempotencyKey, readingAvailable = true }: Props) {
   const [state, action, pending] = useActionState(safeSubmit, idleState);
   const [picked, setPicked] = useState<{ name: string; size: number } | null>(null);
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
@@ -108,6 +108,7 @@ export function SubmitForm({ years, defaultYear, initialSchool = null, initialGr
     <>
       <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col">
         <form action={action} onSubmit={onSubmit} onChange={onChange} noValidate className="flex w-full flex-1 flex-col gap-5 px-6 pt-6 pb-9">
+          {idempotencyKey ? <input type="hidden" name="idempotencyKey" value={idempotencyKey} /> : null}
           <header className="flex flex-col gap-3">
             <Link href={initialSchool ? `/escolas/${initialSchool.inep}` : "/conta"} aria-label="Voltar" className="bg-campo focus-visible:outline-verde-fundo grid size-12 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2">
               <ChevronLeftIcon />
@@ -150,7 +151,7 @@ export function SubmitForm({ years, defaultYear, initialSchool = null, initialGr
       </main>
       {pending ? (
         <div className="fixed inset-0 z-50 overflow-auto">
-          <ProcessingScreen embedded phase="sending" title="Enviando sua lista" subtitle={`Guardando o arquivo e iniciando a leitura.${reduced ? ` ${REDUCED_NOTE}` : ""}`} />
+          <ProcessingScreen embedded phase="sending" title="Enviando sua lista" subtitle={`${readingAvailable ? "Guardando o arquivo e iniciando a leitura." : "Guardando o arquivo."}${reduced ? ` ${REDUCED_NOTE}` : ""}`} />
         </div>
       ) : null}
     </>

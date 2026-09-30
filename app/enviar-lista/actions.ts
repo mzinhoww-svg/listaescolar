@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { z } from "zod";
 import { redirect } from "next/navigation";
 
 import { getSessionActor } from "@/features/auth/actor";
@@ -38,6 +39,9 @@ export async function submitListAction(_prev: SubmitState, formData: FormData): 
     schoolId: typeof schoolRaw === "string" && schoolRaw !== "" ? schoolRaw : undefined,
   });
   if (!fields.success) return fail("invalid_input");
+  const keyRaw = formData.get("idempotencyKey");
+  const key = z.uuid().safeParse(keyRaw);
+  if (typeof keyRaw === "string" && keyRaw !== "" && !key.success) return fail("invalid_input");
   // D-001 (S19): primeira camada de rate limit por IP+ator no envio (aciona upload + OCR síncrono, S07). Só depois
   // da validação (consentimento, campos): tentativas inválidas não gastam a cota (revisão M4c).
   if (submitRateLimited(await headers(), user.id)) return fail("rate_limited");
@@ -67,6 +71,7 @@ export async function submitListAction(_prev: SubmitState, formData: FormData): 
         grade: fields.data.grade,
         schoolYear: fields.data.schoolYear,
         consent: true,
+        ...(key.success ? { idempotencyKey: key.data } : {}),
         file: {
           name: file.name,
           declaredMime: file.type,

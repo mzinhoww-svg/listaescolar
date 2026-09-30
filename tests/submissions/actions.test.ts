@@ -62,6 +62,16 @@ describe("submitListAction", () => {
     expect(submitList).not.toHaveBeenCalled();
   });
 
+  it("a chave de idempotência do formulário chega ao serviço; chave inválida é recusada (S29 T14)", async () => {
+    const KEY = "8a1f0c52-3b0e-4b7a-9f1d-2c6e5d4b3a11";
+    submitList.mockResolvedValue({ status: "duplicate", submissionId: "sub-1" });
+    await expect(submitListAction(idle, form({ idempotencyKey: KEY }))).rejects.toThrow("REDIRECT:/enviar-lista/sub-1");
+    expect(submitList.mock.calls[0]![0]).toMatchObject({ idempotencyKey: KEY });
+    submitList.mockClear();
+    expect(await submitListAction(idle, form({ idempotencyKey: "nao-e-uuid" }))).toMatchObject({ status: "error", code: "invalid_input" });
+    expect(submitList).not.toHaveBeenCalled();
+  });
+
   it("sem consentimento: erro e nada é gravado", async () => {
     const r = await submitListAction(idle, form({ consent: null }));
     expect(r).toMatchObject({ status: "error", code: "consent_required" });

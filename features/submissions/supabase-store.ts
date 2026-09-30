@@ -15,6 +15,14 @@ import { rpcOf } from "./supabase-queue";
 export function createSupabaseStore(client: SupabaseClient): SubmissionStore {
   return {
     async createSubmission(input: NewSubmission) {
+      const key = input.idempotencyKey;
+      const existing = async (): Promise<string | null> => {
+        if (!key) return null;
+        const { data } = await client.from("list_submissions").select("id").eq("submitted_by", input.profileId).eq("idempotency_key", key).maybeSingle();
+        return typeof data?.id === "string" ? data.id : null;
+      };
+      const before = await existing();
+      if (before) return { submissionId: before, duplicate: true as const };
       const submissionId = crypto.randomUUID();
       const path = `${input.profileId}/${submissionId}/${input.fileName}`;
       const up = await client.storage
@@ -37,9 +45,15 @@ export function createSupabaseStore(client: SupabaseClient): SubmissionStore {
         p_is_demo: input.isDemo,
         p_consent_purpose: input.consent.purpose,
         p_consent_text_version: input.consent.textVersion,
+        p_idempotency_key: key ?? null,
       });
       if (error || data !== submissionId) {
         await client.storage.from(UPLOAD_BUCKET).remove([path]);
+        // Duas chamadas simultâneas com a mesma chave: a que perde bate no índice único (23505) e devolve o envio da que ganhou.
+        if ((error as { code?: unknown } | null)?.code === "23505") {
+          const winner = await existing();
+          if (winner) return { submissionId: winner, duplicate: true as const };
+        }
         // D-002: o banco recusa envio de escola sem vínculo confirmado (hint estável); qualquer outro erro é genérico.
         if ((error as { hint?: unknown } | null)?.hint === "school_not_linked") throw new SubmissionError("school_not_linked");
         throw new Error("create");

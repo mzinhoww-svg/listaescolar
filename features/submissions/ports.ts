@@ -40,6 +40,8 @@ export type NewSubmission = {
   bytes: Uint8Array;
   isDemo: boolean;
   consent: { purpose: string; textVersion: string };
+  /** Uma chave por renderização do formulário: o mesmo (dono, chave) devolve o envio já criado. */
+  idempotencyKey?: string;
 };
 
 export interface SubmissionStore {
@@ -47,7 +49,7 @@ export interface SubmissionStore {
    * Grava consentimento, arquivo, envio (status `processing`) e o job do envio (`running`, com lease, chave =
    * id do envio), tudo ou nada. O job existir desde já é o que permite recuperar um envio órfão.
    */
-  createSubmission(input: NewSubmission): Promise<{ submissionId: string }>;
+  createSubmission(input: NewSubmission): Promise<{ submissionId: string; duplicate?: true }>;
   /** Falha antes de haver worker: envio `rejected` e job `dead`, juntos. */
   reject(submissionId: string, reason: string): Promise<void>;
   /**
@@ -96,4 +98,6 @@ export type SubmitResult =
       publication?: { status: string };
     }
   | { status: "processing_async"; submissionId: string; jobId: string; pipelineAvailable: boolean }
+  /** Reenvio com a mesma chave: o envio já existia; nada foi criado nem lido de novo. */
+  | { status: "duplicate"; submissionId: string }
   | { status: "failed"; submissionId: string; reason: string };

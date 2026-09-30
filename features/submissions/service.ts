@@ -18,6 +18,7 @@ export type SubmitInput = {
   schoolYear: number;
   consent: boolean;
   file: UploadFile;
+  idempotencyKey?: string;
 };
 
 export type SubmissionErrorCode = "consent_required" | "invalid_input" | "school_not_linked" | UploadErrorCode;
@@ -58,7 +59,7 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
 
   const fileName = sanitizeFileName(input.file.name, check.mime);
   const { pipeline, store, queue, clock } = deps;
-  const { submissionId } = await store.createSubmission({
+  const created = await store.createSubmission({
     profileId: meta.data.profileId,
     source: meta.data.source,
     schoolId: meta.data.schoolId,
@@ -70,7 +71,10 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     bytes: input.file.bytes,
     isDemo: pipeline?.isDemo === true,
     consent: { purpose: CONSENT_PURPOSE, textVersion: CONSENT_TEXT_VERSION },
+    ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
   });
+  const { submissionId } = created;
+  if (created.duplicate) return { status: "duplicate", submissionId }; // mesma chave: sem segunda leitura nem segundo job
 
   const enqueueAsync = async (pipelineAvailable = pipeline !== null): Promise<SubmitResult> => {
     try {

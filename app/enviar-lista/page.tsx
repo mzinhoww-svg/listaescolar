@@ -1,3 +1,4 @@
+import { isPipelineAvailable } from "@/features/submissions/status";
 import { requireAccess } from "@/features/auth/guard";
 import { loadSchool } from "@/features/schools/search/load-school";
 import { sendListHref, parseSendListPrefill } from "@/features/submissions/href";
@@ -24,6 +25,8 @@ export default async function Page({ searchParams }: PageProps<"/enviar-lista">)
   const year = prefill.year !== undefined && base.years.includes(prefill.year) ? prefill.year : base.defaultYear;
   return (
     <SubmitForm
+      idempotencyKey={crypto.randomUUID()}
+      readingAvailable={isPipelineAvailable()}
       years={base.years}
       defaultYear={year}
       initialGrade={prefill.gradeSlug ? (seriesValueForSlug(prefill.gradeSlug) ?? "") : ""}

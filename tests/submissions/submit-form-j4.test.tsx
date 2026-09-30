@@ -37,7 +37,7 @@ describe("UX-061 · falha de rede no envio", () => {
       return { status: "idle" };
     });
     submitListAction.mockResolvedValue({ status: "idle" });
-    renderForm();
+    renderForm({ idempotencyKey: "8a1f0c52-3b0e-4b7a-9f1d-2c6e5d4b3a11" });
     fillAll();
     send();
 
@@ -56,6 +56,10 @@ describe("UX-061 · falha de rede no envio", () => {
     expect(second.get("grade")).toBe(first.get("grade"));
     expect(second.get("schoolYear")).toBe(first.get("schoolYear"));
     expect(second.get("consent")).toBe("on");
+    // idempotência (S29 T14): o retry manda O MESMO FormData, com a mesma chave; sem ela o servidor criaria outro envio
+    expect(first.get("idempotencyKey")).toBe("8a1f0c52-3b0e-4b7a-9f1d-2c6e5d4b3a11");
+    expect(second.get("idempotencyKey")).toBe(first.get("idempotencyKey"));
+    expect(second).toBe(first);
     // nada foi pedido de novo: a série continua escolhida e nenhum erro de campo apareceu
     expect(screen.getByLabelText("Série")).toHaveValue("5º ano");
     expect(screen.getByLabelText("Série")).toHaveAttribute("aria-invalid", "false");
@@ -155,6 +159,20 @@ describe("UX-069 · Voltar", () => {
   it("com a escola pré-escolhida volta para a página dela", () => {
     renderForm({ initialSchool: { id: "10000000-0000-4000-8000-0000000000b1", name: "Escola Modelo", inep: "51000001", neighborhood: "Centro", municipalityName: "Cuiabá" } });
     expect(screen.getByRole("link", { name: "Voltar" })).toHaveAttribute("href", "/escolas/51000001");
+  });
+});
+
+describe("subtítulo da sobreposição só promete leitura quando ela existe", () => {
+  beforeEach(() => submitListAction.mockReset());
+  it.each([[true, "iniciando a leitura"], [false, "Guardando o arquivo."]])("readingAvailable=%s", async (available, text) => {
+    let finish: (v: unknown) => void = () => undefined;
+    submitListAction.mockReturnValue(new Promise((r) => (finish = r)));
+    renderForm({ readingAvailable: available });
+    fillAll();
+    send();
+    const sub = await screen.findByText(new RegExp(text));
+    if (!available) expect(sub.textContent).not.toMatch(/leitura/);
+    await act(async () => finish({ status: "idle" }));
   });
 });
 

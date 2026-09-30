@@ -20,7 +20,8 @@ export function ParentItemRow({ item, index, onChange, onRemove, error }: Props)
           </label>
           <input id={`item-nome-${n}`} className={field} value={item.name} maxLength={300} onChange={(e) => onChange({ name: e.target.value })} />
         </div>
-        <button type="button" aria-label={`Remover item ${n}`} onClick={onRemove} className="bg-erro-fundo text-erro-texto rounded-botao focus-visible:outline-erro-texto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">
+        {/* data-ui="native-ok": remover é desfeito por "Desfazer" (ParentCopyEditor) e só vale ao salvar; não pede ConfirmDialog. */}
+        <button type="button" data-ui="native-ok" aria-label={`Remover item ${n}`} onClick={onRemove} className="bg-erro-fundo text-erro-texto rounded-botao focus-visible:outline-erro-texto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">
           <span aria-hidden="true">✕</span>
         </button>
       </div>

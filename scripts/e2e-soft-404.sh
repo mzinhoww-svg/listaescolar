@@ -40,6 +40,8 @@ check 307 "/conta/notificacoes" "anônimo em notificações (loading.tsx de cont
 check 307 "/conta/privacidade" "anônimo em privacidade"
 check 307 "/conta/alunos/novo" "anônimo em aluno novo"
 check 307 "/conta/alunos/abc/editar" "anônimo em edição de aluno com id inválido"
+# S29 T14: `/conta/envios` (Meus envios) não chama `notFound()`; anônimo redireciona.
+check 307 "/conta/envios" "anônimo em meus envios"
 check 200 "/cadastrar-papelaria" "cadastro de papelaria não tem guard: 200 esperado (loading.tsx de cadastrar-papelaria)"
 # Logado, id inexistente = 404 de verdade. `FAMILIA_COOKIE`/`ADMIN_COOKIE` = valor do cabeçalho Cookie das contas de demonstração
 # (login por link mágico); sem eles esta parte é pulada. Foi o que pegou o soft-404 dos loading.tsx de admin/conta/cotacao/enviar-lista.
@@ -64,6 +66,7 @@ if [ -n "${FAMILIA_COOKIE:-}" ]; then
   checkc "$FAMILIA_COOKIE" 200 "/conta/notificacoes?pagina=99" "logada: página alta da central não vira 404 nem erro"
   checkc "$FAMILIA_COOKIE" 200 "/conta" "logada: hub"
   checkc "$FAMILIA_COOKIE" 200 "/conta/privacidade" "logada: privacidade"
+  checkc "$FAMILIA_COOKIE" 200 "/conta/envios" "logada: meus envios"
   checkc "$FAMILIA_COOKIE" 404 "/conta/alunos/abc/editar" "logada: aluno com id malformado"
 fi
 if [ -n "${ADMIN_COOKIE:-}" ]; then

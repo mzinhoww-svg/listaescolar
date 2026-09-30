@@ -45,7 +45,7 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
   const next = cart.success ? novaHref({ carrinho: cart.data, opcao }) : "/cotacao/nova";
   await requireAccess(next);
   if (!cart.success) {
-    return <EmptyState title="Nenhum carrinho escolhido" text="Abra o carrinho e use “Pedir cotação a papelarias” na opção da papelaria local." actions={NO_CART_ACTIONS} />;
+    return <EmptyState title="Nenhum carrinho escolhido" text="Abra o carrinho e use “Pedir cotação a papelarias” na opção da papelaria local." actions={NO_CART_ACTIONS} backHref="/conta" />;
   }
   const actor = await getSessionActor();
   if (!actor) return <EmptyState title="Entre para continuar" text="É preciso estar logado para pedir cotação." />;
@@ -55,9 +55,9 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
   const retirada = one(sp.retirada) === "1";
   const erro = errorMessageForCode(one(sp.erro));
   const result = await loadQuoteView(actor, cart.data, bairro || undefined);
-  if (result.status === "not_found") return <EmptyState title="Carrinho não encontrado" text="Não achamos este carrinho, ou ele não é seu." actions={NO_CART_ACTIONS} />;
+  if (result.status === "not_found") return <EmptyState title="Carrinho não encontrado" text="Não achamos este carrinho, ou ele não é seu." actions={NO_CART_ACTIONS} backHref="/conta" />;
   if (result.status === "unavailable") {
-    return <EmptyState title="Cotação indisponível" text="Ainda não há lista com escola e série ligada a este carrinho neste ambiente. Não inventamos dados." actions={[{ href: `/carrinho/${cart.data}`, label: "Voltar ao carrinho" }, ...NO_CART_ACTIONS]} />;
+    return <EmptyState title="Cotação indisponível" text="Ainda não há lista com escola e série ligada a este carrinho neste ambiente. Não inventamos dados." actions={[{ href: `/carrinho/${cart.data}`, label: "Voltar ao carrinho" }, ...NO_CART_ACTIONS]} backHref="/conta" />;
   }
   const { view } = result;
   const picked = view.options.find((o) => o.id === one(sp.papelaria));
@@ -75,7 +75,7 @@ export default async function NovaCotacaoPage({ searchParams }: PageProps<"/cota
 
   return (
     <Screen>
-      <BackHeader href={cartOptionHref(cart.data, opcao ?? null)} title="Papelarias perto de você" />
+      <BackHeader href={cartOptionHref(cart.data, opcao ?? null)} title="Papelarias perto de você" heading />
       {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
       {picked ? (
         <>

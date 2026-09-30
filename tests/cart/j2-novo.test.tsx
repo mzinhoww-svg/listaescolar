@@ -6,6 +6,7 @@ vi.mock("@/features/auth/guard", () => ({ requireAccess: vi.fn(async () => ({ us
 vi.mock("@/features/auth/actor", () => ({ getSessionActor: async () => ({ userId: "u", role: "parent" }) }));
 const getList = vi.fn();
 vi.mock("@/features/cart/service", () => ({ getListReader: () => ({ getList: (...a: unknown[]) => getList(...a) }), readServiceEnv: () => ({}) }));
+vi.mock("@/features/lists/queries", () => ({ getListOriginByVersion: async () => null, listOriginHref: () => null }));
 vi.mock("@/app/carrinho/novo/actions", () => ({ createCartAction: vi.fn() }));
 
 import NovoCarrinhoPage from "@/app/carrinho/novo/page";
@@ -18,8 +19,15 @@ beforeEach(() => getList.mockReset());
 describe("/carrinho/novo", () => {
   it("sem lista: leva a 'Buscar escola' e 'Meus carrinhos'", async () => {
     await page({});
+    expect(screen.getByRole("link", { name: "Voltar" })).toHaveAttribute("href", "/conta");
     expect(screen.getByRole("link", { name: "Buscar escola" })).toHaveAttribute("href", "/escolas");
     expect(screen.getByRole("link", { name: "Meus carrinhos" })).toHaveAttribute("href", "/conta/carrinhos");
+  });
+
+  it("tem 'Voltar' (conta, quando a lista não tem página pública)", async () => {
+    getList.mockResolvedValue({ kind: "official", isDemo: false, items: [{ id: "i", name: "Caderno", quantity: 2 }] });
+    await page({ lista: LIST });
+    expect(screen.getByRole("link", { name: "Voltar" })).toHaveAttribute("href", "/conta");
   });
 
   it("título e botão nomeiam a mesma ação", async () => {

@@ -138,3 +138,23 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-30T01:25:46.025Z contra `http://1
 | `/escolas?q=Maria%20das%20Dores` | pub | 200 | ok | - |
 | `/escolas/99029003` | pub | 200 | ok | - |
 <!-- J1:end -->
+
+<!-- J2:start -->
+## J2 · Família compra
+
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T01:48:29.226Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 11.
+
+| Rota | Conta | HTTP | Resultado | Achados |
+|---|---|---|---|---|
+| `/carrinho/novo` | familia | 200 | ok | - |
+| `/carrinho/novo?lista=d22024cf-272e-4ef3-841d-3b5b191b88a7` | familia | 200 | ok | - |
+| `/carrinho/00000000-0000-4000-8000-0000000029d2` | familia | 200 | ok | - |
+| `/ir-para/00000000-0000-4000-8000-0000000029d2/mercadolivre` | familia | 200 | ok | - |
+| `/carrinho/00000000-0000-4000-8000-0000000029d2/checkout` | familia | 200 | ok | - |
+| `/cotacao` | familia | 200 | ok | - |
+| `/cotacao/nova` | familia | 200 | ok | - |
+| `/cotacao/nova?carrinho=00000000-0000-4000-8000-0000000029d2` | familia | 200 | ok | - |
+| `/cotacao/LC-S29D1` | familia | 200 | ok | - |
+| `/cotacao/LC-S29D4` | familia | 200 | ok | - |
+| `/conta/compras` | familia | 200 | ok | - |
+<!-- J2:end -->

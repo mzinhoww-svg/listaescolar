@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { z } from "zod";
 
 import { Screen } from "@/components/auth/Screen";
-import { EmptyState } from "@/components/cart/CartStates";
+import { BackHeader, EmptyState } from "@/components/cart/CartStates";
 import { SubmitButton } from "@/components/cart/SubmitButton";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { getListReader, readServiceEnv } from "@/features/cart/service";
+import { getListOriginByVersion, listOriginHref } from "@/features/lists/queries";
 
 import { createCartAction } from "./actions";
 
@@ -33,6 +34,7 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
             : "Abra o carrinho a partir de uma lista de material para comparar as opções de compra."
         }
         actions={EMPTY_ACTIONS}
+        backHref="/conta"
       />
     );
   }
@@ -43,12 +45,21 @@ export default async function NovoCarrinhoPage({ searchParams }: PageProps<"/car
         title="Lista não encontrada"
         text="Não achamos itens para esta lista, ou ela não está disponível para você."
         actions={EMPTY_ACTIONS}
+        backHref="/conta"
       />
     );
   }
   const items = list.items;
+  // "Voltar" leva à lista de origem quando ela é pública; cópia privada, demonstração ou falha de consulta voltam à conta.
+  let backHref = "/conta";
+  try {
+    backHref = listOriginHref(await getListOriginByVersion(listId.data)) ?? "/conta";
+  } catch {
+    backHref = "/conta";
+  }
   return (
     <Screen>
+      <BackHeader href={backHref} title="Montar carrinho" />
       <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
         {toQuote ? "Pedir cotação" : "Comparar opções de compra"} para {items.length} {items.length === 1 ? "item" : "itens"}
       </h1>

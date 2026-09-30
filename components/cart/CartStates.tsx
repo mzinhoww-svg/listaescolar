@@ -5,10 +5,11 @@ import { outlineButton, primaryButton, Screen } from "@/components/auth/Screen";
 export type EmptyAction = { href: string; label: string };
 
 /** Vazio com caminho: sem `actions`, só "Ir para o início"; com `actions`, a primeira é a principal e as outras, secundárias. */
-export function EmptyState({ title, text, actions }: { title: string; text: string; actions?: readonly EmptyAction[] }) {
+export function EmptyState({ title, text, actions, backHref }: { title: string; text: string; actions?: readonly EmptyAction[]; backHref?: string }) {
   const list: readonly EmptyAction[] = actions && actions.length > 0 ? actions : [{ href: "/", label: "Ir para o início" }];
   return (
     <Screen>
+      {backHref ? <BackHeader href={backHref} title="" /> : null}
       <div className="flex flex-1 flex-col gap-3.5">
         <div className="flex-1" />
         <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">{title}</h1>

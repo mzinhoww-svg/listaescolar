@@ -106,7 +106,8 @@ export function PurchaseCard({
 }) {
   const askable = surveyAskable(item, now);
   return (
-    <div className="rounded-card flex flex-col gap-3 bg-white p-5">
+    // Uma ação principal por pedido: cada cartão é a sua própria região.
+    <article data-region={`pedido-${item.code}`} className="rounded-card flex flex-col gap-3 bg-white p-5">
       <div>
         <p className="text-[15px] font-extrabold">{item.stationeryName}</p>
         <p className="text-texto-3 text-[13px] font-bold">{item.schoolName} · pedido {item.code}</p>
@@ -138,6 +139,6 @@ export function PurchaseCard({
       ) : item.canReview ? (
         <ReviewForm leadId={item.leadId} createReview={createReview} />
       ) : null}
-    </div>
+    </article>
   );
 }

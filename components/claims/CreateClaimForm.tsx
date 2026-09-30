@@ -17,8 +17,6 @@ type Props = {
   inep: string;
   methods: SchoolClaimContext["methods"];
   accountEmail: string | null;
-  /** Versão do texto de privacidade: o servidor grava a vigente; a tela não mostra o id interno. */
-  privacyVersion?: string;
 };
 
 type Errors = Record<string, string>;

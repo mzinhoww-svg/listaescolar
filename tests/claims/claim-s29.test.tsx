@@ -72,7 +72,7 @@ describe("UX-099 · método: 'Documentos' primeiro; indisponíveis depois, com r
 describe("UX-097 · formulário do pedido", () => {
   it("noValidate: erro em português junto do campo, sem chamar a action, e sem o id interno do texto", () => {
     const action = vi.fn(async (): Promise<ClaimActionState> => IDLE);
-    const { container } = render(<CreateClaimForm action={action} inep="99001003" methods={methods} accountEmail="a@b.com" privacyVersion="claim-v1" />);
+    const { container } = render(<CreateClaimForm action={action} inep="99001003" methods={methods} accountEmail="a@b.com" />);
     expect(container.querySelector("form")).toHaveAttribute("novalidate");
     expect(container.textContent).not.toContain("claim-v1");
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
@@ -83,7 +83,7 @@ describe("UX-097 · formulário do pedido", () => {
     expect(screen.getByLabelText("Seu nome")).toHaveAttribute("aria-invalid", "true");
   });
   it("dá um exemplo em 'Seu nome'", () => {
-    render(<CreateClaimForm action={vi.fn()} inep="99001003" methods={methods} accountEmail={null} privacyVersion="claim-v1" />);
+    render(<CreateClaimForm action={vi.fn()} inep="99001003" methods={methods} accountEmail={null} />);
     expect(screen.getByLabelText("Seu nome")).toHaveAttribute("placeholder", "Ex.: Maria da Silva");
   });
 });

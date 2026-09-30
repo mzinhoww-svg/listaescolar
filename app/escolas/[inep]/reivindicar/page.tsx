@@ -13,7 +13,6 @@ import { getCurrentUser } from "@/features/auth/queries";
 import { loginPath } from "@/features/claims/action-support";
 import { ROLE_BLOCK_MESSAGE } from "@/features/claims/messages";
 import { getClaimStatusView, getMyClaimForSchool, getSchoolClaimContext } from "@/features/claims/queries";
-import { PRIVACY_TEXT_VERSION } from "@/features/claims/schemas";
 import { claimStep } from "@/features/claims/steps";
 
 import { createClaimAction, removeEvidenceAction, requestTokenAction, submitClaimAction, uploadEvidenceAction } from "./actions";
@@ -65,7 +64,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
             </div>
           </div>
         ) : (
-          <CreateClaimForm action={createClaimAction} inep={inep} methods={context.methods} accountEmail={user?.email ?? null} privacyVersion={PRIVACY_TEXT_VERSION} />
+          <CreateClaimForm action={createClaimAction} inep={inep} methods={context.methods} accountEmail={user?.email ?? null} />
         )
       ) : view ? (
         <ClaimFlow inep={inep} claim={view} actions={{ upload: uploadEvidenceAction, remove: removeEvidenceAction, submit: submitClaimAction, request: requestTokenAction, confirm: confirmTokenAction }} />

@@ -168,7 +168,7 @@ export function SchoolUploadForm({ schools, initialSchoolId, years, defaultYear,
             </li>
           ))}
         </ul>
-        <p className="border-linha text-verde-fundo mt-5 border-t pt-4 text-sm font-extrabold">A equipe ListaCerta revisa a lista antes de ela aparecer para as famílias.</p>
+        <p className="border-linha text-verde-fundo mt-5 border-t pt-4 text-sm font-extrabold">A ListaCerta confere a lista antes de publicar; se precisar, a equipe revisa.</p>
       </aside>
     </form>
   );

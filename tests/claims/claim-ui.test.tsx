@@ -74,7 +74,7 @@ describe("MethodPicker e CreateClaimForm", () => {
   });
   it("mostra contador N/500, e-mail da sessão e erros do servidor", async () => {
     const action = vi.fn(async (): Promise<ClaimActionState> => failed("Revise os campos destacados.", { claimantName: "Revise este campo." }));
-    render(<CreateClaimForm action={action} inep="99001001" methods={methods} accountEmail="parent@listacerta.test" privacyVersion="claim-v1" />);
+    render(<CreateClaimForm action={action} inep="99001001" methods={methods} accountEmail="parent@listacerta.test" />);
     expect(screen.getByText(/Você entra como parent@listacerta.test/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Como você comprova/), { target: { value: "abc" } });
     expect(screen.getByText(/3\/500/)).toBeInTheDocument();

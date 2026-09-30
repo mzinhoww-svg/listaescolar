@@ -14,7 +14,7 @@ const LIST_HREF = /^\/escolas\/(\d{8})\/([a-z0-9-]+)/;
 
 type Copy = { title: string; body: string };
 
-/** Título e texto por fase, com a verdade sobre quem revisa: a equipe ListaCerta (nunca "a sua revisão"). */
+/** Título e texto por fase. Só diz "equipe" quando o estado real é revisão humana; sem estado definido, texto neutro (a publicação automática pode estar ligada). */
 function copyFor(data: StatusPayload, phase: string, lost: boolean): Copy {
   if (lost) return { title: "Não conseguimos atualizar o andamento", body: "Verifique sua conexão e recarregue a página. O envio já foi feito." };
   if (phase === "failed") return { title: "Não foi possível ler este arquivo", body: "A leitura não terminou e este envio não vale como lista. Envie outro arquivo: um PDF gerado no computador costuma ler melhor que foto." };
@@ -22,7 +22,7 @@ function copyFor(data: StatusPayload, phase: string, lost: boolean): Copy {
   if (phase === "reading") return { title: "Recebemos o arquivo da escola", body: "A leitura automática está identificando os itens e as quantidades. Você pode sair desta página: o andamento fica guardado." };
   const key = data.status === "published" ? (data.publishedBy === "auto" ? "published_auto" : "published") : data.status === "human_review" || data.status === "approved" || data.status === "rejected" ? data.status : null;
   if (key) return PUBLICATION_STATE_COPY[key];
-  return { title: "Em revisão pela equipe", body: "A leitura terminou. A equipe confere a lista antes de ela aparecer para as famílias." };
+  return { title: "Leitura concluída", body: "A leitura terminou. A ListaCerta confere a lista antes de publicar; se precisar, a equipe revisa." };
 }
 
 /** Andamento do envio da escola, dentro do painel da escola (UX-090). O `main` e o menu são da casca. */
@@ -40,8 +40,8 @@ export function SchoolStatusPanel({ submissionId, initial, origin = "" }: { subm
         <h2 id="andamento" className="text-[22px] leading-[1.15] font-extrabold tracking-[-0.03em]">{c.title}</h2>
         <p className="text-texto-2 text-[15px] leading-[1.45] font-medium" role={problem ? "alert" : "status"}>{c.body}</p>
         {phase === "ready" && items > 0 ? <p className="text-[14px] font-extrabold">{items === 1 ? "1 item lido no arquivo." : `${items} itens lidos no arquivo.`}</p> : null}
-        {phase === "reading" || (phase === "ready" && data.status !== "published") ? (
-          <InlineStatus tone="info">A equipe ListaCerta revisa a lista antes de ela aparecer para as famílias. Só depois disso a lista é publicada.</InlineStatus>
+        {phase === "reading" || (phase === "ready" && !["published", "human_review", "approved", "rejected"].includes(data.status)) ? (
+          <InlineStatus tone="info">A ListaCerta confere a lista antes de publicar; se precisar, a equipe revisa.</InlineStatus>
         ) : null}
       </section>
       {share ? <ShareListCard inep={share[1] ?? ""} gradeSlug={share[2] ?? ""} origin={origin} /> : null}

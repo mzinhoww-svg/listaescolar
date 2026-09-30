@@ -22,10 +22,11 @@ describe("UX-090 · andamento do envio da escola (dentro do painel)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("lendo: diz quem revisa (a equipe ListaCerta) e não promete revisão da escola", () => {
+  it("lendo: texto neutro (a publicação automática pode estar ligada) e sem promessa de revisão da escola", () => {
     render(<SchoolStatusPanel submissionId={ID} initial={base} />);
     expect(screen.getByRole("heading", { level: 2, name: "Recebemos o arquivo da escola" })).toBeInTheDocument();
-    expect(screen.getByText(/A equipe ListaCerta revisa a lista antes de ela aparecer para as famílias/)).toBeInTheDocument();
+    expect(screen.getByText("A ListaCerta confere a lista antes de publicar; se precisar, a equipe revisa.")).toBeInTheDocument();
+    expect(screen.queryByText(/Só depois disso/)).toBeNull();
     expect(screen.queryByText(/sem a sua revisão/i)).toBeNull();
     expect(screen.getByRole("link", { name: "Enviar outra série" })).toHaveAttribute("href", "/escola/listas/nova");
     expect(screen.getByRole("link", { name: "Voltar para Minhas escolas" })).toHaveAttribute("href", "/escola");
@@ -36,6 +37,19 @@ describe("UX-090 · andamento do envio da escola (dentro do painel)", () => {
     render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "human_review", jobStatus: "succeeded", result }} />);
     expect(screen.getByRole("heading", { level: 2, name: "Em revisão pela equipe" })).toBeInTheDocument();
     expect(screen.getByText("2 itens lidos no arquivo.")).toBeInTheDocument();
+  });
+
+  it("leitura pronta sem estado de revisão definido: não afirma revisão humana", () => {
+    render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "review_needed", jobStatus: "succeeded", result }} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Leitura concluída" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Em revisão pela equipe" })).toBeNull();
+    expect(screen.getAllByText(/se precisar, a equipe revisa/).length).toBeGreaterThan(0);
+  });
+
+  it("publicada automaticamente: diz que foi automática e não menciona revisão pela equipe", () => {
+    render(<SchoolStatusPanel submissionId={ID} initial={{ ...base, status: "published", jobStatus: "succeeded", result, publishedBy: "auto", listHref: "/escolas/99029001/ef-5?ano=2027" }} origin="https://listacerta.test" />);
+    expect(screen.queryByText(/revisa a lista antes/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Ver a lista oficial" })).toBeInTheDocument();
   });
 
   it("publicada: leva à lista oficial e mostra o cartão de divulgação com o link curto", () => {

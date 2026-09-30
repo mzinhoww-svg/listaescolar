@@ -154,7 +154,7 @@ describe("SchoolUploadForm (Escola08)", () => {
     submitListAction.mockResolvedValue({ status: "idle" });
     render(<SchoolUploadForm schools={[{ id: SCHOOL, name: "Escola Modelo", inep: "51000001" }]} initialSchoolId={null} years={[2026, 2027]} defaultYear={2027} />);
     expect(screen.getByText("Para a leitura sair certa")).toBeInTheDocument();
-    expect(screen.getByText("A equipe ListaCerta revisa a lista antes de ela aparecer para as famílias.")).toBeInTheDocument();
+    expect(screen.getByText("A ListaCerta confere a lista antes de publicar; se precisar, a equipe revisa.")).toBeInTheDocument();
     fill({ consent: false });
     send();
     expect(await screen.findByRole("alert")).toHaveTextContent("Marque o consentimento");

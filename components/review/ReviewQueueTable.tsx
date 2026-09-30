@@ -18,7 +18,7 @@ export function ReviewQueueTable({ rows, labels, demoPublication = false }: { ro
         <thead>
           <tr className="text-texto-3 text-[12px] tracking-[0.06em] uppercase">
             {["Escola · série", "Ano", "Origem", "Itens", "Enviada em", "Motivos", ""].map((h, i) => (
-              <th key={i} scope="col" className="px-3 py-2.5 font-extrabold">{h || <span className="sr-only">Ação</span>}</th>
+              <th key={i} scope="col" className={`px-3 py-2.5 font-extrabold ${i === 6 ? "sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]" : ""}`}>{h || <span className="sr-only">Ação</span>}</th>
             ))}
           </tr>
         </thead>
@@ -46,7 +46,7 @@ export function ReviewQueueTable({ rows, labels, demoPublication = false }: { ro
                     </ul>
                   )}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-3 py-3 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]" data-sticky-action>
                   <Link href={`/admin/revisao/${r.id}`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
                     Abrir<span className="sr-only"> revisão de {school}, {r.grade ?? "série não informada"}</span>
                   </Link>

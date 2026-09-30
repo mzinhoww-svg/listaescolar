@@ -86,7 +86,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
                 <th className="px-4 py-3 font-extrabold">Chamadas hoje</th>
                 <th className="px-4 py-3 font-extrabold">Limite/dia</th>
                 <th className="px-4 py-3 font-extrabold">Status</th>
-                <th className="px-4 py-3 font-extrabold">Gerir</th>
+                <th className="px-4 py-3 font-extrabold sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]">Gerir</th>
               </tr>
             </thead>
             <tbody>
@@ -100,7 +100,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
                   <td className="px-4 py-3">
                     <PartnerStatusBadge status={r.status as B2bPartnerStatus} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]" data-sticky-action>
                     <Link href={`/admin/parceiros/${r.id}`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
                       Gerir
                     </Link>

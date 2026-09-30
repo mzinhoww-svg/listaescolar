@@ -47,7 +47,7 @@ export function ReviewQueueTable({ rows, labels, demoPublication = false }: { ro
                   )}
                 </td>
                 <td className="px-3 py-3 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]" data-sticky-action>
-                  <Link href={`/admin/revisao/${r.id}`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
+                  <Link href={`/admin/revisao/${r.id}`} className="text-verde-fundo inline-flex min-h-11 min-w-11 items-center justify-center font-extrabold underline">
                     Abrir<span className="sr-only"> revisão de {school}, {r.grade ?? "série não informada"}</span>
                   </Link>
                 </td>

@@ -56,7 +56,7 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-extrabold">Linhas com problema ({errorTotal})</h2>
           {errorTotal + batch.fileErrors.length > 0 ? (
-            <a href={`/admin/importacoes/${id.data}/erros.csv`} className="text-verde-fundo font-extrabold underline">
+            <a href={`/admin/importacoes/${id.data}/erros.csv`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
               Baixar erros
             </a>
           ) : null}

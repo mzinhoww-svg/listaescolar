@@ -101,7 +101,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
                     <PartnerStatusBadge status={r.status as B2bPartnerStatus} />
                   </td>
                   <td className="px-4 py-3 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]" data-sticky-action>
-                    <Link href={`/admin/parceiros/${r.id}`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
+                    <Link href={`/admin/parceiros/${r.id}`} className="text-verde-fundo inline-flex min-h-11 min-w-11 items-center justify-center font-extrabold underline">
                       Gerir
                     </Link>
                   </td>

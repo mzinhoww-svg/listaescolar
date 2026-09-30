@@ -66,7 +66,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
                     <td className="px-4 py-3">{REPORT_REASON_LABEL[r.reason]}</td>
                     <td className="px-4 py-3">{REPORT_STATUS_LABEL[r.status]}</td>
                     <td className="px-4 py-3">{formatWhen(r.createdAt)}</td>
-                    <td className="px-4 py-3 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]"><Link href={`/admin/denuncias/${r.id}`} className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">Abrir</Link></td>
+                    <td className="px-4 py-3 sticky right-0 bg-white shadow-[-8px_0_8px_-8px_rgba(15,27,45,0.18)]"><Link href={`/admin/denuncias/${r.id}`} className="text-verde-fundo inline-flex min-h-11 min-w-11 items-center justify-center font-extrabold underline">Abrir</Link></td>
                   </tr>
                 ))
               )}

@@ -29,7 +29,13 @@ describe("features/conversion/schemas", () => {
   });
 
   it("disputeResolveInputSchema: só accepted/rejected", () => {
-    expect(disputeResolveInputSchema.safeParse({ disputeId: DISPUTE_ID, decision: "accepted", reason: null }).success).toBe(true);
-    expect(disputeResolveInputSchema.safeParse({ disputeId: DISPUTE_ID, decision: "aceito", reason: null }).success).toBe(false);
+    expect(disputeResolveInputSchema.safeParse({ disputeId: DISPUTE_ID, decision: "accepted", reason: "Número confere com o pedido" }).success).toBe(true);
+    expect(disputeResolveInputSchema.safeParse({ disputeId: DISPUTE_ID, decision: "aceito", reason: "x" }).success).toBe(false);
+  });
+  it("disputeResolveInputSchema: motivo é obrigatório ao aceitar e ao rejeitar (a papelaria o lê)", () => {
+    for (const decision of ["accepted", "rejected"]) {
+      expect(disputeResolveInputSchema.safeParse({ disputeId: DISPUTE_ID, decision, reason: null }).success).toBe(false);
+      expect(disputeResolveInputSchema.safeParse({ disputeId: DISPUTE_ID, decision, reason: "   " }).success).toBe(false);
+    }
   });
 });

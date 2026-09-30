@@ -29,8 +29,8 @@ export function DisputeForm({ code, gate }: { code: string; gate: LeadDisputeGat
         ? `Contestação enviada (${REASON_LABEL[dispute.reason]}), aguardando análise.`
         : dispute.status === "accepted"
           ? dispute.reversedEntryId
-            ? "Contestação aceita: o crédito do pedido foi devolvido no extrato."
-            : "Contestação aceita: sem crédito a devolver (este pedido não gerou cobrança)."
+            ? `Contestação aceita: o crédito do pedido foi devolvido no extrato.${dispute.resolutionReason ? ` Motivo: ${dispute.resolutionReason}` : ""}`
+            : `Contestação aceita: sem crédito a devolver (este pedido não gerou cobrança).${dispute.resolutionReason ? ` Motivo: ${dispute.resolutionReason}` : ""}`
           : `Contestação rejeitada.${dispute.resolutionReason ? ` Motivo: ${dispute.resolutionReason}` : ""}`;
     return (
       <section className="rounded-card flex flex-col gap-2 bg-white p-5" aria-label="Contestação">

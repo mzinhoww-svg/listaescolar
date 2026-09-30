@@ -40,12 +40,8 @@ export const disputeResolveInputSchema = z
   .object({
     disputeId: z.uuid(),
     decision: z.enum(DISPUTE_DECISIONS),
-    reason: z
-      .string()
-      .trim()
-      .max(500)
-      .nullable()
-      .transform((v) => (v === "" ? null : v)),
+    /** Obrigatório: a papelaria lê o motivo da decisão (UX-106). */
+    reason: z.string().trim().min(1).max(500),
   })
   .strict();
 

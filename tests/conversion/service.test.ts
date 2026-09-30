@@ -76,7 +76,7 @@ describe("ConversionService", () => {
   it("resolveDispute: decisão inválida -> invalid_input; decisão válida repassa ao repositório", async () => {
     const svc = new ConversionService({ store: makeStore() });
     await expect(svc.resolveDispute(PARENT, { disputeId: LEAD_ID, decision: "talvez", reason: null })).rejects.toMatchObject({ code: "invalid_input" });
-    await expect(svc.resolveDispute(PARENT, { disputeId: LEAD_ID, decision: "accepted", reason: null })).resolves.toBe("dispute-id");
+    await expect(svc.resolveDispute(PARENT, { disputeId: LEAD_ID, decision: "accepted", reason: "Confere" })).resolves.toBe("dispute-id");
   });
 
   it("listAuditRows/listSurveyLeadsForParent: delegam ao repositório com o limite padrão", async () => {

@@ -113,7 +113,7 @@ export type LeadDisputeGate = {
 };
 
 /** Linha de contestação para o admin (Admin12): mostra o status do lead e os 3 sinais antes de "Aceitar"/"Rejeitar". */
-export type AdminDisputeView = DisputeView & { leadStatus: string; signals: ConversionSignals };
+export type AdminDisputeView = DisputeView & { leadStatus: string; signals: ConversionSignals; stationeryName: string };
 
 export interface ConversionStore {
   confirmPurchase(actor: SessionActor, leadId: string, answer: PurchaseAnswer): Promise<string>;

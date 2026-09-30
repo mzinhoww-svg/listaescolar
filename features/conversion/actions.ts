@@ -81,7 +81,7 @@ export async function resolveDisputeAction(formData: FormData): Promise<void> {
     await getConversionService().resolveDispute(actor, {
       disputeId: text(formData, "disputeId"),
       decision: text(formData, "decision"),
-      reason: text(formData, "reason") || null,
+      reason: text(formData, "reason"),
     });
   } catch (error) {
     redirect(`${back}?erro=${logAndCode("resolver contestação", error)}`);

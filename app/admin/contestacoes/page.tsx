@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AdminShell } from "@/components/admin/AdminShell";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Notice } from "@/components/stationeries/PanelShell";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
@@ -44,8 +45,16 @@ function signalsSummary(d: AdminDisputeView): string {
   return `Status do pedido: ${LEAD_STATUS_LABEL[d.leadStatus] ?? d.leadStatus}. Sinais confirmados: ${parts.length > 0 ? parts.join(" + ") : "nenhum"} (${d.signals.signalCount}/3; Pix pela plataforma indisponível nesta fase).`;
 }
 
-const btn = "bg-tinta text-papel rounded-botao h-10 px-4 text-[13px] font-extrabold";
-const btnOutline = "border-tinta text-tinta rounded-botao h-10 border-[1.5px] px-4 text-[13px] font-extrabold";
+function ReasonBody({ d, effect }: { d: AdminDisputeView; effect: string }) {
+  return (
+    <>
+      <p>{d.stationeryName} · {REASON_LABEL[d.reason]}. {effect}</p>
+      <label className="mt-3 block text-[13px] font-extrabold" htmlFor={`motivo-${d.id}`}>Motivo (obrigatório)</label>
+      <textarea id={`motivo-${d.id}`} name="reason" required maxLength={500} rows={3} className="mt-1 w-full rounded-campo bg-campo p-3 text-[14px]" />
+    </>
+  );
+}
+
 
 /** Admin12: fila de contestações abertas (com prazo) e histórico das resolvidas. */
 export default async function Page({ searchParams }: { searchParams: Promise<{ erro?: string | string[]; ok?: string | string[] }> }) {
@@ -84,21 +93,32 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                 {open.map((d) => (
                   <li key={d.id} className="rounded-card flex flex-wrap items-center justify-between gap-3 bg-white p-4">
                     <div>
-                      <p className="text-[14px] font-extrabold">Pedido {d.leadCode} · {REASON_LABEL[d.reason]}</p>
+                      <p className="text-[14px] font-extrabold">{d.stationeryName} · Pedido {d.leadCode} · {REASON_LABEL[d.reason]}</p>
                       <p className="text-texto-3 text-[13px] font-semibold">Prazo do pai/papelaria: até {formatWhen(d.deadlineAt)}{d.detail ? ` · ${d.detail}` : ""}</p>
                       <p className="text-texto-3 text-[13px] font-semibold">{signalsSummary(d)}</p>
                     </div>
                     <div className="flex gap-2">
-                      <form action={resolveDisputeAction}>
-                        <input type="hidden" name="disputeId" value={d.id} />
-                        <input type="hidden" name="decision" value="accepted" />
-                        <button type="submit" className={btn}>Aceitar (devolve o crédito, se houver)</button>
-                      </form>
-                      <form action={resolveDisputeAction}>
-                        <input type="hidden" name="disputeId" value={d.id} />
-                        <input type="hidden" name="decision" value="rejected" />
-                        <button type="submit" className={btnOutline}>Rejeitar</button>
-                      </form>
+                      <ConfirmDialog
+                        triggerLabel="Aceitar"
+                        triggerStyle="button"
+                        triggerVariant="primary"
+                        confirmVariant="primary"
+                        title={`Aceitar a contestação do pedido ${d.leadCode}?`}
+                        body={<ReasonBody d={d} effect="O crédito do pedido é devolvido à papelaria, se houver. O motivo abaixo aparece para a papelaria." />}
+                        confirmLabel="Aceitar contestação"
+                        action={resolveDisputeAction}
+                        hidden={{ disputeId: d.id, decision: "accepted" }}
+                      />
+                      <ConfirmDialog
+                        triggerLabel="Rejeitar"
+                        triggerStyle="button"
+                        triggerVariant="outline"
+                        title={`Rejeitar a contestação do pedido ${d.leadCode}?`}
+                        body={<ReasonBody d={d} effect="Nada é devolvido e a contestação fica encerrada. O motivo abaixo aparece para a papelaria." />}
+                        confirmLabel="Rejeitar contestação"
+                        action={resolveDisputeAction}
+                        hidden={{ disputeId: d.id, decision: "rejected" }}
+                      />
                     </div>
                   </li>
                 ))}
@@ -115,7 +135,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
                   <li key={d.id} className="bg-campo rounded-campo flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px] font-semibold">
                     <span>Pedido {d.leadCode} · {REASON_LABEL[d.reason]}</span>
                     <span className="font-extrabold">
-                      {d.status === "accepted" ? (d.reversedEntryId ? "Aceita, crédito devolvido" : "Aceita, sem crédito a devolver") : "Rejeitada"}
+                      {d.stationeryName} · {d.status === "accepted" ? (d.reversedEntryId ? "Aceita, crédito devolvido" : "Aceita, sem crédito a devolver") : "Rejeitada"}
                       {d.resolvedAt ? ` · ${formatWhen(d.resolvedAt)}` : ""}
                     </span>
                   </li>

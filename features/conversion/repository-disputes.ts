@@ -124,12 +124,12 @@ export async function listDisputesForStationery(admin: SupabaseClient, actor: Se
 }
 
 /** Enriquece disputas com o status do lead e os 3 sinais — o admin vê isso ANTES de aceitar/rejeitar (revisão de segurança). */
-async function toAdminDisputeViews(admin: SupabaseClient, rows: readonly (z.infer<typeof disputeRow> & { leads: { code: string; status: string } | null })[]): Promise<AdminDisputeView[]> {
+async function toAdminDisputeViews(admin: SupabaseClient, rows: readonly (z.infer<typeof disputeRow> & { leads: { code: string; status: string } | null; stationeries: { trade_name: string } | null })[]): Promise<AdminDisputeView[]> {
   return Promise.all(
     rows.map(async (r) => {
       const dispute = toDispute(r, r.leads?.code ?? "");
       const signals = await fetchSignals(admin, r.lead_id);
-      return { ...dispute, leadStatus: r.leads?.status ?? "indisponível", signals };
+      return { ...dispute, leadStatus: r.leads?.status ?? "indisponível", signals, stationeryName: r.stationeries?.trade_name ?? "indisponível" };
     }),
   );
 }
@@ -139,11 +139,11 @@ export async function listOpenDisputesForAdmin(admin: SupabaseClient, actor: Ses
   if (actor.role !== "admin") throw new ConversionError("só a equipe vê a fila de contestações", "forbidden");
   const { data, error } = await admin
     .from("lead_disputes")
-    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code, status)")
+    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code, status), stationeries(trade_name)")
     .eq("status", "open")
     .order("deadline_at", { ascending: true });
   if (error) fail("listar contestações abertas", error);
-  const rows = z.array(disputeRow.extend({ leads: z.object({ code: z.string(), status: z.string() }).nullable() })).parse(data ?? []);
+  const rows = z.array(disputeRow.extend({ leads: z.object({ code: z.string(), status: z.string() }).nullable(), stationeries: z.object({ trade_name: z.string() }).nullable() })).parse(data ?? []);
   return toAdminDisputeViews(admin, rows);
 }
 
@@ -152,11 +152,11 @@ export async function listResolvedDisputesForAdmin(admin: SupabaseClient, actor:
   if (actor.role !== "admin") throw new ConversionError("só a equipe vê o histórico de contestações", "forbidden");
   const { data, error } = await admin
     .from("lead_disputes")
-    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code, status)")
+    .select("id, lead_id, stationery_id, reason, detail, status, deadline_at, resolved_at, resolution_reason, reversed_entry_id, created_at, leads(code, status), stationeries(trade_name)")
     .neq("status", "open")
     .order("resolved_at", { ascending: false })
     .limit(limit);
   if (error) fail("listar contestações resolvidas", error);
-  const rows = z.array(disputeRow.extend({ leads: z.object({ code: z.string(), status: z.string() }).nullable() })).parse(data ?? []);
+  const rows = z.array(disputeRow.extend({ leads: z.object({ code: z.string(), status: z.string() }).nullable(), stationeries: z.object({ trade_name: z.string() }).nullable() })).parse(data ?? []);
   return toAdminDisputeViews(admin, rows);
 }

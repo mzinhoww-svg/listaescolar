@@ -53,20 +53,21 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:25:26.240Z contra `http://1
 <!-- J6:start -->
 ## J6 · Papelaria vende
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:25:50.230Z contra `http://127.0.0.1:3003`. Rotas com falha: **9** de 10.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T03:23:45.918Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 11.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|
-| `/cadastrar-papelaria` | familia | 200 | falha | beco sem saída: sem caminho de volta |
-| `/papelaria` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelaria/areas` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelaria/catalogo` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelaria/creditos` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelaria/creditos/faturas/` | papelaria | - | pulada | pulada: sem dado no seed (fatura); o seed cresce na Task 5 |
-| `/papelaria/leads` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelaria/leads/LC-S29D1` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelaria/desempenho` | papelaria | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
-| `/papelarias/s29-papelaria-demo` | pub | 200 | falha | beco sem saída: sem caminho de volta |
+| `/cadastrar-papelaria` | familia | 200 | ok | - |
+| `/papelaria` | papelaria | 200 | ok | - |
+| `/papelaria/areas` | papelaria | 200 | ok | - |
+| `/papelaria/catalogo` | papelaria | 200 | ok | - |
+| `/papelaria/creditos` | papelaria | 200 | ok | - |
+| `/papelaria/creditos/faturas/00000000-0000-4000-8000-000000290901` | papelaria | 200 | ok | - |
+| `/papelaria/leads` | papelaria | 200 | ok | - |
+| `/papelaria/leads/LC-S29D1` | papelaria | 200 | ok | - |
+| `/papelaria/leads/LC-S29D4` | papelaria | 200 | ok | - |
+| `/papelaria/desempenho` | papelaria | 200 | ok | - |
+| `/papelarias/s29-papelaria-demo` | pub | 200 | ok | - |
 <!-- J6:end -->
 
 <!-- J7:start -->
@@ -142,12 +143,12 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-30T01:25:46.025Z contra `http://1
 <!-- J2:start -->
 ## J2 · Família compra
 
-Gerado por `scripts/s29-checks.mjs` em 2026-09-30T01:48:29.226Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 11.
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T03:24:11.151Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 11.
 
 | Rota | Conta | HTTP | Resultado | Achados |
 |---|---|---|---|---|
 | `/carrinho/novo` | familia | 200 | ok | - |
-| `/carrinho/novo?lista=d22024cf-272e-4ef3-841d-3b5b191b88a7` | familia | 200 | ok | - |
+| `/carrinho/novo?lista=eb7391e5-8aea-4f54-b9e9-50d2dd4f6724` | familia | 200 | ok | - |
 | `/carrinho/00000000-0000-4000-8000-0000000029d2` | familia | 200 | ok | - |
 | `/ir-para/00000000-0000-4000-8000-0000000029d2/mercadolivre` | familia | 200 | ok | - |
 | `/carrinho/00000000-0000-4000-8000-0000000029d2/checkout` | familia | 200 | ok | - |

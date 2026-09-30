@@ -4,6 +4,7 @@ import type { PublicProfile } from "@/features/stationeries/repository";
 import { PAYMENT_METHODS } from "@/features/stationeries/schemas";
 import { WHATSAPP_ORDER_MESSAGE, whatsappLink } from "@/features/stationeries/whatsapp";
 
+import { EntryBar } from "./EntryBar";
 import { PRICE_SOURCE_LABEL, STOCK_LABEL } from "./CatalogTable";
 import { formatDateTime } from "./StatusPanel";
 
@@ -31,7 +32,10 @@ export function PublicProfileView({ profile, reviews = [] }: { profile: PublicPr
   const delivery = [profile.offersPickup ? "Retirada na loja" : null, profile.offersDelivery ? "Entrega no bairro" : null].filter(Boolean);
   return (
     <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col pb-28">
-      <header className="bg-tinta rounded-b-[28px] px-5 pt-14 pb-7 text-white">
+      <div className="px-5 pt-3 pb-1">
+        <EntryBar />
+      </div>
+      <header className="bg-tinta mt-2 rounded-[28px] px-5 py-7 text-white">
         <div className="flex items-center gap-3.5">
           <span aria-hidden className="bg-verde-certo text-tinta grid size-14 shrink-0 place-items-center rounded-[18px] text-[18px] font-extrabold">
             {initials(profile.tradeName)}

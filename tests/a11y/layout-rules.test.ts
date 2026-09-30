@@ -27,6 +27,7 @@ describe("regras de layout do DESIGN.md", () => {
     // Superfícies escuras conhecidas (cabeçalho/aside/rodapé em Tinta): o contorno Verde Certo passa de 3:1 ali.
     const DARK = new Set([
       "components/stationeries/NavLinks.tsx",
+      "components/stationeries/PanelShell.tsx",
       "components/lists/ListHeader.tsx",
       "components/admin/AdminNav.tsx",
       "components/b2b/CodeSample.tsx",

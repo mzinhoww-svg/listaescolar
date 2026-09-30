@@ -27,6 +27,21 @@ describe("skip-link e landmark #conteudo nas cascas autenticadas", () => {
     expect(document.querySelector("main#conteudo")).not.toBeNull();
   });
 
+  it("UX-083: casca da papelaria compacta a 390 px (logo, selo e conta na mesma faixa), menu com indício de rolagem e Sair como Button", () => {
+    const { container } = render(
+      <PanelShell badge="Papelaria" nav={PANEL_NAV} email="dona@papelaria.com">
+        <p>conteúdo</p>
+      </PanelShell>,
+    );
+    const aside = container.querySelector("aside")!;
+    expect(aside.className).toMatch(/flex-row/);
+    expect(aside.className).toMatch(/md:flex-col/);
+    expect(screen.getByRole("navigation", { name: "Navegação" }).className).toMatch(/mask-image/);
+    const sair = screen.getByRole("button", { name: "Sair" });
+    expect(sair.className).toMatch(/h-11/);
+    expect(sair.className).toMatch(/rounded-botao/);
+  });
+
   it("AdminShell", () => {
     render(
       <AdminShell active="/admin" email="admin@listacerta.com.br" breadcrumb="Admin" title="Visão geral">

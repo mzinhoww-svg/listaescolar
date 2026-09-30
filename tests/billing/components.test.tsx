@@ -136,6 +136,8 @@ describe("InvoiceList", () => {
 
   it("lista a fatura com link para o detalhe", () => {
     render(<InvoiceList invoices={[inv]} />);
-    expect(screen.getByRole("link", { name: "Ver" })).toHaveAttribute("href", "/papelaria/creditos/faturas/inv-1");
+    const link = screen.getByRole("link", { name: "Ver" });
+    expect(link).toHaveAttribute("href", "/papelaria/creditos/faturas/inv-1");
+    expect(link.className).toContain("min-h-11"); // alvo de 44 px (era 22 x 20)
   });
 });

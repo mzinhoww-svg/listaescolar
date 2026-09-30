@@ -15,7 +15,7 @@ const STOCK_TONE: Record<CatalogRow["stock"], string> = {
 };
 export const PRICE_SOURCE_LABEL = "Informado pela papelaria";
 
-/** Tabela do catálogo (Pap04). Data = `price_updated_at`: muda só quando o preço muda. */
+/** Lista do catálogo (Pap04), em cartões: a tabela de 5 colunas escondia "Editar" fora da tela a 390 px. Data = `price_updated_at`: muda só quando o preço muda. */
 export function CatalogTable({ rows, editHref }: { rows: readonly CatalogRow[]; editHref: (id: string) => string }) {
   if (rows.length === 0) {
     return (
@@ -25,35 +25,22 @@ export function CatalogTable({ rows, editHref }: { rows: readonly CatalogRow[]; 
     );
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
-      <table className="w-full min-w-[720px] text-left text-[14px]">
-        <thead>
-          <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">
-            <th scope="col" className="px-5 py-4">Item</th>
-            <th scope="col" className="px-5 py-4">Preço</th>
-            <th scope="col" className="px-5 py-4">Origem e data</th>
-            <th scope="col" className="px-5 py-4">Estoque informado</th>
-            <th scope="col" className="px-5 py-4"><span className="sr-only">Ações</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-linha border-b last:border-b-0">
-              <th scope="row" className="px-5 py-3.5 font-bold">{r.name}</th>
-              <td className="px-5 py-3.5 font-extrabold">{formatBRL(r.priceCents)}</td>
-              <td className="text-texto-2 px-5 py-3.5">
-                {PRICE_SOURCE_LABEL} · {formatDateTime(r.priceUpdatedAt)}
-              </td>
-              <td className="px-5 py-3.5">
-                <span className={`rounded-botao px-3 py-1 text-[12px] font-extrabold ${STOCK_TONE[r.stock]}`}>{STOCK_LABEL[r.stock]}</span>
-              </td>
-              <td className="px-5 py-3.5">
-                <a href={editHref(r.id)} aria-label={`Editar ${r.name}`} className="text-verde-fundo focus-visible:outline-verde-fundo -my-2 inline-flex min-h-11 min-w-11 items-center font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2">Editar</a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ul className="divide-linha rounded-card flex flex-col divide-y bg-white" aria-label="Itens do catálogo">
+      {rows.map((r) => (
+        <li key={r.id} className="flex min-w-0 flex-col gap-2 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <p className="text-[14px] font-bold break-words">{r.name}</p>
+            <p className="text-texto-2 text-[13px]">
+              {PRICE_SOURCE_LABEL} · {formatDateTime(r.priceUpdatedAt)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:shrink-0">
+            <span className="text-[15px] font-extrabold">{formatBRL(r.priceCents)}</span>
+            <span className={`rounded-botao px-3 py-1 text-[12px] font-extrabold ${STOCK_TONE[r.stock]}`}>{STOCK_LABEL[r.stock]}</span>
+            <a href={editHref(r.id)} aria-label={`Editar ${r.name}`} className="text-verde-fundo focus-visible:outline-verde-fundo inline-flex min-h-11 min-w-11 items-center font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2">Editar</a>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

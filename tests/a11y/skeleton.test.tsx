@@ -71,3 +71,27 @@ describe("UX-004 · carregando padrão das árvores privadas", () => {
     expect(src).toContain("Notificações");
   });
 });
+
+describe("S29 T15 · loading.tsx da papelaria não reabre o soft-404 (D-043)", () => {
+  it("nenhum loading.tsx de app/papelaria cobre uma página com notFound()/redirect; os detalhes com id ficam sem loading acima", async () => {
+    const { existsSync, readFileSync, readdirSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
+    // Só a árvore que o `loading.tsx` de fato cobre: o próprio diretório e os descendentes; um grupo `(x)` isola os irmãos.
+    const files = walk("app/papelaria");
+    for (const loading of files.filter((f) => f.endsWith("/loading.tsx"))) {
+      const dir = loading.replace(/\/loading\.tsx$/, "");
+      for (const f of files.filter((x) => x.startsWith(`${dir}/`) && /\/page\.tsx$/.test(x))) {
+        expect(readFileSync(f, "utf8"), `${loading} cobre ${f}`).not.toMatch(/notFound\(/);
+      }
+    }
+    for (const f of ["app/papelaria/loading.tsx", "app/papelaria/creditos/loading.tsx", "app/papelaria/leads/loading.tsx"]) {
+      expect(existsSync(f), f).toBe(false);
+    }
+    // O carregando do painel continua, agora só nas páginas sem notFound (grupos e pastas próprias).
+    for (const f of ["app/papelaria/(painel)/loading.tsx", "app/papelaria/creditos/(resumo)/loading.tsx", "app/papelaria/leads/(lista)/loading.tsx", "app/papelaria/areas/loading.tsx", "app/papelaria/desempenho/loading.tsx"]) {
+      expect(existsSync(f), f).toBe(true);
+    }
+  });
+});

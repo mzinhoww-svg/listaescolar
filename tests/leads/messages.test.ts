@@ -34,3 +34,26 @@ describe("mensagens de erro do lead", () => {
     for (const code of LEAD_ERROR_CODES) expect(errorMessageForCode(code)).not.toMatch(/R\$|prazo de \d|garant/i);
   });
 });
+
+describe("UX-087 · vocabulário da papelaria (sem 'pai', sem código de fatia, sem 'ticket médio')", () => {
+  it("telas do dono da papelaria falam 'família' e não expõem '(S22)'", async () => {
+    const { readFileSync } = await import("node:fs");
+    const files = [
+      "components/stationeries/RegistrationForm.tsx",
+      "components/stationeries/RegistrationSteps.tsx",
+      "components/stationeries/StatusPanel.tsx",
+      "components/payouts/PerformanceSummaryView.tsx",
+      "components/payouts/ConfirmSaleForm.tsx",
+      "app/papelaria/(painel)/page.tsx",
+    ];
+    for (const f of files) {
+      const text = readFileSync(f, "utf8")
+        .split("\n")
+        .filter((l) => !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*") && !l.trimStart().startsWith("/**"))
+        .join("\n");
+      expect(text, f).not.toMatch(/\b(pai|pais)\b/i);
+      expect(text, f).not.toMatch(/\(S\d\d\)/);
+      expect(text, f).not.toMatch(/ticket médio/i);
+    }
+  });
+});

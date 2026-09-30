@@ -72,7 +72,7 @@ export function StepConsent({ errors, values }: { errors: Errors; values: Values
   return (
     <div className="flex flex-col gap-4">
       <p className="text-texto-2 text-[15px]">
-        Depois de enviar, a equipe analisa o cadastro. Cadastro não é verificação: você só aparece para os pais depois da aprovação e
+        Depois de enviar, a equipe analisa o cadastro. Cadastro não é verificação: você só aparece para as famílias depois da aprovação e
         de publicar sua papelaria.
       </p>
       <label className="flex items-start gap-3 text-[14px] font-bold">

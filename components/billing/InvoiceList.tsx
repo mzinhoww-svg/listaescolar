@@ -28,7 +28,7 @@ export function InvoiceList({ invoices }: { invoices: readonly InvoiceView[] }) 
           <div className="flex items-center gap-3">
             <span className="text-[14px] font-extrabold">{formatBrl(inv.amountCents)}</span>
             <span className="text-texto-2 text-[12px] font-extrabold uppercase">{STATUS_LABEL[inv.status]}</span>
-            <Link href={`/papelaria/creditos/faturas/${inv.id}`} className="text-verde-fundo text-[13px] font-extrabold underline">
+            <Link href={`/papelaria/creditos/faturas/${inv.id}`} className="text-verde-fundo inline-flex min-h-11 min-w-11 items-center justify-center text-[13px] font-extrabold underline">
               Ver
             </Link>
           </div>

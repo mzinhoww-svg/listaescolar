@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { formatWhen, moneyOrUnavailable } from "@/components/leads/format";
+import { formatWhen, itemsLabel, moneyOrUnavailable } from "@/components/leads/format";
 import { ItemsTable } from "@/components/leads/ItemsTable";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
@@ -80,7 +80,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/pap
         <div className="flex flex-col gap-4">
           <div className="rounded-card flex flex-wrap items-center justify-between gap-2 bg-white px-5 py-4">
             <p className="text-[16px] font-extrabold">{lead.schoolName} · {lead.gradeLabel} · {lead.schoolYear}</p>
-            <p className="text-texto-3 text-[13px] font-bold">{lead.itemCount} itens{lead.neighborhood ? ` · bairro ${lead.neighborhood}` : ""}</p>
+            <p className="text-texto-3 text-[13px] font-bold">{itemsLabel(lead.itemCount)}{lead.neighborhood ? ` · bairro ${lead.neighborhood}` : ""}</p>
           </div>
           <ItemsTable estimate={estimate} />
         </div>

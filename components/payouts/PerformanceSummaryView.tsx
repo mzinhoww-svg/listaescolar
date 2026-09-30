@@ -15,13 +15,13 @@ export function PerformanceSummaryView({ summary }: { summary: PerformanceSummar
         <div className={ROW}><span className="text-texto-2 font-semibold">Atendidos</span><span>{summary.funnel.attended}</span></div>
         <div className={ROW}><span className="text-texto-2 font-semibold">Vendidos</span><span>{summary.funnel.sold}</span></div>
         <p className="text-texto-3 mt-2 text-[13px] font-semibold">
-          Ticket médio (vendas com Pix pela plataforma confirmado):{" "}
+          Valor médio por venda (com Pix pela plataforma confirmado):{" "}
           {summary.ticketAverageCents === null ? "indisponível" : formatBrl(summary.ticketAverageCents)}
         </p>
       </section>
       <section className="rounded-card flex flex-col gap-3 bg-white p-6">
         <h2 className="text-[16px] font-extrabold">Declarado × confirmado</h2>
-        <p className="text-texto-2 text-[13px] font-semibold">Vendas que você marcou como &ldquo;Vendi&rdquo; e que bateram na regra de 2 de 3 sinais (S22).</p>
+        <p className="text-texto-2 text-[13px] font-semibold">Vendas que você marcou como &ldquo;Vendi&rdquo; e que foram confirmadas por pelo menos duas de três partes (você, a família e o Pix pela plataforma).</p>
         <div className={ROW}><span className="text-texto-2 font-semibold">Você declarou</span><span>{summary.declaredCount}</span></div>
         <div className={ROW}><span className="text-texto-2 font-semibold">Confirmadas (2 de 3 sinais)</span><span>{summary.confirmedCount}</span></div>
         {divergence !== null ? (

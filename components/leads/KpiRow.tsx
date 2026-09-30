@@ -19,7 +19,7 @@ function Kpi({ value, label, tone }: { value: string; label: string; tone: "dark
 export function KpiRow({ kpis, balanceCents }: Props) {
   const n = (v: number | undefined): string => (v === undefined ? "indisponível" : String(v));
   return (
-    <section aria-label="Indicadores" className="order-last mt-6 mb-6 grid grid-cols-2 gap-3 md:order-none md:mt-0 lg:grid-cols-5" data-testid="kpis">
+    <section aria-label="Indicadores" className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="kpis">
       <Kpi tone="dark" value={n(kpis?.newCount)} label="leads recebidos, ainda novos" />
       <Kpi tone="light" value={n(kpis?.awaitingCount)} label="ainda não atendidos" />
       <Kpi tone="light" value={n(kpis?.soldThisWeek)} label="vendas declaradas, últimos 7 dias" />

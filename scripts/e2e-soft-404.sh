@@ -73,6 +73,23 @@ if [ -n "${ADMIN_COOKIE:-}" ]; then
   checkc "$ADMIN_COOKIE" 404 "/admin/reivindicacoes/$NOID" "admin: pedido inexistente"
   checkc "$ADMIN_COOKIE" 404 "/admin/revisao/$NOID" "admin: revisão inexistente"
 fi
+# S29 T15: papelaria. `app/papelaria/loading.tsx` e `creditos/loading.tsx` davam 200 para lead e fatura inexistentes (D-043);
+# os carregando agora vivem em grupos de rota que não cobrem as páginas com `notFound()`. `PAPELARIA_COOKIE` = Cookie de papelaria@listacerta.test.
+check 404 "/papelarias/nao-existe-slug-s29" "perfil público de papelaria inexistente"
+check 404 "/papelarias/Slug_Invalido" "perfil público com slug malformado"
+check 307 "/papelaria/creditos/faturas/abc" "anônimo em fatura com id inválido"
+if [ -n "${PAPELARIA_COOKIE:-}" ]; then
+  checkc "$PAPELARIA_COOKIE" 404 "/papelaria/leads/LC-ZZZZ" "papelaria: lead inexistente"
+  checkc "$PAPELARIA_COOKIE" 404 "/papelaria/leads/abc" "papelaria: lead com código malformado"
+  checkc "$PAPELARIA_COOKIE" 404 "/papelaria/creditos/faturas/$NOID" "papelaria: fatura inexistente"
+  checkc "$PAPELARIA_COOKIE" 404 "/papelaria/creditos/faturas/abc" "papelaria: fatura com id malformado"
+  checkc "$PAPELARIA_COOKIE" 200 "/papelaria" "papelaria: painel (loading.tsx do grupo painel)"
+  checkc "$PAPELARIA_COOKIE" 200 "/papelaria/leads" "papelaria: lista de leads"
+  checkc "$PAPELARIA_COOKIE" 200 "/papelaria/creditos" "papelaria: créditos e plano"
+  checkc "$PAPELARIA_COOKIE" 200 "/papelaria/areas" "papelaria: bairros"
+  checkc "$PAPELARIA_COOKIE" 200 "/papelaria/desempenho" "papelaria: desempenho"
+  checkc "$PAPELARIA_COOKIE" 200 "/papelaria/catalogo" "papelaria: catálogo"
+fi
 check 404 "/rota-inexistente-s29" "404 global"
 check 200 "/" "home"
 exit $((fail > 0))

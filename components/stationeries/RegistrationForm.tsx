@@ -21,7 +21,7 @@ const initial: RegisterState = { status: "idle" };
 type Action = (prev: RegisterState, formData: FormData) => Promise<RegisterState>;
 
 const LEADS_STEPS = [
-  "O pai escolhe sua papelaria na lista da escola.",
+  "A família escolhe sua papelaria na lista da escola.",
   "Ele chama no seu WhatsApp com o código do lead e o link da lista.",
   "Você atende como sempre e marca aqui quando vender.",
 ];

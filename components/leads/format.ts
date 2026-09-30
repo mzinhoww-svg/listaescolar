@@ -10,6 +10,9 @@ export function moneyOrUnavailable(cents: number | null | undefined): string {
   return typeof cents === "number" && Number.isSafeInteger(cents) && cents >= 0 ? formatBRL(cents) : "indisponível";
 }
 
+/** "1 item" / "3 itens": o número de itens do pedido no singular quando é 1 (UX-082). */
+export const itemsLabel = (n: number): string => `${n} ${n === 1 ? "item" : "itens"}`;
+
 /** "há 12 min", "há 3 h", "ontem", senão a data. Data futura vira a data absoluta. */
 export function relativeWhen(date: Date, now: Date): string {
   const diff = now.getTime() - date.getTime();

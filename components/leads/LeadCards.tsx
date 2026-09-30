@@ -1,8 +1,9 @@
+import { buttonClass } from "@/components/ui/Button";
 import Link from "next/link";
 
 import type { StationeryLead } from "@/features/leads/repository";
 
-import { moneyOrUnavailable, relativeWhen } from "./format";
+import { itemsLabel, moneyOrUnavailable, relativeWhen } from "./format";
 import { DemoSeal, StatusBadge } from "./StatusBadge";
 
 /** Cartões (mobile, Pap02m). */
@@ -19,12 +20,12 @@ export function LeadCards({ rows, now }: { rows: readonly StationeryLead[]; now:
             {r.schoolName} · {r.gradeLabel}
           </p>
           <p className="text-texto-3 text-[12px] font-semibold">
-            {r.itemCount} itens · enviado {moneyOrUnavailable(r.quotedTotalCents)} · {relativeWhen(r.createdAt, now)}
+            {itemsLabel(r.itemCount)} · {r.quotedTotalCents === null ? "sem orçamento enviado" : `orçamento ${moneyOrUnavailable(r.quotedTotalCents)}`} · {relativeWhen(r.createdAt, now)}
           </p>
           {r.isDemo ? <DemoSeal /> : null}
           <Link
             href={`/papelaria/leads/${r.code}`}
-            className="bg-tinta text-papel rounded-botao mt-1 flex h-12 items-center justify-center text-[15px] font-extrabold"
+            className={buttonClass("outline", "md", "mt-1 w-full text-[15px]")}
             aria-label={`Abrir ${r.code} (cartão)`}
           >
             Abrir e responder o pedido

@@ -1,3 +1,6 @@
+import Link from "next/link";
+
+import { buttonClass } from "@/components/ui/Button";
 import { STATUS_LABEL } from "@/features/stationeries/messages";
 import type { AdminRow } from "@/features/stationeries/repository";
 import type { StatusEvent } from "@/features/stationeries/queries";
@@ -13,8 +16,8 @@ const NEXT_STEP: Record<StationeryStatus, string> = {
   under_review: "A equipe está analisando o cadastro. Você será liberada ou liberado para publicar quando for aprovado. Cadastro não é verificação.",
   approved: "Aprovado. Abra o painel para publicar sua papelaria e cadastrar o catálogo.",
   active: "Sua papelaria está publicada. Gerencie pelo painel.",
-  paused: "Sua papelaria está pausada e não aparece para os pais. Reative pelo painel.",
-  suspended: "A papelaria foi suspensa pela equipe e não aparece para os pais. Veja o motivo abaixo.",
+  paused: "Sua papelaria está pausada e não aparece para as famílias. Reative pelo painel.",
+  suspended: "A papelaria foi suspensa pela equipe e não aparece para as famílias. Veja o motivo abaixo.",
   rejected: "O cadastro foi recusado. Veja o motivo abaixo; você pode reenviar para nova análise.",
 };
 
@@ -54,6 +57,17 @@ export function StatusPanel({ stationery, events, resubmit, submitError }: Props
         </ol>
       ) : null}
       <p className="text-texto-2 text-[15px]">{NEXT_STEP[status]}</p>
+      {status === "under_review" ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-texto-2 text-[14px] font-semibold">
+            A decisão é da equipe da ListaCerta e aparece aqui, nesta página, com o motivo se houver recusa. Você não precisa enviar nada de novo.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/conta" className={buttonClass("outline")}>Ir para minha conta</Link>
+            <Link href="/" className={buttonClass("text")}>Voltar ao início</Link>
+          </div>
+        </div>
+      ) : null}
       {showReason ? (
         <p className="rounded-campo bg-erro-fundo px-4 py-3 text-[14px] font-bold text-erro-texto">Motivo informado pela equipe: {stationery.statusReason}</p>
       ) : null}

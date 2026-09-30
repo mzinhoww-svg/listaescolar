@@ -16,7 +16,7 @@ import { ItemsTable } from "@/components/leads/ItemsTable";
 import { KpiRow } from "@/components/leads/KpiRow";
 import { LeadCards } from "@/components/leads/LeadCards";
 import { LeadTable } from "@/components/leads/LeadTable";
-import { eventLabel, moneyOrUnavailable, relativeWhen } from "@/components/leads/format";
+import { eventLabel, itemsLabel, moneyOrUnavailable, relativeWhen } from "@/components/leads/format";
 import { StationeryCard } from "@/components/leads/StationeryCard";
 import { StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
@@ -51,6 +51,16 @@ describe("formatação", () => {
     const e = (over: Partial<LeadEventRow>): LeadEventRow => ({ id: ID, eventType: "created", fromStatus: null, toStatus: null, actorRole: "parent", amountCents: null, createdAt: NOW, ...over });
     expect(eventLabel(e({ eventType: "quote_registered" }), "stationery")).toMatch(/sem valor informado/);
     expect(eventLabel(e({ eventType: "sale_declared", amountCents: 9000 }), "stationery")).toContain("R$ 90,00");
+  });
+});
+
+describe("UX-082/087 · texto do dono da papelaria", () => {
+  it("1 item no singular; cartão sem orçamento não diz 'enviado indisponível'", () => {
+    expect(itemsLabel(1)).toBe("1 item");
+    expect(itemsLabel(3)).toBe("3 itens");
+    const { container } = render(<LeadCards rows={[lead({ itemCount: 1 })]} now={NOW} />);
+    expect(container.textContent).toContain("1 item · sem orçamento enviado");
+    expect(container.textContent).not.toMatch(/enviado indisponível|1 itens/);
   });
 });
 

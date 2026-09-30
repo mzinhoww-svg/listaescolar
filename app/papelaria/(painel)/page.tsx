@@ -11,7 +11,7 @@ import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messa
 import { countCatalogItems, listOwnAreas, listStatusEvents } from "@/features/stationeries/queries";
 import { getOwnerContext } from "@/features/stationeries/session";
 
-import { ownerStatusAction } from "./actions";
+import { ownerStatusAction } from "../actions";
 
 const btn = buttonClass("primary");
 const btnOutline = buttonClass("outline");
@@ -30,12 +30,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   const { stationery } = ctx;
   const events = await listStatusEvents(stationery.id);
   const showActivation = stationery.status === "approved" || stationery.status === "active" || stationery.status === "paused";
+  const leadRows = showActivation ? (await listStationeryLeads(ctx.actor, stationery.id)).rows : [];
+  // UX-080: pedidos esperando a primeira resposta ganham link direto para a aba dos novos.
+  const waiting = leadRows.filter((r) => r.status === "received" || r.status === "viewed").length;
   const activation = showActivation
     ? computeActivation({
         hasProfile: stationery.status === "active" || stationery.status === "paused",
         areasCount: (await listOwnAreas(stationery.id)).length,
         catalogCount: await countCatalogItems(stationery.id),
-        leadsReceived: (await listStationeryLeads(ctx.actor, stationery.id)).rows.length,
+        leadsReceived: leadRows.length,
       })
     : null;
   const move = (to: "active" | "paused", label: string, outline = false) => (
@@ -80,8 +83,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
           </Link>
         ) : null}
       </div>
+      {waiting > 0 ? (
+        <Notice kind="info">
+          {waiting === 1 ? "1 pedido está esperando sua resposta." : `${waiting} pedidos estão esperando sua resposta.`}{" "}
+          <Link href="/papelaria/leads?aba=new" className="underline">
+            Ver pedidos
+          </Link>
+        </Notice>
+      ) : null}
       {stationery.status === "approved" ? (
-        <Notice kind="info">Aprovada: publique para aparecer aos pais. Preço e estoque só aparecem se você informar no catálogo.</Notice>
+        <Notice kind="info">Aprovada: publique para aparecer às famílias. Preço e estoque só aparecem se você informar no catálogo.</Notice>
       ) : null}
       {activation ? <ActivationChecklist activation={activation} /> : null}
       <StatusPanel stationery={stationery} events={events} />

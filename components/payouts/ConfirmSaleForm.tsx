@@ -30,7 +30,7 @@ export function ConfirmSaleForm({ leadId, declaredSaleCents, sale, back }: Props
     <section className="rounded-card flex flex-col gap-2 bg-white p-5" aria-label="Pix pela plataforma">
       <p className="text-texto-3 text-[13px] font-bold">Pix pela plataforma</p>
       <p className="text-texto-2 text-[13px] font-semibold">
-        Se o pai pagou por um Pix rastreado pela ListaCerta (não pelo seu Pix direto), confirme aqui. Isso não move
+        Se a família pagou por um Pix rastreado pela ListaCerta (não pelo seu Pix direto), confirme aqui. Isso não move
         dinheiro nenhum: só registra a venda para a comissão da plataforma.
       </p>
       <form action={confirmSaleAction}>

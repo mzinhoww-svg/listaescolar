@@ -1,6 +1,8 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/brand/Logo";
+import { Button } from "@/components/ui/Button";
 import { signOutAction } from "@/components/auth/sign-out-action";
 import { SkipLink } from "@/components/site/SkipLink";
 
@@ -14,25 +16,27 @@ export function PanelShell({ badge, nav, email, children }: Props) {
   return (
     <div className="flex min-h-dvh flex-1 flex-col md:flex-row">
       <SkipLink />
-      <aside className="bg-tinta flex shrink-0 flex-col gap-5 px-4 py-5 md:w-[248px] md:px-[18px] md:py-7">
-        <div className="px-1">
-          <Logo variant="horizontal-negativo" height={32} />
-        </div>
-        <span className="bg-verde-certo text-tinta w-fit rounded-botao px-3 py-1 text-[12px] font-extrabold">{badge}</span>
-        <NavLinks items={nav} />
-        <div className="mt-auto flex items-center gap-3 px-1 pt-4 text-white">
+      <aside className="bg-tinta flex shrink-0 flex-row flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 md:w-[248px] md:flex-col md:items-stretch md:gap-5 md:px-[18px] md:py-7">
+        <header className="order-1 px-1">
+          <Link href="/" aria-label="ListaCerta, página inicial" className="flex min-h-11 items-center rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-verde-certo">
+            <Logo variant="horizontal-negativo" height={32} />
+          </Link>
+        </header>
+        <span className="bg-verde-certo text-tinta order-2 w-fit rounded-botao px-3 py-1 text-[12px] font-extrabold md:order-none">{badge}</span>
+        <div className="order-3 ml-auto flex items-center gap-2 text-white md:order-none md:mt-auto md:ml-0 md:gap-3 md:px-1 md:pt-4">
           <span className="bg-verde-certo text-tinta grid size-10 shrink-0 place-items-center rounded-full text-[12px] font-extrabold">
             {initials}
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-bold">{email ?? "indisponível"}</p>
+          <div className="min-w-0 md:flex-1">
+            <p className="hidden truncate text-[13px] font-bold md:block">{email ?? "indisponível"}</p>
             <form action={signOutAction}>
-              <button type="submit" className="min-h-11 px-2 text-[12px] font-semibold text-white/70 underline">
+              <Button type="submit" variant="outline" className="!h-11 !border-white/40 !px-4 !text-[13px] !text-white">
                 Sair
-              </button>
+              </Button>
             </form>
           </div>
         </div>
+        <NavLinks items={nav} />
       </aside>
       <main id="conteudo" className="min-w-0 flex-1 px-5 py-8 md:px-10">{children}</main>
     </div>

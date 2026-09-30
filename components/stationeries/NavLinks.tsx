@@ -12,7 +12,7 @@ export function NavLinks({ items }: { items: readonly NavItem[] }) {
     .sort((a, b) => b.href.length - a.href.length)
     .find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))?.href;
   return (
-    <nav aria-label="Navegação" className="flex flex-row gap-1 overflow-x-auto md:flex-col">
+    <nav aria-label="Navegação" className="order-4 flex w-full flex-row gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)] md:order-none md:w-auto md:flex-col md:[mask-image:none]">
       {items.map((i) => (
         <Link
           key={i.href}

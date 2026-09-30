@@ -17,7 +17,7 @@ export function Stepper({ current }: { current: 0 | 1 | 2 }) {
               {done ? "✓" : i + 1}
             </span>
             <span className={`text-[15px] font-extrabold ${now || done ? "" : "text-texto-3"}`}>{label}</span>
-            {i < STEPS.length - 1 ? <span aria-hidden className={`hidden h-0.5 w-10 sm:block ${done ? "bg-verde-certo" : "bg-[#d9d4c6]"}`} /> : null}
+            {i < STEPS.length - 1 ? <span aria-hidden className={`hidden h-0.5 w-10 sm:block ${done ? "bg-verde-certo" : "bg-linha"}`} /> : null}
           </li>
         );
       })}

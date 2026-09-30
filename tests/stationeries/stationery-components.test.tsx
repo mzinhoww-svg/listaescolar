@@ -96,6 +96,12 @@ describe("StatusPanel", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByText("Sem eventos ainda.")).toBeInTheDocument();
   });
+  it("UX-085: em análise diz de onde vem a decisão e leva à conta e à home", () => {
+    render(<StatusPanel stationery={{ ...base, status: "under_review" }} events={[]} resubmit={noop} />);
+    expect(screen.getByText(/A decisão é da equipe da ListaCerta/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ir para minha conta" })).toHaveAttribute("href", "/conta");
+    expect(screen.getByRole("link", { name: "Voltar ao início" })).toHaveAttribute("href", "/");
+  });
   it("rejected: mostra o motivo e permite reenviar", () => {
     render(<StatusPanel stationery={{ ...base, status: "rejected", statusReason: "CNPJ divergente" }} events={[]} resubmit={noop} />);
     expect(screen.getByText(/CNPJ divergente/)).toBeInTheDocument();
@@ -121,6 +127,8 @@ describe("CatalogTable", () => {
     const edit = screen.getByRole("link", { name: "Editar Lápis HB" });
     expect(edit).toHaveAttribute("href", "/e/1");
     expect(edit.className).toContain("min-h-11"); // alvo de toque de 44 px (revisão UX, menores)
+    // sem tabela larga: "Editar" não pode ficar fora da tela a 390 px
+    expect(document.querySelector("table")).toBeNull();
   });
 });
 
@@ -167,6 +175,12 @@ describe("PublicProfileView", () => {
     const text = container.textContent ?? "";
     expect(text).not.toMatch(/estrela|parceira|cnpj|prazo/i);
     expect(text).not.toContain("Demonstração");
+  });
+  it("UX-086: cabeçalho com logo e Voltar, e a barra do WhatsApp não cobre as avaliações (folga no fim)", () => {
+    const { container } = render(<PublicProfileView profile={profile} />);
+    expect(screen.getByRole("link", { name: "ListaCerta, página inicial" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Voltar ao início" })).toHaveAttribute("href", "/");
+    expect(container.querySelector("main")!.className).toMatch(/pb-2[8-9]|pb-3\d/);
   });
   it("avaliações publicadas (S22): nota entre colchetes (Ruling SPEC-2), etiqueta legível (não o slug) e comentário", () => {
     const reviews = [

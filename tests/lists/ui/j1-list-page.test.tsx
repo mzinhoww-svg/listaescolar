@@ -120,3 +120,11 @@ describe("série sem lista publicada (UX-012, UX-014)", () => {
     expect(screen.getByRole("link", { name: "Escolher outra série" })).toHaveAttribute("href", "/escolas/99029003");
   });
 });
+
+describe("título de categoria (UX-020)", () => {
+  it("categoria vinda em minúsculas aparece com a primeira letra maiúscula, sem depender de CSS", async () => {
+    const { container } = render(await ListPage(props()));
+    const titles = [...container.querySelectorAll('section[aria-labelledby="itens"] h3')].map((h) => h.textContent);
+    expect(titles).toEqual(["Papelaria", "Outros itens"]);
+  });
+});

@@ -37,7 +37,7 @@ export function ItemsTable({ items }: { items: PublicListItem[] }) {
       </h2>
       {groups.map((group) => (
         <div key={group.category} className="flex flex-col gap-1.5">
-          <h3 className="text-texto-2 text-[13px] font-extrabold">{group.category}</h3>
+          <h3 className="text-texto-2 text-[13px] font-extrabold">{group.category.charAt(0).toUpperCase() + group.category.slice(1)}</h3>
           <ul className="divide-linha flex flex-col divide-y rounded-[22px] bg-white px-4">
             {group.items.map((item) => {
               const qty = formatQuantity(item.quantity, item.unit);

@@ -43,7 +43,7 @@ export function ListChooser({ inep, publishedShortcuts }: Props) {
               Se você tem a lista que a escola entregou, envie: a equipe revisa antes de publicar.
             </p>
           </div>
-          <Link href={send} className={buttonClass("primary")}>
+          <Link href={send} className={buttonClass("outline")}>
             Enviar a lista desta escola
           </Link>
         </div>

@@ -22,11 +22,7 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:15:17.867Z contra `http://1
 <!-- movimento:start -->
 ## Movimento fora dos tokens (CSS publicado, 1 folha(s))
 
-Aceitos: 120/200/320 ms e `var(--mov-*)`. Isentos por lista nomeada: `animate-spin`, `animate-pulse`, `pesquisa-pulso`. Achados: **3**
-
-- `21ejjs3j--ktj.css: :root,:host { --default-transition-duration: .15s } (150 ms)`
-- `21ejjs3j--ktj.css: .duration-500 { --tw-duration: .5s } (500 ms)`
-- `21ejjs3j--ktj.css: .duration-500 { transition-duration: .5s } (500 ms)`
+Aceitos: 120/200/320 ms e `var(--mov-*)`. Isentos por lista nomeada: `animate-spin`, `animate-pulse`, `pesquisa-pulso`. Achados: **0**
 <!-- movimento:end -->
 
 <!-- J4:start -->
@@ -125,3 +121,20 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-30T00:08:13.159Z contra `http://1
 | `/b2b/faturamento` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
 | `/b2b/conta` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
 <!-- J8:end -->
+
+<!-- J1:start -->
+## J1 · Família acha a lista
+
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T01:25:46.025Z contra `http://127.0.0.1:3003`. Rotas com falha: **0** de 8.
+
+| Rota | Conta | HTTP | Resultado | Achados |
+|---|---|---|---|---|
+| `/` | pub | 200 | ok | - |
+| `/escolas` | pub | 200 | ok | - |
+| `/escolas/99029001` | pub | 200 | ok | - |
+| `/escolas/99029001/ef-5?ano=2027` | pub | 200 | ok | - |
+| `/l/2YE4099M` | pub | 200 | ok | redirecionou para /escolas/99029001/ef-5 |
+| `/l/2YE4099M/qr` | pub | 200 | ok | não é HTML (image/svg+xml; charset=utf-8): só status |
+| `/escolas?q=Maria%20das%20Dores` | pub | 200 | ok | - |
+| `/escolas/99029003` | pub | 200 | ok | - |
+<!-- J1:end -->

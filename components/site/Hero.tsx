@@ -19,7 +19,7 @@ const CHIPS = [
 export function Hero({ shortcuts = [] }: { shortcuts?: readonly PublishedListShortcut[] }) {
   const c = SITE_COPY.hero;
   return (
-    <section aria-labelledby="hero-t" className="bg-papel"><div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 items-center gap-10 px-6 py-12 md:grid-cols-2 md:gap-16 md:py-20">
+    <section aria-labelledby="hero-t" className="bg-papel"><div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 items-start gap-10 px-6 py-12 md:grid-cols-2 md:gap-16 md:py-20">
       <div className="flex min-w-0 flex-col gap-5">
         <p className="text-verde-fundo text-sm font-extrabold">{c.eyebrow}</p>
         <h1 id="hero-t" className="text-[34px] leading-[1.05] font-extrabold tracking-[-0.035em] md:text-[56px]">

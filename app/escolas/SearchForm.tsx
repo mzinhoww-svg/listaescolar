@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { CloseIcon, MagnifierIcon } from "@/components/schools/icons";
+import { Button } from "@/components/ui/Button";
 
 type Props = {
   defaultValue?: string;
@@ -48,14 +49,9 @@ export function SearchForm({ defaultValue = "", neighborhood = "", preserve = {}
           className="placeholder:text-texto-3 h-11 min-w-0 grow bg-transparent text-[15px] font-semibold outline-none [&::-webkit-search-cancel-button]:hidden"
         />
         {value ? (
-          <button
-            type="button"
-            onClick={() => setValue("")}
-            aria-label="Limpar busca"
-            className="text-texto-2 focus-visible:outline-verde-fundo flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
+          <Button variant="icon" onClick={() => setValue("")} aria-label="Limpar busca" className="text-texto-2 rounded-full">
             <CloseIcon />
-          </button>
+          </Button>
         ) : null}
         {stacked ? null : (
           <button type="submit" className="bg-tinta text-papel focus-visible:outline-verde-fundo rounded-botao h-11 shrink-0 px-4 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2">

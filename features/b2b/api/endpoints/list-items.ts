@@ -23,11 +23,11 @@ export const ItemResponseSchema = z
   })
   .strict();
 
-const ParamsSchema = z.object({ id: z.uuid() }).strict();
+const ParamsSchema = z.object({ id: z.uuid().describe("Identificador da lista.") }).strict();
 const QuerySchema = z
   .object({
-    limit: z.coerce.number().int().min(1).max(LIST_ITEMS_LIMIT.max).optional(),
-    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(LIST_ITEMS_LIMIT.max).optional().describe("Quantidade de itens por página."),
+    cursor: z.string().optional().describe("Cursor devolvido na página anterior (next_cursor)."),
   })
   .strict();
 const ItemsCursorSchema = z.object({ position: z.number().int() }).strict();

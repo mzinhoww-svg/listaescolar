@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { ComingSoonBadge } from "@/components/b2b/ComingSoonBadge";
 import { EndpointDoc } from "@/components/b2b/EndpointDoc";
@@ -86,6 +86,35 @@ describe("EndpointDoc", () => {
       expect(screen.getByText(entry.method)).toBeInTheDocument();
       expect(screen.getByText(entry.path)).toBeInTheDocument();
       expect(screen.getByText("Exemplo de resposta (ilustrativo)")).toBeInTheDocument();
+      unmount();
+    }
+  });
+});
+
+// UX-128 · exemplo copiável e descrições dos parâmetros
+import { CurlSample, curlCommand } from "@/components/b2b/CurlSample";
+
+describe("UX-128 · primeira chamada copiável", () => {
+  it("curl usa a chave do ambiente (lc_test_ no sandbox, lc_live_ em produção) e nunca uma chave real", () => {
+    expect(curlCommand("test", "https://listacerta.example")).toContain("lc_test_SUA_CHAVE");
+    expect(curlCommand("live", "https://listacerta.example")).toContain("lc_live_SUA_CHAVE");
+    expect(curlCommand("test", "https://listacerta.example")).toContain("https://listacerta.example/v1/schools?uf=MT&limit=5");
+  });
+
+  it("botão 'Copiar exemplo' copia o comando e avisa", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<CurlSample environment="test" origin="https://listacerta.example" />);
+    fireEvent.click(screen.getByRole("button", { name: "Copiar exemplo" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("lc_test_SUA_CHAVE"));
+    expect(await screen.findByText("Copiado")).toBeInTheDocument();
+  });
+
+  it("nenhum parâmetro do contrato fica com descrição vazia", () => {
+    for (const e of ENDPOINTS) {
+      const { container, unmount } = render(<EndpointDoc entry={e.entry} />);
+      const cells = [...container.querySelectorAll("tbody td:nth-child(4)")].map((c) => c.textContent);
+      expect(cells.filter((t) => t === "—"), e.entry.id).toEqual([]);
       unmount();
     }
   });

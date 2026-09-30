@@ -11,7 +11,7 @@ import { SchoolResponseSchema } from "./schools";
 // GET /v1/schools/{inep} — mesma regra pública de `schools.list`, uma escola. Fora da cobertura ou inexistente:
 // 404 igual (nunca revela se existe fora da cobertura).
 
-const ParamsSchema = z.object({ inep: z.string().regex(/^[0-9]{8}$/) }).strict();
+const ParamsSchema = z.object({ inep: z.string().regex(/^[0-9]{8}$/).describe("Código INEP da escola (8 dígitos).") }).strict();
 
 export const schoolEndpoint = defineEndpoint(
   {

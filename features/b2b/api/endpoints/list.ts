@@ -11,7 +11,7 @@ import { ListResponseSchema } from "./school-lists";
 // GET /v1/lists/{id} — mesma regra pública; só a versão atual publicada. Fora da cobertura, ambiente errado,
 // versão superseded ou lista não publicada: 404 igual a inexistente.
 
-const ParamsSchema = z.object({ id: z.uuid() }).strict();
+const ParamsSchema = z.object({ id: z.uuid().describe("Identificador da lista.") }).strict();
 
 export const listEndpoint = defineEndpoint(
   {

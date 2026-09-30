@@ -27,12 +27,12 @@ export const ListResponseSchema = z
   })
   .strict();
 
-const ParamsSchema = z.object({ inep: z.string().regex(/^[0-9]{8}$/) }).strict();
+const ParamsSchema = z.object({ inep: z.string().regex(/^[0-9]{8}$/).describe("Código INEP da escola (8 dígitos).") }).strict();
 const QuerySchema = z
   .object({
-    year: z.coerce.number().int().min(2020).max(2100).optional(),
-    limit: z.coerce.number().int().min(1).max(SCHOOL_LISTS_LIMIT.max).optional(),
-    cursor: z.string().optional(),
+    year: z.coerce.number().int().min(2020).max(2100).optional().describe("Ano letivo da lista."),
+    limit: z.coerce.number().int().min(1).max(SCHOOL_LISTS_LIMIT.max).optional().describe("Quantidade de listas por página."),
+    cursor: z.string().optional().describe("Cursor devolvido na página anterior (next_cursor)."),
   })
   .strict();
 const ListsCursorSchema = z.object({ year: z.number().int(), sort: z.number().int(), id: z.uuid() }).strict();

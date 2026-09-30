@@ -1,4 +1,6 @@
+import { CurlSample } from "@/components/b2b/CurlSample";
 import { getSessionActor } from "@/features/auth/actor";
+import { siteBase } from "@/lib/site-base";
 import { getMyPartnerHeader, getMyPartnerOverview } from "@/features/b2b/queries";
 import type { B2bPartnerType } from "@/features/b2b/scopes";
 import { KEY_ROTATION_GRACE_DAYS } from "@/features/b2b/limits";
@@ -13,6 +15,10 @@ import { NewKeyDialog } from "./NewKeyDialog";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "API e chaves · Portal B2B · ListaCerta" };
+
+function siteOrigin(): string {
+  return (siteBase() ?? "https://SEU_ENDERECO_DA_LISTACERTA").replace(/\/$/, "");
+}
 
 export default async function Page() {
   const actor = await getSessionActor();
@@ -75,7 +81,12 @@ export default async function Page() {
           </div>
           <div className="rounded-[20px] bg-white p-5">
             <h2 className="text-[16px] font-extrabold">Autenticação</h2>
-            <code className="bg-campo mt-2 block w-fit rounded-campo px-3 py-2 text-[13px] font-bold">x-listacerta-key: lc_live_…</code>
+            <p className="text-texto-2 mt-1 text-[14px] font-medium">
+              Envie a chave no cabeçalho <code className="font-bold">x-listacerta-key</code>. Copie o exemplo, troque <code className="font-bold">SUA_CHAVE</code> pela chave criada e rode no terminal.
+            </p>
+            <div className="mt-3">
+              <CurlSample environment={overview.status === "active" ? "live" : "test"} origin={siteOrigin()} />
+            </div>
             <p className="text-texto-3 mt-2 text-[12px] font-semibold">Rotação sem downtime: a chave anterior vale por até {KEY_ROTATION_GRACE_DAYS.max} dias (padrão {KEY_ROTATION_GRACE_DAYS.default}).</p>
           </div>
         </>

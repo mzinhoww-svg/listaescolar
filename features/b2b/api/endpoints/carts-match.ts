@@ -14,15 +14,15 @@ import { matchItems, type MatchableItem } from "../match";
 
 const SkuInputSchema = z
   .object({
-    sku: z.string().min(CART_MATCH_SKU_LENGTH.min).max(CART_MATCH_SKU_LENGTH.max).regex(CART_MATCH_SKU_PATTERN),
-    name: z.string().min(CART_MATCH_NAME_LENGTH.min).max(CART_MATCH_NAME_LENGTH.max),
+    sku: z.string().min(CART_MATCH_SKU_LENGTH.min).max(CART_MATCH_SKU_LENGTH.max).regex(CART_MATCH_SKU_PATTERN).describe("Código do produto no seu catálogo."),
+    name: z.string().min(CART_MATCH_NAME_LENGTH.min).max(CART_MATCH_NAME_LENGTH.max).describe("Nome do produto no seu catálogo."),
   })
   .strict();
 
 const BodySchema = z
   .object({
-    list_id: z.uuid(),
-    skus: z.array(SkuInputSchema).min(CART_MATCH_MAX_SKUS.min).max(CART_MATCH_MAX_SKUS.max),
+    list_id: z.uuid().describe("Identificador da lista a casar."),
+    skus: z.array(SkuInputSchema).min(CART_MATCH_MAX_SKUS.min).max(CART_MATCH_MAX_SKUS.max).describe("Produtos do seu catálogo a comparar com os itens."),
   })
   .strict();
 

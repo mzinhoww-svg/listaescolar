@@ -30,12 +30,12 @@ export const SchoolResponseSchema = z
 
 const SchoolsQuerySchema = z
   .object({
-    city: z.string().regex(/^[0-9]{7}$/).optional(),
-    uf: z.string().length(2).optional(),
-    q: z.string().min(SCHOOL_QUERY_LENGTH.min).max(SCHOOL_QUERY_LENGTH.max).optional(),
-    has_lists: z.enum(["true", "false"]).optional(),
-    limit: z.coerce.number().int().min(1).max(SCHOOLS_LIST_LIMIT.max).optional(),
-    cursor: z.string().optional(),
+    city: z.string().regex(/^[0-9]{7}$/).optional().describe("Código IBGE do município (7 dígitos)."),
+    uf: z.string().length(2).optional().describe("Sigla da UF, por exemplo MT."),
+    q: z.string().min(SCHOOL_QUERY_LENGTH.min).max(SCHOOL_QUERY_LENGTH.max).optional().describe("Parte do nome da escola."),
+    has_lists: z.enum(["true", "false"]).optional().describe("Filtra escolas com lista publicada."),
+    limit: z.coerce.number().int().min(1).max(SCHOOLS_LIST_LIMIT.max).optional().describe("Quantidade de escolas por página."),
+    cursor: z.string().optional().describe("Cursor devolvido na página anterior (next_cursor)."),
   })
   .strict();
 

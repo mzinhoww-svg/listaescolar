@@ -279,6 +279,18 @@ describe("LeadService transições", () => {
     expect(await code(build().updateStatus(actorOf("stationery_member"), { code: "LC-5TJ1", to: "quote_sent", amount: "12,5x" }))).toBe("amount_invalid");
   });
 
+  it("UX-074: cotação enviada exige o valor, ou o pedido explícito de responder sem valor", async () => {
+    const stationery = actorOf("stationery_member");
+    const before = store.transitionLead.mock.calls.length;
+    expect(await code(build().updateStatus(stationery, { code: "LC-5TJ1", to: "quote_sent" }))).toBe("amount_required");
+    expect(await code(build().updateStatus(stationery, { code: "LC-5TJ1", to: "quote_sent", amount: "  " }))).toBe("amount_required");
+    expect(store.transitionLead.mock.calls.length).toBe(before);
+    await build().updateStatus(stationery, { code: "LC-5TJ1", to: "quote_sent", withoutValue: true });
+    expect(store.transitionLead).toHaveBeenLastCalledWith(expect.anything(), { code: "LC-5TJ1", to: "quote_sent", as: "stationery" });
+    // "sem valor" e valor ao mesmo tempo é contraditório
+    expect(await code(build().updateStatus(stationery, { code: "LC-5TJ1", to: "quote_sent", amount: "10,00", withoutValue: true }))).toBe("invalid_input");
+  });
+
   it("papéis sem relação com papelaria são recusados; parent (dono) e admin passam ao banco", async () => {
     for (const role of ["school_member", "system"]) {
       expect(await code(build().updateStatus(actorOf(role), { code: "LC-5TJ1", to: "in_progress" }))).toBe("forbidden");

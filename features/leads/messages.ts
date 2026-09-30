@@ -12,6 +12,7 @@ const BY_CODE: Record<LeadErrorCode | "desconhecido", string> = {
   out_of_area: "Esta papelaria não atende a sua região.",
   expired: "Este pedido expirou.",
   amount_invalid: "Valor inválido. Use o formato 1.234,50.",
+  amount_required: "Informe o valor do orçamento, ou escolha responder sem valor.",
   reason_required: "Informe o motivo.",
   actor_invalid: "Não foi possível confirmar quem está fazendo esta ação. Entre de novo.",
   limit_exceeded: "Passou do limite permitido. Tente de novo mais tarde.",

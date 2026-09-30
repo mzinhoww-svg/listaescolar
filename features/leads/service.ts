@@ -133,15 +133,18 @@ export class LeadService {
     return this.apply(actor, { code, to: "cancelled", as: "parent" });
   }
 
-  /** Papelaria: em atendimento, cotação enviada (valor opcional) ou aguardando o responsável. */
+  /** Papelaria: em atendimento, cotação enviada (valor, ou `withoutValue` explícito) ou aguardando o responsável. */
   async updateStatus(actor: SessionActor, raw: unknown): Promise<LeadStatus> {
     this.requireStationerySide(actor);
     const code = this.codeOf(raw);
     const parsed = UpdateStatusInputSchema.safeParse(this.rest(raw));
     if (!parsed.success) throw new LeadError("status inválido", "invalid_input");
-    const { to, amount } = parsed.data;
+    const { to, amount, withoutValue } = parsed.data;
     const text = amount?.trim() ?? "";
     if (text !== "" && to !== "quote_sent") throw new LeadError("valor só na cotação enviada", "invalid_input");
+    if (withoutValue && (to !== "quote_sent" || text !== "")) throw new LeadError("sem valor só na cotação enviada e sem valor", "invalid_input");
+    // UX-074: a família lê "a papelaria informou o valor"; sem o valor a resposta só vale se a papelaria disser que é sem valor.
+    if (to === "quote_sent" && text === "" && !withoutValue) throw new LeadError("informe o valor", "amount_required");
     const amountCents = this.amountOf(text);
     return this.apply(actor, { code, to, as: "stationery", ...(amountCents !== undefined ? { amountCents } : {}) });
   }

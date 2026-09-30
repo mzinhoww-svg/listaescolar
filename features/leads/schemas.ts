@@ -22,6 +22,8 @@ const AmountText = z.string().max(40).optional();
 export const UpdateStatusInputSchema = z.strictObject({
   to: z.enum(["in_progress", "quote_sent", "awaiting_customer"]),
   amount: AmountText,
+  /** "Responder sem valor": pedido explícito de quem responde a cotação sem informar preço (UX-074). */
+  withoutValue: z.boolean().optional(),
 });
 export const DeclareSaleInputSchema = z.strictObject({ amount: AmountText });
 export const CloseLostInputSchema = z.strictObject({ reason: z.enum(CLOSE_REASONS) });

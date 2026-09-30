@@ -170,6 +170,10 @@ describe("ações da papelaria", () => {
     svc.updateStatus.mockResolvedValue("quote_sent");
     expect(await redirected(updateLeadStatusAction(form({ code: "LC-5TJ1", to: "quote_sent", amount: "10,00" })))).toBe("/papelaria/leads/LC-5TJ1?ok=1");
     expect(svc.updateStatus).toHaveBeenCalledWith(expect.anything(), { code: "LC-5TJ1", to: "quote_sent", amount: "10,00" });
+    // UX-074: "Responder sem valor" manda o pedido explícito ao serviço.
+    svc.updateStatus.mockClear();
+    await redirected(updateLeadStatusAction(form({ code: "LC-5TJ1", to: "quote_sent", withoutValue: "1" })));
+    expect(svc.updateStatus).toHaveBeenCalledWith(expect.anything(), { code: "LC-5TJ1", to: "quote_sent", withoutValue: true });
     svc.updateStatus.mockRejectedValue(new LeadError("x", "amount_invalid"));
     expect(await redirected(updateLeadStatusAction(form({ code: "LC-5TJ1", to: "quote_sent", amount: "x" })))).toBe("/papelaria/leads/LC-5TJ1?erro=amount_invalid");
   });

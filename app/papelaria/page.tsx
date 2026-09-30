@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { buttonClass } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ActivationChecklist } from "@/components/stationeries/ActivationChecklist";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { StatusPanel } from "@/components/stationeries/StatusPanel";
@@ -56,7 +57,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
       {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       <div className="mb-6 flex flex-wrap gap-3">
         {stationery.status === "approved" ? move("active", "Publicar papelaria") : null}
-        {stationery.status === "active" ? move("paused", "Pausar", true) : null}
+        {stationery.status === "active" ? (
+          <ConfirmDialog
+            triggerLabel="Pausar papelaria"
+            triggerStyle="button"
+            triggerVariant="outline"
+            confirmVariant="primary"
+            title="Pausar a papelaria?"
+            body={<p>Sua papelaria sai da busca e não recebe novos pedidos de cotação até você reativar. Os pedidos que já chegaram continuam no painel.</p>}
+            confirmLabel="Pausar papelaria"
+            action={ownerStatusAction}
+            hidden={{ to: "paused" }}
+          />
+        ) : null}
         {stationery.status === "paused" ? move("active", "Reativar") : null}
         <Link href="/papelaria/catalogo" className={btnOutline}>
           Catálogo

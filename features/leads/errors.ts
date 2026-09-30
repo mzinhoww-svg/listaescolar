@@ -9,6 +9,7 @@ export const LEAD_ERROR_CODES = [
   "out_of_area",
   "expired",
   "amount_invalid",
+  "amount_required",
   "reason_required",
   "actor_invalid",
   "limit_exceeded",

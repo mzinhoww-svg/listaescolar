@@ -172,8 +172,11 @@ DUMPL=$(ab pa eval "fetch('$BASE/papelaria/leads').then(r=>r.text())")
 LEAK=""; for needle in "parent@listacerta.test" "$PARENT_ID" "$CART" "requester_id" "cart_id"; do grep -qF -- "$needle" <<<"$DUMPL" && LEAK="$LEAK [$needle]"; done
 [ -z "$LEAK" ] && ok "lista (html) sem dado do responsável" || bad "lista vazou" "$LEAK"
 # orçamento com valor, depois "Vendi" com valor
-ab pa fill 'input[aria-label="Valor do orçamento (opcional)"]' "120,50" >/dev/null
-clicktext pa "Orçamento enviado"
+# S29 T15: orçamento e venda passam por diálogo; preenche o campo do diálogo e envia o formulário dele.
+dlgsubmit() { # sessão, valor de input[name=to] ('' para venda), valor do campo amount
+  ab "$1" eval "(() => { const f=[...document.querySelectorAll('dialog form')].find(f=>f.querySelector('input[name=amount]') && ('$2'===''? !f.querySelector('input[name=to]') : f.querySelector('input[name=to][value=$2]'))); if(!f) return 'sem-form'; f.querySelector('input[name=amount]').value='$3'; f.requestSubmit(); return 'ok'; })()" >/dev/null
+}
+dlgsubmit pa quote_sent "120,50"
 wait_text pa "Cotação enviada · R\$ 120,50" 15
 expect_eq "$(sql "select status||'/'||quoted_total_cents from public.leads where code='$LEAD1'")" "quote_sent/12050" "orçamento com valor: quote_sent, R\$ 120,50 em centavos"
 expect_text pa "Cotação enviada · R\$ 120,50" "linha do tempo com o valor"
@@ -181,8 +184,7 @@ ab p open "$BASE/cotacao" >/dev/null; wait_text p "Minhas cotações" 15
 expect_text p "Valor informado: R\$ 120,50" "solicitante vê o valor SÓ agora que a papelaria informou"
 expect_text p "Cotação enviada" "solicitante vê o status"
 shot p "$OUT/S14-app08-cotacao-orcada.png"
-ab pa fill 'input[aria-label="Valor da venda (opcional)"]' "150,00" >/dev/null
-clicktext pa "Vendi"
+dlgsubmit pa "" "150,00"
 wait_text pa "Lead encerrado: sem novas ações." 15
 expect_eq "$(sql "select status||'/'||declared_sale_cents from public.leads where code='$LEAD1'")" "converted/15000" "Vendi: converted (declarada), R\$ 150,00"
 expect_text pa "Vendido (declarado)" "UI diz venda declarada"

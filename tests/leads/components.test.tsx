@@ -108,14 +108,49 @@ describe("detalhe do lead", () => {
     expect(screen.getByTestId("subtotal")).toHaveTextContent("indisponível");
     expect(screen.getAllByText("não informado")).toHaveLength(2);
   });
+  it("UX-075/079: itens em lista de cartões (sem tabela que estoura 390 px), preço unitário e total rotulado", () => {
+    const cand = { stationeryId: ID, status: "active", municipalityId: ID, neighborhood: null, isDemo: true, areas: [], itemKey: "lapis", priceCents: 1290, priceSource: "catalog", stock: "in_stock" as const, itemActive: true, priceUpdatedAt: new Date("2026-09-20T12:00:00Z") };
+    const { container } = render(<ItemsTable estimate={estimateFromCatalog(items, [cand], NOW)} />);
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.innerHTML).toMatch(/min-w-0|break-words/);
+    expect(screen.getByText("2 × R$ 12,90")).toBeInTheDocument();
+    expect(screen.getByText(/Total no seu catálogo/)).toBeInTheDocument();
+    expect(screen.getByText("Cola")).toBeInTheDocument();
+    expect(screen.getAllByText("indisponível").length).toBeGreaterThanOrEqual(1);
+  });
   it("StatusForm oferece só transições válidas", () => {
     const { rerender } = render(<StatusForm code="LC-5TJ1" status="viewed" />);
-    expect(screen.getByRole("button", { name: "Vendi" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Orçamento enviado" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Não fechou" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Registrar venda" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enviar orçamento" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Registrar que não fechou" })).toBeInTheDocument();
     rerender(<StatusForm code="LC-5TJ1" status="quote_sent" />);
-    expect(screen.queryByRole("button", { name: "Orçamento enviado" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Valor da venda (opcional)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enviar orçamento" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Valor da venda (opcional)", { selector: "input" })).toBeInTheDocument();
+  });
+  it("UX-076: venda, não fechou e orçamento passam por diálogo com o efeito escrito; Esc/Cancelar não envia", () => {
+    const { container } = render(<StatusForm code="LC-5TJ1" status="viewed" />);
+    const dialogs = [...container.querySelectorAll("dialog")];
+    expect(dialogs.length).toBeGreaterThanOrEqual(4); // orçamento, sem valor, venda, não fechou
+    const sale = dialogs.find((d) => d.textContent?.includes("Registrar venda?"))!;
+    expect(sale.textContent).toMatch(/72 h/);
+    expect(sale.querySelector('input[name="code"][value="LC-5TJ1"]')).not.toBeNull();
+    const lost = dialogs.find((d) => d.querySelector('select[name="reason"]'))!;
+    expect(lost.querySelector('select[name="reason"]')).toBeRequired();
+    // o gatilho abre o diálogo; Cancelar fecha sem enviar
+    fireEvent.click(screen.getByRole("button", { name: "Registrar venda" }));
+    expect(sale.hasAttribute("open")).toBe(true);
+    fireEvent.click(within(sale as HTMLElement).getByRole("button", { name: "Cancelar", hidden: true }));
+    expect(sale.hasAttribute("open")).toBe(false);
+  });
+  it("UX-074: orçamento pede o valor (obrigatório) e a resposta sem valor é um diálogo à parte, com o efeito dito", () => {
+    const { container } = render(<StatusForm code="LC-5TJ1" status="in_progress" />);
+    const dialogs = [...container.querySelectorAll("dialog")];
+    const quote = dialogs.find((d) => d.querySelector('input[name="to"][value="quote_sent"]') && d.querySelector('input[name="amount"]'))!;
+    expect(quote.querySelector('input[name="amount"]')).toBeRequired();
+    expect(quote.textContent).toMatch(/A família verá/);
+    const without = dialogs.find((d) => d.querySelector('input[name="withoutValue"]'))!;
+    expect(without.querySelector('input[name="amount"]')).toBeNull();
+    expect(without.textContent).toMatch(/sem informar valor/);
   });
   it("linha do tempo vazia e com eventos", () => {
     const { rerender } = render(<Timeline events={[]} side="stationery" />);

@@ -83,7 +83,7 @@ echo "== 3) papelaria declara 'Vendi' no mesmo lead (Pap03) -> 2 sinais"
 ab a set viewport 1280 800 >/dev/null
 login a s14a@listacerta.test "/papelaria/leads/LC-E2E1"
 wait_text a "Lead LC-E2E1" 20
-ab a eval "(() => { const f=[...document.querySelectorAll('form')].find(f=>f.querySelector('button')?.textContent.trim()==='Vendi'); f.requestSubmit(); return 'ok'; })()" >/dev/null
+ab a eval "(() => { const f=[...document.querySelectorAll('dialog form')].find(f=>f.querySelector('button[type=submit]')?.textContent.trim()==='Registrar venda'); f.requestSubmit(); return 'ok'; })()" >/dev/null
 wait_text a "Registrado" 15
 expect_text a "Registrado" "venda declarada"
 shot a "$OUT/S22-pap03-vendi.png"

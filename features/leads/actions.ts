@@ -122,7 +122,12 @@ const optional = (formData: FormData, key: string): { [k: string]: string } => {
 /** Papelaria: em atendimento, cotação enviada (valor opcional) ou aguardando o responsável. */
 export async function updateLeadStatusAction(formData: FormData): Promise<void> {
   await stationeryAction(formData, "atualizar status do lead", (svc, actor, code) =>
-    svc.updateStatus(actor, { code, to: text(formData, "to"), ...optional(formData, "amount") }),
+    svc.updateStatus(actor, {
+      code,
+      to: text(formData, "to"),
+      ...optional(formData, "amount"),
+      ...(text(formData, "withoutValue") === "1" ? { withoutValue: true } : {}),
+    }),
   );
 }
 

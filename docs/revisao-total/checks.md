@@ -103,3 +103,25 @@ Gerado por `scripts/s29-checks.mjs` em 2026-09-29T23:56:36.813Z contra `http://1
 | `/admin/importacoes/` | admin | - | pulada | pulada: sem dado no seed (lote de importação); o seed cresce na Task 5 |
 | `/admin/parceiros/` | admin | - | pulada | pulada: sem dado no seed (id do parceiro); o seed cresce na Task 5 |
 <!-- J7:end -->
+
+<!-- J8:start -->
+## J8 · Parceiro B2B integra
+
+Gerado por `scripts/s29-checks.mjs` em 2026-09-30T00:08:13.159Z contra `http://127.0.0.1:3003`. Rotas com falha: **13** de 13.
+
+| Rota | Conta | HTTP | Resultado | Achados |
+|---|---|---|---|---|
+| `/parceiros` | pub | 200 | falha | mais de uma ação principal: main=2 |
+| `/parceiros/termos` | pub | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/parceiros/docs` | pub | 200 | falha | beco sem saída: sem ação adiante; sem caminho de volta |
+| `/b2b` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/api` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (3): button.min-h-11.px-2.text-[12px].font-semibold "Sair" | button.text-verde-fundo.text-[13px].font-extrabold.underline "Rotacionar" | button.text-erro-texto.inline-flex.min-h-11.items-center "Revogar" |
+| `/b2b/docs` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/widget` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/webhooks` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (3): button.min-h-11.px-2.text-[12px].font-semibold "Sair" | button.text-verde-fundo.text-[13px].font-extrabold.underline "Revelar" | button.text-verde-fundo.text-[13px].font-extrabold.underline "Rotacionar" |
+| `/b2b/campanhas` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/campanhas/nova` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/insights` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/faturamento` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+| `/b2b/conta` | parceiro | 200 | falha | beco sem saída: sem caminho de volta<br>botão fora do sistema (1): button.min-h-11.px-2.text-[12px].font-semibold "Sair" |
+<!-- J8:end -->

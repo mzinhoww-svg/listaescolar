@@ -195,18 +195,28 @@ flowchart LR
 
 ## J8 · Parceiro B2B integra
 
+Percorrida no navegador (fichas/J8.md): cadastro público, aprovação no admin, chave, widget (colado numa página de outra origem), webhook, campanha e a aprovação dela no admin. Chamadas reais à API e o extrato de faturamento não foram exercitados.
+
 ```mermaid
 flowchart LR
-  parceiros["/parceiros"] --> termos["/parceiros/termos"]
+  parceiros["/parceiros"] -->|"Falar com o time"| cad["#cadastro"]
+  cad -. "SEM VOLTA hoje (J8-10): sem sessão só 'Entrar para enviar'; o formulário exige conta" .-> login["/entrar"]
+  cad -->|"Enviar (com sessão)"| espera["/b2b (Aguardando aprovação, sem prazo nem contato)"]
+  parceiros --> termos["/parceiros/termos"]
   parceiros --> pdocs["/parceiros/docs"]
-  parceiros -->|"Entrar no portal"| b2b["/b2b"]
+  parceiros -->|"Entrar no portal"| b2b["/b2b (sem próximo passo, J8-05)"]
+  espera -.->|"admin aprova em sandbox (J7)"| aprov{{"/admin/parceiros/[id]"}}
+  aprov -. "AUSENTE hoje (J7-06): nenhum aviso ao parceiro" .-> b2b
   b2b --> api["/b2b/api (chaves)"]
-  api --> docs["/b2b/docs"]
+  api -. "AUSENTE hoje (J8-06): sem exemplo copiável da primeira chamada" .-> docs["/b2b/docs"]
+  api -. "a 390 px 'Rotacionar' e 'Revogar' ficam fora do cartão (J8-03)" .-> api
   b2b --> widget["/b2b/widget"]
-  widget -.->|"script no site do parceiro"| externo{{"Widget em site externo"}}
-  b2b --> web["/b2b/webhooks"]
+  widget -.->|"script no site do parceiro"| externo{{"Widget em site externo: sem estilo, busca vazia muda (J8-02)"}}
+  b2b --> web["/b2b/webhooks (http:// recusado sem dizer por quê, J8-08)"]
   b2b --> camp["/b2b/campanhas"]
-  camp --> campnova["/b2b/campanhas/nova"]
+  camp -. "SEM VOLTA hoje (J8-01): 'Nova campanha' para todo tipo, mas só marca cria" .-> campnova["/b2b/campanhas/nova"]
+  campnova -->|"Criar e enviar para aprovação (marca)"| adminc{{"/admin/campanhas (J7-20)"}}
+  adminc -->|"Aprovar (1 clique)"| camp
   b2b --> ins["/b2b/insights"]
   b2b --> fat["/b2b/faturamento"]
   b2b --> conta["/b2b/conta"]

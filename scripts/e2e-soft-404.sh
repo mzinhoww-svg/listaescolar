@@ -25,5 +25,36 @@ check 307 "/cotacao/LC-ZZZZ" "anônimo em cotação: redireciona ao login"
 check 307 "/admin/reivindicacoes/00000000-0000-0000-0000-000000000000" "anônimo em admin: redireciona"
 check 307 "/papelaria" "anônimo em papelaria: redireciona ao login"
 check 307 "/escola" "anônimo em escola: redireciona ao login"
+# S29 T10: uma rota por `loading.tsx` novo (admin, conta, cotacao, enviar-lista, carrinho, cadastrar-papelaria). O carregando não pode
+# transformar o guard em 200. Id inválido em rota privada também redireciona (o guard vem antes do `notFound()`); 404 de id só
+# se prova logado (roteiros E2E de cada fatia).
+check 307 "/admin" "anônimo em admin (loading.tsx de admin)"
+check 307 "/conta" "anônimo em conta (loading.tsx de conta)"
+check 307 "/cotacao/nova" "anônimo em cotação nova (loading.tsx de cotacao)"
+check 307 "/enviar-lista" "anônimo em enviar-lista (loading.tsx de enviar-lista)"
+check 307 "/enviar-lista/abc" "anônimo em envio com id inválido"
+check 307 "/carrinho/novo" "anônimo em carrinho novo (loading.tsx de carrinho)"
+check 307 "/carrinho/abc" "anônimo em carrinho com id inválido"
+check 200 "/cadastrar-papelaria" "cadastro de papelaria não tem guard: 200 esperado (loading.tsx de cadastrar-papelaria)"
+# Logado, id inexistente = 404 de verdade. `FAMILIA_COOKIE`/`ADMIN_COOKIE` = valor do cabeçalho Cookie das contas de demonstração
+# (login por link mágico); sem eles esta parte é pulada. Foi o que pegou o soft-404 dos loading.tsx de admin/conta/cotacao/enviar-lista.
+checkc() { # <cookie> <esperado> <caminho> <descrição>
+  local got
+  got=$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: $1" "$BASE$3")
+  if [ "$got" = "$2" ]; then r=OK; else r=FALHA; fail=$((fail + 1)); fi
+  printf '%-5s esperado %s obtido %s  %s  (%s)\n' "$r" "$2" "$got" "$3" "$4"
+}
+NOID="00000000-0000-4000-8000-0000000fffff"
+if [ -n "${FAMILIA_COOKIE:-}" ]; then
+  checkc "$FAMILIA_COOKIE" 404 "/cotacao/LC-ZZZZ" "logada: cotação inexistente"
+  checkc "$FAMILIA_COOKIE" 404 "/enviar-lista/$NOID" "logada: envio inexistente"
+  checkc "$FAMILIA_COOKIE" 404 "/enviar-lista/$NOID/revisar" "logada: revisão de envio inexistente"
+  checkc "$FAMILIA_COOKIE" 404 "/conta/alunos/$NOID/editar" "logada: aluno inexistente"
+fi
+if [ -n "${ADMIN_COOKIE:-}" ]; then
+  checkc "$ADMIN_COOKIE" 404 "/admin/reivindicacoes/$NOID" "admin: pedido inexistente"
+  checkc "$ADMIN_COOKIE" 404 "/admin/revisao/$NOID" "admin: revisão inexistente"
+fi
+check 404 "/rota-inexistente-s29" "404 global"
 check 200 "/" "home"
 exit $((fail > 0))

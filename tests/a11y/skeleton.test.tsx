@@ -36,13 +36,11 @@ describe("UX-004 · carregando padrão das árvores privadas", () => {
     expect(container.innerHTML).not.toContain("animate-spin");
     expect(container.innerHTML).toMatch(/h-\d+/);
   });
-  it("cada árvore privada sem carregando próprio o reexporta; a raiz e as páginas públicas indexáveis continuam sem (D-043)", async () => {
+  it("só o cadastro de papelaria (sem guard nem notFound) reexporta PageLoading; árvores com guard/notFound ficam sem loading.tsx (D-043)", async () => {
     const { existsSync, readFileSync } = await import("node:fs");
-    for (const d of ["admin", "conta", "cotacao", "enviar-lista", "carrinho", "cadastrar-papelaria"]) {
-      const f = `app/${d}/loading.tsx`;
-      expect(existsSync(f), f).toBe(true);
-      expect(readFileSync(f, "utf8")).toContain("@/components/ui/PageLoading");
-    }
+    expect(readFileSync("app/cadastrar-papelaria/loading.tsx", "utf8")).toContain("@/components/ui/PageLoading");
+    // Um loading.tsx acima de uma página com `requireAccess`/`notFound()` a põe em streaming e o status vira 200 (soft-404).
+    for (const d of ["admin", "conta", "cotacao", "enviar-lista", "carrinho"]) expect(existsSync(`app/${d}/loading.tsx`), d).toBe(false);
     expect(existsSync("app/loading.tsx")).toBe(false);
   });
 });

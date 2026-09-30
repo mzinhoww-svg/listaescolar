@@ -28,11 +28,15 @@ describe("ConsentNotice (revisão UX I6)", () => {
     expect(container.textContent).not.toContain("sem identificar você");
   });
 
-  it("UX-011: texto de 14 px, sem sombra decorativa e fora do rodapé fixo (não cobre 'Começar' nem outras ações fixas)", () => {
+  it("UX-011: texto de 14 px, sem sombra, sobreposição fixa no topo (sem empurrar conteúdo nem cobrir ações fixas de baixo)", () => {
     render(<ConsentNotice onAccept={() => {}} onDeny={() => {}} />);
     const region = screen.getByRole("region", { name: "Medição de uso" });
-    expect(region.className).not.toMatch(/\bfixed\b|shadow-|bottom-0/);
-    expect(region.className).toContain("order-first");
+    expect(region.className).toMatch(/\bfixed\b/);
+    expect(region.className).toContain("top-0");
+    expect(region.className).not.toMatch(/bottom-|shadow-|order-first/);
+    expect(region.className).toContain("env(safe-area-inset-top)");
+    // Entrada só com opacidade/transform, pelo token, e só com movimento permitido.
+    expect(region.className).toContain("motion-safe:animate-[offline-in_var(--mov-base)");
     const text = region.querySelector("p")!;
     expect(text.className).toContain("text-[14px]");
     expect(text.className).not.toContain("text-[13px]");

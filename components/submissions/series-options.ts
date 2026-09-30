@@ -24,3 +24,8 @@ export function seriesValueForSlug(slug: string): SeriesOption["value"] | undefi
   const value = grade.stage === "ei" ? "Educação infantil" : grade.stage === "em" ? `${grade.label} do ensino médio` : grade.label;
   return SERIES_OPTIONS.find((o) => o.value === value)?.value;
 }
+
+/** Slug do catálogo para o valor do seletor (`5º ano` vira `ef-5`); educação infantil e desconhecido = `undefined` (o valor não diz a turma). */
+export function slugForSeriesValue(value: string): string | undefined {
+  return GRADES.find((g) => g.stage !== "ei" && seriesValueForSlug(g.slug) === value)?.slug;
+}

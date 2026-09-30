@@ -26,7 +26,7 @@ export function AsyncOptions({ submissionId }: { submissionId: string }) {
   return (
     <section aria-label="Enquanto a leitura termina" className="flex flex-col gap-3">
       <p className="text-papel/80 text-sm leading-[1.4] font-semibold">
-        A leitura está demorando mais que o normal. Você pode continuar aguardando ou pedir um aviso.
+        A leitura está demorando mais que o normal. Você pode continuar aguardando ou voltar mais tarde: o resultado fica em Meus envios.
       </p>
       <button type="button" onClick={() => setWaiting(true)} className={light}>
         Continuar aguardando
@@ -41,8 +41,11 @@ export function AsyncOptions({ submissionId }: { submissionId: string }) {
           Ativar notificação do navegador
         </button>
       </form>
+      <Link href="/conta/envios" className="text-papel flex min-h-11 items-center text-[14px] font-extrabold underline underline-offset-2">
+        Ver meus envios
+      </Link>
       {/* D-084 (S18): a página não apontava para onde gerenciar/confirmar o aviso já ativado. */}
-      <Link href="/conta/notificacoes" className="text-papel/80 text-[13px] font-bold underline underline-offset-2">
+      <Link href="/conta/notificacoes" className="text-papel/80 flex min-h-11 items-center text-[13px] font-bold underline underline-offset-2">
         Gerenciar avisos em Minha conta
       </Link>
       <form action={action} className="flex flex-col gap-2">
@@ -75,12 +78,12 @@ export function AsyncOptions({ submissionId }: { submissionId: string }) {
         {state.status === "saved" ? (
           <p className="text-verde-certo text-sm font-bold">
             {state.channel === "browser"
-              ? "Preferência registrada. O aviso pelo navegador ainda será ativado; volte aqui para ver o resultado."
-              : "Canal registrado. Vamos avisar quando a leitura terminar."}
+              ? "Preferência registrada. Ainda não enviamos aviso pelo navegador: volte aqui ou em Meus envios para ver o resultado."
+              : "Canal registrado. O aviso depende de o canal estar ativo: volte aqui ou em Meus envios para ver o resultado."}
           </p>
         ) : null}
         {state.status === "error" ? (
-          <p role="alert" className="text-sm font-bold text-[#ffb4a8]">
+          <p role="alert" className="text-sm font-bold text-erro-fundo">
             {state.message}
           </p>
         ) : null}

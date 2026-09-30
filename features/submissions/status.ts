@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { publicationIsDemo } from "@/features/publication";
+import { slugForSeriesValue } from "@/components/submissions/series-options";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getExtractionPipeline } from "./pipeline-factory";
 import { extractionResultSchema } from "./schemas";
@@ -30,12 +31,23 @@ export async function publishedByOf(id: string): Promise<"auto" | "human" | null
   }
 }
 
+/** Endereço da lista publicada (`/escolas/[inep]/[serie]?ano=`), ou `null` se a escola ou a série não se resolvem. */
+async function publishedListHref(supabase: SupabaseClient, schoolId: unknown, grade: unknown, year: unknown): Promise<string | null> {
+  if (typeof schoolId !== "string" || typeof grade !== "string") return null;
+  const slug = slugForSeriesValue(grade);
+  if (!slug) return null;
+  const school = await supabase.from("schools").select("inep").eq("id", schoolId).maybeSingle();
+  const inep = school.data?.inep;
+  if (typeof inep !== "string" || !/^\d{8}$/.test(inep)) return null;
+  return `/escolas/${inep}/${slug}${typeof year === "number" ? `?ano=${year}` : ""}`;
+}
+
 /**
  * Status do envio com o cliente DO USUÁRIO: a RLS só devolve o envio ao dono e ao admin.
  * `null` = não existe OU é de outra pessoa (o chamador responde 404 nos dois casos).
  */
 export async function getSubmissionStatus(supabase: SupabaseClient, id: string): Promise<StatusPayload | null> {
-  const sub = await supabase.from("list_submissions").select("id, status, is_demo, source").eq("id", id).maybeSingle();
+  const sub = await supabase.from("list_submissions").select("id, status, is_demo, source, school_id, grade, school_year").eq("id", id).maybeSingle();
   if (sub.error || !sub.data) return null;
   const job = await supabase
     .from("jobs")
@@ -54,6 +66,7 @@ export async function getSubmissionStatus(supabase: SupabaseClient, id: string):
   const result = extractionResultSchema.safeParse(ocr.data?.result);
   const source = sub.data.source === "parent" || sub.data.source === "school" ? sub.data.source : null;
   const publishedBy = sub.data.status === "published" ? await publishedByOf(id) : null;
+  const listHref = sub.data.status === "published" ? await publishedListHref(supabase, sub.data.school_id, sub.data.grade, sub.data.school_year) : null;
   return {
     status: String(sub.data.status),
     jobStatus: job.data ? String(job.data.status) : null,
@@ -64,6 +77,7 @@ export async function getSubmissionStatus(supabase: SupabaseClient, id: string):
     publicationDemo: publicationIsDemo({ NODE_ENV: process.env.NODE_ENV, APP_ENV: process.env.APP_ENV, VERCEL_ENV: process.env.VERCEL_ENV, FAKE_PUBLICATION_FIXTURE: process.env.FAKE_PUBLICATION_FIXTURE }),
     ...(source ? { source } : {}),
     ...(publishedBy ? { publishedBy } : {}),
+    ...(listHref ? { listHref } : {}),
     ...(result.success ? { result: result.data } : {}),
   };
 }

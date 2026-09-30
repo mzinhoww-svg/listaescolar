@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
 import { PUBLICATION_STATE_COPY, REJECTED_COPY_HINT, REVIEW_NOTICE } from "@/features/submissions/copy";
 import { WARNING_LOW_CONFIDENCE } from "@/supabase/functions/_shared/ai/warnings";
 import type { ExtractionResult } from "@/features/submissions/schemas";
@@ -13,24 +14,24 @@ const ALERT_LABEL: Record<string, string> = {
 };
 
 /** Resumo do que a leitura encontrou (a revisão do responsável é a S10). Só mostra o que veio do resultado. */
-type Props = { result?: ExtractionResult; isDemo: boolean; status?: string; publicationDemo?: boolean; submissionId?: string; source?: "parent" | "school"; publishedBy?: "auto" | "human" };
+type Props = { result?: ExtractionResult; isDemo: boolean; status?: string; publicationDemo?: boolean; submissionId?: string; source?: "parent" | "school"; publishedBy?: "auto" | "human"; listHref?: string };
 
-export function ReviewSummary({ result, isDemo, status, publicationDemo = false, submissionId, source, publishedBy }: Props) {
+export function ReviewSummary({ result, isDemo, status, publicationDemo = false, submissionId, source, publishedBy, listHref }: Props) {
   const key = status === "published" ? (publishedBy === "auto" ? "published_auto" : "published") : status === "human_review" || status === "approved" || status === "rejected" ? status : null;
   const state = key ? PUBLICATION_STATE_COPY[key] : null;
   const parentOwner = source === "parent" && submissionId !== undefined && result !== undefined;
   const items = result?.items ?? [];
+  const listLink = status === "published" && listHref !== undefined;
   // Baixa confiança ou alerta crítico: aviso em destaque (nunca "publicável automático"; a revisão é obrigatória).
   const attention = result?.lowConfidence === true || (result?.criticalAlerts?.length ?? 0) > 0;
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
-      <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Lista lida</h1>
+    <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-6 pt-14 pb-9">
+      <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">{state?.title ?? "Lista lida"}</h1>
       {isDemo ? (
         <p className="bg-campo text-texto-2 w-fit rounded-full px-3 py-1 text-xs font-extrabold">Demonstração</p>
       ) : null}
       {state ? (
         <section data-testid="publication-state" className="bg-campo rounded-2xl p-3.5">
-          <p className="text-[15px] font-extrabold">{state.title}</p>
           <p className="text-texto-2 text-[13px] leading-[1.4] font-semibold">
             {state.body}
             {status === "rejected" && source === "parent" ? ` ${REJECTED_COPY_HINT}` : ""}
@@ -43,8 +44,11 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false,
       {state ? null : (
         <p className="text-texto-2 rounded-2xl bg-aviso-fundo p-3.5 text-[13px] leading-[1.4] font-semibold">{REVIEW_NOTICE}</p>
       )}
+      <p className="text-texto-2 text-[13px] leading-[1.4] font-semibold">Seu envio foi recebido. Não é preciso enviar de novo: enviar outra vez cria um novo envio.</p>
       {items.length === 0 ? (
-        <p className="text-texto-2 text-[15px] font-semibold">Nenhum item foi identificado neste arquivo.</p>
+        <p className="text-texto-2 text-[15px] font-semibold">
+          {result === undefined ? "Os itens desta leitura não estão disponíveis aqui." : "Nenhum item foi identificado neste arquivo."}
+        </p>
       ) : (
         <section aria-label="Itens lidos">
           <h2 className="mb-2 flex justify-between text-[13px] font-extrabold">
@@ -84,17 +88,24 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false,
           {w}
         </p>
       ))}
-      {parentOwner ? (
-        <Link href={`/enviar-lista/${submissionId}/revisar`} className="bg-tinta text-papel flex h-[52px] w-full items-center justify-center rounded-botao text-base font-extrabold">
-          Revisar meus itens
-        </Link>
-      ) : null}
-      <Link
-        href="/enviar-lista"
-        className="border-tinta text-tinta mt-auto flex h-[52px] w-full items-center justify-center rounded-botao border-[1.5px] text-base font-extrabold"
-      >
-        Enviar outra lista
-      </Link>
+      <div className="mt-auto flex flex-col gap-3 pt-2">
+        {listLink ? (
+          <Link href={listHref} className={buttonClass("primary", "lg", "w-full")}>Ver a lista publicada</Link>
+        ) : null}
+        {parentOwner ? (
+          <Link href={`/enviar-lista/${submissionId}/revisar`} className={buttonClass(listLink ? "outline" : "primary", listLink ? "md" : "lg", "w-full")}>
+            Revisar meus itens
+          </Link>
+        ) : null}
+        {listLink || parentOwner ? null : (
+          <Link href="/conta/envios" className={buttonClass("primary", "lg", "w-full")}>Ver meus envios</Link>
+        )}
+        <nav aria-label="Outras opções" className="flex flex-wrap gap-x-4">
+          {listLink || parentOwner ? <Link href="/conta/envios" className={buttonClass("text")}>Meus envios</Link> : null}
+          <Link href="/conta" className={buttonClass("text")}>Ir para minha conta</Link>
+          <Link href="/enviar-lista" className={buttonClass("text")}>Enviar outra lista</Link>
+        </nav>
+      </div>
     </main>
   );
 }

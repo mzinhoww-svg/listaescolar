@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { extractionResultSchema, type ExtractionResult } from "./schemas";
 
+/** `/escolas/<INEP de 8 dígitos>/<slug da série>?ano=<aaaa>`: o único endereço que a tela de andamento aceita seguir. */
+export const PUBLISHED_LIST_HREF = /^\/escolas\/\d{8}\/[a-z0-9-]+(\?ano=\d{4})?$/;
+
 /** Corpo de `GET /api/submissions/[id]/status` (também o estado inicial da página). */
 export const statusPayloadSchema = z.object({
   status: z.string(),
@@ -17,6 +20,8 @@ export const statusPayloadSchema = z.object({
   source: z.enum(["parent", "school"]).optional(),
   /** D-071: quem publicou, vindo da linha da decisão (não do status). Ausente = não se sabe: texto neutro. */
   publishedBy: z.enum(["auto", "human"]).optional(),
+  /** Endereço da lista publicada desta escola e série (só com envio publicado e escola conhecida). */
+  listHref: z.string().regex(PUBLISHED_LIST_HREF).optional(),
 });
 export type StatusPayload = z.infer<typeof statusPayloadSchema>;
 

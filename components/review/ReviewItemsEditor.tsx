@@ -92,8 +92,8 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
         </label>
         <label className="flex flex-col gap-1 text-[13px] font-extrabold">
           Ano letivo
+          {readOnly ? <span className="min-h-11 py-2 text-[14px] font-bold">{draft.schoolYear ?? "Não informado"}</span> : (
           <input
-            disabled={readOnly}
             className={`${field} w-28`}
             type="number"
             inputMode="numeric"
@@ -102,6 +102,7 @@ export function ReviewItemsEditor({ submissionId, version, initial, thresholds, 
             value={draft.schoolYear ?? ""}
             onChange={(e) => setDraft((d) => ({ ...d, schoolYear: e.target.value === "" ? null : Number(e.target.value) }))}
           />
+          )}
         </label>
         <p className="ml-auto flex flex-wrap items-center gap-2 text-[14px] font-bold">
           <span className="text-texto-2">{draft.items.length} {draft.items.length === 1 ? "item lido" : "itens lidos"}</span>

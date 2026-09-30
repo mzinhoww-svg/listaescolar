@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 import { IDLE, state, type ReviewActionState } from "@/app/admin/revisao/state";
 import { AlertNote } from "@/components/review/AlertNote";
 import { ConfidenceBadge } from "@/components/review/ConfidenceBadge";
+import { ReviewDocument } from "@/components/review/ReviewDocument";
 import { DecisionPanel } from "@/components/review/DecisionPanel";
 import { DraftProvider } from "@/components/review/DraftContext";
 import { ReviewItemsEditor, type ReviewDraft } from "@/components/review/ReviewItemsEditor";
@@ -109,6 +110,18 @@ describe("ReviewItemsEditor", () => {
     expect(screen.queryByLabelText("Nome do item 1")).toBeNull();
     expect(screen.queryByRole("button", { name: "Salvar edição" })).toBeNull();
     expect(screen.getByText("Caderno")).toBeInTheDocument();
+  });
+});
+
+describe("UX-112", () => {
+  it("somente leitura: Ano letivo vira texto, sem campo desabilitado", () => {
+    render(<ReviewItemsEditor submissionId="s1" version={2} initial={initial} thresholds={TH} readOnly action={async () => IDLE} />);
+    expect(document.querySelector('input[type="number"]')).toBeNull();
+    expect(screen.getByText("Ano letivo")).toBeInTheDocument();
+  });
+  it("documento: texto de apoio quando a pré-visualização não carrega", () => {
+    const { container } = render(<ReviewDocument submissionId="s1" mimeType="application/pdf" sizeBytes={1000} />);
+    expect(container.textContent).toMatch(/Se o documento não aparecer/);
   });
 });
 

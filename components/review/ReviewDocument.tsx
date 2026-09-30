@@ -25,6 +25,7 @@ export function ReviewDocument({ submissionId, mimeType, sizeBytes }: Props) {
       ) : (
         <p className="bg-campo rounded-campo px-4 py-3 text-[14px] font-semibold">Este formato não tem pré-visualização. Abra o arquivo pelo link abaixo.</p>
       )}
+      <p className="text-texto-2 text-[13px] font-semibold">Se o documento não aparecer aqui, abra em outra aba pelo link abaixo.</p>
       <a href={src} target="_blank" rel="noopener noreferrer" className="text-verde-fundo inline-flex min-h-11 items-center text-[14px] font-extrabold underline">
         Abrir em outra aba (link de 60 s)
       </a>

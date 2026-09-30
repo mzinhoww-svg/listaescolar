@@ -63,7 +63,7 @@ describe("prepareUpload", () => {
     });
     const r = await prepareUpload(fakeFile("IMG_1.heic", "", 5_000_000), { resize });
     expect(r).toEqual({ ok: false, message: ERROR_MESSAGES.image_undecodable });
-    expect(ERROR_MESSAGES.image_undecodable).toMatch(/JPG|PNG/);
+    expect(ERROR_MESSAGES.image_undecodable).toMatch(/PDF/);
   });
 
   it("depois de comprimir, ainda acima de 4 MB: recusa", async () => {

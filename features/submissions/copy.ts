@@ -1,11 +1,16 @@
 import type { UploadErrorCode } from "./file-validation";
 
 /**
- * Texto do consentimento. As telas de referência (App15) só trazem o aviso de revisão; a primeira frase é o
- * mínimo para o aceite ser explícito. Se o texto mudar, mude também CONSENT_TEXT_VERSION (constants.ts).
+ * Texto do consentimento (S29 UX-067): diz que o arquivo é lido por serviço de inteligência artificial, que a equipe
+ * revisa antes de a lista aparecer para outras famílias e pede para não mostrar dado do aluno. É o ÚNICO lugar do
+ * formulário que fala da revisão. Se o texto mudar, mude também CONSENT_TEXT_VERSION (constants.ts).
  */
 export const CONSENT_LABEL =
-  "Concordo em enviar este arquivo. Sua lista passa por revisão antes de aparecer para outras famílias.";
+  "Concordo em enviar este arquivo. Ele pode ser lido por um serviço de inteligência artificial e a equipe revisa a lista antes de ela aparecer para outras famílias. Não deixe aparecer nome de aluno na foto ou no PDF.";
+/** Prazo de guarda do arquivo: definição do humano (H-05); sem ela, "indisponível" (nada inventado). */
+export const CONSENT_RETENTION_NOTE = "Prazo de guarda do arquivo: indisponível por enquanto.";
+/** Dito quando a foto grande foi reduzida no navegador antes do envio (UX-071). */
+export const REDUCED_NOTE = "Reduzimos a foto para caber.";
 export const REVIEW_NOTICE = "Sua lista passa por revisão antes de aparecer para outras famílias.";
 
 export type FormErrorCode =
@@ -18,6 +23,7 @@ export type FormErrorCode =
   | "pdf_too_large"
   | "image_undecodable"
   | "rate_limited"
+  | "network"
   | UploadErrorCode;
 
 export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
@@ -27,12 +33,13 @@ export const ERROR_MESSAGES: Record<FormErrorCode, string> = {
   forbidden: "Seu perfil não pode enviar listas por aqui.",
   school_not_linked: "Você ainda não tem vínculo confirmado com esta escola. Reivindique a escola antes de enviar a lista.",
   unexpected: "Não foi possível enviar agora. Tente novamente em instantes.",
+  network: "Não conseguimos enviar: a conexão falhou. O que você escolheu continua aqui.",
   rate_limited: "Muitos envios em pouco tempo. Aguarde um pouco e tente de novo.",
   empty_file: "O arquivo está vazio. Escolha outro.",
-  file_too_large: "Este arquivo passa de 4 MB. Tire a foto de novo com menos qualidade ou envie um PDF menor.",
-  pdf_too_large: "Este PDF passa de 4 MB. Comprima o PDF ou envie fotos das páginas.",
-  image_undecodable: "Não conseguimos reduzir esta foto (formatos como HEIC). Envie em JPG ou PNG, ou como PDF.",
-  unsupported_type: "Tipo de arquivo não aceito. Envie PDF, JPG, PNG, WEBP ou HEIC.",
+  file_too_large: "Este arquivo passa de 4 MB. Tire a foto de novo ou envie um PDF menor.",
+  pdf_too_large: "Este PDF passa de 4 MB. Envie um PDF menor ou fotos das páginas.",
+  image_undecodable: "Não conseguimos reduzir esta foto. Tire a foto de novo ou envie a lista como PDF.",
+  unsupported_type: "Tipo de arquivo não aceito. Envie uma foto ou PDF da lista.",
   signature_mismatch: "O conteúdo do arquivo não confere com o tipo informado. Escolha outro arquivo.",
   encrypted_pdf: "Este PDF tem senha. Envie uma versão sem proteção.",
   corrupt_file: "Não conseguimos abrir este arquivo. Escolha outro.",
@@ -75,12 +82,12 @@ export const PUBLICATION_STATE_COPY: Record<"human_review" | "approved" | "publi
   // Neutro: vale para publicação humana e para quando não se sabe quem publicou (D-071).
   published: {
     title: "Lista publicada",
-    body: "A lista foi publicada.",
+    body: "Ela já aparece para outras famílias.",
   },
   // Só quando a linha `publication:published` prova que foi automática.
   published_auto: {
     title: "Publicada automaticamente",
-    body: "A lista passou pelas verificações e foi publicada.",
+    body: "Passou pelas verificações e já aparece para outras famílias.",
   },
   rejected: {
     title: "Lista não publicada",

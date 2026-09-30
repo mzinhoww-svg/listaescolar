@@ -55,6 +55,7 @@ describe("/conta · hub · UX-048", () => {
     await hub();
     const shortcuts = screen.getByRole("navigation", { name: "Atalhos" });
     expect(within(shortcuts).getByRole("link", { name: /Enviar a lista da escola/ })).toHaveAttribute("href", "/enviar-lista");
+    expect(within(shortcuts).getByRole("link", { name: /Meus envios/ })).toHaveAttribute("href", "/conta/envios");
     expect(within(shortcuts).getByRole("link", { name: /Minhas compras/ })).toHaveAttribute("href", "/conta/compras");
     expect(within(shortcuts).getByRole("link", { name: /Minhas cotações/ })).toHaveAttribute("href", "/cotacao");
   });

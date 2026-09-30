@@ -3,44 +3,82 @@
 import Link from "next/link";
 import { startTransition, useActionState, useRef, useState, type FormEvent } from "react";
 
-import { clientCheck, formatSize, pickedFile } from "@/components/submissions/clientChecks";
-import { prepareUpload } from "@/components/submissions/prepareUpload";
+import { clientChecks, pickedFile, type FieldErrors } from "@/components/submissions/clientChecks";
 import { ConsentField } from "@/components/submissions/ConsentField";
-import { BoltIcon, CameraIcon, ChevronLeftIcon, ClockIcon } from "@/components/submissions/icons";
+import { FilePicker } from "@/components/submissions/FilePicker";
+import { ChevronLeftIcon } from "@/components/submissions/icons";
+import { prepareUpload } from "@/components/submissions/prepareUpload";
 import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
 import { SchoolSearchPicker, type SchoolHit } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
-import { ACCEPT_ATTR, errorFieldFor, FORM_ERROR_ID, REVIEW_NOTICE } from "@/features/submissions/copy";
+import { Button } from "@/components/ui/Button";
+import { InlineStatus } from "@/components/ui/InlineStatus";
+import { errorFieldFor, FORM_ERROR_ID, messageFor, REDUCED_NOTE, type ErrorField } from "@/features/submissions/copy";
+import { idleState, type SubmitState } from "@/features/submissions/form-schema";
+import { isControlFlowError, isRetryable, submitFailureCode } from "@/features/submissions/network";
 import { trackUploadStarted } from "@/lib/analytics/track";
-import { idleState } from "@/features/submissions/form-schema";
 
 import { submitListAction } from "./actions";
 
-const primary = "bg-tinta text-papel flex h-14 w-full items-center justify-center gap-2 rounded-botao text-base font-extrabold disabled:opacity-60";
-const outline = "border-tinta text-tinta flex h-[52px] w-full items-center justify-center gap-2 rounded-botao border-[1.5px] text-base font-extrabold";
+/** Foco no primeiro campo com erro, na ordem da tela: arquivo, série, consentimento (UX-064). */
+const FOCUS_ORDER: [ErrorField, string][] = [["file", "file-choose"], ["grade", "grade"], ["consent", "consent"]];
+
+/**
+ * A chamada da Server Action viaja por `fetch`: sem rede ela REJEITA. Sem este envoltório a rejeição derrubaria a tela
+ * (limite de erro); aqui vira um estado de erro com "Tentar de novo". `redirect()` da action não é erro: mantém o estado.
+ */
+async function safeSubmit(prev: SubmitState, data: FormData): Promise<SubmitState> {
+  try {
+    return await submitListAction(prev, data);
+  } catch (e) {
+    if (isControlFlowError(e)) return prev;
+    const code = submitFailureCode(e);
+    return { status: "error", code, message: messageFor(code) };
+  }
+}
+
+type Props = { years: number[]; defaultYear: number; initialSchool?: SchoolHit | null; initialGrade?: string };
 
 /** App15-EnviarLista + App06-Foto (390×844). O arquivo vai pela Server Action; a tela App20 cobre o envio. */
-export function SubmitForm({ years, defaultYear, initialSchool = null, initialGrade = "" }: { years: number[]; defaultYear: number; initialSchool?: SchoolHit | null; initialGrade?: string }) {
-  const [state, action, pending] = useActionState(submitListAction, idleState);
+export function SubmitForm({ years, defaultYear, initialSchool = null, initialGrade = "" }: Props) {
+  const [state, action, pending] = useActionState(safeSubmit, idleState);
   const [picked, setPicked] = useState<{ name: string; size: number } | null>(null);
-  const [clientError, setClientError] = useState<string | null>(null);
+  const [clientErrors, setClientErrors] = useState<FieldErrors>({});
+  const [dismissed, setDismissed] = useState<SubmitState | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [reduced, setReduced] = useState(false);
   const camera = useRef<HTMLInputElement>(null);
   const gallery = useRef<HTMLInputElement>(null);
+  // O envio já preparado (série, consentimento, arquivo reduzido): "Tentar de novo" reenvia ESTE, sem pedir nada de novo.
+  const [lastSent, setLastSent] = useState<FormData | null>(null);
 
+  const clear = (key: ErrorField) => {
+    setClientErrors((cur) => {
+      const next = { ...cur };
+      delete next[key];
+      return next;
+    });
+    setDismissed(state);
+  };
   const onPick = (own: HTMLInputElement | null, other: HTMLInputElement | null) => {
     const file = own?.files?.[0];
     if (other) other.value = ""; // um só arquivo por envio
     setPicked(file ? { name: file.name, size: file.size } : null);
-    setClientError(null);
+    setReduced(false);
+    clear("file");
   };
-  const [preparing, setPreparing] = useState(false);
-  // O envio passa por aqui (não pelo `action` direto) para trocar fotos grandes pela versão reduzida (JPEG, 2400 px).
+  const onChange = (e: FormEvent<HTMLFormElement>) => {
+    const name = (e.target as HTMLInputElement).name;
+    if (name === "grade" || name === "consent") clear(name);
+  };
+
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const problem = clientCheck(form, { compressImages: true });
-    setClientError(problem);
-    if (problem) return;
+    const problems = clientChecks(form, { compressImages: true });
+    setClientErrors(problems);
+    const first = FOCUS_ORDER.find(([field]) => problems[field] !== undefined);
+    if (first) return void document.getElementById(first[1])?.focus();
     const data = new FormData(form);
     const original = pickedFile(form);
     if (original) trackUploadStarted(original, data.get("schoolId") !== "");
@@ -48,74 +86,71 @@ export function SubmitForm({ years, defaultYear, initialSchool = null, initialGr
       setPreparing(true);
       const prepared = await prepareUpload(original);
       setPreparing(false);
-      if (!prepared.ok) {
-        setClientError(prepared.message);
-        return;
-      }
+      if (!prepared.ok) return void setClientErrors({ file: prepared.message });
+      setReduced(prepared.compressed);
       data.delete("file");
       data.append("file", prepared.file);
     }
+    setLastSent(data);
     startTransition(() => action(data));
   };
-  const message = clientError ?? (state.status === "error" ? state.message : null);
-  const errorField = errorFieldFor(message);
-  const fileInvalid = errorField === "file";
+  const retry = () => {
+    if (lastSent) startTransition(() => action(lastSent));
+  };
+
+  const server = state.status === "error" && state !== dismissed ? state : null;
+  const serverField = errorFieldFor(server?.message ?? null);
+  const errors: FieldErrors = { ...(server && serverField ? { [serverField]: server.message } : {}), ...clientErrors };
+  const general = server && !serverField ? server : null;
+  const canRetry = general !== null && isRetryable(general.code) && lastSent !== null;
 
   return (
     <>
       <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col">
-      <form action={action} onSubmit={onSubmit} noValidate className="flex w-full flex-1 flex-col gap-4 px-5 pt-14 pb-9">
-        <header className="relative flex h-12 items-center justify-center">
-          <Link href="/" aria-label="Voltar" className="bg-campo absolute left-0 grid size-12 place-items-center rounded-full">
-            <ChevronLeftIcon />
-          </Link>
-          <h1 className="text-base font-extrabold">Enviar lista</h1>
-        </header>
-        <p className="flex items-start gap-2.5 rounded-2xl bg-aviso-fundo p-3.5 text-[13px] leading-[1.4] font-semibold text-[#7a4a0a]">
-          <ClockIcon size={16} className="mt-0.5 shrink-0" />
-          {REVIEW_NOTICE}
-        </p>
+        <form action={action} onSubmit={onSubmit} onChange={onChange} noValidate className="flex w-full flex-1 flex-col gap-5 px-6 pt-6 pb-9">
+          <header className="flex flex-col gap-3">
+            <Link href={initialSchool ? `/escolas/${initialSchool.inep}` : "/conta"} aria-label="Voltar" className="bg-campo focus-visible:outline-verde-fundo grid size-12 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2">
+              <ChevronLeftIcon />
+            </Link>
+            <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Enviar a lista da escola</h1>
+            <p className="text-texto-2 text-[14px] leading-[1.4] font-semibold">Mande a foto ou o PDF da lista que a escola entregou.</p>
+          </header>
 
-        <section aria-label="Foto ou arquivo da lista" className="flex flex-col gap-3">
-          <p className="bg-verde-certo/15 text-verde-fundo flex items-center gap-3 rounded-2xl p-3.5 text-[13px] leading-[1.4] font-bold">
-            <span className="bg-verde-certo text-tinta grid size-9 shrink-0 place-items-center rounded-full">
-              <BoltIcon size={18} />
-            </span>
-            A IA lê a lista, identifica cada item e confere as quantidades.
-          </p>
-          <input ref={camera} name="file" type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Tirar foto da lista" aria-invalid={fileInvalid} aria-describedby={fileInvalid ? FORM_ERROR_ID : undefined} onChange={() => onPick(camera.current, gallery.current)} />
-          <input ref={gallery} id="file" name="file" type="file" accept={ACCEPT_ATTR} className="sr-only" tabIndex={-1} aria-label="Arquivo da lista" aria-invalid={fileInvalid} aria-describedby={fileInvalid ? FORM_ERROR_ID : undefined} onChange={() => onPick(gallery.current, camera.current)} />
-          <button type="button" className={`${primary} h-14`} onClick={() => camera.current?.click()}>
-            <CameraIcon size={18} /> Tirar foto
-          </button>
-          <button type="button" className={outline} onClick={() => gallery.current?.click()}>
-            Escolher da galeria ou PDF
-          </button>
-          {picked ? (
-            <p data-testid="picked" className="text-texto-2 text-center text-[13px] font-bold">
-              {picked.name} · {formatSize(picked.size)}
-            </p>
-          ) : null}
-        </section>
+          <FilePicker camera={camera} gallery={gallery} picked={picked} error={errors.file} onPick={onPick} />
+          {reduced ? <InlineStatus tone="info">{REDUCED_NOTE}</InlineStatus> : null}
+          <SchoolSearchPicker initial={initialSchool} />
+          <SeriesFields years={years} defaultYear={defaultYear} defaultGrade={initialGrade} error={errors.grade} />
+          <ConsentField error={errors.consent} />
 
-        <SchoolSearchPicker initial={initialSchool} />
-        <SeriesFields years={years} defaultYear={defaultYear} defaultGrade={initialGrade} invalid={errorField === "grade"} />
-        <ConsentField invalid={errorField === "consent"} />
-        <div aria-live="polite">
-          {message ? (
-            <p id={FORM_ERROR_ID} role="alert" className="text-[13px] font-bold text-erro-texto">
-              {message}
-            </p>
-          ) : null}
-        </div>
-        <button type="submit" disabled={pending || preparing} className={`${primary} mt-auto`}>
-          {preparing ? "Preparando a foto…" : "Enviar para revisão"}
-        </button>
-      </form>
+          <div aria-live="polite" className="flex flex-col gap-3">
+            {preparing ? <InlineStatus tone="info">Preparando a foto…</InlineStatus> : null}
+            {general ? (
+              <div id={FORM_ERROR_ID} role="alert" className="bg-erro-fundo text-erro-texto flex flex-col gap-3 rounded-campo p-3.5 text-[14px] leading-[1.4] font-semibold">
+                <p>
+                  {general.message}
+                  {canRetry ? (
+                    <>
+                      {" "}Toque em Tentar de novo. Se o envio já tiver chegado, ele aparece em{" "}
+                      <Link href="/conta/envios" className="underline">Meus envios</Link>.
+                    </>
+                  ) : null}
+                </p>
+                {canRetry ? (
+                  <Button variant="danger" className="w-full" onClick={retry}>
+                    Tentar de novo
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <Button type="submit" size="lg" loading={pending || preparing} className="mt-auto w-full">
+            Enviar para revisão
+          </Button>
+        </form>
       </main>
       {pending ? (
         <div className="fixed inset-0 z-50 overflow-auto">
-          <ProcessingScreen phase="sending" title="Enviando sua lista" subtitle="Guardando o arquivo e iniciando a leitura." />
+          <ProcessingScreen embedded phase="sending" title="Enviando sua lista" subtitle={`Guardando o arquivo e iniciando a leitura.${reduced ? ` ${REDUCED_NOTE}` : ""}`} />
         </div>
       ) : null}
     </>

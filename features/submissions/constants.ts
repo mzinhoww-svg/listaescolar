@@ -23,7 +23,7 @@ export const UPLOAD_BUCKET = "list-uploads";
 
 /** Consentimento: só o texto da tela App15; a versão muda quando o texto mudar. */
 export const CONSENT_PURPOSE = "list_upload";
-export const CONSENT_TEXT_VERSION = "2026-09-v1";
+export const CONSENT_TEXT_VERSION = "2026-09-v2";
 
 export const OCR_JOB_KIND = "ocr_jobs";
 

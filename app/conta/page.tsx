@@ -26,7 +26,7 @@ const SHORTCUT = "bg-branco-tonal focus-visible:outline-verde-fundo flex min-h-1
  * status vindo do banco. `/conta` serve os quatro papéis logados (S02); a área da família aparece para qualquer
  * um deles (um `school_member` também pode ter filhos), sem exigir papel `parent`.
  * S29 (UX-048): uma ação principal por vez (adicionar aluno enquanto não há aluno; depois, buscar a lista) e atalhos
- * para enviar a lista, minhas compras e minhas cotações. "Meus envios" entra com a S29 Task 14 (UX-060).
+ * para enviar a lista, minhas compras e minhas cotações. "Meus envios" (UX-060, S29 Task 14).
  */
 export default async function AccountHubPage({ searchParams }: PageProps<"/conta">) {
   const { user } = await requireAccess("/conta");
@@ -64,6 +64,13 @@ export default async function AccountHubPage({ searchParams }: PageProps<"/conta
           <span className="flex flex-col gap-0.5">
             <span className="text-[14px] font-extrabold">Enviar a lista da escola</span>
             <span className="text-texto-2 text-[13px] font-semibold">Não achou a lista? Mande a foto ou o PDF.</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </Link>
+        <Link href="/conta/envios" className={SHORTCUT}>
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[14px] font-extrabold">Meus envios</span>
+            <span className="text-texto-2 text-[13px] font-semibold">Veja o andamento das listas que você enviou</span>
           </span>
           <span aria-hidden="true">→</span>
         </Link>

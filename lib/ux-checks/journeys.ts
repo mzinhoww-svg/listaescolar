@@ -23,7 +23,7 @@ export const JOURNEYS: Record<string, Journey> = {
       r("/conta/listas-salvas", "familia"), r("/conta/carrinhos", "familia"), r("/conta/notificacoes", "familia"), r("/conta/privacidade", "familia"),
     ],
   },
-  J4: { nome: "Família envia a lista da escola", rotas: [r("/enviar-lista", "familia"), r("/enviar-lista/{submissionId}", "familia"), r("/enviar-lista/{submissionId}/revisar", "familia")] },
+  J4: { nome: "Família envia a lista da escola", rotas: [r("/enviar-lista", "familia"), r("/enviar-lista/{submissionId}", "familia"), r("/enviar-lista/{submissionId}/revisar", "familia"), r("/conta/envios", "familia")] },
   J5: {
     nome: "Escola assume e publica",
     rotas: [

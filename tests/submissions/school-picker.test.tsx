@@ -27,13 +27,12 @@ describe("LinkedSchoolSelect (escola vinculada)", () => {
   });
 });
 
-describe("SchoolSearchPicker (busca da S04)", () => {
+describe("SchoolSearchPicker (busca ao digitar, UX-070)", () => {
   it("busca, escolhe e leva o id no campo schoolId; 'Trocar' limpa", async () => {
     search.mockResolvedValue({ status: "ok", hits: [{ ...A, neighborhood: "Centro", municipalityName: "Cuiabá" }] });
     const { container } = render(<SchoolSearchPicker />);
     expect((container.querySelector('input[name="schoolId"]') as HTMLInputElement).value).toBe("");
-    fireEvent.change(screen.getByLabelText("Buscar escola por nome ou INEP"), { target: { value: "alfa" } });
-    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    fireEvent.change(screen.getByLabelText("Nome ou código INEP da escola"), { target: { value: "alfa" } });
     fireEvent.click(await screen.findByRole("button", { name: /Escola Alfa/ }));
     expect((container.querySelector('input[name="schoolId"]') as HTMLInputElement).value).toBe(A.id);
     expect(search).toHaveBeenCalledWith("alfa");
@@ -41,15 +40,25 @@ describe("SchoolSearchPicker (busca da S04)", () => {
     expect((container.querySelector('input[name="schoolId"]') as HTMLInputElement).value).toBe("");
   });
   it("sem resultado e erro têm frases próprias; busca curta demais não dispara", async () => {
-    search.mockResolvedValueOnce({ status: "ok", hits: [] });
+    search.mockReset().mockResolvedValueOnce({ status: "ok", hits: [] });
     render(<SchoolSearchPicker />);
-    const input = screen.getByLabelText("Buscar escola por nome ou INEP");
-    expect(screen.getByRole("button", { name: "Buscar" })).toBeDisabled();
+    const input = screen.getByLabelText("Nome ou código INEP da escola");
+    fireEvent.change(input, { target: { value: "z" } });
+    await new Promise((r) => setTimeout(r, 450));
+    expect(search).not.toHaveBeenCalled();
     fireEvent.change(input, { target: { value: "zz" } });
-    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
     expect(await screen.findByText("Nenhuma escola encontrada.")).toBeInTheDocument();
     search.mockResolvedValueOnce({ status: "error" });
-    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    fireEvent.change(input, { target: { value: "zzz" } });
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível buscar agora"));
+  });
+  it("digitação rápida dispara uma busca só (com a última palavra)", async () => {
+    search.mockReset().mockResolvedValue({ status: "ok", hits: [] });
+    render(<SchoolSearchPicker />);
+    const input = screen.getByLabelText("Nome ou código INEP da escola");
+    for (const v of ["al", "alf", "alfa"]) fireEvent.change(input, { target: { value: v } });
+    await screen.findByText("Nenhuma escola encontrada.");
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledWith("alfa");
   });
 });

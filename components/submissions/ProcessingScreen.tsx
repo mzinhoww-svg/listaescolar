@@ -21,7 +21,7 @@ function StepMark({ state }: { state: StepState }) {
     return (
       <span
         aria-hidden="true"
-        className="border-verde-certo/25 border-t-verde-certo size-6 shrink-0 animate-spin rounded-full border-[3px]"
+        className="border-verde-certo/25 border-t-verde-certo size-6 shrink-0 motion-safe:animate-spin rounded-full border-[3px]"
       />
     );
   }
@@ -33,15 +33,20 @@ export function ProcessingScreen({
   phase,
   title = "Lendo sua lista",
   subtitle = "Identificando cada item e conferindo as quantidades.",
+  embedded = false,
   children,
 }: {
   phase: ProcessingPhase;
   title?: string;
   subtitle?: string;
+  /** Sobre outra tela (o envio): sem segundo `main` nem segundo `h1` (UX-073). */
+  embedded?: boolean;
   children?: ReactNode;
 }) {
+  const Root = embedded ? "div" : "main";
+  const Heading = embedded ? "h2" : "h1";
   return (
-    <main
+    <Root
       role="status"
       aria-live="polite"
       className="bg-tinta text-papel mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col px-7 pt-24 pb-9"
@@ -49,7 +54,7 @@ export function ProcessingScreen({
       <span className="bg-papel mb-5 grid size-20 place-items-center rounded-[22px]">
         <Image src="/brand/simbolo.svg" alt="" width={56} height={56} priority />
       </span>
-      <h1 className="text-[32px] leading-[1.05] font-extrabold tracking-[-0.035em]">{title}</h1>
+      <Heading className="text-[32px] leading-[1.05] font-extrabold tracking-[-0.035em]">{title}</Heading>
       <p className="text-papel/70 mt-3 text-[15px] leading-[1.4] font-medium">{subtitle}</p>
       <ol className="mt-8 flex flex-col gap-4">
         {stepsFor(phase).map((s) => (
@@ -64,6 +69,6 @@ export function ProcessingScreen({
         ))}
       </ol>
       <div className="mt-auto flex flex-col gap-3 pt-10">{children}</div>
-    </main>
+    </Root>
   );
 }

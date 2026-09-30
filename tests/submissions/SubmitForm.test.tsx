@@ -25,9 +25,9 @@ const send = () => fireEvent.click(screen.getByRole("button", { name: /enviar pa
 describe("SubmitForm (App15/App06)", () => {
   beforeEach(() => submitListAction.mockReset());
 
-  it("mostra o aviso de revisão, o consentimento desmarcado e as duas formas de enviar", () => {
+  it("mostra o consentimento (com o aviso de revisão) desmarcado e as duas formas de enviar", () => {
     render(<SubmitForm years={[2026, 2027]} defaultYear={2027} />);
-    expect(screen.getByText("Sua lista passa por revisão antes de aparecer para outras famílias.")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox").closest("label")).toHaveTextContent("a equipe revisa a lista antes de ela aparecer para outras famílias");
     expect(screen.getByRole("checkbox")).not.toBeChecked();
     expect(screen.getByRole("button", { name: /tirar foto/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /galeria ou pdf/i })).toBeInTheDocument();
@@ -51,7 +51,9 @@ describe("SubmitForm (App15/App06)", () => {
     render(<SubmitForm years={[2027]} defaultYear={2027} />);
     fill({ file: false, grade: "" });
     send();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Confira a série");
+    // UX-064: todos os erros de uma vez, cada um junto do campo
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.map((a) => a.textContent).join(" ")).toMatch(/Confira a série.*Escolha um arquivo|Escolha um arquivo.*Confira a série/);
     fireEvent.change(screen.getByLabelText("Série"), { target: { value: "5º ano" } });
     send();
     expect(await screen.findByRole("alert")).toHaveTextContent("Escolha um arquivo");
@@ -106,7 +108,7 @@ describe("SubmitForm (App15/App06)", () => {
     render(<SubmitForm years={[2027]} defaultYear={2027} />);
     pick(sized("IMG_1.heic", "image/heic", 6_000_000));
     send();
-    expect(await screen.findByRole("alert")).toHaveTextContent("JPG ou PNG");
+    expect(await screen.findByRole("alert")).toHaveTextContent("envie a lista como PDF");
     expect(submitListAction).not.toHaveBeenCalled();
   });
 

@@ -119,3 +119,31 @@ describe("UX-128 · primeira chamada copiável", () => {
     }
   });
 });
+
+// UX-129 · formulário do widget
+vi.mock("@/features/widget/actions", () => ({ saveWidgetConfigAction: vi.fn() }));
+import { WidgetConfigForm } from "@/app/b2b/widget/WidgetConfigForm";
+
+describe("UX-129 · configuração do widget", () => {
+  const base = { partnerId: "11111111-1111-4111-8111-111111111111", coverageLabel: "MT", siteOrigin: "https://listacerta.example" };
+
+  it("campo de cor tem rótulo próprio e Salvar desabilitado diz o motivo", () => {
+    render(<WidgetConfigForm {...base} initial={null} />);
+    expect(screen.getByLabelText("Cor de destaque (hexadecimal)")).toHaveValue("#0B6B4A");
+    expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
+    expect(screen.getByText(/Informe o domínio do carrinho para salvar/)).toBeInTheDocument();
+  });
+
+  it("Copiar código fica desativado com o widget desligado, com o motivo", () => {
+    render(<WidgetConfigForm {...base} initial={{ accentColor: "#0B6B4A", cartTargetDomain: "loja.example.com", enabled: false }} />);
+    expect(screen.getByRole("button", { name: "Copiar código" })).toBeDisabled();
+    expect(screen.getByText(/Ligue o widget para copiar o código/)).toBeInTheDocument();
+  });
+
+  it("pré-visualização sem colchetes nem emoji", () => {
+    const { container } = render(<WidgetConfigForm {...base} initial={{ accentColor: "#0B6B4A", cartTargetDomain: "loja.example.com", enabled: true }} />);
+    const preview = container.textContent ?? "";
+    expect(preview).not.toMatch(/\[Item da lista\]|\[qtd\]|✅/);
+    expect(screen.getByRole("button", { name: "Copiar código" })).toBeEnabled();
+  });
+});

@@ -40,7 +40,7 @@ import ConfirmPage from "@/app/escolas/[inep]/reivindicar/confirmar/page";
 import ClaimPage from "@/app/escolas/[inep]/reivindicar/page";
 import AdminDetail from "@/app/admin/reivindicacoes/[id]/page";
 import AdminQueue from "@/app/admin/reivindicacoes/page";
-import SchoolPanel from "@/app/escola/page";
+import SchoolPanel from "@/app/escola/(painel)/page";
 
 const TOKEN = "A".repeat(43);
 const context = {

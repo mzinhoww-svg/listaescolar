@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { z } from "zod";
 
-import { SchoolShell } from "@/components/submissions/SchoolShell";
+import { SchoolPanelShell } from "@/components/claims/SchoolPanelShell";
+import { buttonClass } from "@/components/ui/Button";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { listMySchools } from "@/features/claims/queries-mine";
@@ -21,21 +22,23 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   const now = new Date();
   const y = now.getFullYear();
   return (
-    <SchoolShell email={user.email}>
+    <SchoolPanelShell email={user.email} active="listas" crumb="Painel / Enviar lista" title="Enviar a lista da escola" back={{ href: "/escola", label: "Minhas escolas" }}>
       {mine === null ? (
-        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível carregar suas escolas. Tente de novo.</p>
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível carregar suas escolas. <Link href="/escola/listas/nova" className="underline">Tentar de novo</Link></p>
       ) : mine.length === 0 ? (
-        <p role="note" className="bg-campo rounded-campo px-4 py-3 text-[14px] font-bold">
-          Você ainda não tem escola vinculada. <Link href="/escolas" className="underline">Encontre a escola e reivindique o acesso</Link> para enviar a lista.
-        </p>
+        <div className="bg-campo rounded-campo flex flex-col items-start gap-3 px-4 py-4">
+          <p role="note" className="text-[14px] font-bold">Você ainda não administra nenhuma escola. Peça para administrar a página da escola para enviar a lista.</p>
+          <Link href="/escolas" className={buttonClass("primary")}>Buscar a escola</Link>
+        </div>
       ) : (
         <SchoolUploadForm
           schools={mine.map((s) => ({ id: s.schoolId, name: s.name, inep: s.inep }))}
           initialSchoolId={initial.success ? initial.data : null}
+          idempotencyKey={crypto.randomUUID()}
           years={[y, y + 1]}
           defaultYear={now.getMonth() >= 7 ? y + 1 : y}
         />
       )}
-    </SchoolShell>
+    </SchoolPanelShell>
   );
 }

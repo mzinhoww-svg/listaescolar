@@ -1,10 +1,11 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
 import { MySchoolsTable } from "@/components/claims/MySchoolsTable";
 import { SchoolPanelShell } from "@/components/claims/SchoolPanelShell";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
-import { listMyPendingClaims, listMySchools, listSchoolIdsWithPublishedList, type MyClaimRow, type MySchoolRow } from "@/features/claims/queries-mine";
+import { listMyPendingClaims, listMySchools, listPublishedListLinks, type MyClaimRow, type MySchoolRow, type PublishedListLink } from "@/features/claims/queries-mine";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Minhas escolas · ListaCerta" };
@@ -12,7 +13,7 @@ export const metadata = { title: "Minhas escolas · ListaCerta" };
 /** Escola03. Papel `school_member`/`admin` (o acesso é decidido em `features/auth/access.ts`, que a S06 não altera). */
 export default async function Page() {
   const { user } = await requireAccess("/escola");
-  let data: { schools: MySchoolRow[]; claims: MyClaimRow[]; withList: ReadonlySet<string> } | null = null;
+  let data: { schools: MySchoolRow[]; claims: MyClaimRow[]; listLinks: ReadonlyMap<string, PublishedListLink> } | null = null;
   try {
     const actor = await getSessionActor();
     if (actor) {
@@ -21,7 +22,7 @@ export default async function Page() {
       const seen = new Set<string>();
       // Só a reivindicação mais recente de cada escola, e nenhuma de escola que o usuário já administra.
       const latest = claims.filter((c) => !linked.has(c.school.inep) && !seen.has(c.school.inep) && seen.add(c.school.inep));
-      data = { schools, claims: latest, withList: await listSchoolIdsWithPublishedList(schools.map((s) => s.schoolId)) };
+      data = { schools, claims: latest, listLinks: await listPublishedListLinks(schools) };
     }
   } catch (error) {
     console.error("minhas escolas", error instanceof Error ? error.message : "erro");
@@ -31,10 +32,10 @@ export default async function Page() {
       email={user.email}
       crumb="Painel"
       title="Minhas escolas"
-      actions={<Link href="/escolas" className="bg-tinta text-papel rounded-botao px-6 py-3 text-[15px] font-extrabold">Pedir para administrar outra escola</Link>}
+      actions={<Link href="/escolas" className={buttonClass("outline")}>Pedir para administrar outra escola</Link>}
     >
       {data ? (
-        <MySchoolsTable schools={data.schools} claims={data.claims} withList={data.withList} />
+        <MySchoolsTable schools={data.schools} claims={data.claims} withList={new Set(data.listLinks.keys())} listLinks={data.listLinks} />
       ) : (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">
           Não foi possível carregar suas escolas. <Link href="/escola" className="underline">Tentar de novo</Link>

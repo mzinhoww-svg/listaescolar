@@ -28,6 +28,12 @@ const claimRow = z.object({
   schools: z.object({ inep: z.string(), name: z.string() }),
 });
 
+const publishedRow = z.object({
+  school_id: z.uuid(),
+  school_year: z.number().int(),
+  grades: z.union([z.object({ slug: z.string() }), z.array(z.object({ slug: z.string() })), z.null()]),
+});
+
 function requireActor(actor: unknown): asserts actor is SessionActor {
   if (!isSessionActor(actor)) throw new ClaimRepositoryError("forbidden", "consulta: forbidden");
 }
@@ -84,4 +90,34 @@ export async function listSchoolIdsWithPublishedList(schoolIds: readonly string[
   } catch {
     return new Set();
   }
+}
+
+export type PublishedListLink = { href: string; gradeSlug: string };
+
+/**
+ * Lista publicada mais recente de cada escola (entre as informadas): destino direto de "Ver a lista oficial" e origem do
+ * cartão de divulgação. Cliente público (RLS); falha vira "sem lista" (só sugere enviar).
+ */
+export async function listPublishedListLinks(schools: readonly { schoolId: string; inep: string }[]): Promise<Map<string, PublishedListLink>> {
+  const out = new Map<string, PublishedListLink>();
+  if (schools.length === 0) return out;
+  try {
+    const { data, error } = await createPublicClient()
+      .from("school_lists")
+      .select("school_id, school_year, published_at, grades(slug)")
+      .eq("status", "published")
+      .in("school_id", schools.map((s) => s.schoolId))
+      .order("published_at", { ascending: false });
+    if (error) return out;
+    const inepOf = new Map(schools.map((s) => [s.schoolId, s.inep]));
+    for (const r of z.array(publishedRow).parse(data ?? [])) {
+      const inep = inepOf.get(r.school_id);
+      const slug = Array.isArray(r.grades) ? r.grades[0]?.slug : r.grades?.slug;
+      if (!inep || !slug || out.has(r.school_id)) continue;
+      out.set(r.school_id, { href: `/escolas/${inep}/${slug}?ano=${r.school_year}`, gradeSlug: slug });
+    }
+  } catch {
+    return new Map();
+  }
+  return out;
 }

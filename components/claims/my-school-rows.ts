@@ -1,7 +1,7 @@
 import { formatDate } from "@/features/claims/format";
 import { STATUS_LABEL } from "@/features/claims/messages";
 import { nextStep } from "@/features/claims/next-step";
-import type { MyClaimRow, MySchoolRow } from "@/features/claims/queries-mine";
+import type { MyClaimRow, MySchoolRow, PublishedListLink } from "@/features/claims/queries-mine";
 
 export type SchoolRowView = {
   key: string;
@@ -14,12 +14,16 @@ export type SchoolRowView = {
   step: { title: string; body: string };
   href: string;
   cta: string;
+  /** Segunda ação (escola com lista publicada continua podendo enviar outras séries, UX-089). */
+  more?: { href: string; label: string };
 };
 
 /** Escolas do vínculo e reivindicações em análise/recusadas, já com texto, próximo passo e destino: a tabela e os cartões só desenham. */
-export function buildSchoolRows(schools: readonly MySchoolRow[], claims: readonly MyClaimRow[], withList: ReadonlySet<string>): SchoolRowView[] {
+export function buildSchoolRows(schools: readonly MySchoolRow[], claims: readonly MyClaimRow[], withList: ReadonlySet<string>, listLinks: ReadonlyMap<string, PublishedListLink> = new Map()): SchoolRowView[] {
   const fromSchools = schools.map((s): SchoolRowView => {
-    const step = nextStep("approved", withList.has(s.schoolId));
+    const hasList = withList.has(s.schoolId);
+    const step = nextStep("approved", hasList);
+    const sendHref = `/escola/listas/nova?escola=${s.schoolId}`;
     return {
       key: s.schoolId,
       name: s.name,
@@ -29,8 +33,9 @@ export function buildSchoolRows(schools: readonly MySchoolRow[], claims: readonl
       chipClass: s.verificationStatus === "verified" ? "bg-verde-certo/20 text-verde-fundo" : s.verificationStatus === "suspended" ? "bg-campo text-texto-2" : "bg-aviso-fundo text-aviso-texto",
       note: null,
       step: { title: step.title, body: step.body },
-      href: withList.has(s.schoolId) ? `/escolas/${s.inep}` : "/escola/listas/nova",
+      href: hasList ? (listLinks.get(s.schoolId)?.href ?? `/escolas/${s.inep}`) : sendHref,
       cta: step.cta,
+      ...(hasList ? { more: { href: sendHref, label: "Enviar outra série" } } : {}),
     };
   });
   const fromClaims = claims.map((c): SchoolRowView => {

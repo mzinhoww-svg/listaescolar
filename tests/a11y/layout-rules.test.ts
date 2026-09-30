@@ -31,7 +31,7 @@ describe("regras de layout do DESIGN.md", () => {
       "components/lists/ListHeader.tsx",
       "components/admin/AdminNav.tsx",
       "components/b2b/CodeSample.tsx",
-      "components/submissions/SchoolShell.tsx",
+      "components/claims/SchoolPanelShell.tsx",
       "components/site/SiteFooter.tsx",
       "components/schools/ProfileHeader.tsx",
       "components/claims/SchoolPanelNav.tsx",

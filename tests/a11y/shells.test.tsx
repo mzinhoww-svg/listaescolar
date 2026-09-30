@@ -8,7 +8,6 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { PortalShell } from "@/components/b2b/PortalShell";
 import { SchoolPanelShell } from "@/components/claims/SchoolPanelShell";
 import { PANEL_NAV, PanelShell } from "@/components/stationeries/PanelShell";
-import { SchoolShell } from "@/components/submissions/SchoolShell";
 
 /**
  * S18 (estados e a11y): as cinco cascas autenticadas do produto (papelaria, admin, B2B, escola × 2) ganharam
@@ -73,16 +72,6 @@ describe("skip-link e landmark #conteudo nas cascas autenticadas", () => {
       <SchoolPanelShell email="escola@x.com" title="Minhas escolas" crumb="Escola">
         <p>conteúdo</p>
       </SchoolPanelShell>,
-    );
-    expect(screen.getByText("Pular para o conteúdo")).toHaveAttribute("href", "#conteudo");
-    expect(document.querySelector("main#conteudo")).not.toBeNull();
-  });
-
-  it("SchoolShell", () => {
-    render(
-      <SchoolShell email="escola@x.com">
-        <p>conteúdo</p>
-      </SchoolShell>,
     );
     expect(screen.getByText("Pular para o conteúdo")).toHaveAttribute("href", "#conteudo");
     expect(document.querySelector("main#conteudo")).not.toBeNull();

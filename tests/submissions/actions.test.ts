@@ -148,7 +148,7 @@ describe("submitListAction", () => {
     expect(submitList).not.toHaveBeenCalled();
     linked.mockResolvedValue([{ schoolId: SCHOOL }]);
     submitList.mockResolvedValue({ status: "review_needed", submissionId: "s3", result: {} });
-    await expect(submitListAction(idle, form({ schoolId: SCHOOL }))).rejects.toThrow("REDIRECT:/enviar-lista/s3");
+    await expect(submitListAction(idle, form({ schoolId: SCHOOL }))).rejects.toThrow("REDIRECT:/escola/envios/s3");
     expect(submitList.mock.calls[0]![0]).toMatchObject({ source: "school", schoolId: SCHOOL });
   });
 

@@ -13,29 +13,15 @@ import { SchoolSearchPicker, type SchoolHit } from "@/components/submissions/Sch
 import { SeriesFields } from "@/components/submissions/SeriesFields";
 import { Button } from "@/components/ui/Button";
 import { InlineStatus } from "@/components/ui/InlineStatus";
-import { errorFieldFor, FORM_ERROR_ID, messageFor, REDUCED_NOTE, type ErrorField } from "@/features/submissions/copy";
+import { errorFieldFor, FORM_ERROR_ID, REDUCED_NOTE, type ErrorField } from "@/features/submissions/copy";
 import { idleState, type SubmitState } from "@/features/submissions/form-schema";
-import { isControlFlowError, isRetryable, submitFailureCode } from "@/features/submissions/network";
+import { isRetryable } from "@/features/submissions/network";
 import { trackUploadStarted } from "@/lib/analytics/track";
 
-import { submitListAction } from "./actions";
+import { safeSubmit } from "./safe-submit";
 
 /** Foco no primeiro campo com erro, na ordem da tela: arquivo, série, consentimento (UX-064). */
 const FOCUS_ORDER: [ErrorField, string][] = [["file", "file-choose"], ["grade", "grade"], ["consent", "consent"]];
-
-/**
- * A chamada da Server Action viaja por `fetch`: sem rede ela REJEITA. Sem este envoltório a rejeição derrubaria a tela
- * (limite de erro); aqui vira um estado de erro com "Tentar de novo". `redirect()` da action não é erro: mantém o estado.
- */
-async function safeSubmit(prev: SubmitState, data: FormData): Promise<SubmitState> {
-  try {
-    return await submitListAction(prev, data);
-  } catch (e) {
-    if (isControlFlowError(e)) return prev;
-    const code = submitFailureCode(e);
-    return { status: "error", code, message: messageFor(code) };
-  }
-}
 
 type Props = { years: number[]; defaultYear: number; initialSchool?: SchoolHit | null; initialGrade?: string; idempotencyKey?: string; readingAvailable?: boolean };
 

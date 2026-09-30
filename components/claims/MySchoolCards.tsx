@@ -25,6 +25,11 @@ export function MySchoolCards({ rows }: { rows: readonly SchoolRowView[] }) {
           >
             {r.cta}
           </Link>
+          {r.more ? (
+            <Link href={r.more.href} className="text-verde-fundo focus-visible:outline-verde-fundo flex min-h-11 items-center justify-center text-[15px] font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2">
+              {r.more.label}
+            </Link>
+          ) : null}
         </li>
       ))}
     </ul>

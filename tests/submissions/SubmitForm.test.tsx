@@ -11,7 +11,7 @@ vi.mock("@/app/enviar-lista/school-search-action", () => ({ searchSchoolsAction:
 vi.mock("@/app/enviar-lista/actions", () => ({ submitListAction: (p: unknown, f: FormData) => submitListAction(p, f) }));
 
 import { SubmitForm } from "@/app/enviar-lista/SubmitForm";
-import { SchoolUploadForm } from "@/app/escola/listas/nova/SchoolUploadForm";
+import { SchoolUploadForm } from "@/app/escola/(painel)/listas/nova/SchoolUploadForm";
 
 const pdf = () => new File([new Uint8Array([37, 80, 68, 70])], "lista-5-ano.pdf", { type: "application/pdf" });
 
@@ -154,7 +154,7 @@ describe("SchoolUploadForm (Escola08)", () => {
     submitListAction.mockResolvedValue({ status: "idle" });
     render(<SchoolUploadForm schools={[{ id: SCHOOL, name: "Escola Modelo", inep: "51000001" }]} initialSchoolId={null} years={[2026, 2027]} defaultYear={2027} />);
     expect(screen.getByText("Para a leitura sair certa")).toBeInTheDocument();
-    expect(screen.getByText("Nada é publicado sem a sua revisão.")).toBeInTheDocument();
+    expect(screen.getByText("A equipe ListaCerta revisa a lista antes de ela aparecer para as famílias.")).toBeInTheDocument();
     fill({ consent: false });
     send();
     expect(await screen.findByRole("alert")).toHaveTextContent("Marque o consentimento");

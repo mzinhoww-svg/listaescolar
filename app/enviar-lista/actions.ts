@@ -86,5 +86,6 @@ export async function submitListAction(_prev: SubmitState, formData: FormData): 
     if (e instanceof SubmissionError) return fail(e.code);
     return fail("unexpected");
   }
-  redirect(`/enviar-lista/${submissionId}`);
+  // A escola acompanha o envio dentro do painel dela; a família, na tela de andamento (S29 UX-090).
+  redirect(choice.source === "school" ? `/escola/envios/${submissionId}` : `/enviar-lista/${submissionId}`);
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { DemoBadge } from "@/components/admin/DemoBadge";
-import type { MyClaimRow, MySchoolRow } from "@/features/claims/queries-mine";
+import type { MyClaimRow, MySchoolRow, PublishedListLink } from "@/features/claims/queries-mine";
 
 import { MySchoolCards } from "./MySchoolCards";
 import { buildSchoolRows } from "./my-school-rows";
@@ -11,7 +11,7 @@ const chip = "rounded-botao inline-flex w-fit px-2.5 py-1 text-[12px] font-extra
 const link = "text-verde-fundo focus-visible:outline-verde-fundo inline-flex min-h-11 items-center text-[14px] font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2";
 
 /** Escola03: escolas do usuário (vínculo real) e reivindicações abertas/recusadas. Sem contagem de listas (sem fonte aqui). Tabela a partir de 768 px; cartões no celular. */
-export function MySchoolsTable({ schools, claims, withList = new Set() }: { schools: MySchoolRow[]; claims: MyClaimRow[]; withList?: ReadonlySet<string> }) {
+export function MySchoolsTable({ schools, claims, withList = new Set(), listLinks }: { schools: MySchoolRow[]; claims: MyClaimRow[]; withList?: ReadonlySet<string>; listLinks?: ReadonlyMap<string, PublishedListLink> }) {
   if (schools.length === 0 && claims.length === 0) {
     return (
       <div className="rounded-[24px] bg-white p-8">
@@ -20,7 +20,7 @@ export function MySchoolsTable({ schools, claims, withList = new Set() }: { scho
       </div>
     );
   }
-  const rows = buildSchoolRows(schools, claims, withList);
+  const rows = buildSchoolRows(schools, claims, withList, listLinks);
   return (
     <>
       <MySchoolCards rows={rows} />
@@ -53,8 +53,9 @@ export function MySchoolsTable({ schools, claims, withList = new Set() }: { scho
                     <span className="text-texto-2 block text-[13px] font-semibold">{r.step.body}</span>
                   </span>
                 </td>
-                <td className="px-5 py-4">
+                <td className="flex flex-col px-5 py-4">
                   <Link href={r.href} className={link}>{r.cta}</Link>
+                  {r.more ? <Link href={r.more.href} className={link}>{r.more.label}</Link> : null}
                 </td>
               </tr>
             ))}

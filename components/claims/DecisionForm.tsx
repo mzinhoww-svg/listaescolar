@@ -24,6 +24,10 @@ export function DecisionForm({ claimId, options, action }: { claimId: string; op
           variant={VARIANT[o.to]}
           disabled={!o.allowed}
           disabledReason={o.reason}
+          validate={o.to === "approved" ? undefined : (fd) => {
+            const len = String(fd.get("reason") ?? "").trim().length;
+            return len < 3 ? { field: "reason", message: "Escreva o motivo com pelo menos 3 caracteres: o reivindicante vai ler." } : null;
+          }}
           confirmMessage={o.to === "approved" ? "Aprovar é definitivo: a escola passa a “verificada” imediatamente. Confirmar?" : undefined}
           className="flex flex-col gap-2.5 rounded-[20px] bg-white p-4"
         >
@@ -32,7 +36,7 @@ export function DecisionForm({ claimId, options, action }: { claimId: string; op
           {o.to === "approved" ? null : (
             <label className="flex flex-col gap-1.5 text-[13px] font-bold">
               {REASON_LABEL[o.to]} (3 a 500 caracteres, o reivindicante vê)
-              <textarea name="reason" required minLength={3} maxLength={500} rows={3} disabled={!o.allowed} className="bg-campo rounded-campo w-full p-3 text-[14px] font-medium" />
+              <textarea name="reason" required aria-required minLength={3} maxLength={500} rows={3} disabled={!o.allowed} className="bg-campo rounded-campo w-full p-3 text-[14px] font-medium" />
             </label>
           )}
         </ActionForm>

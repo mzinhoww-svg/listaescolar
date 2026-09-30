@@ -47,3 +47,21 @@ describe("ActionForm confirmMessage (D-006)", () => {
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
   });
 });
+
+describe("ActionForm validate (UX-113)", () => {
+  it("motivo curto: mensagem em português, foco no campo, ação não roda", async () => {
+    const action = vi.fn(idle);
+    render(
+      <ActionForm action={action} submitLabel="Recusar" validate={(fd) => (String(fd.get("reason") ?? "").trim().length < 3 ? { field: "reason", message: "Escreva o motivo com pelo menos 3 caracteres." } : null)}>
+        <textarea name="reason" aria-label="Motivo" required />
+      </ActionForm>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Recusar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("pelo menos 3 caracteres");
+    expect(document.activeElement).toBe(screen.getByLabelText("Motivo"));
+    expect(action).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Motivo"), { target: { value: "sem prova" } });
+    fireEvent.click(screen.getByRole("button", { name: "Recusar" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+  });
+});

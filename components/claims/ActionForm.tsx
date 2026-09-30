@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, type ReactNode } from "react";
+import { useActionState, useRef, useState, type ReactNode } from "react";
 
 import { Button, buttonClass } from "@/components/ui/Button";
 
@@ -20,18 +20,35 @@ type Props = {
   children?: ReactNode;
   /** D-006: pede confirmação (diálogo único do produto, `<dialog>`) antes de enviar — para ações terminais e imediatas (ex.: aprovar). */
   confirmMessage?: string;
+  /** Validação no navegador com texto do produto (o servidor continua sendo a autoridade). Devolve a mensagem de erro ou `null`. */
+  validate?: (formData: FormData) => { field: string; message: string } | null;
 };
 
 /** Formulário de Server Action com estado (`useActionState`) e mensagem fixa de sucesso/erro. */
-export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, ariaLabel, variant = "primary", className, children, confirmMessage }: Props) {
+export function ActionForm({ action, submitLabel, pendingLabel, disabled, disabledReason, ariaLabel, variant = "primary", className, children, confirmMessage, validate }: Props) {
   const [state, formAction, pending] = useActionState(action, IDLE);
   const dialog = useRef<HTMLDialogElement>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   return (
     <form
       action={formAction}
+      noValidate
+      onSubmit={(e) => {
+        const bad = validate?.(new FormData(e.currentTarget)) ?? null;
+        setProblem(bad?.message ?? null);
+        if (bad) {
+          e.preventDefault();
+          e.currentTarget.querySelector<HTMLElement>(`[name="${bad.field}"]`)?.focus();
+        }
+      }}
       className={className ?? "flex flex-col gap-3"}
     >
       {children}
+      {problem ? (
+        <p role="alert" className="text-erro-texto text-[13px] font-semibold">
+          {problem}
+        </p>
+      ) : null}
       {state.status === "error" ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">
           {state.message}

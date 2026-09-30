@@ -28,12 +28,21 @@ describe("Skeleton", () => {
   });
 });
 
-describe("UX-004 · app/loading.tsx", () => {
-  it("é um esqueleto com role=status, aria-busy, altura reservada e sem spinner de tela cheia", async () => {
-    const Loading = (await import("@/app/loading")).default;
-    const { container } = render(<Loading />);
+describe("UX-004 · carregando padrão das árvores privadas", () => {
+  it("PageLoading é um esqueleto com role=status, aria-busy, altura reservada e sem spinner de tela cheia", async () => {
+    const PageLoading = (await import("@/components/ui/PageLoading")).default;
+    const { container } = render(<PageLoading />);
     expect(screen.getByRole("status").getAttribute("aria-busy")).toBe("true");
     expect(container.innerHTML).not.toContain("animate-spin");
     expect(container.innerHTML).toMatch(/h-\d+/);
+  });
+  it("cada árvore privada sem carregando próprio o reexporta; a raiz e as páginas públicas indexáveis continuam sem (D-043)", async () => {
+    const { existsSync, readFileSync } = await import("node:fs");
+    for (const d of ["admin", "conta", "cotacao", "enviar-lista", "carrinho", "cadastrar-papelaria"]) {
+      const f = `app/${d}/loading.tsx`;
+      expect(existsSync(f), f).toBe(true);
+      expect(readFileSync(f, "utf8")).toContain("@/components/ui/PageLoading");
+    }
+    expect(existsSync("app/loading.tsx")).toBe(false);
   });
 });

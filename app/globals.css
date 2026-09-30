@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* S29 · J9-16: o Tailwind varre o repositório inteiro; exemplos de classe em docs e testes geravam CSS
+   publicado fora dos tokens de movimento. Só o código de UI conta. */
+@source not "../docs";
+@source not "../tests";
+@source not "../scripts";
 
 :root {
   --tinta: #0f1b2d;
@@ -29,6 +34,8 @@
 }
 
 @theme inline {
+  /* S29 · J9-16: a duração padrão de `transition` do Tailwind (150 ms) passa a ser o token rápido (120 ms). */
+  --default-transition-duration: var(--mov-rapido);
   --color-tinta: var(--tinta);
   --color-papel: var(--papel);
   --color-branco-tonal: var(--branco-tonal);
@@ -114,6 +121,17 @@ body {
 @utility duration-mov-entrada {
   --tw-duration: var(--mov-entrada);
   transition-duration: var(--mov-entrada);
+}
+/* Entrada do aviso "Sem conexão" (orientação: apareceu algo novo); só com movimento permitido (motion-safe no componente). */
+@keyframes offline-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @utility ease-mov-in {
   --tw-ease: var(--mov-ease-in);

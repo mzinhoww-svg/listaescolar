@@ -125,7 +125,8 @@ function exempt(selector: string, prop: string, value: string): boolean {
   if (LOADING_EXEMPT.classes.some((c) => selector.includes(`.${c}`))) return true;
   if (prop === "animation") {
     const names = splitTop(value, ",").flatMap((i) => splitTop(i, " "));
-    return names.some((n) => (LOADING_EXEMPT.keyframes as readonly string[]).includes(n));
+    // CSS Modules trocam o nome do keyframe por `<arquivo>-module__<hash>__<nome>`: casa pelo sufixo `__<nome>` também.
+    return names.some((n) => (LOADING_EXEMPT.keyframes as readonly string[]).some((k) => n === k || n.endsWith(`__${k}`)));
   }
   return false;
 }

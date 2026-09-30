@@ -82,6 +82,9 @@ describe("movimento fora dos tokens", () => {
     expect(findOffTokenMotion(".x{animation:pesquisa-pulso 1.4s ease-in-out infinite}")).toEqual([]);
     expect(findOffTokenMotion("@theme{--animate-spin:spin 1s linear infinite}")).toEqual([]);
     expect(findOffTokenMotion(".x{animation:bounce 1s infinite}")).toHaveLength(1);
+    // nome de keyframe alterado pelo CSS Module
+    expect(findOffTokenMotion(".pesquisa-module__CmWruq__pulso{animation:1.4s ease-in-out infinite pesquisa-module__CmWruq__pesquisa-pulso}")).toEqual([]);
+    expect(findOffTokenMotion(".a{animation:1s infinite a-module__x__bounce}")).toHaveLength(1);
   });
   it("ignora comentários e keyframes sem duração", () => {
     expect(findOffTokenMotion("/* transition: all 900ms */@keyframes a{from{opacity:0}to{opacity:1}}")).toEqual([]);

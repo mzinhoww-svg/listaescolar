@@ -32,4 +32,8 @@ describe("JOURNEYS cobre todas as rotas de página", () => {
   it("rota sem seed traz motivo", () => {
     for (const j of Object.values(JOURNEYS)) for (const r of j.rotas) if (r.skip) expect(r.skip.length).toBeGreaterThan(10);
   });
+  it("nenhuma rota de detalhe fica pulada por falta de seed (Task 10)", () => {
+    const puladas = Object.values(JOURNEYS).flatMap((j) => j.rotas.filter((r) => r.skip).map((r) => r.path));
+    expect(puladas).toEqual([]);
+  });
 });

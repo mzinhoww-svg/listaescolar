@@ -48,6 +48,7 @@ const ACCOUNTS = {
   papelaria: { email: "papelaria@listacerta.test", next: "/papelaria" },
   admin: { email: "admin@listacerta.test", next: "/admin" },
   parceiro: { email: "parceiro@listacerta.test", next: "/b2b" },
+  marca: { email: "marca@listacerta.test", next: "/b2b" },
 };
 
 const psql = (q) => {
@@ -59,15 +60,37 @@ const psql = (q) => {
 };
 const INEP = process.env.S29_INEP ?? psql("select inep from public.schools where name like 'Escola Demo S29%' limit 1") ?? "99029001";
 const SERIE = "ef-5";
+const U = "00000000-0000-4000-8000-";
+/** Devolve o id só se a linha semeada existe (senão a rota é pulada e registrada). */
+const seeded = (table, id) => psql(`select id from public.${table} where id = '${id}'`);
 const P = {
   inep: INEP,
   serie: SERIE,
   code: encodeShortCode({ inep: INEP, gradeSlug: SERIE }),
-  cartId: psql("select id from public.carts where owner_id = '00000000-0000-4000-8000-0000000029a1' order by created_at desc limit 1"),
-  retailer: psql("select slug from public.retailers where is_active order by slug limit 1"),
-  leadCode: psql("select code from public.leads where code like 'LC-S29%' order by created_at limit 1"),
-  submissionId: psql("select id from public.list_submissions where submitted_by = '00000000-0000-4000-8000-0000000029a1' order by created_at desc limit 1"),
-  slug: psql("select slug from public.stationeries where slug like 's29-%' limit 1"),
+  inepLivre: psql("select inep from public.schools where id = '" + U + "000000290101'"),
+  inepLongo: psql("select inep from public.schools where id = '" + U + "000000290102'"),
+  inepVerificando: psql("select inep from public.schools where id = '" + U + "000000290112'"),
+  // Token só sintático (43 caracteres base64url): o GET nunca consome token, só mostra a tela de confirmação.
+  tokenFalso: "S29S29S29S29S29S29S29S29S29S29S29S29S29S29S29",
+  cartId: seeded("carts", U + "0000000029d2"),
+  listVersionId: psql("select current_version_id from public.school_lists where school_id = '" + U + "0000000029b1' and school_year = 2027"),
+  // L-C7: varejista fixo (o de `retailers` mais antigo por ordem de slug mudava com o banco); DEMO_RETAILERS liga os quatro.
+  retailer: psql("select slug from public.retailers where is_active and slug = 'mercadolivre'"),
+  // Códigos fixos do seed: recebido (sem cotação) e cotação enviada (com valor).
+  leadCode: psql("select code from public.leads where code = 'LC-S29D1'"),
+  leadCodeQuote: psql("select code from public.leads where code = 'LC-S29D4'"),
+  // L-C8: o envio semeado em revisão humana (com cópia privada), não o mais recente.
+  submissionId: seeded("list_submissions", U + "0000000029e3"),
+  reviewId: seeded("list_submissions", U + "0000000029e3"),
+  listId: psql("select id from public.school_lists where school_id = '" + U + "0000000029b1' and school_year = 2027"),
+  claimId: seeded("claims", U + "000000290201"),
+  stationeryId: seeded("stationeries", U + "000000290301"),
+  reportId: seeded("reports", U + "000000290701"),
+  batchId: seeded("import_batches", U + "000000290801"),
+  partnerId: seeded("b2b_partners", U + "000000290b02"),
+  studentId: seeded("students", U + "000000290a01"),
+  invoiceId: seeded("invoices", U + "000000290901"),
+  slug: psql("select slug from public.stationeries where slug = 's29-papelaria-demo'"),
 };
 
 const fill = (path) => {

@@ -10,8 +10,9 @@
  * Saída: a seção de cada jornada (entre marcadores) em --out; código 1 se alguma rota ou o CSS falhar.
  * Só abre e fecha as sessões do agent-browser `s29-t4-*`; nunca `close --all`.
  *
- * Checagens por rota: uma ação principal por região, beco sem saída, botão fora do sistema (HTML buscado com o
- * cookie da conta do papel) e, no navegador a 390 px: rolagem horizontal, main, h1, alvo de toque < 44 px, texto < 12 px.
+ * Checagens por rota: uma ação principal por região, beco sem saída, botão fora do sistema e ação irreversível sem
+ * confirmação (HTML buscado com o cookie da conta do papel) e, no navegador a 390 px: rolagem horizontal, main, h1,
+ * alvo de toque < 44 px (P1 < 24 px, P2 de 24 a 43 px), ação escondida por tabela larga, texto < 12 px.
  * Checagem global do CSS publicado: movimento fora dos tokens (120/200/320 ms).
  */
 import { execFileSync } from "node:child_process";
@@ -23,7 +24,7 @@ import { tsImport } from "tsx/esm/api";
 
 import { PROBE, createSessions } from "./lib/sessions.mjs";
 
-const { countPrimaryPerRegion, findDeadEnds, findOffSystemButtons, findOffTokenMotion } = await tsImport("../lib/ux-checks/index.ts", import.meta.url);
+const { classifyHiddenActions, classifyTargets, countPrimaryPerRegion, findDeadEnds, findOffSystemButtons, findOffTokenMotion, findUnconfirmedDestructive } = await tsImport("../lib/ux-checks/index.ts", import.meta.url);
 const { JOURNEYS } = await tsImport("../lib/ux-checks/journeys.ts", import.meta.url);
 const { encodeShortCode } = await tsImport("../features/short-links/code.ts", import.meta.url);
 
@@ -146,6 +147,8 @@ async function checkRoute(route) {
   if (dead.length) row.fails.push(`beco sem saída: ${dead.join("; ")}`);
   const off = findOffSystemButtons(doc);
   if (off.length) row.fails.push(`botão fora do sistema (${off.length}): ${off.slice(0, 3).join(" | ")}`);
+  const irreversible = findUnconfirmedDestructive(doc);
+  if (irreversible.length) row.fails.push(`ação irreversível sem confirmação (${irreversible.length}): ${irreversible.slice(0, 3).join(" | ")}`);
   // Layout no navegador a 390 px.
   try {
     ab(route.who, "open", `${BASE}${path}`);
@@ -155,7 +158,10 @@ async function checkRoute(route) {
     if (p.sw > p.vw + 1) row.fails.push(`rolagem horizontal ${p.sw}/${p.vw}${p.over.length ? ` (${p.over.slice(0, 2).join("; ")})` : ""}`);
     if (p.main !== 1) row.fails.push(`main=${p.main}`);
     if (p.h1 !== 1) row.fails.push(`h1=${p.h1}`);
-    if (p.small.length) row.fails.push(`alvo < 44 px (${p.small.length}): ${p.small.slice(0, 3).join("; ")}`);
+    const targets = classifyTargets(p.targets ?? []);
+    if (targets.p1.length + targets.p2.length) row.fails.push(`alvo < 44 px (${targets.summary}): ${[...targets.p1, ...targets.p2].slice(0, 3).join("; ")}`);
+    const hidden = classifyHiddenActions(p.acts ?? []);
+    if (hidden.length) row.fails.push(`ação escondida por tabela larga (${hidden.length}): ${hidden.slice(0, 3).join("; ")}`);
     if (p.tiny.length) row.fails.push(`texto < 12 px (${p.tiny.length}): ${p.tiny.slice(0, 3).join("; ")}`);
   } catch (e) {
     row.notes.push(`layout não medido: ${String(e.message).split("\n")[0].slice(0, 80)}`);

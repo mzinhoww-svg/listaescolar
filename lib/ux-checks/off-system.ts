@@ -7,10 +7,43 @@ function describe(el: Element): string {
   return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""} "${text}"`;
 }
 
-/** `button` e `a[role=button]` sem a assinatura do sistema e sem `data-ui="native-ok"`. */
+/**
+ * Botão de texto (variante `text`, gatilho em linha de tabela): sem fundo e sem contorno, com sublinhado ou altura
+ * mínima de 44 px. O CSS global (`app/globals.css`, camada base) dá 44 px de alvo a todo `button`, então o que conta
+ * é o alvo, não o tamanho do texto (L-C2).
+ */
+function isTextButton(el: Element): boolean {
+  if (el.tagName !== "BUTTON") return false;
+  const cls = Array.from(el.classList);
+  if (cls.some((c) => /^bg-/.test(c) && c !== "bg-transparent")) return false;
+  if (cls.some((c) => c === "border" || /^border-(\[|\d|x|y|t|b|l|r)/.test(c) || /^border-\[/.test(c))) return false;
+  return cls.includes("underline") || cls.includes("min-h-11");
+}
+
+/** `button` e `a[role=button]` sem a assinatura do sistema, sem ser botão de texto e sem `data-ui="native-ok"`. */
 export function findOffSystemButtons(doc: Document): string[] {
   return Array.from(doc.querySelectorAll('button, a[role="button"]'))
-    .filter((el) => !el.classList.contains(BUTTON_SIGNATURE_CLASS) && el.getAttribute("data-ui") !== "native-ok")
+    .filter((el) => !el.classList.contains(BUTTON_SIGNATURE_CLASS) && el.getAttribute("data-ui") !== "native-ok" && !isTextButton(el))
+    .map(describe);
+}
+
+const DESTRUCTIVE = /^\W*(?:excluir|apagar|revogar|remover|desativar|suspender|cancelar\s+(?:assinatura|pedido|conta))\b/i;
+const NOT_DESTRUCTIVE = /\b(?:filtros?|busca|sele[cç][aã]o)\b/i;
+
+/**
+ * Ações irreversíveis sem confirmação, até onde o HTML deixa ver: botão de rótulo destrutivo (excluir, apagar, revogar,
+ * remover, desativar, suspender, cancelar assinatura/pedido/conta) que não esteja dentro de um `<dialog>` nem seja o
+ * gatilho de um (o `ConfirmDialog` renderiza o gatilho e o `<dialog>` lado a lado). `window.confirm` não é visível aqui.
+ */
+export function findUnconfirmedDestructive(doc: Document): string[] {
+  return Array.from(doc.querySelectorAll('button, a[role="button"]'))
+    .filter((el) => {
+      const label = ((el.getAttribute("aria-label") ?? "") || (el.textContent ?? "")).replace(/\s+/g, " ").trim();
+      if (!DESTRUCTIVE.test(label) || NOT_DESTRUCTIVE.test(label)) return false;
+      if (el.getAttribute("data-ui") === "native-ok") return false;
+      if (el.closest("dialog")) return false;
+      return el.nextElementSibling?.tagName !== "DIALOG";
+    })
     .map(describe);
 }
 

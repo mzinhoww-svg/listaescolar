@@ -72,6 +72,32 @@ describe("findDeadEnds: volta", () => {
   });
 });
 
+describe("findDeadEnds: rótulos e rotas de entrada (Task 10)", () => {
+  it("rota de entrada aceita Voltar ao início ou migalha mesmo sem logo linkado (/escolas)", () => {
+    expect(findDeadEnds(doc(`<header><span>ListaCerta</span></header><main><a href="/escolas/1">Abrir</a><a href="/">Voltar ao início</a></main>`), "/escolas")).toEqual([]);
+    expect(findDeadEnds(doc(`<nav aria-label="Trilha"></nav><main><a href="/escolas/1">Abrir</a></main>`), "/escolas")).toEqual([]);
+    expect(findDeadEnds(doc(`<main><a href="/escolas/1">Abrir</a></main>`), "/escolas")).toEqual(["sem caminho de volta"]);
+  });
+  it("CTA que começa com Fechar/Cancelar continua sendo adiante", () => {
+    for (const label of ["Fechar pedido", "Cancelar assinatura", "Fechar a compra"]) {
+      expect(findDeadEnds(doc(`${H}<main><button>${label}</button><a href="/a">Voltar</a></main>`), "/x/y")).toEqual([]);
+    }
+  });
+  it("Voltar (com objeto), Cancelar, Fechar e Dispensar inteiros não são adiante", () => {
+    for (const label of ["Voltar ao carrinho", "← Voltar", "Cancelar", "Fechar", "Dispensar", "Fechar aviso"]) {
+      expect(findDeadEnds(doc(`${H}<main><a href="/a">${label}</a></main>`), "/x/y"), label).toContain("sem ação adiante");
+    }
+  });
+  it("Cancelar assinatura como link não conta como volta", () => {
+    expect(findDeadEnds(doc(`${H}<main><a href="/x">Abrir</a><a href="/assinatura/cancelar">Cancelar assinatura</a></main>`), "/a/b")).toEqual(["sem caminho de volta"]);
+  });
+  it("painel com menu lateral que leva à raiz do painel dispensa o Voltar", () => {
+    const shell = `<nav aria-label="Menu do painel"><a href="/admin">Fila</a><a href="/admin/revisao">Revisão</a></nav>`;
+    expect(findDeadEnds(doc(`${H}${shell}<main><a href="/admin/revisao/1">Abrir</a></main>`), "/admin/revisao")).toEqual([]);
+    expect(findDeadEnds(doc(`${H}<nav aria-label="Abas"><a href="/conta">Conta</a></nav><main><a href="/x">Abrir</a></main>`), "/loja/x/y")).toEqual(["sem caminho de volta"]);
+  });
+});
+
 describe("normalizeHref", () => {
   it("normaliza relativo, query, barra final e origin", () => {
     expect(normalizeHref("/?x=1")).toBe("/");

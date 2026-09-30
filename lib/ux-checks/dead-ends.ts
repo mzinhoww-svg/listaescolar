@@ -1,6 +1,12 @@
 const CHROME = "header, footer";
-const BACK_LABEL = /\b(voltar|cancelar|fechar|dispensar)\b/i;
-const BACK_LINK_LABEL = /\b(voltar|cancelar)\b/i;
+/**
+ * Rótulo de volta: "Voltar ..." (com objeto) ou a palavra inteira Cancelar/Fechar/Dispensar (com ou sem "aviso", "janela"...).
+ * Casa o rótulo inteiro, não o trecho: "Fechar pedido" e "Cancelar assinatura" são ações adiante (Ruling da S29).
+ */
+const BACK_LABEL = /^\W*(?:voltar\b.*|(?:cancelar|fechar|dispensar)(?:\s+(?:aviso|janela|di[aá]logo|mensagem|menu|painel|banner|notifica[cç][aã]o))?\W*)$/i;
+const BACK_LINK_LABEL = /^\W*(?:voltar\b.*|cancelar\W*)$/i;
+/** Raízes de painel: o menu lateral que leva à raiz do painel já é o caminho de volta das telas internas. */
+const PANEL_ROOTS: readonly string[] = ["/admin", "/papelaria", "/escola", "/b2b", "/conta"];
 const CRUMB_LABEL = /migalha|breadcrumb|trilha/i;
 const FAKE_ORIGIN = "http://local.invalid";
 
@@ -25,7 +31,10 @@ export function normalizeHref(href: string | null, origin?: string): string | nu
   }
 }
 
-const labelOf = (el: Element) => `${(el.textContent ?? "").replace(/\s+/g, " ").trim()} ${el.getAttribute("aria-label") ?? ""}`;
+/** Nome do controle: o texto visível e o `aria-label`, cada um avaliado à parte (o rótulo inteiro decide). */
+const labelsOf = (el: Element): string[] =>
+  [(el.textContent ?? "").replace(/\s+/g, " ").trim(), (el.getAttribute("aria-label") ?? "").trim()].filter(Boolean);
+const matchesLabel = (el: Element, re: RegExp) => labelsOf(el).some((l) => re.test(l));
 
 function isIconOrMenuButton(el: Element): boolean {
   if (el.tagName !== "BUTTON") return false;
@@ -38,7 +47,7 @@ function isIconOrMenuButton(el: Element): boolean {
 function isForwardAction(el: Element, origin?: string): boolean {
   if (el.closest(CHROME) || el.closest("nav")) return false;
   if (el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true") return false;
-  if (BACK_LABEL.test(labelOf(el))) return false;
+  if (matchesLabel(el, BACK_LABEL)) return false;
   if (el.tagName === "A") {
     const raw = (el.getAttribute("href") ?? "").trim();
     if (raw === "" || raw.startsWith("#") || /^javascript:/i.test(raw)) return false;
@@ -59,11 +68,13 @@ function parentOf(path: string): string {
 }
 
 function hasBack(doc: Document, path: string, origin?: string): boolean {
-  if (ENTRY_ROUTES.includes(path)) {
-    return Array.from(doc.querySelectorAll("header a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === "/");
-  }
+  // Nas rotas de entrada o logo do header em "/" basta; Voltar e migalha também valem (como nas demais rotas).
+  if (ENTRY_ROUTES.includes(path) && Array.from(doc.querySelectorAll("header a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === "/")) return true;
   // Voltar/Cancelar e migalha valem em qualquer lugar da página; o link para a rota-pai só dentro de `main`.
-  if (Array.from(doc.querySelectorAll("a[href]")).some((a) => BACK_LINK_LABEL.test(labelOf(a)))) return true;
+  if (Array.from(doc.querySelectorAll("a[href]")).some((a) => matchesLabel(a, BACK_LINK_LABEL))) return true;
+  // Casca de painel: menu (`nav`) com link para a raiz do painel dispensa o Voltar nas telas internas.
+  const root = `/${path.split("/")[1] ?? ""}`;
+  if (path !== root && PANEL_ROOTS.includes(root) && Array.from(doc.querySelectorAll("nav a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === root)) return true;
   if (Array.from(doc.querySelectorAll("nav[aria-label]")).some((n) => CRUMB_LABEL.test(n.getAttribute("aria-label") ?? ""))) return true;
   const main = doc.querySelector("main");
   if (!main) return false;
@@ -74,7 +85,7 @@ function hasBack(doc: Document, path: string, origin?: string): boolean {
 /**
  * Motivos de a tela ser um beco sem saída.
  * "Adiante": link ou botão fora de header/footer/nav que não seja Voltar/Cancelar/Fechar nem botão de ícone/menu.
- * "Volta": logo do header em "/" só nas rotas de entrada; nas demais, link Voltar/Cancelar,
+ * "Volta": logo do header em "/" (só nas rotas de entrada), link Voltar/Cancelar (rótulo inteiro), menu do painel com a raiz,
  * migalha (`nav[aria-label]` com migalha/breadcrumb/trilha) em qualquer lugar da página, ou link para a rota-pai dentro de `main`.
  */
 export function findDeadEnds(doc: Document, path: string, origin?: string): string[] {

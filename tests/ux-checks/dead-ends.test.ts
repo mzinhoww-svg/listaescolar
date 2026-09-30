@@ -108,3 +108,14 @@ describe("normalizeHref", () => {
     expect(normalizeHref("mailto:a@b.c")).toBeNull();
   });
 });
+
+describe("findDeadEnds: casca com lateral (aside)", () => {
+  it("rota de entrada: link para '/' na lateral conta como volta", () => {
+    const d = doc(`<aside><a href="/">Ir para o site</a></aside><main><a href="/admin/revisao">Abrir</a></main>`);
+    expect(findDeadEnds(d, "/admin")).toEqual([]);
+  });
+  it("rota interna: link para '/' na lateral não conta", () => {
+    const d = doc(`<aside><a href="/">Ir para o site</a></aside><main><a href="/x">Abrir</a></main>`);
+    expect(findDeadEnds(d, "/admin/x/y")).toContain("sem caminho de volta");
+  });
+});

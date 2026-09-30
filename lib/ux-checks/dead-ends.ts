@@ -68,8 +68,8 @@ function parentOf(path: string): string {
 }
 
 function hasBack(doc: Document, path: string, origin?: string): boolean {
-  // Nas rotas de entrada o logo do header em "/" basta; Voltar e migalha também valem (como nas demais rotas).
-  if (ENTRY_ROUTES.includes(path) && Array.from(doc.querySelectorAll("header a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === "/")) return true;
+  // Nas rotas de entrada o link para "/" no header ou na lateral da casca (logo, "Ir para o site") basta; Voltar e migalha também valem (como nas demais rotas).
+  if (ENTRY_ROUTES.includes(path) && Array.from(doc.querySelectorAll("header a[href], aside a[href]")).some((a) => normalizeHref(a.getAttribute("href"), origin) === "/")) return true;
   // Voltar/Cancelar e migalha valem em qualquer lugar da página; o link para a rota-pai só dentro de `main`.
   if (Array.from(doc.querySelectorAll("a[href]")).some((a) => matchesLabel(a, BACK_LINK_LABEL))) return true;
   // Casca de painel: menu (`nav`) com link para a raiz do painel dispensa o Voltar nas telas internas.

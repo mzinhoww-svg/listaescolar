@@ -49,7 +49,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
           Não foi possível carregar a fila. <Link href={`/admin/reivindicacoes?aba=${tab.key}`} className="underline">Tentar de novo</Link>
         </p>
       ) : rows.length === 0 ? (
-        <p className="text-texto-2 rounded-[24px] bg-white p-8 text-[15px] font-bold">Nenhuma reivindicação nesta aba.</p>
+        <div className="rounded-[24px] bg-white p-8">
+          <p className="text-texto-2 text-[15px] font-bold">Nenhuma reivindicação nesta aba.</p>
+          {(() => {
+            const other = TABS.map((t, i) => ({ t, n: lists[i]?.length ?? 0 })).find((x) => x.t.key !== tab.key && x.n > 0);
+            return other ? (
+              <Link href={`/admin/reivindicacoes?aba=${other.t.key}`} className="text-verde-fundo mt-2 inline-flex min-h-11 items-center text-[14px] font-extrabold underline">
+                Ver a aba {other.t.label} ({other.n})
+              </Link>
+            ) : (
+              <Link href="/admin/revisao" className="text-verde-fundo mt-2 inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Ver a fila de revisão de listas</Link>
+            );
+          })()}
+        </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {rows.map((r) => <ClaimQueueCard key={r.id} row={r} />)}

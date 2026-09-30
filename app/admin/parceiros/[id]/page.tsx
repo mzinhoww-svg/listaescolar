@@ -117,6 +117,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           </section>
           <aside className="flex flex-col gap-3">
             <h2 className="text-[17px] font-extrabold">Decisão</h2>
+            <Link href="/admin/parceiros?aba=pendentes" className="text-verde-fundo inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Ver parceiros pendentes</Link>
             <DecisionForm
               partnerId={id.data}
               status={overview.status as B2bPartnerStatus}

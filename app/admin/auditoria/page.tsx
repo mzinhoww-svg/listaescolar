@@ -49,6 +49,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
         </Notice>
       ) : (
         <>
+          <Link href="/admin/contestacoes" className="text-verde-fundo mb-2 inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Ver contestações abertas</Link>
           <p className="text-texto-2 mb-4 text-[14px] font-semibold">
             {rows.length} pedidos analisados · {divergent} com divergência entre o declarado pela papelaria e a regra de 2 de 3 sinais.
           </p>

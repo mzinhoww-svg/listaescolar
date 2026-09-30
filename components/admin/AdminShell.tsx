@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { Logo } from "@/components/brand/Logo";
 import { SkipLink } from "@/components/site/SkipLink";
@@ -59,6 +60,7 @@ export function AdminShell({ active, email, breadcrumb, title, actions, children
           Admin interno
         </span>
         <AdminNav items={NAV} active={active} />
+        <Link href="/" className="inline-flex min-h-11 items-center text-[14px] font-extrabold underline">Ir para o site</Link>
         {email === null ? null : (
           <div className="flex items-center gap-3 md:mt-auto">
             <span className="bg-verde-certo text-tinta flex size-10 items-center justify-center rounded-full text-xs font-extrabold">

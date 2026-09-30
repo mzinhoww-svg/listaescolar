@@ -14,9 +14,9 @@ export function PayoutKpiRow({ pendingCents, schoolsWithRepasse, executedCents }
         <p className="text-[28px] leading-none font-extrabold tracking-[-0.02em]">{schoolsWithRepasse}</p>
         <p className="text-texto-2 mt-1 text-[13px] font-semibold">escola(s)/APM com repasse pendente</p>
       </div>
-      <div className="bg-verde-certo text-tinta rounded-card p-5">
+      <div className="rounded-card bg-white p-5">
         <p className="text-[28px] leading-none font-extrabold tracking-[-0.02em]">{formatBrl(executedCents)}</p>
-        <p className="mt-1 text-[13px] font-semibold">já pago (lotes executados)</p>
+        <p className="text-texto-2 mt-1 text-[13px] font-semibold">já pago (lotes executados)</p>
       </div>
     </div>
   );

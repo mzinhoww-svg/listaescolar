@@ -1,15 +1,14 @@
 import { formatBrl } from "@/features/billing/money";
 import type { PriceTier } from "@/features/billing/tiers";
 
-const ROWS = 6;
 
-/** Faixas de preço (Admin10): linhas fixas (sem JS de adicionar/remover); em branco = ignorada. A última fica aberta. */
+/** Faixas de preço (Admin10): mostra as faixas salvas e uma linha em branco (para outra faixa, salve e reabra). A última fica aberta. */
 export function TierFields({ tiers }: { tiers: readonly PriceTier[] }) {
-  const rows = Array.from({ length: ROWS }, (_, i) => tiers[i] ?? null);
+  const rows = [...tiers, null];
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="mb-1 text-[15px] font-extrabold">Preço por lead (faixa de itens da lista)</legend>
-      <div className="text-texto-3 grid grid-cols-[1fr_1fr_1fr] gap-2 text-[12px] font-extrabold uppercase">
+      <div className="text-texto-3 grid grid-cols-[1fr_1fr_1fr] gap-2 text-[13px] font-extrabold">
         <span>De (itens)</span>
         <span>Até (itens, vazio = aberta)</span>
         <span>Preço</span>

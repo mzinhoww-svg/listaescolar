@@ -6,6 +6,7 @@ import { PortalShell } from "@/components/b2b/PortalShell";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 import { getMyPartnerHeader, getMyPartnerOverview } from "@/features/b2b/queries";
+import { PARTNER_TYPES } from "@/features/b2b/scopes";
 import type { B2bPartnerStatus } from "@/features/b2b/states";
 
 // Casca de `/b2b` (B2B01/02/03/Conta): exige membro de fato (linha em `b2b_partner_members`), não só o papel —
@@ -22,7 +23,7 @@ export default async function Layout({ children }: { children: ReactNode }) {
   if (!actor || !overview) redirect("/parceiros?cadastro=1");
   const header = await getMyPartnerHeader(actor);
   return (
-    <PortalShell tradeName={header?.tradeName ?? "Parceiro"} status={overview.status as B2bPartnerStatus} email={user.email}>
+    <PortalShell tradeName={header?.tradeName ?? "Parceiro"} status={overview.status as B2bPartnerStatus} email={user.email} partnerType={PARTNER_TYPES.find((t) => t === header?.partnerType)}>
       {children}
     </PortalShell>
   );

@@ -67,6 +67,37 @@ describe("skip-link e landmark #conteudo nas cascas autenticadas", () => {
     expect(document.querySelector("main#conteudo")).not.toBeNull();
   });
 
+  it("UX-126: casca B2B compacta a 390 px (logo, selo e conta na mesma faixa), menu com indício de rolagem e Sair como Button", () => {
+    const { container } = render(
+      <PortalShell tradeName="Parceiro" status="active" email="parceiro@b2b.com">
+        <p>conteúdo</p>
+      </PortalShell>,
+    );
+    const aside = container.querySelector("aside")!;
+    expect(aside.className).toMatch(/flex-row/);
+    expect(aside.className).toMatch(/md:flex-col/);
+    expect(screen.getByRole("navigation", { name: "Navegação" }).className).toMatch(/mask-image/);
+    const sair = screen.getByRole("button", { name: "Sair" });
+    expect(sair.className).toMatch(/h-11/);
+    expect(sair.className).toMatch(/rounded-botao/);
+  });
+
+  it("UX-123: só parceiro do tipo marca vê Campanhas no menu", () => {
+    const { rerender } = render(
+      <PortalShell tradeName="Loja" status="active" email="a@b.com" partnerType="retailer">
+        <p>x</p>
+      </PortalShell>,
+    );
+    expect(screen.queryByRole("link", { name: "Campanhas" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Insights" })).toBeInTheDocument();
+    rerender(
+      <PortalShell tradeName="Marca" status="active" email="a@b.com" partnerType="brand">
+        <p>x</p>
+      </PortalShell>,
+    );
+    expect(screen.getByRole("link", { name: "Campanhas" })).toBeInTheDocument();
+  });
+
   it("SchoolPanelShell", () => {
     render(
       <SchoolPanelShell email="escola@x.com" title="Minhas escolas" crumb="Escola">

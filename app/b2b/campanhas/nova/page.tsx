@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
+import { BrandOnlyNotice } from "@/components/b2b/BrandOnlyNotice";
 import { getSessionActor } from "@/features/auth/actor";
+import { getMyPartnerHeader } from "@/features/b2b/queries";
 import { getMyPartnerId } from "@/features/campaigns/queries";
 
 import { NovaCampanhaForm } from "./NovaCampanhaForm";
@@ -17,6 +19,15 @@ export default async function Page() {
   if (!actor) redirect("/entrar?next=%2Fb2b%2Fcampanhas%2Fnova");
   const partnerId = await getMyPartnerId(actor);
   if (!partnerId) redirect("/parceiros?cadastro=1");
+  const header = await getMyPartnerHeader(actor);
+  if (header && header.partnerType !== "brand") {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-[30px] leading-[1.1] font-extrabold tracking-[-0.035em]">Nova campanha</h1>
+        <BrandOnlyNotice partnerType={header.partnerType} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

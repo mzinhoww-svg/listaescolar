@@ -47,7 +47,7 @@ describe("widget.js (origem externa)", () => {
     const r = root();
     expect(r.querySelector("style") ?? (r as ShadowRoot).adoptedStyleSheets?.length).toBeTruthy();
     expect(SRC).not.toContain("widget.css");
-    expect(f.mock.calls[0]?.[1]).toMatchObject({ credentials: "omit" });
+    expect((f.mock.calls[0] as unknown as [string, RequestInit])[1]).toMatchObject({ credentials: "omit" });
     expect(r.querySelector("input")).not.toBeNull();
   });
 

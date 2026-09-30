@@ -1,6 +1,9 @@
 import Link from "next/link";
 
+import { BrandOnlyNotice } from "@/components/b2b/BrandOnlyNotice";
+import { buttonClass } from "@/components/ui/Button";
 import { getSessionActor } from "@/features/auth/actor";
+import { getMyPartnerHeader } from "@/features/b2b/queries";
 import { listMyCampaigns } from "@/features/campaigns/queries";
 
 import { CampaignsTable } from "./CampaignsTable";
@@ -14,14 +17,23 @@ export const metadata = { title: "Campanhas · Portal B2B · ListaCerta" };
 export default async function Page() {
   const actor = await getSessionActor();
   if (!actor) return <p className="text-texto-2 text-[15px] font-bold">Não foi possível carregar seu parceiro agora.</p>;
+  const header = await getMyPartnerHeader(actor);
+  if (header && header.partnerType !== "brand") {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-[30px] leading-[1.1] font-extrabold tracking-[-0.035em]">Campanhas</h1>
+        <BrandOnlyNotice partnerType={header.partnerType} />
+      </div>
+    );
+  }
   const campaigns = await listMyCampaigns(actor);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-[30px] leading-[1.1] font-extrabold tracking-[-0.035em]">Campanhas</h1>
-        <Link href="/b2b/campanhas/nova" className="bg-tinta text-papel rounded-botao flex h-11 items-center px-5 text-[14px] font-extrabold">
-          + Nova campanha
+        <Link href="/b2b/campanhas/nova" className={buttonClass("primary", "md")}>
+          Nova campanha
         </Link>
       </div>
       <p className="text-texto-2 max-w-2xl text-[14px] font-semibold">

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { formatCnpj } from "@/features/stationeries/cnpj";
 import type { AdminListRow } from "@/features/stationeries/queries";
 import { STATUS_LABEL } from "@/features/stationeries/messages";
@@ -35,7 +37,9 @@ export function AdminTable({ rows, approve }: Props) {
           {rows.map((r) => (
             <tr key={r.id} className="border-linha border-b last:border-b-0">
               <th scope="row" className="px-5 py-3.5 font-extrabold">
-                {r.tradeName}
+                <Link href={`/admin/papelarias/${r.id}`} className="inline-flex min-h-11 items-center underline">
+                  {r.tradeName}
+                </Link>
                 {r.isDemo ? <span className="bg-campo ml-2 rounded-botao px-2 py-0.5 text-[12px]">Demonstração</span> : null}
               </th>
               <td className="px-5 py-3.5 font-bold whitespace-nowrap">{formatCnpj(r.cnpj)}</td>
@@ -46,17 +50,39 @@ export function AdminTable({ rows, approve }: Props) {
               <td className="px-5 py-3.5 font-bold">{STATUS_LABEL[r.status]}</td>
               <td className="px-5 py-3.5 font-bold">{formatDateTime(r.createdAt)}</td>
               <td className="flex items-center justify-end gap-2 px-5 py-3.5">
-                <Link href={`/admin/papelarias/${r.id}`} className="min-h-11 inline-flex items-center justify-center border-tinta rounded-botao border-[1.5px] px-4 py-2 text-[13px] font-extrabold">
-                  {r.status === "under_review" ? "Recusar" : "Abrir"}
-                </Link>
                 {r.status === "under_review" ? (
-                  <form action={approve}>
-                    <input type="hidden" name="id" value={r.id} />
-                    <input type="hidden" name="to" value="approved" />
-                    <input type="hidden" name="back" value="list" />
-                    <button type="submit" className="min-h-11 inline-flex items-center justify-center bg-tinta text-papel rounded-botao px-4 py-2 text-[13px] font-extrabold">Aprovar</button>
-                  </form>
-                ) : null}
+                  <>
+                    <ConfirmDialog
+                      triggerLabel="Recusar"
+                      triggerStyle="button"
+                      triggerVariant="outline"
+                      title={`Recusar ${r.tradeName}?`}
+                      body={
+                        <>
+                          <p>A papelaria fica recusada e não aparece para as famílias. O motivo é mostrado a ela para corrigir e reenviar.</p>
+                          <label className="mt-3 block text-[13px] font-extrabold" htmlFor={`reason-${r.id}`}>Motivo (obrigatório)</label>
+                          <textarea id={`reason-${r.id}`} name="reason" required maxLength={500} rows={3} className="mt-1 w-full rounded-campo bg-campo p-3 text-[14px]" />
+                        </>
+                      }
+                      confirmLabel="Recusar papelaria"
+                      action={approve}
+                      hidden={{ id: r.id, to: "rejected", back: "list" }}
+                    />
+                    <ConfirmDialog
+                      triggerLabel="Aprovar"
+                      triggerStyle="button"
+                      triggerVariant="primary"
+                      confirmVariant="primary"
+                      title={`Aprovar ${r.tradeName}?`}
+                      body="Depois de aprovada, a papelaria passa a poder receber cotações quando ativar o cadastro. Você pode pausar ou suspender depois."
+                      confirmLabel="Aprovar papelaria"
+                      action={approve}
+                      hidden={{ id: r.id, to: "approved", back: "list" }}
+                    />
+                  </>
+                ) : (
+                  <Link href={`/admin/papelarias/${r.id}`} className={buttonClass("outline")}>Abrir</Link>
+                )}
               </td>
             </tr>
           ))}

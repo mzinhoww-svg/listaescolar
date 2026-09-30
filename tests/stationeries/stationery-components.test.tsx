@@ -202,11 +202,20 @@ describe("PublicProfileView", () => {
 
 describe("AdminTable", () => {
   const row = { id: "a", tradeName: "Alfa", cnpj: "11222333000181", neighborhood: "Centro", whatsapp: "+5565999991234", status: "under_review" as const, isDemo: false, createdAt: new Date() };
-  it("pendente: Aprovar e Recusar; CNPJ formatado", () => {
-    render(<AdminTable rows={[row]} approve={noop} />);
+  it("pendente: Aprovar e Recusar abrem confirmação com o efeito; CNPJ formatado; nome é link", () => {
+    const { container } = render(<AdminTable rows={[row]} approve={noop} />);
     expect(screen.getByText("11.222.333/0001-81")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Alfa" })).toHaveAttribute("href", "/admin/papelarias/a");
     expect(screen.getByRole("button", { name: "Aprovar" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Recusar" })).toHaveAttribute("href", "/admin/papelarias/a");
+    expect(screen.getByRole("button", { name: "Recusar" })).toBeInTheDocument();
+    const dialogs = container.querySelectorAll("dialog");
+    expect(dialogs).toHaveLength(2);
+    expect(dialogs[1]?.textContent).toMatch(/passa a poder receber/i);
+    const reject = dialogs[0] as HTMLElement;
+    expect(reject.querySelector('input[name="to"][value="rejected"]')).not.toBeNull();
+    const reason = reject.querySelector('textarea[name="reason"]');
+    expect(reason).not.toBeNull();
+    expect(reason).toBeRequired();
   });
   it("vazio", () => {
     render(<AdminTable rows={[]} approve={noop} />);

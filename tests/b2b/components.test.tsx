@@ -147,3 +147,24 @@ describe("UX-129 · configuração do widget", () => {
     expect(screen.getByRole("button", { name: "Copiar código" })).toBeEnabled();
   });
 });
+
+// UX-130 · formulário de webhook
+vi.mock("@/features/webhooks/actions", () => ({ createEndpointAction: vi.fn(), revealSecretAction: vi.fn(), rotateSecretAction: vi.fn(), updateEndpointAction: vi.fn() }));
+import { EndpointForm } from "@/app/b2b/webhooks/EndpointForm";
+
+describe("UX-130 · endpoint de webhook", () => {
+  it("diz junto do campo que a URL precisa começar com https:// e mostra o problema de uma URL http", () => {
+    render(<EndpointForm endpoint={null} onSaved={() => {}} />);
+    expect(screen.getByText(/a URL precisa começar com https:\/\//i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("URL"), { target: { value: "http://exemplo.com" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/https:\/\//);
+    expect(screen.getByRole("button", { name: "Criar endpoint" })).toBeDisabled();
+  });
+
+  it("'Criar endpoint' desabilitado explica o motivo e os chips não usam Verde Certo", () => {
+    const { container } = render(<EndpointForm endpoint={null} onSaved={() => {}} />);
+    expect(screen.getByRole("button", { name: "Criar endpoint" })).toBeDisabled();
+    expect(screen.getByText(/Informe a URL do endpoint para criar/)).toBeInTheDocument();
+    expect(container.innerHTML).not.toContain("bg-verde-certo");
+  });
+});

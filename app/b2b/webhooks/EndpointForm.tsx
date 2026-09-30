@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
+import { Field, fieldInputClass } from "@/components/ui/Field";
+import { InlineStatus } from "@/components/ui/InlineStatus";
 import { createEndpointAction, revealSecretAction, rotateSecretAction, updateEndpointAction } from "@/features/webhooks/actions";
 import { WEBHOOK_EVENTS, type WebhookEvent } from "@/features/webhooks/events";
 import type { EndpointRow } from "@/features/webhooks/repository";
@@ -85,33 +88,33 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
     } else setError(r.message);
   }
 
+  const urlError = url.length > 0 && !url.startsWith("https://") ? "A URL precisa começar com https://" : undefined;
+  const disabledReason = url.length === 0 ? "Informe a URL do endpoint para criar." : urlError ? null : events.length === 0 ? "Marque ao menos um evento." : null;
   const displaySecret = justCreatedSecret ?? revealedSecret;
 
   return (
     <div className="flex flex-col gap-4 rounded-[20px] bg-white p-5">
       <h2 className="text-[16px] font-extrabold">Endpoint</h2>
-      {error ? (
-        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">
-          {error}
-        </p>
-      ) : null}
+      {error ? <InlineStatus tone="error">{error}</InlineStatus> : null}
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-bold">URL</span>
+      <Field id="webhook-url" label="URL" hint="A URL precisa começar com https://" error={urlError}>
         <input
+          id="webhook-url"
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://sua-api/listacerta/webhook"
-          className="border-linha rounded-campo h-11 border-[1.5px] px-3 text-[14px] font-semibold"
+          aria-invalid={urlError ? true : undefined}
+          aria-describedby={urlError ? "webhook-url-erro" : undefined}
+          className={fieldInputClass}
         />
-      </label>
+      </Field>
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-[13px] font-bold">Eventos</legend>
         <div className="flex flex-wrap gap-2">
           {WEBHOOK_EVENTS.map((e) => (
-            <label key={e} className={`rounded-botao border-tinta cursor-pointer border-[1.5px] px-3 py-1.5 text-[12px] font-extrabold ${events.includes(e) ? "bg-verde-certo" : ""}`}>
+            <label key={e} className={`rounded-botao border-tinta inline-flex min-h-11 cursor-pointer items-center border-[1.5px] px-3 text-[12px] font-extrabold ${events.includes(e) ? "bg-tinta text-papel" : ""} has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-verde-fundo`}>
               <input type="checkbox" className="sr-only" checked={events.includes(e)} onChange={() => toggleEvent(e)} />
               {EVENT_LABEL[e]}
             </label>
@@ -155,11 +158,11 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
                     >
                       Ocultar
                     </button>
-                    <button type="button" onClick={rotate} className="text-verde-fundo text-[13px] font-extrabold underline">
+                    <button type="button" onClick={rotate} className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
                       {confirmingRotate ? "Confirmar rotação (invalida o segredo atual)" : "Rotacionar"}
                     </button>
                     {confirmingRotate ? (
-                      <button type="button" onClick={() => setConfirmingRotate(false)} className="text-texto-3 text-[13px] font-bold underline">
+                      <button type="button" onClick={() => setConfirmingRotate(false)} className="text-texto-3 inline-flex min-h-11 items-center text-[13px] font-bold underline">
                         Cancelar
                       </button>
                     ) : null}
@@ -170,14 +173,14 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
           ) : (
             <div className="flex flex-wrap items-center gap-3">
               <code className="bg-campo rounded-campo px-3 py-2 text-[13px] font-bold">whsec_••••••••</code>
-              <button type="button" onClick={reveal} className="text-verde-fundo text-[13px] font-extrabold underline">
+              <button type="button" onClick={reveal} className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
                 Revelar
               </button>
-              <button type="button" onClick={rotate} className="text-verde-fundo text-[13px] font-extrabold underline">
+              <button type="button" onClick={rotate} className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
                 {confirmingRotate ? "Confirmar rotação (invalida o segredo atual)" : "Rotacionar"}
               </button>
               {confirmingRotate ? (
-                <button type="button" onClick={() => setConfirmingRotate(false)} className="text-texto-3 text-[13px] font-bold underline">
+                <button type="button" onClick={() => setConfirmingRotate(false)} className="text-texto-3 inline-flex min-h-11 items-center text-[13px] font-bold underline">
                   Cancelar
                 </button>
               ) : null}
@@ -188,9 +191,12 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
       ) : null}
 
       {justCreatedSecret ? null : (
-        <button type="button" onClick={submit} disabled={pending || url.length === 0 || events.length === 0} className="bg-tinta text-papel rounded-botao flex h-11 w-fit items-center justify-center px-5 text-[14px] font-extrabold disabled:opacity-50">
-          {pending ? "Salvando..." : endpoint ? "Salvar" : "Criar endpoint"}
-        </button>
+        <div className="flex flex-col gap-2">
+          <Button loading={pending} disabled={url.length === 0 || events.length === 0 || Boolean(urlError)} onClick={submit} className="w-fit">
+            {endpoint ? "Salvar" : "Criar endpoint"}
+          </Button>
+          {disabledReason ? <p className="text-texto-2 text-[13px] font-semibold">{disabledReason}</p> : null}
+        </div>
       )}
     </div>
   );

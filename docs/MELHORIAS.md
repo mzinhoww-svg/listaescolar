@@ -101,9 +101,9 @@ Ordenado por prioridade (I ÷ E). "Fatia" indica se entra no top 15 desta fatia 
 | M12 | Papelaria: checklist de ativação no painel (dados, áreas, catálogo, primeiro lead), vazios orientados, lead mobile com a ação principal à vista | 4 | 3 | 1,3 | `components/stationeries/*`, `components/leads/*`, `app/papelaria/*` | `stationery_registered` → `catalog_activated` (dias); `catalog_activated` → `lead_received` | S28 |
 | M13 | Escola: painel com "próximo passo" (aguardando verificação, enviar PDF, revisar, compartilhar), estados de reivindicação em linguagem clara | 4 | 3 | 1,3 | `components/claims/*`, `app/escola/*`, `features/claims/messages*` | Tempo de `claim` aprovada até `list_upload_started source=school`; `list_published` por escola | S28 |
 | M15 | `DESIGN.md` do projeto e componentes compartilhados (botão, campo, tabela, foco, feedback, movimento) alinhando escola, papelaria, admin e B2B às telas de referência | 3 | 3 | 1,0 | `DESIGN.md` (novo), `components/ui/*` (novo, pequeno), `app/globals.css`, telas das áreas | Zero achados de consistência na auditoria impeccable das 6 áreas; componentes de até 250 linhas; `pnpm check:sizes` verde | S28 |
-| M22 | Quickstart B2B: exemplo copiável com a chave sandbox e a resposta esperada | 3 | 2 | 1,5 | `app/b2b/api/page.tsx`, `app/b2b/docs/page.tsx` | Tempo da criação da chave à 1ª chamada 200 no sandbox | Pós-piloto |
-| M26 | Kit de divulgação da escola: cartaz A4 com QR e mensagem de WhatsApp | 3 | 2 | 1,5 | `features/short-links/*`, `app/l/*`, `components/share/*` | Cliques no link curto por escola | Pós-piloto |
-| M30 | Ajuda contextual nos pontos de dúvida (marca, item coletivo, INEP) | 3 | 2 | 1,5 | `components/lists/*`, `components/schools/*` | Menos `report` de lista por dúvida; leitura de item | Pós-piloto |
+| M22 | Quickstart B2B: exemplo copiável com a chave sandbox e a resposta esperada | 3 | 2 | 1,5 | `app/b2b/api/page.tsx`, `app/b2b/docs/page.tsx` | Tempo da criação da chave à 1ª chamada 200 no sandbox | Pós-piloto, coberto pela S29 (UX-128, Task 18) |
+| M26 | Kit de divulgação da escola: cartaz A4 com QR e mensagem de WhatsApp | 3 | 2 | 1,5 | `features/short-links/*`, `app/l/*`, `components/share/*` | Cliques no link curto por escola | Pós-piloto; S29 cobre link curto, QR e mensagem de WhatsApp (UX-098, Task 16), o cartaz A4 segue pós-piloto |
+| M30 | Ajuda contextual nos pontos de dúvida (marca, item coletivo, INEP) | 3 | 2 | 1,5 | `components/lists/*`, `components/schools/*` | Menos `report` de lista por dúvida; leitura de item | Pós-piloto; S29 cobre só o INEP (UX-015, Task 11) |
 | M19 | Indexar listas reais de escolas verificadas (D-033) para chegar por busca do Google | 3 | 2 | 1,5 | `app/escolas/[inep]/[serie]/page.tsx`, `lib/robots-header.ts`, `app/sitemap.ts` | `landing_viewed` por origem orgânica; só após go-live e SITE_INDEXING=1 | Pós-piloto |
 | M16 | Entrada por código de 6 dígitos no mesmo aparelho (além do link) | 4 | 3 | 1,3 | Template do e-mail de acesso no Supabase hospedado (ação do humano), `features/auth/*` | `login_completed` no mesmo dispositivo; depende do template hospedado | Pós-piloto |
 | M18 | Busca com sugestões em tempo real | 3 | 3 | 1,0 | `app/escolas/SearchForm.tsx`, rota de sugestões, índice trigram (D-019) | `school_searched` → `school_viewed` | Pós-piloto |
@@ -111,7 +111,7 @@ Ordenado por prioridade (I ÷ E). "Fatia" indica se entra no top 15 desta fatia 
 | M29 | Relatório semanal de funil (PostHog + banco) | 3 | 3 | 1,0 | `scripts/`, `docs/superpowers/` | Relatório semanal publicado | Pós-piloto |
 | M25 | Adicionar à tela inicial (manifest leve) | 2 | 2 | 1,0 | `app/manifest.ts`, ícones | Instalações; baixa prioridade sem push | Pós-piloto |
 | M27 | Teste A/B de título e CTA da landing | 2 | 2 | 1,0 | Landing, PostHog flags | Só com tráfego suficiente | Pós-piloto |
-| M23 | Widget B2B com pré-visualização ao vivo | 2 | 3 | 0,7 | `app/b2b/widget/*` | Cadastros de widget concluídos | Pós-piloto |
+| M23 | Widget B2B com pré-visualização ao vivo | 2 | 3 | 0,7 | `app/b2b/widget/*` | Cadastros de widget concluídos | Pós-piloto; S29 cobre a parte de rótulos e pré-visualização (UX-129, UX-124, Task 18), o "ao vivo" segue pós-piloto |
 | M28 | Regressão visual automatizada por captura | 3 | 4 | 0,8 | CI, `scripts/` | Regressões visuais barradas antes do merge | Pós-piloto |
 | M20 | Upload direto ao Storage por URL assinada (D-023) | 3 | 4 | 0,8 | `features/submissions/*`, Storage | Falhas de upload; M04 cobre o grosso do ganho | Pós-piloto |
 | M31 | Explicar item ambíguo ("por que a escola pede isso?") | 4 | 4 | 1,0 | Pipeline, `list_items`, curadoria | Menos `comprar item errado` (pesquisa) | Pós-piloto |
@@ -164,5 +164,18 @@ Origem: `docs/superpowers/evidencias/S28/auditoria-*.md` (65 achados: 0 P0, 16 P
 | ID | Melhoria | I | E | Prior. | Onde | Fatia |
 |---|---|---|---|---|---|---|
 | M33 | Campo de busca da home utilizável no celular (botão em linha própria ou ícone; placeholder legível; menu do topo com indício de rolagem) | 4 | 1 | 4,0 | `components/site/Hero.tsx`, `app/escolas/SearchForm.tsx` | S28, dentro da Task 13 (M06) |
-| M34 | Admin com menu recolhível abaixo de 768 px, grupos no menu e barra fixa | 3 | 2 | 1,5 | `components/admin/AdminShell.tsx` | S28, dentro da Task 18 (M15) se couber; senão pós-piloto |
-| M35 | Painel admin com fila de atenção (reivindicações pendentes, listas na fila, contestações abertas) e tabela de eventos legível | 3 | 3 | 1,0 | `app/admin/page.tsx`, `app/admin/eventos/page.tsx` | Pós-piloto |
+| M34 | Admin com menu recolhível abaixo de 768 px, grupos no menu e barra fixa | 3 | 2 | 1,5 | `components/admin/AdminShell.tsx` | S28, dentro da Task 18 (M15) se couber; senão pós-piloto; S29: adiada com Ruling proposto (UX-122, Task 17) |
+| M35 | Painel admin com fila de atenção (reivindicações pendentes, listas na fila, contestações abertas) e tabela de eventos legível | 3 | 3 | 1,0 | `app/admin/page.tsx`, `app/admin/eventos/page.tsx` | Pós-piloto, coberto pela S29 (UX-110 e UX-108, Task 17) |
+
+## 8. S29 · itens pós-piloto que a revisão total cobre
+
+Origem: `docs/revisao-total/backlog.md` (seção "Itens pós-piloto de `docs/MELHORIAS.md` que a S29 cobre"). A S29 revisa a UX de todas as telas em 390 e 1280 px; onde uma correção dela entrega parte de uma melhoria pós-piloto, a linha da tabela acima cita o item `UX-NNN`.
+
+| Melhoria | Cobertura pela S29 | Item |
+|---|---|---|
+| M22 · Quickstart B2B | total | UX-128 (Task 18) |
+| M35 · Fila de atenção e eventos legíveis | total | UX-110, UX-108 (Task 17) |
+| M26 · Kit de divulgação da escola | parcial (sem cartaz A4) | UX-098 (Task 16) |
+| M30 · Ajuda contextual | parcial (só INEP) | UX-015 (Task 11) |
+| M23 · Widget com pré-visualização | parcial (sem "ao vivo") | UX-129, UX-124 (Task 18) |
+| M34 · Admin com menu agrupado | adiada (Ruling proposto) | UX-122 (Task 17) |

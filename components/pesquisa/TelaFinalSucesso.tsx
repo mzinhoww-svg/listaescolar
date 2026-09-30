@@ -19,7 +19,7 @@ export function TelaFinalSucesso({ sessionId, g }: Props) {
       aria-live="polite"
       className={`${styles.entrar} mx-auto flex min-h-[100dvh] w-full max-w-[480px] flex-1 flex-col gap-6 px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]`}
     >
-      <Cabecalho />
+      <Cabecalho voltarAoSite />
       <div className="bg-tinta text-papel rounded-card flex flex-1 flex-col items-center justify-center gap-5 px-6 py-12 text-center shadow-[0_16px_40px_rgba(15,27,45,0.22)]">
         <span
           aria-hidden

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { HomeIcon, LockIcon } from "@/components/auth/icons";
 import { outlineButton, primaryButton, Screen } from "@/components/auth/Screen";
 
-export const metadata: Metadata = { title: "Erro 403 · ListaCerta", robots: { index: false, follow: false } };
+/** Destino de redirecionamento de `requireAccess`: responde 200 de propósito (Ruling da S29, ver ledger). */
+export const metadata: Metadata = { title: "Sem acesso · ListaCerta", robots: { index: false, follow: false } };
 
 export default function ForbiddenPage() {
   return (
@@ -15,14 +16,11 @@ export default function ForbiddenPage() {
           <div className="bg-tinta flex size-24 items-center justify-center rounded-[30px]">
             <LockIcon />
           </div>
-          <p className="text-texto-3 text-xs font-extrabold tracking-[0.16em] uppercase">
-            Erro 403
-          </p>
           <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
-            Você não tem acesso a esta página
+            Sem acesso a esta área
           </h1>
           <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">
-            Ela é restrita a administradores desta escola ou do ListaCerta.
+            Esta área é só para quem administra a escola ou trabalha na equipe da ListaCerta. Se você deveria ter acesso, entre com a conta certa ou peça a quem administra a escola.
           </p>
         </div>
         <div className="flex-1" />

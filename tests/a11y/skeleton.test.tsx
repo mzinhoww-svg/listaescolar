@@ -27,3 +27,13 @@ describe("Skeleton", () => {
     expect(screen.getByRole("status").textContent).toBe("Carregando a lista…");
   });
 });
+
+describe("UX-004 · app/loading.tsx", () => {
+  it("é um esqueleto com role=status, aria-busy, altura reservada e sem spinner de tela cheia", async () => {
+    const Loading = (await import("@/app/loading")).default;
+    const { container } = render(<Loading />);
+    expect(screen.getByRole("status").getAttribute("aria-busy")).toBe("true");
+    expect(container.innerHTML).not.toContain("animate-spin");
+    expect(container.innerHTML).toMatch(/h-\d+/);
+  });
+});

@@ -19,9 +19,9 @@ export type EventEntry = {
 };
 
 const CLAIM_BODY: Record<string, string> = {
-  approved: "A reivindicação foi aprovada. Você já pode administrar a escola.",
-  rejected: "A reivindicação não foi aprovada.",
-  insufficient_evidence: "Precisamos de mais evidências para concluir a reivindicação.",
+  approved: "O pedido para administrar a escola foi aprovado. Você já pode administrar a escola.",
+  rejected: "O pedido para administrar a escola não foi aprovado.",
+  insufficient_evidence: "Precisamos de mais evidências para concluir o pedido para administrar a escola.",
   token_expired: "O link de confirmação venceu. Peça um novo para continuar.",
 };
 const ALERT_BODY: Record<string, (n: number | undefined) => string> = {
@@ -41,10 +41,10 @@ export const EVENT_CATALOG: Record<NotificationEvent, EventEntry> = {
     title: () => "A lista que você acompanha foi publicada",
     body: (p) => [p.school_name, p.grade_label, p.school_year?.toString()].filter(Boolean).join(" · ") || "Abra para ver a lista.",
   },
-  lead_received: { external: true, pushTitle: "Você tem um novo pedido de cotação", title: () => "Novo pedido de cotação", body: (p) => `Pedido${p.lead_code ? ` ${p.lead_code}` : ""}. Abra para responder.` },
-  lead_quote_sent: { external: true, pushTitle: "Sua cotação chegou", title: () => "Sua cotação chegou", body: (p) => `A papelaria respondeu ao pedido${p.lead_code ? ` ${p.lead_code}` : ""}.` },
-  lead_expired: { external: true, pushTitle: "Seu pedido de cotação expirou", title: () => "Seu pedido de cotação expirou", body: (p) => `O pedido${p.lead_code ? ` ${p.lead_code}` : ""} passou do prazo. Você pode pedir de novo.` },
-  claim_updated: { external: true, pushTitle: "Sua reivindicação teve uma atualização", title: () => "Atualização na sua reivindicação", body: (p) => (p.status_code && CLAIM_BODY[p.status_code]) || "Abra para ver o andamento." },
+  lead_received: { external: true, pushTitle: "Você tem um novo pedido de cotação", title: () => "Novo pedido de cotação", body: () => "Abra para responder." },
+  lead_quote_sent: { external: true, pushTitle: "Sua cotação chegou", title: () => "Sua cotação chegou", body: () => "A papelaria respondeu ao seu pedido de cotação." },
+  lead_expired: { external: true, pushTitle: "Seu pedido de cotação expirou", title: () => "Seu pedido de cotação expirou", body: () => "O pedido passou do prazo. Você pode pedir de novo." },
+  claim_updated: { external: true, pushTitle: "Seu pedido para administrar teve uma atualização", title: () => "Atualização no seu pedido para administrar", body: (p) => (p.status_code && CLAIM_BODY[p.status_code]) || "Abra para ver o andamento." },
   publication_orphaned: { external: false, pushTitle: "Publicação para conciliar", title: () => "Publicação para conciliar", body: () => "Uma lista foi publicada sem registro no envio. Abra a revisão para conciliar." },
   system_alert: {
     external: false,

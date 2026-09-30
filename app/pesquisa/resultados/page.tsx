@@ -42,7 +42,7 @@ export default async function ResultadosPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-[880px] flex-1 flex-col gap-10 px-5 pt-3 pb-12">
-      <Cabecalho />
+      <Cabecalho voltarAoSite />
       <div className="flex flex-col gap-4">
         <h1 className="text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em] text-balance">
           Resultados da pesquisa

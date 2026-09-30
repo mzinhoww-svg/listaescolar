@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { Logo } from "@/components/brand/Logo";
 import { AboutSteps } from "@/components/site/AboutSteps";
+import { ClosingActions } from "@/components/site/ClosingActions";
 import { Placeholder } from "@/components/site/Placeholder";
 import { SITE_COPY, pageMetadata } from "@/features/site/copy";
 import { LEGAL } from "@/features/site/legal";
@@ -24,6 +25,7 @@ export default function Sobre() {
       <p className="text-texto-3 mt-10 text-center text-[13px] font-bold">
         Nasceu em Cuiabá · MT. Contato: <Placeholder label="e-mail de contato" value={LEGAL.contactEmail} />
       </p>
+      <ClosingActions className="mt-8" />
     </main>
   );
 }

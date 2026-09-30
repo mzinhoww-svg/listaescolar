@@ -12,6 +12,13 @@ const STILL_HUMAN_OWNED = ["companyName", "cnpj", "dpoEmail", "contactEmail", "a
 const FILLED_BY_S17 = ["retention", "claimRetention"] as const;
 
 describe("textos jurídicos preliminares", () => {
+  it("H-01: nenhum colchete '[a definir' fica visível; o pendente aparece como 'Em revisão'", async () => {
+    const Page = await loadPage("/privacidade");
+    const { container } = await renderInSite(Page);
+    expect(container.textContent).not.toMatch(/\[a definir/);
+    expect(container.querySelector("mark")?.textContent).toMatch(/^Em revisão/);
+  });
+
   it("só o humano/jurídico preenche razão social, CNPJ, contato, base legal, operadores, data e prazo de auditoria; S17 preencheu os prazos técnicos que já existem em código", () => {
     for (const k of STILL_HUMAN_OWNED) expect(LEGAL[k], k).toBeNull();
     for (const k of FILLED_BY_S17) expect(LEGAL[k], k).not.toBeNull();
@@ -26,15 +33,15 @@ describe("textos jurídicos preliminares", () => {
     const { container } = await renderInSite(Page);
     expect(screen.getByText(/Versão preliminar\. Texto em revisão jurídica\./)).toBeInTheDocument();
     const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
-    for (const l of labels) expect(marks).toContain(`[a definir: ${l}]`);
+    for (const l of labels) expect(marks).toContain(`Em revisão: ${l}`);
   });
 
   it("/privacidade: prazo de retenção e prazo de guarda dos documentos de reivindicação já preenchidos (S17), fora de <mark>", async () => {
     const Page = await loadPage("/privacidade");
     const { container } = await renderInSite(Page);
     const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
-    expect(marks).not.toContain("[a definir: prazo de retenção]");
-    expect(marks).not.toContain("[a definir: prazo de guarda dos documentos de reivindicação]");
+    expect(marks).not.toContain("Em revisão: prazo de retenção");
+    expect(marks).not.toContain("Em revisão: prazo de guarda dos documentos de reivindicação");
     const t = container.textContent ?? "";
     expect(t).toMatch(/excluir sua conta/i);
     expect(t).toMatch(/prazo técnico definido internamente/i);
@@ -64,8 +71,10 @@ describe("textos jurídicos preliminares", () => {
     const upd = [...main.querySelectorAll("p")].find((p) => p.textContent?.startsWith("Última atualização"));
     expect(upd).toBeTruthy();
     expect(main.querySelector("h1")!.compareDocumentPosition(upd!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(main.lastElementChild?.tagName).toBe("ASIDE");
-    expect(main.lastElementChild?.textContent).toMatch(/^Dúvidas:/);
+    // O cartão Dúvidas vem logo antes do fecho com as ações adiante (UX-001).
+    const duvidas = main.lastElementChild?.previousElementSibling;
+    expect(duvidas?.tagName).toBe("ASIDE");
+    expect(duvidas?.textContent).toMatch(/^Dúvidas:/);
   });
 
   it("termos: compra na loja escolhida e comissão sem mudar o preço", async () => {
@@ -88,7 +97,7 @@ describe("/privacidade: medição de uso (ADR-007, S28)", () => {
     expect(t).not.toMatch(/em conformidade com a LGPD/i);
     expect(t).not.toMatch(/\bconforme (a )?LGPD\b/i);
     const marks = [...container.querySelectorAll("mark")].map((m) => m.textContent);
-    expect(marks).toContain("[a definir: operador da medição de uso (PostHog)]");
+    expect(marks).toContain("Em revisão: operador da medição de uso (PostHog)");
   });
 
   it("/privacidade: medição de uso diz com precisão o que depende do aceite e o que não depende, sem afirmar conformidade", async () => {

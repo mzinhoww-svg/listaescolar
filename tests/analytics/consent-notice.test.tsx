@@ -27,4 +27,14 @@ describe("ConsentNotice (revisão UX I6)", () => {
     const { container } = render(<ConsentNotice onAccept={() => {}} onDeny={() => {}} />);
     expect(container.textContent).not.toContain("sem identificar você");
   });
+
+  it("UX-011: texto de 14 px, sem sombra decorativa e fora do rodapé fixo (não cobre 'Começar' nem outras ações fixas)", () => {
+    render(<ConsentNotice onAccept={() => {}} onDeny={() => {}} />);
+    const region = screen.getByRole("region", { name: "Medição de uso" });
+    expect(region.className).not.toMatch(/\bfixed\b|shadow-|bottom-0/);
+    expect(region.className).toContain("order-first");
+    const text = region.querySelector("p")!;
+    expect(text.className).toContain("text-[14px]");
+    expect(text.className).not.toContain("text-[13px]");
+  });
 });

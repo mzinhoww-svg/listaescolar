@@ -13,3 +13,11 @@ export function pushPayload(event: NotificationEvent, linkPath: string): { title
   if (!isSafeLinkPath(linkPath)) throw new Error("link_path inválido");
   return { title: EVENT_CATALOG[event].pushTitle, url: linkPath };
 }
+
+/**
+ * Destino do aviso na central. O caminho que o banco grava para `claim_updated` é o da página do pedido; com o pedido
+ * aprovado o próximo passo é o painel da escola, `/escola`.
+ */
+export function resolveLinkPath(event: NotificationEvent, params: { status_code?: string }, linkPath: string): string {
+  return event === "claim_updated" && params.status_code === "approved" ? "/escola" : linkPath;
+}

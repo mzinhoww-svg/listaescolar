@@ -70,7 +70,7 @@ export function TelaFinal({ sessionId, g, jaConcluida }: Props) {
       aria-live="polite"
       className={`${styles.entrar} mx-auto flex min-h-[100dvh] w-full max-w-[480px] flex-1 flex-col gap-5 px-5 pt-3`}
     >
-      <Cabecalho />
+      <Cabecalho voltarAoSite />
       <TituloTela focar className="text-tinta">
         Obrigada! Quer receber a lista da sua escola pronta em janeiro?
       </TituloTela>

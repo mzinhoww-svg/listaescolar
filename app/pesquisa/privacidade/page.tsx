@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Cabecalho } from "@/components/pesquisa/Cabecalho";
+import { buttonClass } from "@/components/ui/Button";
 
 export const metadata: Metadata = {
   title: "Como usamos seus dados | Pesquisa ListaCerta",
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export default function PesquisaPrivacidadePage() {
   return (
     <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col gap-6 px-5 pt-3 pb-12">
-      <Cabecalho />
+      <Cabecalho voltarAoSite />
       <div>
         <Link
           href="/pesquisa"
@@ -54,6 +55,9 @@ export default function PesquisaPrivacidadePage() {
           Este aviso não afirma conformidade legal total com a legislação de proteção de dados.
         </p>
       </section>
+      <Link href="/pesquisa" className={buttonClass("primary", "lg")}>
+        Começar a pesquisa
+      </Link>
     </main>
   );
 }

@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 
 import { LEGAL, PRELIMINARY_BANNER, type LegalSection } from "@/features/site/legal";
 
+import { ClosingActions } from "./ClosingActions";
 import { MailIcon } from "./icons";
 import { Placeholder } from "./Placeholder";
 
@@ -44,6 +45,7 @@ export function LegalPage({ title, sections, extra }: Props) {
           Dúvidas: <Placeholder label="e-mail do encarregado de dados" value={LEGAL.dpoEmail} />
         </p>
       </aside>
+      <ClosingActions className="mt-8" />
     </main>
   );
 }

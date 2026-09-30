@@ -62,7 +62,7 @@ export const JOURNEYS: Record<string, Journey> = {
   J9: {
     nome: "Sistema e bordas",
     rotas: [
-      r("/403", "pub", { status: 403 }), r("/rota-inexistente-s29", "pub", { status: 404 }), r("/pesquisa"), r("/pesquisa/privacidade"), r("/pesquisa/resultados"),
+      r("/403", "pub") /* 200 de propósito: destino de redirect (Ruling S29) */, r("/rota-inexistente-s29", "pub", { status: 404 }), r("/pesquisa"), r("/pesquisa/privacidade"), r("/pesquisa/resultados"),
       r("/pesquisa/resultados/login"), r("/termos"), r("/privacidade"), r("/sobre"), r("/como-funciona"),
     ],
   },

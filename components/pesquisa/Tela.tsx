@@ -35,7 +35,7 @@ export function Tela({
       aria-live="polite"
       className={`${styles.entrar} mx-auto flex min-h-[100dvh] w-full max-w-[480px] flex-1 flex-col gap-5 px-5 pt-3`}
     >
-      <Cabecalho direita={progresso ? `${progresso.atual} de ${progresso.total}` : undefined} />
+      <Cabecalho direita={progresso ? `${progresso.atual} de ${progresso.total}` : undefined} voltarAoSite={!progresso} />
       {progresso ? <Progresso atual={progresso.atual} total={progresso.total} /> : null}
       {onVoltar ? (
         <button

@@ -13,14 +13,22 @@ describe("404", () => {
     expect(notFoundMeta.title).toBe("Página não encontrada · ListaCerta");
     expect(notFoundMeta.robots).toMatchObject({ index: false });
   });
+  it("UX-003: sem verde no estado de erro e o 404 não domina o título", () => {
+    const { container } = render(<NotFound />);
+    expect(container.innerHTML).not.toContain("verde-certo");
+    expect(container.innerHTML).not.toContain("text-[120px]");
+  });
 });
 
 describe("403", () => {
-  it("texto da Sis05 e noindex", () => {
-    render(<ForbiddenPage />);
-    expect(screen.getByRole("heading", { level: 1, name: "Você não tem acesso a esta página" })).toBeTruthy();
+  it("UX-003: título humano, orientação de quem deveria entrar, sem código de erro, e noindex", () => {
+    const { container } = render(<ForbiddenPage />);
+    expect(screen.getByRole("heading", { level: 1, name: "Sem acesso a esta área" })).toBeTruthy();
+    expect(container.textContent).not.toMatch(/erro 403/i);
+    expect(container.textContent).toMatch(/entre com a conta certa|peça a quem administra/i);
     expect(screen.getByRole("link", { name: "Entrar com outra conta" }).getAttribute("href")).toBe("/entrar");
-    expect(forbiddenMeta.title).toBe("Erro 403 · ListaCerta");
+    expect(screen.getByRole("link", { name: "Ir para o início" }).getAttribute("href")).toBe("/");
+    expect(forbiddenMeta.title).toBe("Sem acesso · ListaCerta");
     expect(forbiddenMeta.robots).toMatchObject({ index: false });
   });
 });

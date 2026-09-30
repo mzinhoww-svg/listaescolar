@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { ClosingActions } from "@/components/site/ClosingActions";
 import { ArrowRight } from "@/components/site/icons";
 import { PhoneMock } from "@/components/site/PhoneMock";
 import { SITE_COPY, pageMetadata } from "@/features/site/copy";
@@ -33,6 +34,7 @@ export default function ComoFunciona() {
             </li>
           ))}
         </ol>
+        <ClosingActions back={false} className="mt-14 md:mt-20" />
       </div>
     </main>
   );

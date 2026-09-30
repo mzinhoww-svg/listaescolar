@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { OfflineNotice } from "@/components/ui/OfflineNotice";
 import { getAnalyticsConfigFromProcess } from "@/lib/analytics/config";
 import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
 import { siteBase } from "@/lib/site-base";
@@ -38,6 +39,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" className={`${plusJakartaSans.variable} h-full antialiased`}>
       <body className="bg-papel text-tinta flex min-h-full flex-col font-medium">
+        <OfflineNotice />
         <div className="flex flex-1 flex-col">{children}</div>
         {analyticsEnabled ? <AnalyticsProvider /> : null}
       </body>

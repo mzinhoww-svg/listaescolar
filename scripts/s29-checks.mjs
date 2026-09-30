@@ -8,7 +8,7 @@
  * Ambiente (defaults da trilha 3):
  *   BASE=http://127.0.0.1:3003  MAILPIT=http://127.0.0.1:54624  DB=supabase_db_listacerta-t3
  * Saída: a seção de cada jornada (entre marcadores) em --out; código 1 se alguma rota ou o CSS falhar.
- * Só abre e fecha as sessões do agent-browser `s29-t4-*`; nunca `close --all`.
+ * Só abre e fecha as sessões do agent-browser `s29-t10-*`; nunca `close --all`.
  *
  * Checagens por rota: uma ação principal por região, beco sem saída, botão fora do sistema e ação irreversível sem
  * confirmação (HTML buscado com o cookie da conta do papel) e, no navegador a 390 px: rolagem horizontal, main, h1,
@@ -38,7 +38,7 @@ const BASE = process.env.BASE ?? "http://127.0.0.1:3003";
 const MAILPIT = process.env.MAILPIT ?? "http://127.0.0.1:54624";
 const DB = process.env.DB ?? "supabase_db_listacerta-t3";
 const OUT = flag("out") ?? "docs/revisao-total/checks.md";
-const sessionName = (k) => `s29-t4-${k}`;
+const sessionName = (k) => `${process.env.S29_SESSION ?? "s29-t10"}-${k}`;
 const { ab, login, assertLogged, cookieHeader } = createSessions({ base: BASE, mailpit: MAILPIT, sessionName });
 
 /** Contas de demonstração (scripts/s29-seed-jornadas.sql) e a rota de retorno do login de cada papel. */
@@ -162,17 +162,11 @@ async function checkRoute(route) {
     row.notes.push(`não é HTML (${res.headers.get("content-type") ?? "?"}): só status`);
     return row;
   }
-  const doc = new JSDOM(await res.text()).window.document;
-  await collectCss(doc, res.url);
-  const many = countPrimaryPerRegion(doc).filter((x) => x.count > 1);
-  if (many.length) row.fails.push(`mais de uma ação principal: ${many.map((x) => `${x.region}=${x.count}`).join(", ")}`);
-  const dead = findDeadEnds(doc, finalPath, new URL(BASE).origin);
-  if (dead.length) row.fails.push(`beco sem saída: ${dead.join("; ")}`);
-  const off = findOffSystemButtons(doc);
-  if (off.length) row.fails.push(`botão fora do sistema (${off.length}): ${off.slice(0, 3).join(" | ")}`);
-  const irreversible = findUnconfirmedDestructive(doc);
-  if (irreversible.length) row.fails.push(`ação irreversível sem confirmação (${irreversible.length}): ${irreversible.slice(0, 3).join(" | ")}`);
-  // Layout no navegador a 390 px.
+  const fetched = await res.text();
+  await collectCss(new JSDOM(fetched).window.document, res.url);
+  // Layout no navegador a 390 px. O DOM renderizado (depois da hidratação) alimenta as checagens de HTML: telas só de cliente
+  // (ex.: /pesquisa, dentro de Suspense) não trazem botões no HTML do servidor.
+  let html = fetched;
   try {
     ab(route.who, "open", `${BASE}${path}`);
     ab(route.who, "wait", "1200");
@@ -186,9 +180,20 @@ async function checkRoute(route) {
     const hidden = classifyHiddenActions(p.acts ?? []);
     if (hidden.length) row.fails.push(`ação escondida por tabela larga (${hidden.length}): ${hidden.slice(0, 3).join("; ")}`);
     if (p.tiny.length) row.fails.push(`texto < 12 px (${p.tiny.length}): ${p.tiny.slice(0, 3).join("; ")}`);
+    const dom = JSON.parse(execFileSync("agent-browser", ["--session", sessionName(route.who), "--json", "eval", "--stdin"], { input: "document.documentElement.outerHTML", encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })).data.result;
+    if (typeof dom === "string" && dom.length > 200) html = dom;
   } catch (e) {
     row.notes.push(`layout não medido: ${String(e.message).split("\n")[0].slice(0, 80)}`);
   }
+  const doc = new JSDOM(html).window.document;
+  const many = countPrimaryPerRegion(doc).filter((x) => x.count > 1);
+  if (many.length) row.fails.push(`mais de uma ação principal: ${many.map((x) => `${x.region}=${x.count}`).join(", ")}`);
+  const dead = findDeadEnds(doc, finalPath, new URL(BASE).origin);
+  if (dead.length) row.fails.push(`beco sem saída: ${dead.join("; ")}`);
+  const off = findOffSystemButtons(doc);
+  if (off.length) row.fails.push(`botão fora do sistema (${off.length}): ${off.slice(0, 3).join(" | ")}`);
+  const irreversible = findUnconfirmedDestructive(doc);
+  if (irreversible.length) row.fails.push(`ação irreversível sem confirmação (${irreversible.length}): ${irreversible.slice(0, 3).join(" | ")}`);
   return row;
 }
 

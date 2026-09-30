@@ -15,8 +15,8 @@ export default function NotFound() {
       <div className="flex flex-1 flex-col gap-3.5">
         <div className="flex-1" />
         <div className="flex flex-col gap-4">
-          <p className="text-[120px] leading-[0.9] font-extrabold tracking-[-0.06em]" aria-hidden>
-            4<span className="text-verde-certo">0</span>4
+          <p className="text-texto-3 text-[32px] leading-none font-extrabold tracking-[-0.03em]" aria-hidden>
+            404
           </p>
           <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">
             Esta página não está na lista

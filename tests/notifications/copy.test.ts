@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EVENT_CATALOG, NOTIFICATION_EVENTS, type NotificationEvent } from "@/features/notifications/catalog";
-import { pushPayload, renderNotification } from "@/features/notifications/copy";
+import { pushPayload, renderNotification, resolveLinkPath } from "@/features/notifications/copy";
 import { isSafeLinkPath, notificationParamsSchema } from "@/features/notifications/params";
 
 const FULL = { school_name: "Escola Modelo", grade_label: "4º ano", school_year: 2027, lead_code: "LC-5TJ1", status_code: "approved" };
@@ -47,5 +47,26 @@ describe("pushPayload (tela de bloqueio)", () => {
     for (const ok of ["/enviar-lista/abc", "/escolas/51000001/ef-4?ano=2027"]) expect(isSafeLinkPath(ok)).toBe(true);
     for (const bad of ["https://evil.example/x", "//evil.example", "/a//b", "javascript:alert(1)", "relativo", "/<script>"]) expect(isSafeLinkPath(bad)).toBe(false);
     expect(() => pushPayload("lead_received", "https://evil.example")).toThrow();
+  });
+});
+
+describe("UX-008 · vocabulário e destino dos avisos", () => {
+  const STATUSES = ["approved", "rejected", "insufficient_evidence", "token_expired", undefined] as const;
+  it("nenhum texto (título, corpo, push) usa 'reivindica'", () => {
+    for (const event of NOTIFICATION_EVENTS) {
+      for (const status_code of STATUSES) {
+        const r = renderNotification(event, { ...FULL, status_code });
+        expect(`${r.title} ${r.body} ${EVENT_CATALOG[event].pushTitle}`).not.toMatch(/reivindica/i);
+      }
+    }
+  });
+  it("o corpo não traz o código LC-… do pedido", () => {
+    for (const event of NOTIFICATION_EVENTS) expect(renderNotification(event, FULL).body).not.toMatch(/LC-/);
+  });
+  it("pedido aprovado abre /escola; os demais estados seguem o caminho gravado", () => {
+    const stored = "/escolas/51000001/reivindicar";
+    expect(resolveLinkPath("claim_updated", { status_code: "approved" }, stored)).toBe("/escola");
+    expect(resolveLinkPath("claim_updated", { status_code: "rejected" }, stored)).toBe(stored);
+    expect(resolveLinkPath("lead_received", { status_code: "approved" }, "/papelaria/leads/LC-5TJ1")).toBe("/papelaria/leads/LC-5TJ1");
   });
 });

@@ -13,6 +13,8 @@ vi.mock("react", async (orig) => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
+const setRoleScope = vi.fn();
+vi.mock("@/lib/observability/scope", () => ({ setRoleScope: (r: unknown) => setRoleScope(r) }));
 
 describe("queries com cache por request", () => {
   beforeEach(() => {
@@ -23,6 +25,7 @@ describe("queries com cache por request", () => {
       auth: { getUser },
       from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }),
     });
+    setRoleScope.mockReset();
   });
 
   it("um só getUser e um só select de profile", async () => {
@@ -46,5 +49,18 @@ describe("queries com cache por request", () => {
     maybeSingle.mockResolvedValue({ data: { role: "root" } });
     const { getCurrentRole } = await import("@/features/auth/queries");
     expect(await getCurrentRole()).toBeNull();
+  });
+
+  it("D-005/S19: escopo do Sentry por papel, num único ponto (getCurrentRole)", async () => {
+    const { getCurrentRole } = await import("@/features/auth/queries");
+    await getCurrentRole();
+    expect(setRoleScope).toHaveBeenCalledExactlyOnceWith("parent");
+  });
+
+  it("D-005/S19: sem usuário, escopo vira null (nunca um id)", async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const { getCurrentRole } = await import("@/features/auth/queries");
+    await getCurrentRole();
+    expect(setRoleScope).toHaveBeenCalledExactlyOnceWith(null);
   });
 });

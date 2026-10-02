@@ -20,8 +20,10 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/features/auth/queries", () => ({ getCurrentUser: () => getCurrentUser(), getCurrentRole: () => getCurrentRole() }));
 vi.mock("@/features/leads/wiring", () => ({ getLeadService: () => svc }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-real-ip": "203.0.113.9" }) }));
 
 import { LeadError } from "@/features/leads/errors";
+import { __resetRateLimitForTests } from "@/lib/rate-limit/memory-bucket";
 import {
   cancelLeadAction,
   closeLostAction,
@@ -55,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getCurrentUser.mockResolvedValue({ id: USER });
   getCurrentRole.mockResolvedValue("parent");
+  __resetRateLimitForTests();
 });
 
 describe("createLeadAction", () => {
@@ -92,6 +95,14 @@ describe("createLeadAction", () => {
   it("?carrinho inválido não vai para a URL de retorno", async () => {
     svc.createLead.mockRejectedValue(new LeadError("x", "invalid_input"));
     expect(await redirected(createLeadAction(form({ ...ok, carrinho: "../../evil" })))).toBe("/cotacao/nova?erro=invalid_input");
+  });
+
+  it("D-001: acima de 10 pedidos pelo mesmo IP+ator em 10 minutos, recusa sem chamar o serviço", async () => {
+    svc.createLead.mockResolvedValue({ leadId: "x", code: "LC-5TJ1", created: true });
+    for (let i = 0; i < 10; i++) await redirected(createLeadAction(form(ok)));
+    svc.createLead.mockClear();
+    expect(await redirected(createLeadAction(form(ok)))).toBe(`/cotacao/nova?carrinho=${CART}&erro=rate_limited`);
+    expect(svc.createLead).not.toHaveBeenCalled();
   });
 });
 

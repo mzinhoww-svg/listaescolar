@@ -35,7 +35,15 @@ const b64url = (min: number, max: number) => z.string().regex(new RegExp(`^[A-Za
 export function parsePushSubscription(raw: unknown, appEnv: string | undefined) {
   return z
     .object({
-      endpoint: z.string().max(2000).refine((e) => isAllowedPushEndpoint(e, appEnv), "endpoint não permitido"),
+      // D-081 (S19): normaliza (host em minúsculas, porta padrão removida) ANTES de gravar — o CHECK de
+      // `push_subscriptions.endpoint` (0602) valida a string crua com regex sensível a caixa e sem grupo de porta
+      // para https; sem isto, um endpoint com host maiúsculo ou `:443` explícito passava aqui (via `new URL()`
+      // internamente em `isAllowedPushEndpoint`) e falhava só no INSERT.
+      endpoint: z
+        .string()
+        .max(2000)
+        .refine((e) => isAllowedPushEndpoint(e, appEnv), "endpoint não permitido")
+        .transform((e) => new URL(e).toString()),
       keys: z.object({ p256dh: b64url(20, 200), auth: b64url(10, 100) }).strict(),
     })
     .strict()

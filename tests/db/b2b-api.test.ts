@@ -5,7 +5,8 @@ import { purgePartners, secret, seedKey, seedPartner, seedPublishedList, TEST_PE
 import { cleanupCommitted } from "./list-fixtures";
 import { withSuperuser } from "./helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { realLookupKey, withApiKey } from "@/features/b2b/api/handler";
+import { realLookupKey } from "@/features/b2b/api/handler";
+import { withApiKey } from "@/features/b2b/api/with-api-key";
 import { schoolsEndpoint } from "@/features/b2b/api/endpoints/schools";
 
 // Testes de API contra o banco real (S24, Step 3): chama os GET/POST exportados das rotas com `Request` real.

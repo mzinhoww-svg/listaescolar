@@ -8,6 +8,8 @@ export const STATUS_CODES = [
   "received", "viewed", "in_progress", "quote_sent", "awaiting_customer", "converted", "declined", "expired", "cancelled",
 ] as const;
 
+export const ALERT_KINDS = ["dead_jobs", "ai_error_rate"] as const;
+
 export const notificationParamsSchema = z
   .object({
     school_name: z.string().min(1).max(120).optional(),
@@ -15,6 +17,8 @@ export const notificationParamsSchema = z
     school_year: z.number().int().min(2000).max(2100).optional(),
     lead_code: z.string().regex(/^LC-[0-9A-HJKMNP-TV-Z]{4,6}$/).optional(),
     status_code: z.enum(STATUS_CODES).optional(),
+    alert_kind: z.enum(ALERT_KINDS).optional(),
+    alert_count: z.number().int().min(0).max(999_999).optional(),
   })
   .strict();
 export type NotificationParams = z.infer<typeof notificationParamsSchema>;

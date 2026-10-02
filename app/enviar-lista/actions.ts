@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getSessionActor } from "@/features/auth/actor";
@@ -11,6 +12,7 @@ import { messageFor, type FormErrorCode } from "@/features/submissions/copy";
 import { buildSubmitDeps } from "@/features/submissions/deps";
 import { checkUploadSize } from "@/features/submissions/file-validation";
 import { submitFieldsSchema, type SubmitState } from "@/features/submissions/form-schema";
+import { submitRateLimited } from "@/features/submissions/rate-limit";
 import { SubmissionError, submitList } from "@/features/submissions/service";
 
 const fail = (code: FormErrorCode): SubmitState => ({ status: "error", code, message: messageFor(code) });
@@ -36,6 +38,9 @@ export async function submitListAction(_prev: SubmitState, formData: FormData): 
     schoolId: typeof schoolRaw === "string" && schoolRaw !== "" ? schoolRaw : undefined,
   });
   if (!fields.success) return fail("invalid_input");
+  // D-001 (S19): primeira camada de rate limit por IP+ator no envio (aciona upload + OCR síncrono, S07). Só depois
+  // da validação (consentimento, campos): tentativas inválidas não gastam a cota (revisão M4c).
+  if (submitRateLimited(await headers(), user.id)) return fail("rate_limited");
   // D-002: envio da escola só de escola VINCULADA ao remetente (o banco confere de novo); a família escolhe qualquer escola pública.
   const actor = await getSessionActor();
   if (!actor) return fail("forbidden");

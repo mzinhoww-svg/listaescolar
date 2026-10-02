@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { ClaimBlock, type OwnClaimSummary } from "@/components/schools/ClaimBlock";
@@ -66,12 +67,15 @@ export default async function SchoolPage({ params, searchParams }: Props) {
   }
   const ownClaim = await loadOwnClaim(school.inep);
   const jsonLd = buildSchoolJsonLd(school, siteBase() ?? undefined);
+  // Nonce por requisição (S19, CSP sem 'unsafe-inline' em script-src): vem do middleware via `x-nonce`.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <div className="flex min-h-dvh flex-col">
       {jsonLd ? (
         <script
           type="application/ld+json"
+          nonce={nonce}
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
       ) : null}

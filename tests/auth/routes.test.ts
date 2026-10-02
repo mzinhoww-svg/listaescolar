@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const exchangeCodeForSession = vi.fn();
 const verifyOtp = vi.fn();
+const captureException = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { exchangeCodeForSession, verifyOtp } }),
 }));
+vi.mock("@sentry/nextjs", () => ({ captureException: (...a: unknown[]) => captureException(...a) }));
 
 import { GET as callback } from "@/app/auth/callback/route";
 import { GET as confirm } from "@/app/auth/confirm/route";
@@ -16,17 +18,34 @@ function req(path: string) {
 }
 
 describe("/auth/callback", () => {
-  beforeEach(() => exchangeCodeForSession.mockReset());
+  beforeEach(() => {
+    exchangeCodeForSession.mockReset();
+    captureException.mockReset();
+  });
   it("sucesso: Location relativo para next", async () => {
     exchangeCodeForSession.mockResolvedValue({ error: null });
     const res = await callback(req("/auth/callback?code=abc&next=/conta"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("/conta");
+    expect(captureException).not.toHaveBeenCalled();
   });
   it("erro: Location relativo para /entrar?erro=codigo", async () => {
     exchangeCodeForSession.mockResolvedValue({ error: { message: "x" } });
     const res = await callback(req("/auth/callback?code=abc"));
     expect(res.headers.get("location")).toBe("/entrar?erro=codigo");
+  });
+  it("D-005/S19: erro do provedor no exchange é registrado no Sentry sem a mensagem crua", async () => {
+    exchangeCodeForSession.mockResolvedValue({ error: { message: "detalhe interno maria@x.com", status: 400 } });
+    await callback(req("/auth/callback?code=abc"));
+    expect(captureException).toHaveBeenCalledOnce();
+    const err = captureException.mock.calls[0]![0] as Error;
+    expect(err.message).not.toContain("maria@x.com");
+    expect(err.message).toContain("400");
+  });
+  it("D-005/S19: exceção no exchange é registrada no Sentry", async () => {
+    exchangeCodeForSession.mockRejectedValue(new Error("rede"));
+    await callback(req("/auth/callback?code=abc"));
+    expect(captureException).toHaveBeenCalledOnce();
   });
   it("erro do provedor", async () => {
     const res = await callback(req("/auth/callback?error=access_denied"));
@@ -43,6 +62,7 @@ describe("/auth/confirm", () => {
   beforeEach(() => {
     verifyOtp.mockReset();
     exchangeCodeForSession.mockReset();
+    captureException.mockReset();
   });
   it("verifyOtp com token_hash e type; Location relativo", async () => {
     verifyOtp.mockResolvedValue({ error: null });
@@ -92,6 +112,18 @@ describe("/auth/confirm", () => {
     verifyOtp.mockResolvedValue({ error: { message: "expired" } });
     const res = await confirm(req("/auth/confirm?token_hash=h&type=email"));
     expect(res.headers.get("location")).toBe("/entrar?erro=codigo");
+  });
+  it("D-005/S19: erro do verifyOtp é registrado no Sentry sem a mensagem crua", async () => {
+    verifyOtp.mockResolvedValue({ error: { message: "expired maria@x.com", status: 401 } });
+    await confirm(req("/auth/confirm?token_hash=h&type=email"));
+    expect(captureException).toHaveBeenCalledOnce();
+    const err = captureException.mock.calls[0]![0] as Error;
+    expect(err.message).not.toContain("maria@x.com");
+  });
+  it("D-005/S19: exceção no verifyOtp é registrada no Sentry", async () => {
+    verifyOtp.mockRejectedValue(new Error("rede"));
+    await confirm(req("/auth/confirm?token_hash=h&type=email"));
+    expect(captureException).toHaveBeenCalledOnce();
   });
   it("next malicioso cai em /conta", async () => {
     verifyOtp.mockResolvedValue({ error: null });

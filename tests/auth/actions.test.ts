@@ -18,6 +18,7 @@ vi.mock("next/navigation", () => ({
 
 import { signOutAction } from "@/components/auth/sign-out-action";
 import { signInWithGoogle, signInWithMagicLink } from "@/features/auth/actions";
+import { __resetRateLimitForTests } from "@/lib/rate-limit/memory-bucket";
 
 function form(values: Record<string, string>) {
   const f = new FormData();
@@ -31,6 +32,7 @@ describe("actions de login", () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://listacerta.test");
     signInWithOtp.mockReset();
     signInWithOAuth.mockReset();
+    __resetRateLimitForTests();
   });
 
   it("link mágico aponta para /auth/confirm na origem canônica, ignorando Host/Origin", async () => {
@@ -86,6 +88,19 @@ describe("actions de login", () => {
       status: "error",
       email: "a@b.co",
     });
+  });
+  it("D-001: acima de 5 pedidos pelo mesmo IP em 1 minuto, recusa sem chamar o Supabase", async () => {
+    signInWithOtp.mockResolvedValue({ error: null });
+    for (let i = 0; i < 5; i++) {
+      expect((await signInWithMagicLink(form({ email: "a@b.co" }))).status).toBe("sent");
+    }
+    signInWithOtp.mockClear();
+    expect(await signInWithMagicLink(form({ email: "a@b.co" }))).toEqual({
+      status: "error",
+      message: "Aguarde um minuto para pedir outro link.",
+      email: "a@b.co",
+    });
+    expect(signInWithOtp).not.toHaveBeenCalled();
   });
   it("signOutAction redireciona a /entrar com sucesso", async () => {
     signOutFn.mockResolvedValue({ error: null });

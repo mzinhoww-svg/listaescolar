@@ -89,6 +89,6 @@ describe("como funciona e sobre", () => {
   it("sobre: contato por placeholder", async () => {
     const Page = await loadPage("/sobre");
     const { container } = await renderInSite(Page);
-    expect(container.querySelector("mark")?.textContent).toBe("[a definir: e-mail de contato]");
+    expect(container.querySelector("mark")?.textContent).toBe("[PREENCHER: e-mail de contato]");
   });
 });

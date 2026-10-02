@@ -13,7 +13,7 @@ import { importInepFile } from "@/features/schools/import-service";
 import { createSchoolsRepository } from "@/features/schools/repository";
 import { createSupabaseGateway } from "@/features/schools/supabase-gateway";
 
-import { assertSafeTarget, parseArgs, reportPath } from "./import-inep-lib";
+import { assertDemoSafe, assertSafeTarget, parseArgs, reportPath } from "./import-inep-lib";
 
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
@@ -21,6 +21,7 @@ async function main(): Promise<number> {
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("Defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente.");
   assertSafeTarget(url, args);
+  if (args.demo) assertDemoSafe(url, process.env);
 
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const repo = createSchoolsRepository(createSupabaseGateway(client));

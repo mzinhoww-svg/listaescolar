@@ -11,7 +11,7 @@ import { createReviewService } from "./service";
 
 /** Serviço da revisão com as portas da S09 (memória só com FAKE_PUBLICATION_FIXTURE + APP_ENV local/development). */
 export function buildReviewService() {
-  const pub = buildPublicationDeps();
+  const pub = buildPublicationDeps({ humanReview: true });
   return createReviewService({
     store: createReviewRepository(createAdminClient({ fresh: true })).store,
     publication: { publisher: pub.publisher, context: pub.context, clock: pub.clock, settings: pub.settings },

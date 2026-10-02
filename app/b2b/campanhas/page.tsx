@@ -1,3 +1,5 @@
+import { CampaignsUnavailable } from "@/components/b2b/CampaignsUnavailable";
+import { flagOn } from "@/lib/feature-flags";
 import Link from "next/link";
 
 import { getSessionActor } from "@/features/auth/actor";
@@ -12,6 +14,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Campanhas · Portal B2B · ListaCerta" };
 
 export default async function Page() {
+  if (!flagOn(process.env, "b2bCampaigns")) return <CampaignsUnavailable />;
   const actor = await getSessionActor();
   if (!actor) return <p className="text-texto-2 text-[15px] font-bold">Não foi possível carregar seu parceiro agora.</p>;
   const campaigns = await listMyCampaigns(actor);

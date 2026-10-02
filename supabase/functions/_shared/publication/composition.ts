@@ -13,7 +13,7 @@ import { createRpcPublicationPorts } from "./rpc-ports.ts";
 import { createRpcPublicationStore } from "./rpc-store.ts";
 import { createPublicationSettings } from "./settings.ts";
 
-export type PublicationEnv = EnvLike & { FAKE_PUBLICATION_FIXTURE?: string };
+export type PublicationEnv = EnvLike & { FAKE_PUBLICATION_FIXTURE?: string; AUTO_PUBLISH_ENABLED?: string };
 
 export const MEMORY_PORT_ENVS = ["local", "development"] as const;
 
@@ -54,7 +54,9 @@ export function createPublicationDeps(o: {
     store: createRpcPublicationStore(o.rpc),
     settings: createPublicationSettings({ rpc: createValidatedRpc(o.rpc), clock: o.clock }),
     context: fixture ? new MemoryPublicationContextReader(fixture, memory ?? undefined) : (real?.context ?? null),
-    publisher: memory ?? real?.publisher ?? null,
+    // Flag AUTO_PUBLISH_ENABLED (padrão desligado): sem ela não há publicador real, e toda decisão vira `human_review`
+    // com `publisher_unavailable` (falha fechada, registrada). A memória (fixture de E2E, só local/development) não depende dela.
+    publisher: memory ?? (o.env.AUTO_PUBLISH_ENABLED === "1" ? (real?.publisher ?? null) : null),
     clock: o.clock,
     ...(o.onAlert ? { onAlert: o.onAlert } : {}),
   };

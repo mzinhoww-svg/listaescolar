@@ -1,6 +1,10 @@
+import { flagOn } from "@/lib/feature-flags";
+
 import { buildSearchUrl, RedirectTargetError, type RetailerTarget } from "./redirect-target";
 
 export type AffiliateEnv = {
+  /** Só "1" aplica tags. Ausente = links sem tag, mesmo com IDs configurados. */
+  AFFILIATE_TAGS_ENABLED?: string;
   MELI_AFFILIATE_ID?: string;
   /** Opcional: só entra na URL se existir (matt_word). */
   MELI_AFFILIATE_WORD?: string;
@@ -29,6 +33,7 @@ export function createAffiliateLinkBuilder(env: AffiliateEnv): AffiliateLinkBuil
       if (!retailer) throw new RedirectTargetError("unknown_retailer");
       const url = buildSearchUrl(retailer, query);
       let applied = false;
+      if (!flagOn(env, "affiliateTags")) return { url: url.toString(), affiliateApplied: false };
       if (retailer.affiliateKind === "amazon") {
         const tag = cleanId(env.AMAZON_ASSOCIATE_TAG);
         if (tag) {

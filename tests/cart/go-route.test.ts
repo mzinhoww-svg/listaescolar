@@ -136,6 +136,7 @@ describe("GET /ir-para/[cartId]/[retailer]/go", () => {
   });
 
   it("com ID de afiliado: tag na URL e affiliateApplied=true", async () => {
+    vi.stubEnv("AFFILIATE_TAGS_ENABLED", "1");
     vi.stubEnv("AMAZON_ASSOCIATE_TAG", "listacerta-20");
     const res = await call();
     expect(res.headers.get("Location")).toContain("tag=listacerta-20");

@@ -113,6 +113,7 @@ Deno.serve(async (req) => {
       APP_ENV: Deno.env.get("APP_ENV"),
       VERCEL_ENV: Deno.env.get("VERCEL_ENV"),
       FAKE_PUBLICATION_FIXTURE: Deno.env.get("FAKE_PUBLICATION_FIXTURE"),
+      AUTO_PUBLISH_ENABLED: Deno.env.get("AUTO_PUBLISH_ENABLED"),
     },
     rpc: client as unknown as RawRpc,
     clock,

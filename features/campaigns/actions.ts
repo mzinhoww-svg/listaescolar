@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getSessionActor } from "@/features/auth/actor";
+import { flagOn } from "@/lib/feature-flags";
 
 import { campaignServiceErrorCode, campaignServiceMessage } from "./messages";
 import type { CreateCampaignInput, OwnerTransitionInput, SubmitCampaignInput } from "./schemas";
@@ -15,6 +16,10 @@ import type { InsightsResult } from "./insights-service";
 // de fronteira (Zod, dentro dos serviços) e o mapeamento de erro — mesmo padrão de features/b2b/actions.ts.
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
+
+/** Campanhas B2B pagas: desligadas por padrão (B2B_CAMPAIGNS_ENABLED=1). Escrita barrada com mensagem "indisponível". */
+const CAMPAIGNS_OFF = { ok: false as const, code: "unavailable", message: "Campanhas estão indisponíveis no momento." };
+const campaignsOff = (): boolean => !flagOn(process.env, "b2bCampaigns");
 
 function logAndCode(what: string, error: unknown): string {
   const code = campaignServiceErrorCode(error);
@@ -34,6 +39,7 @@ function toResult<T>(promise: Promise<T>): Promise<ActionResult<T>> {
 
 /** B2B07: cria a campanha (nasce `draft`). */
 export async function createCampaignAction(input: CreateCampaignInput): Promise<ActionResult<{ campaignId: string }>> {
+  if (campaignsOff()) return CAMPAIGNS_OFF;
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getCampaignService().createCampaign(actor, input));
@@ -43,6 +49,7 @@ export async function createCampaignAction(input: CreateCampaignInput): Promise<
 
 /** B2B06/B2B07: envia para aprovação do admin (`draft` -> `pending_review`). */
 export async function submitCampaignAction(input: SubmitCampaignInput): Promise<ActionResult<void>> {
+  if (campaignsOff()) return CAMPAIGNS_OFF;
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getCampaignService().submitCampaign(actor, input));
@@ -52,6 +59,7 @@ export async function submitCampaignAction(input: SubmitCampaignInput): Promise<
 
 /** B2B06: pausar ou concluir a própria campanha. */
 export async function ownerTransitionCampaignAction(input: OwnerTransitionInput): Promise<ActionResult<void>> {
+  if (campaignsOff()) return CAMPAIGNS_OFF;
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getCampaignService().ownerTransition(actor, input));
@@ -61,6 +69,7 @@ export async function ownerTransitionCampaignAction(input: OwnerTransitionInput)
 
 /** B2B06: retomar campanha pausada (recusado pelo banco se o orçamento total já se esgotou). */
 export async function resumeCampaignAction(input: { campaignId: string }): Promise<ActionResult<void>> {
+  if (campaignsOff()) return CAMPAIGNS_OFF;
   const actor = await getSessionActor();
   if (!actor) return { ok: false, code: "forbidden", message: "Entre para continuar." };
   const result = await toResult(getCampaignService().resumeCampaign(actor, input));

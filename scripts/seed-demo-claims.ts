@@ -13,7 +13,7 @@ import { createSupabaseEvidenceStorage } from "@/features/claims/evidence-storag
 import { sanitizeFileName, sniffEvidence } from "@/features/claims/files";
 import { PRIVACY_TEXT_VERSION } from "@/features/claims/schemas";
 
-import { assertSafeTarget } from "./import-inep-lib";
+import { assertDemoSafe, assertSafeTarget } from "./import-inep-lib";
 import {
   DEMO_ADMIN_EMAIL,
   DEMO_CLAIMANT_EMAIL,
@@ -77,6 +77,7 @@ async function main(): Promise<void> {
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("Defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente.");
   assertSafeTarget(url, { allowProduction: args.allowProduction });
+  assertDemoSafe(url, process.env);
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const claimantId = await userIdByEmail(client, DEMO_CLAIMANT_EMAIL);
   const adminId = await userIdByEmail(client, DEMO_ADMIN_EMAIL);

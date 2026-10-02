@@ -9,7 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { defaultAcademicYear } from "@/features/grades/catalog";
 import { createListsRepository } from "@/features/lists/repository";
 
-import { assertSafeTarget } from "./import-inep-lib";
+import { assertDemoSafe, assertSafeTarget } from "./import-inep-lib";
 import {
   DEMO_ACTOR_ID,
   DEMO_LIST_PLANS,
@@ -24,6 +24,7 @@ async function main(): Promise<void> {
   if (!url || !key)
     throw new Error("Defina NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente.");
   assertSafeTarget(url, { allowProduction: args.allowProduction });
+  assertDemoSafe(url, process.env);
 
   const client = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },

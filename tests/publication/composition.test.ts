@@ -9,7 +9,7 @@ const FIXTURE = JSON.stringify({
   validSchoolYears: [2027],
 });
 const rpc = { rpc: vi.fn(async () => ({ data: null, error: null })) };
-const build = (env: PublicationEnv) => createPublicationDeps({ env, rpc, clock: new FakeClock() });
+const build = (env: PublicationEnv) => createPublicationDeps({ env: { AUTO_PUBLISH_ENABLED: "1", ...env }, rpc, clock: new FakeClock() });
 
 describe("createPublicationDeps: portas reais sempre; memória só com fixture e ambiente explicitamente não produtivo", () => {
   it("fixture válida + APP_ENV=local: liga as portas em memória", () => {
@@ -45,7 +45,7 @@ describe("createPublicationDeps: portas reais sempre; memória só com fixture e
     resetMemoryPublishers();
   });
   it("sem a fixture: portas REAIS (S11), nunca nulas nem em memória", async () => {
-    const d = build({ APP_ENV: "local" });
+    const d = build({ APP_ENV: "local", AUTO_PUBLISH_ENABLED: "1" });
     expect(d.publisher).not.toBeNull();
     expect(d.context).not.toBeNull();
     expect(d.publisher).not.toBeInstanceOf(MemoryListPublisher);

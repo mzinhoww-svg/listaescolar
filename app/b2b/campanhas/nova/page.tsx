@@ -1,3 +1,5 @@
+import { CampaignsUnavailable } from "@/components/b2b/CampaignsUnavailable";
+import { flagOn } from "@/lib/feature-flags";
 import { redirect } from "next/navigation";
 
 import { getSessionActor } from "@/features/auth/actor";
@@ -13,6 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Nova campanha · Portal B2B · ListaCerta" };
 
 export default async function Page() {
+  if (!flagOn(process.env, "b2bCampaigns")) return <CampaignsUnavailable />;
   const actor = await getSessionActor();
   if (!actor) redirect("/entrar?next=%2Fb2b%2Fcampanhas%2Fnova");
   const partnerId = await getMyPartnerId(actor);

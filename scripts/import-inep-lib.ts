@@ -40,6 +40,17 @@ export function assertSafeTarget(url: string, flags: { allowProduction: boolean 
   );
 }
 
+/**
+ * Dados demonstrativos (is_demo = true) nunca vão a produção: recusa APP_ENV/VERCEL_ENV=production e qualquer alvo
+ * que não seja loopback ou o staging, mesmo com --i-know-this-is-production. Seeds chamam sempre; o import só com --demo.
+ */
+export function assertDemoSafe(url: string, env: Readonly<Record<string, string | undefined>>): void {
+  const tag = (v: string | undefined) => (v ?? "").trim().toLowerCase();
+  if (tag(env.APP_ENV) === "production" || tag(env.VERCEL_ENV) === "production" || tag(env.NODE_ENV) === "production")
+    throw new Error("Dados demonstrativos (is_demo) são proibidos em produção. Recusado.");
+  assertSafeTarget(url, { allowProduction: false });
+}
+
 export function reportPath(dir: string, batchId: string): string {
   return join(dir, safeReportFileName(batchId));
 }

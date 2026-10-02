@@ -131,17 +131,17 @@ describe("afiliados", () => {
 
   it("ID vazio, em branco ou com caracteres inválidos não conta como afiliado", () => {
     for (const bad of ["", "   ", "a&b=c", "id com espaço", "x".repeat(65)]) {
-      expect(buildRetailerRedirect(AMZ, "x", { AMAZON_ASSOCIATE_TAG: bad }).affiliateApplied).toBe(
+      expect(buildRetailerRedirect(AMZ, "x", { AFFILIATE_TAGS_ENABLED: "1", AMAZON_ASSOCIATE_TAG: bad }).affiliateApplied).toBe(
         false,
       );
-      expect(buildRetailerRedirect(ML, "x", { MELI_AFFILIATE_ID: bad }).affiliateApplied).toBe(
+      expect(buildRetailerRedirect(ML, "x", { AFFILIATE_TAGS_ENABLED: "1", MELI_AFFILIATE_ID: bad }).affiliateApplied).toBe(
         false,
       );
     }
   });
 
   it("Amazon com tag: parâmetro tag e selo", () => {
-    const out = buildRetailerRedirect(AMZ, "caderno", { AMAZON_ASSOCIATE_TAG: "listacerta-20" });
+    const out = buildRetailerRedirect(AMZ, "caderno", { AFFILIATE_TAGS_ENABLED: "1", AMAZON_ASSOCIATE_TAG: "listacerta-20" });
     expect(out).toEqual({
       url: "https://www.amazon.com.br/s?k=caderno&tag=listacerta-20",
       affiliateApplied: true,
@@ -149,7 +149,7 @@ describe("afiliados", () => {
   });
 
   it("Mercado Livre com ID: matt_tool = ID e sem matt_word quando não há palavra", () => {
-    const out = buildRetailerRedirect(ML, "caderno", { MELI_AFFILIATE_ID: "abc123" });
+    const out = buildRetailerRedirect(ML, "caderno", { AFFILIATE_TAGS_ENABLED: "1", MELI_AFFILIATE_ID: "abc123" });
     expect(out).toEqual({
       url: "https://lista.mercadolivre.com.br/caderno?matt_tool=abc123",
       affiliateApplied: true,
@@ -157,7 +157,7 @@ describe("afiliados", () => {
   });
 
   it("Mercado Livre com ID e palavra: matt_tool e matt_word; palavra inválida é omitida", () => {
-    const env = { MELI_AFFILIATE_ID: "abc123", MELI_AFFILIATE_WORD: "listacerta" };
+    const env = { AFFILIATE_TAGS_ENABLED: "1", MELI_AFFILIATE_ID: "abc123", MELI_AFFILIATE_WORD: "listacerta" };
     expect(buildRetailerRedirect(ML, "caderno", env)).toEqual({
       url: "https://lista.mercadolivre.com.br/caderno?matt_tool=abc123&matt_word=listacerta",
       affiliateApplied: true,
@@ -175,13 +175,13 @@ describe("afiliados", () => {
   });
 
   it("ID de um programa não vaza para outro varejista", () => {
-    const env = { MELI_AFFILIATE_ID: "abc", AMAZON_ASSOCIATE_TAG: "tag-20" };
+    const env = { AFFILIATE_TAGS_ENABLED: "1", MELI_AFFILIATE_ID: "abc", AMAZON_ASSOCIATE_TAG: "tag-20" };
     expect(buildRetailerRedirect(R(), "x", env)).toEqual({
       url: "https://www.kalunga.com.br/busca/x",
       affiliateApplied: false,
     });
     expect(
-      buildRetailerRedirect(ML, "x", { AMAZON_ASSOCIATE_TAG: "tag-20" }).affiliateApplied,
+      buildRetailerRedirect(ML, "x", { AFFILIATE_TAGS_ENABLED: "1", AMAZON_ASSOCIATE_TAG: "tag-20" }).affiliateApplied,
     ).toBe(false);
   });
 
@@ -193,6 +193,7 @@ describe("afiliados", () => {
 
   it("a query nunca injeta parâmetro de afiliado próprio", () => {
     const out = buildRetailerRedirect(AMZ, "x&tag=evil-20", {
+      AFFILIATE_TAGS_ENABLED: "1",
       AMAZON_ASSOCIATE_TAG: "listacerta-20",
     });
     expect(new URL(out.url).searchParams.getAll("tag")).toEqual(["listacerta-20"]);

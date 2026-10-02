@@ -2,6 +2,7 @@
 export type Legal = {
   companyName: string | null;
   cnpj: string | null;
+  address: string | null;
   dpoEmail: string | null;
   contactEmail: string | null;
   retention: string | null;
@@ -15,6 +16,7 @@ export type Legal = {
 export const LEGAL: Legal = {
   companyName: null,
   cnpj: null,
+  address: null,
   dpoEmail: null,
   contactEmail: null,
   // S17: valores técnicos provisórios de `retention_policies` (migration 0605), editáveis sem mudança de código;
@@ -62,7 +64,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     title: "Quem somos",
     paragraphs: [
-      [{ key: "companyName", label: "razão social" }, ", CNPJ ", { key: "cnpj", label: "CNPJ" }, ", responsável pelos dados tratados neste site."],
+      [{ key: "companyName", label: "razão social" }, ", CNPJ ", { key: "cnpj", label: "CNPJ" }, ", endereço ", { key: "address", label: "endereço do controlador" }, ", responsável pelos dados tratados neste site."],
     ],
   },
   {

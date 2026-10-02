@@ -26,6 +26,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-011 | ledger-dados S04 T2 / T1 rodada 1 | `grant select on schools to anon` de tabela inteira expunha `email` | média | S04 | resolvida em S04 (grants por coluna na 0102) |
 | D-159 | revisão de segurança da S19 (M6) | Migration `0606`: (a) `notification_params_valid` aceita `alert_kind`/`alert_count` em qualquer tipo de evento (deveria só em `system_alert`); (b) `system_alert_notify` devolve o nº de admins mesmo quando o alerta foi deduplicado no dia; (c) job `dead` realerta todo dia enquanto continuar `dead` (sem "visto"/silêncio). Só in-app e sem PII: impacto baixo | baixa | S20 | aberta — Ruling S19: não mexer na `0606` (já revisada e ainda não aplicada, mas o custo/risco de reabrir supera o ganho); corrigir numa migration nova `0608` junto do go-live |
 | D-160 | ledger.md S19 (E2E) | O documento da revisão só foi verificado por Storage direto: em http local o `upgrade-insecure-requests` bloqueia o destino https do redirect 307. Repetir o embed real do iframe da revisão no preview da Vercel (https) na S20 | baixa | S20 | aberta |
+| D-164 | PR #60 (revisão Opus da T2) | Rate limit do login por código é em memória por instância e o contador por e-mail pode ser zerado com ~10 mil chaves distintas; o limite do Supabase Auth é por IP da Vercel. Mitigar com regra no Vercel Firewall (POST /entrar) e `token_verifications` no Supabase de produção | média | S20 | aberta |
 
 ## Dados e LGPD
 

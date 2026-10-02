@@ -16,7 +16,7 @@ Passo manual do humano; o Supabase hospedado não lê os arquivos do repositóri
 1. Dashboard do projeto, Authentication, Emails (Email Templates).
 2. Aba "Magic Link": assunto "Seu link de acesso ao ListaCerta"; cole o conteúdo de `magic_link.html`; salve.
 3. Aba "Confirm signup": assunto "Confirme seu e-mail no ListaCerta"; cole `confirmation.html`; salve.
-4. Authentication, Providers, Email: "Email OTP Length" = 6; "Email OTP Expiration" = 3600 (igual ao `config.toml`).
+4. Authentication, Providers, Email: "Email OTP Length" = 6; "Email OTP Expiration" = 900 (15 minutos) (igual ao `config.toml`).
 5. Conferir que o SMTP próprio (Resend/outro) está ativo em produção: o SMTP padrão do Supabase tem limite baixo.
 6. Teste: em `/entrar`, peça o e-mail, confirme que ele traz o botão e o código, e que o código entra.
 
@@ -29,3 +29,6 @@ Alternativa por CLI/API: `PATCH https://api.supabase.com/v1/projects/{ref}/confi
   além do limite do próprio Supabase Auth.
 - Código errado, expirado ou e-mail inexistente devolvem a mesma mensagem (não enumera contas).
 - O pedido de link/código responde "Verifique seu e-mail" independentemente de o e-mail existir.
+
+## Antes de abrir ao público (obrigatório)
+(a) regra de rate limit no Vercel Firewall para POST em `/entrar` (ex.: 10 req/min por IP); (b) subir o limite `token_verifications` no painel do Supabase de produção (Authentication, Rate Limits). Risco residual: o limite em memória vale por instância e o contador por e-mail pode ser zerado enchendo o balde com ~10 mil chaves distintas.

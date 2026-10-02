@@ -43,7 +43,7 @@ export function loginRateLimited(headers: HeadersLike, email: string): boolean {
 }
 
 // T2 (D-163): verificação do código de 6 dígitos. Espaço de 1 milhão de códigos: limite apertado por IP + e-mail
-// (8 por 10 min) e teto por e-mail (20) contra quem varia IPs. O Supabase Auth aplica o próprio limite por cima.
+// (8 por 10 min) e teto por e-mail (20) contra quem varia IPs. O Supabase Auth tem limite próprio, mas é por IP de origem (o da Vercel, compartilhado), não por usuário: não substitui este.
 const CODE_EMAIL_IP_LIMIT = 8;
 const CODE_EMAIL_CEILING = 20;
 

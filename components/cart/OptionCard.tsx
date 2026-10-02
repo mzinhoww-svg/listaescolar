@@ -8,6 +8,7 @@ import {
   deliveryText,
   isSelectable,
   moneyOrUnavailable,
+  plural,
   optionHasDemo,
   STRATEGY_LABEL,
   STRATEGY_TAG,
@@ -28,6 +29,19 @@ export function OptionCard({ option, cartId, selected, action }: Props) {
   const usable = isSelectable(option);
   const current = selected && usable;
   const base = `/carrinho/${cartId}`;
+  const quoteLink =
+    option.strategy === "local_stationery" ? (
+      <Link
+        href={`/cotacao/nova?carrinho=${cartId}`}
+        className={
+          usable
+            ? "text-verde-fundo flex min-h-11 items-center justify-center text-center text-sm font-extrabold underline"
+            : "bg-tinta text-papel rounded-botao flex h-12 items-center justify-center text-center text-[15px] font-extrabold"
+        }
+      >
+        Pedir cotação a papelarias
+      </Link>
+    ) : null;
   return (
     <li
       data-testid={`option-${option.strategy}`}
@@ -42,6 +56,7 @@ export function OptionCard({ option, cartId, selected, action }: Props) {
           </Tag>
         ) : null}
       </div>
+      {usable ? null : quoteLink}
       <div className="flex items-end justify-between gap-3">
         <p
           className={`${usable ? "text-[28px]" : "text-texto-3 text-xl"} font-extrabold tracking-[-0.03em]`}
@@ -57,7 +72,7 @@ export function OptionCard({ option, cartId, selected, action }: Props) {
       {optionHasDemo(option) ? <DemoBadge /> : null}
       {option.status === "partial" ? (
         <p className="text-texto-2 text-xs font-semibold">
-          Total parcial: {option.missingItems.length} item(ns) sem preço disponível.
+          Total parcial: {plural(option.missingItems.length, "item sem preço disponível", "itens sem preço disponível")}.
         </p>
       ) : null}
       {usable ? (
@@ -86,14 +101,7 @@ export function OptionCard({ option, cartId, selected, action }: Props) {
             : "Sem preço de fonte identificada para esta opção."}
         </p>
       )}
-      {option.strategy === "local_stationery" ? (
-        <Link
-          href={`/cotacao/nova?carrinho=${cartId}`}
-          className="text-verde-fundo text-center text-sm font-extrabold underline"
-        >
-          Pedir cotação a papelarias
-        </Link>
-      ) : null}
+      {usable ? quoteLink : null}
     </li>
   );
 }

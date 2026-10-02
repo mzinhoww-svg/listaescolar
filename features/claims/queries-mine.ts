@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { isSessionActor, type SessionActor } from "@/features/auth/actor";
+import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 
 import { ClaimRepositoryError } from "./repository";
@@ -71,4 +72,16 @@ export async function listMyPendingClaims(actor: SessionActor, session?: Supabas
     isDemo: r.is_demo,
     school: r.schools,
   }));
+}
+
+/** Ids de escola (entre os informados) com lista publicada. Cliente público (RLS); falha vira "sem lista", que só sugere enviar. */
+export async function listSchoolIdsWithPublishedList(schoolIds: readonly string[]): Promise<Set<string>> {
+  if (schoolIds.length === 0) return new Set();
+  try {
+    const { data, error } = await createPublicClient().from("school_lists").select("school_id").eq("status", "published").in("school_id", [...schoolIds]);
+    if (error) return new Set();
+    return new Set((data ?? []).map((r: { school_id: string }) => r.school_id));
+  } catch {
+    return new Set();
+  }
 }

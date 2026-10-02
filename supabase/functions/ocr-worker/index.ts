@@ -4,6 +4,8 @@
 // Local: `pnpm exec supabase --workdir .track-workdir functions serve ocr-worker --no-verify-jwt --env-file <arquivo>`.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+import { createEmitter } from "../_shared/analytics/capture.ts";
+import { workerCaptureConfig } from "../_shared/analytics/host.ts";
 import { demoConfigError, demoEnabled, parseSlowMs } from "../_shared/demo-lock.ts";
 import { DemoExtractionPipeline } from "../_shared/demo-pipeline.ts";
 import { aiPipelineAvailable, createAiPipeline, type AiEnv } from "../_shared/ai/composition.ts";
@@ -107,6 +109,11 @@ Deno.serve(async (req) => {
         signal?.addEventListener("abort", () => clearTimeout(t), { once: true });
       }),
   };
+  // Medição de produto (ADR-007): sem POSTHOG_KEY não faz nada; eventos só de fatos, sem dado pessoal.
+  const posthogKey = Deno.env.get("POSTHOG_KEY");
+  const appEnv = Deno.env.get("APP_ENV");
+  // `POSTHOG_HOST` passa pela mesma regra do app (`isAllowedHost`): host fora da regra desliga a medição (revisão M5).
+  const analytics = createEmitter(workerCaptureConfig({ key: posthogKey, host: Deno.env.get("POSTHOG_HOST"), appEnv }));
   const publication = createPublicationDeps({
     env: {
       NODE_ENV: Deno.env.get("NODE_ENV"),
@@ -117,6 +124,7 @@ Deno.serve(async (req) => {
     rpc: client as unknown as RawRpc,
     clock,
     onAlert: (a) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", ...a })),
+    emit: analytics.emit,
   });
 
   const jobs = createRpcWorkerJobs(rpc, async (id) => {
@@ -154,6 +162,7 @@ Deno.serve(async (req) => {
     clock,
     random: Math.random,
     decide: (submissionId, o) => decideListPublication(submissionId, publication, o),
+    emit: analytics.emit,
   }, {
     sweep: (remainingMs) => runPublicationSweep(publication, {
       limit: 10,
@@ -164,5 +173,6 @@ Deno.serve(async (req) => {
     // erro de infra do tick: sem PII (o core já sanitiza) e sem derrubar a resposta
     onError: (e) => console.error(JSON.stringify({ level: "error", fn: "ocr-worker", ...e })),
   });
+  await analytics.flush();
   return json({ status: kind ? "ok" : "pipeline_unavailable", ...summary });
 });

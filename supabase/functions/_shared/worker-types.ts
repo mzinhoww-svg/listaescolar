@@ -1,6 +1,8 @@
 // Tipos, constantes e utilitários puros do worker do OCR. Sem APIs do Deno nem imports: roda na Edge Function e
 // no Vitest. Extraído de worker-core.ts (D-057, S18, arquivo com 424 linhas) — comportamento idêntico ao original.
 
+import type { Emit } from "./analytics/capture.ts";
+
 export type JobOutcome = "done" | "retry" | "dead" | "skipped";
 
 export type WorkerJobRow = {
@@ -76,6 +78,8 @@ export type WorkerDeps = {
   /** Instante (relógio do worker) em que o tick acaba; `decide` recebe o que resta como `budgetMs`. */
   deadlineAt?: number;
   onDecideError?: (e: unknown) => void;
+  /** Gancho de medição (ADR-007): `ocr_completed` depois de `jobs.complete`. Nunca altera o resultado do job. */
+  emit?: Emit;
 };
 
 export const BACKOFF_BASE_SECONDS = 30;

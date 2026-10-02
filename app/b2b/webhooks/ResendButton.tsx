@@ -17,7 +17,7 @@ export function ResendButton({ deliveryId }: { deliveryId: string }) {
   }
 
   return (
-    <button type="button" onClick={resend} disabled={pending} className="border-tinta rounded-botao h-9 border-[1.5px] px-3 text-[12px] font-extrabold disabled:opacity-50">
+    <button type="button" onClick={resend} disabled={pending} className="border-tinta rounded-botao h-11 border-[1.5px] px-3 text-[12px] font-extrabold disabled:opacity-50">
       {pending ? "Reenviando..." : "Reenviar"}
     </button>
   );

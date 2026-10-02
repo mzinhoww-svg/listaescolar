@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { buttonClass } from "@/components/ui/Button";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Notice } from "@/components/stationeries/PanelShell";
 import { formatDateTime } from "@/components/stationeries/StatusPanel";
@@ -77,7 +78,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
               aria-label={`Motivo para ${a.label.toLowerCase()}`}
               className="bg-campo h-11 min-w-[260px] flex-1 rounded-campo px-4 text-[14px] font-medium"
             />
-            <button type="submit" className={`h-11 rounded-botao px-5 text-[14px] font-extrabold ${a.tone === "danger" ? "border-[1.5px] border-[#8a1c14] text-[#8a1c14]" : "bg-tinta text-papel"}`}>
+            <button type="submit" className={buttonClass(a.tone === "danger" ? "danger" : "primary")}>
               {a.label}
             </button>
           </form>

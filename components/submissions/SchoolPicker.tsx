@@ -81,13 +81,13 @@ export function SchoolSearchPicker({
             </button>
           </div>
           <div aria-live="polite">
-            {failed ? <p role="alert" className="text-[13px] font-bold text-red-700">Não foi possível buscar agora. Tente de novo.</p> : null}
+            {failed ? <p role="alert" className="text-[13px] font-bold text-erro-texto">Não foi possível buscar agora. Tente de novo.</p> : null}
             {hits && hits.length === 0 ? <p className="text-texto-2 text-[13px] font-semibold">Nenhuma escola encontrada.</p> : null}
             {hits && hits.length > 0 ? (
               <ul className="flex flex-col gap-1.5">
                 {hits.map((h) => (
                   <li key={h.id}>
-                    <button type="button" onClick={() => setChosen(h)} className="bg-campo w-full rounded-campo px-4 py-2.5 text-left text-[14px] font-semibold">
+                    <button type="button" onClick={() => setChosen(h)} className="min-h-11 inline-flex items-center justify-center bg-campo w-full rounded-campo px-4 py-2.5 text-left text-[14px] font-semibold">
                       <span className="font-extrabold">{h.name}</span> · INEP {h.inep}
                       <span className="text-texto-3 block text-[12px]">{[h.neighborhood, h.municipalityName].filter(Boolean).join(" · ")}</span>
                     </button>

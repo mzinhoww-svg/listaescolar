@@ -12,13 +12,19 @@ export function SavedListsSection({ savedLists }: { savedLists: readonly SavedLi
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-extrabold">Listas salvas</h2>
         {savedLists.length > 0 ? (
-          <Link href="/conta/listas-salvas" className="text-verde-fundo text-[13px] font-extrabold">
+          <Link href="/conta/listas-salvas" className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold">
             Ver todas
           </Link>
         ) : null}
       </div>
       {shown.length === 0 ? (
-        <p className="text-texto-2 text-[13px] font-semibold">Nenhuma lista salva ainda.</p>
+        <p className="text-texto-2 text-[13px] font-semibold">
+          Nenhuma lista salva ainda.{" "}
+          <Link href="/escolas" className="text-verde-fundo inline-flex min-h-11 items-center font-extrabold underline">
+            Buscar a escola
+          </Link>{" "}
+          e toque em Salvar lista.
+        </p>
       ) : (
         <ul className="flex flex-col gap-2.5" aria-label="Listas salvas recentes">
           {shown.map((r) => (

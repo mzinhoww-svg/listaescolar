@@ -9,7 +9,7 @@ export function TierFields({ tiers }: { tiers: readonly PriceTier[] }) {
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="mb-1 text-[15px] font-extrabold">Preço por lead (faixa de itens da lista)</legend>
-      <div className="text-texto-3 grid grid-cols-[1fr_1fr_1fr] gap-2 text-[11px] font-extrabold uppercase">
+      <div className="text-texto-3 grid grid-cols-[1fr_1fr_1fr] gap-2 text-[12px] font-extrabold uppercase">
         <span>De (itens)</span>
         <span>Até (itens, vazio = aberta)</span>
         <span>Preço</span>

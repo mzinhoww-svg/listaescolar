@@ -72,7 +72,21 @@ const serverSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{64}$/, "precisa ter 64 caracteres hexadecimais (32 bytes)")
     .optional(),
+  /** Segredo do HMAC do rastreio de campanhas B2B (cliques e visualizações; `features/campaigns/tracking-service.ts`):
+   * mínimo de 32 caracteres, gerar com `openssl rand -hex 32`. Obrigatório quando `APP_ENV=production`, salvo com o
+   * rastreio desligado de propósito (`B2B_CAMPAIGN_TRACKING=0`). Local, preview e staging seguem opcionais. */
+  B2B_CAMPAIGN_TRACKING_SECRET: z.string().min(32).optional(),
+  /** `0` desliga o rastreio de campanhas B2B (aí o segredo não é exigido). */
+  B2B_CAMPAIGN_TRACKING: flag,
   ...pipelineShape,
+}).superRefine((env, ctx) => {
+  if (env.APP_ENV === "production" && env.B2B_CAMPAIGN_TRACKING !== "0" && !env.B2B_CAMPAIGN_TRACKING_SECRET) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["B2B_CAMPAIGN_TRACKING_SECRET"],
+      message: "obrigatória em produção (ou desligue o rastreio com B2B_CAMPAIGN_TRACKING=0)",
+    });
+  }
 });
 
 export type ServerEnv = z.infer<typeof serverSchema> & PublicEnv;
@@ -105,6 +119,8 @@ export function getServerEnv(): ServerEnv {
       IP_HASH_SALT: process.env.IP_HASH_SALT,
       B2B_API_KEY_PEPPER: process.env.B2B_API_KEY_PEPPER,
       B2B_WEBHOOK_ENCRYPTION_KEY: process.env.B2B_WEBHOOK_ENCRYPTION_KEY,
+      B2B_CAMPAIGN_TRACKING_SECRET: process.env.B2B_CAMPAIGN_TRACKING_SECRET,
+      B2B_CAMPAIGN_TRACKING: process.env.B2B_CAMPAIGN_TRACKING,
       ...readPipelineFlags(),
     }),
   );

@@ -26,6 +26,7 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-011 | ledger-dados S04 T2 / T1 rodada 1 | `grant select on schools to anon` de tabela inteira expunha `email` | média | S04 | resolvida em S04 (grants por coluna na 0102) |
 | D-159 | revisão de segurança da S19 (M6) | Migration `0606`: (a) `notification_params_valid` aceita `alert_kind`/`alert_count` em qualquer tipo de evento (deveria só em `system_alert`); (b) `system_alert_notify` devolve o nº de admins mesmo quando o alerta foi deduplicado no dia; (c) job `dead` realerta todo dia enquanto continuar `dead` (sem "visto"/silêncio). Só in-app e sem PII: impacto baixo | baixa | S20 | aberta — Ruling S19: não mexer na `0606` (já revisada e ainda não aplicada, mas o custo/risco de reabrir supera o ganho); corrigir numa migration nova `0608` junto do go-live |
 | D-160 | ledger.md S19 (E2E) | O documento da revisão só foi verificado por Storage direto: em http local o `upgrade-insecure-requests` bloqueia o destino https do redirect 307. Repetir o embed real do iframe da revisão no preview da Vercel (https) na S20 | baixa | S20 | aberta |
+| D-163 | S28 fechamento (M16, `docs/MELHORIAS.md`); ledger.md S28 | O link mágico de `/entrar` usa PKCE: abrir o e-mail e tocar no link dentro do navegador embutido do WhatsApp (ou de outro app) abre um contexto sem o verificador gravado no aparelho e o login falha; é a entrada de todas as áreas logadas (carrinho, cotação, envio de lista) e a distribuição do produto é por WhatsApp. Correção: entrada por código de 6 dígitos no mesmo aparelho (além do link), o que exige alterar o template do e-mail de acesso no Supabase hospedado (ação só do humano, fora da fatia por regra de autonomia) e mexer em `features/auth/*`. Enquanto isso, mitigação: orientar 'abra o link no navegador do celular' na tela de e-mail enviado e medir `login_completed` no funil (PostHog) | **alta** | Humano (template do Supabase) + S20 (Ruling de mitigação registrado no ledger; mede-se no piloto) | aberta — Ruling S28 no `ledger.md`; sem Ruling explícito não vai ao go-live |
 
 ## Dados e LGPD
 
@@ -77,6 +78,8 @@ Lista única e sem duplicatas da dívida registrada em `ledger.md`, `ledger-dado
 | D-043 | ledger-dados S04 T3; ledger-dados S05 T3; ledger-comercio S12 T3 e S13; e2e/S04, S05 | Soft-404: `notFound()`/`redirect()` respondiam HTTP 200 por causa dos `loading.tsx` que forçavam streaming | média | chore | resolvida em chore/soft-404 (PR #17) |
 | D-044 | ledger-comercio S13 T3 | Nome do bairro digitado não era preservado (normalizado para minúsculas) | baixa | S13 | resolvida em S13 T2 rodada 2 (`display_name`) |
 | D-156 | ledger.md (S17, renumerado de D-152 por colisão com a S16) | Auditoria do selo "Demonstração" (`DemoBadge`/`DemoSeal`) foi por amostragem dirigida (S17), não exaustiva por todo `is_demo` do schema; nenhuma lacuna encontrada nos pontos verificados (schools/listas, papelarias, leads — inclusive `LeadTable`/`LeadCards` da papelaria), mas uma varredura completa (grep de todo `is_demo` exposto à UI × todo componente que o consome) ainda não foi feita | baixa | S18 | aberta — Ruling (S18): amostra estendida (~15 arquivos a mais que recebem `isDemo`: `app/carrinho/{novo,[id]}`, `app/cotacao/[code]`, `app/papelaria/creditos`, `components/cart/StoreCard`, `components/schools/{ProfileHeader,ProfileInfo,SchoolCard}`), todos já mostram o selo (por `DemoBadge`/`DemoSeal` ou por um componente de status próprio — `StatusBadges`, `demoBadge` de `components/lists/badges` — que faz o mesmo papel com outro nome, o que gerava falso positivo num grep raso por "DemoBadge"/"DemoSeal" literal). Nenhuma lacuna nova encontrada. Uma varredura VERDADEIRAMENTE exaustiva (conferir os ~26 arquivos restantes que citam `isDemo` sem essas strings, um por um) fica pendente — desproporcional para severidade baixa sem indício de gap depois de duas rodadas de amostragem (S17 + S18); mantida `aberta` |
+| D-161 | revisão final de UX da S28 (Opus), menores restantes | Menores da revisão final de UX que ficaram fora do fechamento da S28: (a) barra de ação fixa na página da lista (o CTA some ao rolar); (b) `KpiRow` do painel da papelaria com `order-last` (ordem visual diferente da ordem de leitura); (c) textos do checklist de configuração da papelaria; (d) grupos do menu do admin (M34) por área, hoje uma lista única; (e) alinhamento do cartão ilustrativo da landing a 1280 px; (f) link 'voltar à lista' na tela de login quando o `next` aponta para uma lista; (g) frases duplicadas em `/enviar-lista` (aviso de revisão aparece no topo e no consentimento) | baixa | pós-piloto | aberta |
+| D-162 | ledger.md S28 (Ruling T24); `lib/analytics/*` | Os eventos `lead_converted` e `catalog_activated` têm esquema e contrato prontos, mas a emissão foi ADIADA: nascem de transições SQL (2 de 3 sinais do lead; aprovação da papelaria) sem ponto único no Node, e emitir só de alguns caminhos falsearia o funil ('nunca inventar métrica'). Correção certa: outbox de eventos (tabela + varredor de servidor que envia ao PostHog) ou varredor periódico das transições. Sem isso, o funil de conversão de leads e o de ativação de papelaria ficam sem os dois últimos degraus | média | S20 / pós-piloto | aberta |
 
 ## Integração entre trilhas (S11)
 
@@ -233,10 +236,12 @@ reverificação de segurança, rodada 2, `1e35153`, sem número anterior).
 
 | Severidade | Abertas | Resolvidas | Total |
 |---|---|---|---|
-| alta | 9 | 6 | 15 |
-| média | 44 | 12 | 56 |
-| baixa | 75 | 10 | 85 |
-| **Total** | **128** | **28** | **156** |
+| alta | 10 | 6 | 16 |
+| média | 45 | 12 | 57 |
+| baixa | 76 | 10 | 86 |
+| **Total** | **131** | **28** | **159** |
+
+Fechamento da S28: soma D-161 (baixa, menores da revisão final de UX), D-162 (média, `lead_converted`/`catalog_activated` sem emissão) e D-163 (alta, M16: link mágico PKCE no navegador do WhatsApp; exige Ruling de mitigação antes do go-live) sobre a contagem anterior (D-159/D-160 da S19 entram na contagem no merge desta branch com a S19 já refletida na linha da S19).
 
 Contagem recontada por script direto das linhas da tabela (sem duplicata de ID) em 2026-09-27, na resolução do
 merge de `origin/main` (S16, PR #50, `c2e8ee6`) com esta branch (S17, `slice/S17-lgpd-demo`): as duas branches

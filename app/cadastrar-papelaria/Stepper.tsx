@@ -11,7 +11,7 @@ export function Stepper({ current }: { current: 0 | 1 | 2 }) {
           <li key={label} aria-current={now ? "step" : undefined} className="flex items-center gap-3">
             <span
               className={`grid size-7 place-items-center rounded-full text-[12px] font-extrabold ${
-                done || now ? "bg-tinta text-papel" : "text-texto-3 border-[1.5px] border-[#cfc9b8]"
+                done || now ? "bg-tinta text-papel" : "text-texto-3 border-[1.5px] border-texto-3"
               }`}
             >
               {done ? "✓" : i + 1}

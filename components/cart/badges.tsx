@@ -1,6 +1,6 @@
 export function DemoBadge() {
   return (
-    <span className="bg-campo text-texto-2 rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[11px] font-extrabold whitespace-nowrap">
+    <span className="bg-campo text-texto-2 rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[12px] font-extrabold whitespace-nowrap">
       Demonstração
     </span>
   );
@@ -8,7 +8,7 @@ export function DemoBadge() {
 
 export function AffiliateBadge() {
   return (
-    <span className="bg-verde-certo/25 text-verde-fundo rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[11px] font-extrabold whitespace-nowrap">
+    <span className="bg-verde-certo/25 text-verde-fundo rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[12px] font-extrabold whitespace-nowrap">
       link afiliado
     </span>
   );
@@ -18,7 +18,7 @@ export function Tag({ children, tone = "green" }: { children: string; tone?: "gr
   const cls = tone === "green" ? "bg-verde-certo text-tinta" : "bg-campo text-texto-2";
   return (
     <span
-      className={`${cls} rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[11px] font-extrabold whitespace-nowrap`}
+      className={`${cls} rounded-botao inline-flex w-fit items-center px-2.5 py-1 text-[12px] font-extrabold whitespace-nowrap`}
     >
       {children}
     </span>

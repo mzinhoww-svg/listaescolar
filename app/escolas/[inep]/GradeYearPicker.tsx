@@ -6,6 +6,8 @@ import { useState, useTransition } from "react";
 
 import { GRADES, STAGE_LABEL, findGrade, type GradeStage } from "@/features/grades/catalog";
 
+import { PublishedShortcuts, type PublishedShortcut } from "./PublishedShortcuts";
+
 type Props = {
   inep: string;
   serie: string | null;
@@ -15,6 +17,8 @@ type Props = {
   published?: { versionNumber: number; itemCount: number } | null;
   /** A consulta da lista falhou no servidor: mostrar "indisponível", nunca "não publicada". */
   unavailable?: boolean;
+  /** Séries/anos com lista publicada (dado real). Ausente = não consultado: nunca afirmar "nenhuma". */
+  publishedShortcuts?: readonly PublishedShortcut[];
 };
 
 const STAGES: GradeStage[] = ["ei", "ef", "em"];
@@ -32,6 +36,7 @@ export function GradeYearPicker({
   years,
   published = null,
   unavailable = false,
+  publishedShortcuts,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -53,6 +58,7 @@ export function GradeYearPicker({
       <h2 id="lista" className="text-base font-extrabold">
         Lista de material
       </h2>
+      {publishedShortcuts && publishedShortcuts.length > 0 ? <PublishedShortcuts inep={inep} items={publishedShortcuts} /> : null}
       <form method="get" action={`/escolas/${inep}`} className="flex flex-col gap-2.5">
         <div className="flex gap-2.5">
           <div className="flex min-w-0 grow flex-col gap-1">
@@ -152,7 +158,9 @@ export function GradeYearPicker({
             <p className="text-texto-2 mt-1 text-[13px] leading-[1.4] font-medium">
               {selected
                 ? "Ainda não há lista publicada para esta escola, série e ano. Quando houver, ela aparece aqui."
-                : "Nenhuma lista publicada está disponível para esta escola no momento."}
+                : publishedShortcuts?.length === 0
+                  ? "Nenhuma lista publicada está disponível para esta escola no momento."
+                  : "Escolha a série e o ano letivo acima."}
             </p>
           </>
         )}

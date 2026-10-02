@@ -19,7 +19,7 @@ function responseLabel(d: DeliveryRow): string {
 function responseTone(d: DeliveryRow): string {
   if (d.lastResponseStatus && d.lastResponseStatus < 300) return "bg-verde-certo text-tinta";
   if (d.status === "queued" || d.status === "sending") return "bg-campo text-texto-2";
-  return "bg-[#fde2e0] text-[#8a1c14]";
+  return "bg-erro-fundo text-erro-texto";
 }
 
 export function DeliveriesTable({ deliveries }: { deliveries: readonly DeliveryRow[] }) {
@@ -27,7 +27,7 @@ export function DeliveriesTable({ deliveries }: { deliveries: readonly DeliveryR
     return <p className="text-texto-2 rounded-[20px] bg-white p-6 text-[15px] font-bold">Nenhuma entrega ainda.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-[20px] bg-white">
+    <div className="overflow-x-auto rounded-[20px] bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] uppercase">

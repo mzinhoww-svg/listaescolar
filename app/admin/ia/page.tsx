@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 
+import { AiCostPanel } from "@/components/admin/AiCostPanel";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { Notice } from "@/components/stationeries/PanelShell";
 import { updateAiSettingsAction } from "@/features/ai-settings/actions";
 import { CRITICAL_ALERT_CODES, CRITICAL_ALERT_LABEL } from "@/features/ai-settings/ports";
 import { getAiSettingsForAdmin } from "@/features/ai-settings/queries";
 import type { AiSettingsView } from "@/features/ai-settings/ports";
+import { getAiCostPanel } from "@/features/admin/ai-cost";
+import type { CostPanelStats } from "@/features/ai-settings/cost";
 import { getSessionActor } from "@/features/auth/actor";
 import { requireAccess } from "@/features/auth/guard";
 
@@ -24,11 +27,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   const actor = await getSessionActor();
   let settings: AiSettingsView | null = null;
   let failed = false;
+  let cost: CostPanelStats | null = null;
   try {
     if (actor) settings = await getAiSettingsForAdmin(actor);
   } catch (error) {
     console.error("ai_settings (admin)", error instanceof Error ? error.message : "erro");
     failed = true;
+  }
+  try {
+    if (actor) cost = await getAiCostPanel(actor);
+  } catch (error) {
+    console.error("custo de IA (admin)", error instanceof Error ? error.message : "erro");
   }
   return (
     <AdminShell active="/admin/ia" email={user.email} breadcrumb="Admin / Configuração de IA" title="Configuração de IA">
@@ -50,6 +59,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             <label className="flex flex-col gap-1.5 text-[13px] font-bold">
               Máximo de escalonamentos (0 a 3)
               <input name="maxEscalations" type="number" step="1" min={0} max={3} defaultValue={settings.maxEscalations} required className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium" />
+            </label>
+            <label className="flex flex-col gap-1.5 text-[13px] font-bold">
+              Taxa de câmbio (BRL por USD, opcional)
+              <input name="usdBrlRate" inputMode="decimal" defaultValue={settings.usdBrlRate ?? ""} placeholder="vazio = reais indisponíveis" className="bg-campo rounded-campo h-11 px-3 text-[14px] font-medium" />
             </label>
             <label className="flex flex-col gap-1.5 text-[13px] font-bold">
               Versão do pipeline
@@ -75,6 +88,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
           <button type="submit" className="bg-tinta text-papel rounded-botao h-12 w-fit px-6 text-[14px] font-extrabold">Salvar</button>
         </form>
       )}
+      <AiCostPanel stats={cost} />
     </AdminShell>
   );
 }

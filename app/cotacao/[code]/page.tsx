@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Screen } from "@/components/auth/Screen";
 import { BackHeader } from "@/components/cart/CartStates";
 import { formatWhen, moneyOrUnavailable } from "@/components/leads/format";
+import { LeadNextStep } from "@/components/leads/LeadNextStep";
 import { MessagePreview } from "@/components/leads/MessagePreview";
 import { DemoSeal, StatusBadge } from "@/components/leads/StatusBadge";
 import { Timeline } from "@/components/leads/Timeline";
@@ -47,8 +48,8 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
   return (
     <Screen>
       <BackHeader href="/cotacao" title="Seu pedido" />
-      {ok ? <p role="status" className="bg-[#d6f3e5] text-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold">Pedido cancelado.</p> : null}
-      {erro ? <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
+      {ok ? <p role="status" className="bg-verde-certo/20 text-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold">Pedido cancelado.</p> : null}
+      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{erro}</p> : null}
       <section className="rounded-card flex flex-col gap-3 bg-white p-6" aria-label="Resumo do pedido">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]" data-testid="lead-code">{lead.code}</h1>
@@ -67,6 +68,7 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
           <div className={row}><dt className="text-texto-2">Válido até</dt><dd className="font-extrabold">{formatWhen(lead.expiresAt)}</dd></div>
         </dl>
       </section>
+      <LeadNextStep status={lead.status} />
       {preview ? <MessagePreview text={preview} /> : null}
       {open ? (
         <>
@@ -83,7 +85,7 @@ export default async function CotacaoDetailPage({ params, searchParams }: PagePr
         <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[14px] font-bold" data-testid="lead-closed">Este pedido está encerrado.</p>
       )}
       <Timeline events={events} side="requester" />
-      <Link href="/" className="text-verde-fundo text-center text-[14px] font-extrabold underline">Voltar ao início</Link>
+      <Link href="/" className="text-verde-fundo flex min-h-11 items-center justify-center text-center text-[14px] font-extrabold underline">Voltar ao início</Link>
     </Screen>
   );
 }

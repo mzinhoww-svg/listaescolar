@@ -62,7 +62,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
             key={t.key}
             href={`/admin/parceiros?aba=${t.key}`}
             aria-current={t.key === tab.key ? "page" : undefined}
-            className={`rounded-botao px-5 py-2.5 text-[14px] font-extrabold ${t.key === tab.key ? "bg-tinta text-papel" : "bg-campo"}`}
+            className={`inline-flex min-h-11 items-center rounded-botao px-5 py-2.5 text-[14px] font-extrabold ${t.key === tab.key ? "bg-tinta text-papel" : "bg-campo"}`}
           >
             {t.label}
             {t.key === "pendentes" ? ` (${pendingCount})` : ""}
@@ -76,7 +76,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
       ) : filtered.length === 0 ? (
         <p className="text-texto-2 rounded-[24px] bg-white p-8 text-[15px] font-bold">Nenhum parceiro nesta aba.</p>
       ) : (
-        <div className="overflow-x-auto rounded-[24px] bg-white">
+        <div className="overflow-x-auto rounded-[24px] bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
           <table className="w-full text-left text-[14px]">
             <thead>
               <tr className="text-texto-3 border-linha border-b text-[12px] uppercase">

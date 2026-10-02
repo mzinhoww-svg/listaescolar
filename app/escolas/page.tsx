@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { TrackView } from "@/components/analytics/TrackView";
 import { BackIcon } from "@/components/schools/icons";
 import { NetworkChips } from "@/components/schools/NetworkChips";
 import { SearchResults } from "@/components/schools/SearchResults";
@@ -45,6 +46,16 @@ export default async function SearchPage({ searchParams }: Props) {
         </Link>
         <h1 className="grow pr-12 text-center text-base font-bold">Buscar escola</h1>
       </div>
+      {input.q ? (
+        <TrackView
+          name="school_searched"
+          props={{
+            query_length: input.q.length,
+            results_count: result.kind === "results" ? result.total : 0,
+            has_filters: Boolean(input.network || input.neighborhood || input.municipalityId),
+          }}
+        />
+      ) : null}
       <SearchForm defaultValue={input.q ?? ""} neighborhood={input.neighborhood ?? ""} preserve={preserve} />
       <NetworkChips input={input} />
       <SearchResults input={input} result={result} />

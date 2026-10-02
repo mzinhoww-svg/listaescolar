@@ -54,11 +54,11 @@ describe("landing", () => {
     expect(container.textContent).toContain("Cuiabá · MT");
   });
 
-  it("mostra os varejistas ativos por nome e omite Papelarias sem papelaria", async () => {
+  it("mostra o tipo de canal (sem nome de loja) e omite Papelarias sem papelaria", async () => {
     const Page = await loadPage("/");
     const { container } = await renderInSite(Page);
-    expect(container.textContent).toContain("Amazon");
-    expect(container.textContent).toContain("Mercado Livre");
+    expect(container.textContent).toContain("Lojas online");
+    expect(container.textContent).not.toContain("Amazon");
     expect(container.textContent).not.toContain("Papelarias do bairro");
   });
 

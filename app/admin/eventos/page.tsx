@@ -71,7 +71,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
       ) : failed ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível carregar.</p>
       ) : (
-        <div className="rounded-card overflow-x-auto bg-white">
+        <div className="rounded-card overflow-x-auto bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
           <table className="w-full min-w-[900px] text-left text-[13px]">
             <thead className="text-texto-3 border-b border-black/10 font-bold">
               <tr>
@@ -94,9 +94,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
                     <td className="px-4 py-3 font-bold">{r.action}</td>
                     <td className="px-4 py-3">{r.entityTable}</td>
                     <td className="px-4 py-3 font-mono text-[12px]">{r.entityId ?? "—"}</td>
-                    <td className="px-4 py-3">{r.actorRole ?? "—"}{r.actorId ? <span className="text-texto-3 block font-mono text-[11px]">{r.actorId}</span> : null}</td>
-                    <td className="px-4 py-3 font-mono text-[11px]">{json(r.before)}</td>
-                    <td className="px-4 py-3 font-mono text-[11px]">{json(r.after)}</td>
+                    <td className="px-4 py-3">{r.actorRole ?? "—"}{r.actorId ? <span className="text-texto-3 block font-mono text-[12px]">{r.actorId}</span> : null}</td>
+                    <td className="px-4 py-3 font-mono text-[12px]">{json(r.before)}</td>
+                    <td className="px-4 py-3 font-mono text-[12px]">{json(r.after)}</td>
                   </tr>
                 ))
               )}

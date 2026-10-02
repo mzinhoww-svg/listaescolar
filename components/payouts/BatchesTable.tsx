@@ -15,7 +15,7 @@ export function BatchesTable({ rows }: { rows: readonly PayoutBatchView[] }) {
     return <p className="text-texto-3 text-[14px] font-semibold">Nenhum lote gerado ainda.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white">
+    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[720px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">
@@ -41,7 +41,7 @@ export function BatchesTable({ rows }: { rows: readonly PayoutBatchView[] }) {
                 {r.status === "pending" ? (
                   <form action={markPayoutBatchExecutedAction}>
                     <input type="hidden" name="batchId" value={r.id} />
-                    <button type="submit" className="border-tinta text-tinta rounded-botao h-9 border-[1.5px] px-4 text-[13px] font-extrabold">
+                    <button type="submit" className="border-tinta text-tinta rounded-botao h-11 border-[1.5px] px-4 text-[13px] font-extrabold">
                       Marcar como executado
                     </button>
                   </form>

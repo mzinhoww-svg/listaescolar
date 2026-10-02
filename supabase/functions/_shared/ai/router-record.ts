@@ -1,6 +1,6 @@
 // Gravação da decisão do roteador (ai_decisions), extraída de router.ts (D-057, S18, arquivo com 261 linhas) —
 // comportamento idêntico ao original.
-import type { AiSettings, DecisionRecord, Prompt, ProviderName, Route } from "./types.ts";
+import type { AiSettings, DecisionRecord, Prompt, ProviderName, Route, Usage } from "./types.ts";
 import type { Evaluation, RouterDeps, Task } from "./router.ts";
 
 export const unit = (n: number): number => (Number.isFinite(n) ? Math.round(Math.min(1, Math.max(0, n)) * 1000) / 1000 : 0);
@@ -27,6 +27,8 @@ export type RecordBase<T> = {
   attempt: number;
   startedAt: number;
   finishedAt: number;
+  /** Uso desta tentativa, quando o provedor informou. */
+  usage?: Usage | undefined;
 };
 
 export async function record<T>(b: RecordBase<T>, decision: DecisionRecord["decision"], justification: string, ev?: Evaluation) {
@@ -49,5 +51,6 @@ export async function record<T>(b: RecordBase<T>, decision: DecisionRecord["deci
     startedAt: iso(b.startedAt),
     finishedAt: iso(b.finishedAt),
     latencyMs: Math.max(0, Math.round(b.finishedAt - b.startedAt)),
+    ...(b.usage ? { usage: b.usage } : {}),
   });
 }

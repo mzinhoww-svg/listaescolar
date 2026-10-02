@@ -90,10 +90,10 @@ export function createRouter(deps: RouterDeps) {
     // Resolve TODA a cadeia antes da 1ª tentativa: se a rota de escalada não está configurada, falha fechado
     // sem rede e sem decisão (evita `escalated` órfão e resultado pago perdido).
     const resolved = chain.slice(0, maxAttempts).map((route) => resolve(settings, route));
-    const usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } = {};
+    const usage: Usage = {};
     const addUsage = (u: Usage | undefined) => {
       if (!u) return;
-      for (const k of ["promptTokens", "completionTokens", "totalTokens"] as const) {
+      for (const k of ["promptTokens", "completionTokens", "totalTokens", "costUsdMicros"] as const) {
         const v = u[k];
         if (typeof v === "number" && Number.isFinite(v)) usage[k] = (usage[k] ?? 0) + v;
       }
@@ -115,6 +115,7 @@ export function createRouter(deps: RouterDeps) {
       }, Math.max(1, Math.min(cfg.timeoutMs, remaining)));
 
       let failure: AiError | null = null;
+      let attemptUsage: Usage | undefined;
       let value: T | undefined;
       let evaluation: Evaluation | undefined;
       try {
@@ -124,6 +125,7 @@ export function createRouter(deps: RouterDeps) {
         );
         if (external?.aborted) throw new AiError("aborted");
         addUsage(resp.usage);
+        attemptUsage = resp.usage;
         const parsed = task.schema.safeParse(parseJsonLoose(resp.text));
         if (!parsed.success) throw new AiError("invalid_output", { detail: "schema" });
         value = parsed.data;
@@ -141,7 +143,7 @@ export function createRouter(deps: RouterDeps) {
 
       const finishedAt = clock.now();
       const canEscalate = i < maxAttempts - 1 && opts.budgetMs - (finishedAt - t0) > 0;
-      const base = { deps, task, settings, prompt, provider, route, cfgProvider: cfg.provider, attempt: i + 1, startedAt, finishedAt };
+      const base = { deps, task, settings, prompt, provider, route, cfgProvider: cfg.provider, attempt: i + 1, startedAt, finishedAt, usage: attemptUsage };
 
       if (!failure && evaluation && value !== undefined) {
         const low = !(evaluation.overall >= settings.confidenceThreshold);

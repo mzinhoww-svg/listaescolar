@@ -118,7 +118,9 @@ describe("CatalogTable", () => {
     expect(screen.getByText("R$ 12,90")).toBeInTheDocument();
     expect(screen.getByText(/Informado pela papelaria · 20\/09\/2026/)).toBeInTheDocument();
     expect(screen.getByText("Em falta")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Editar" })).toHaveAttribute("href", "/e/1");
+    const edit = screen.getByRole("link", { name: "Editar Lápis HB" });
+    expect(edit).toHaveAttribute("href", "/e/1");
+    expect(edit.className).toContain("min-h-11"); // alvo de toque de 44 px (revisão UX, menores)
   });
 });
 

@@ -62,7 +62,7 @@ export function LoginForm() {
       </button>
       <div aria-live="polite">
         {erro ? (
-          <p id="senha-erro" role="alert" className="text-[13px] font-semibold text-red-700">
+          <p id="senha-erro" role="alert" className="text-[13px] font-semibold text-erro-texto">
             {erro}
           </p>
         ) : null}

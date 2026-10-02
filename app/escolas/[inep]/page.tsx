@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
+import { TrackView } from "@/components/analytics/TrackView";
 import { ClaimBlock, type OwnClaimSummary } from "@/components/schools/ClaimBlock";
 import { ProfileHeader } from "@/components/schools/ProfileHeader";
 import { ProfileInfo } from "@/components/schools/ProfileInfo";
@@ -10,7 +11,7 @@ import { ReportListForm } from "@/components/schools/ReportListForm";
 import { getSessionActor } from "@/features/auth/actor";
 import { getMyClaimForSchool } from "@/features/claims/queries";
 import { academicYears, defaultAcademicYear, parseGradeSelection } from "@/features/grades/catalog";
-import { getPublishedList } from "@/features/lists/queries";
+import { getPublishedList, listPublishedGradeYears } from "@/features/lists/queries";
 import { submitReportAction } from "@/features/reports/actions";
 import { buildSchoolJsonLd, serializeJsonLd } from "@/features/schools/search/jsonld";
 import { loadSchool } from "@/features/schools/search/load-school";
@@ -65,6 +66,12 @@ export default async function SchoolPage({ params, searchParams }: Props) {
       listUnavailable = true;
     }
   }
+  let shortcuts: Awaited<ReturnType<typeof listPublishedGradeYears>> | undefined;
+  try {
+    shortcuts = await listPublishedGradeYears(school.inep);
+  } catch {
+    shortcuts = undefined; // consulta falhou: sem atalhos e sem afirmar "nenhuma lista".
+  }
   const ownClaim = await loadOwnClaim(school.inep);
   const jsonLd = buildSchoolJsonLd(school, siteBase() ?? undefined);
   // Nonce por requisição (S19, CSP sem 'unsafe-inline' em script-src): vem do middleware via `x-nonce`.
@@ -79,6 +86,7 @@ export default async function SchoolPage({ params, searchParams }: Props) {
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
       ) : null}
+      <TrackView name="school_viewed" props={{ school_inep: school.inep, verification_status: school.verificationStatus }} />
       <ProfileHeader school={school} />
       <main className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-6 pb-9">
         <ProfileNotices school={school} />
@@ -88,6 +96,7 @@ export default async function SchoolPage({ params, searchParams }: Props) {
           ano={selectedYear}
           years={academicYears(now)}
           unavailable={listUnavailable}
+          publishedShortcuts={shortcuts?.map((s) => ({ gradeSlug: s.gradeSlug, year: s.year }))}
           published={
             list
               ? { versionNumber: list.version.versionNumber, itemCount: list.version.itemCount }

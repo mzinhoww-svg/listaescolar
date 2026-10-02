@@ -36,10 +36,11 @@ export function SchemaTable({ schema, caption }: { schema: ObjectJsonSchema | un
   if (properties.length === 0) return null;
   const required = new Set(schema?.required ?? []);
   return (
-    <table className="w-full text-left text-[13px]">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={caption}>
+    <table className="w-full min-w-[420px] text-left text-[13px]">
       <caption className="text-texto-3 mb-1.5 text-left text-[12px] font-extrabold tracking-[0.04em] uppercase">{caption}</caption>
       <thead>
-        <tr className="text-texto-3 text-[11px] uppercase">
+        <tr className="text-texto-3 text-[12px] uppercase">
           <th className="py-1 pr-3 font-extrabold">Campo</th>
           <th className="py-1 pr-3 font-extrabold">Tipo</th>
           <th className="py-1 pr-3 font-extrabold">Obrigatório</th>
@@ -57,5 +58,6 @@ export function SchemaTable({ schema, caption }: { schema: ObjectJsonSchema | un
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

@@ -14,7 +14,7 @@ export function buildReviewService() {
   const pub = buildPublicationDeps();
   return createReviewService({
     store: createReviewRepository(createAdminClient({ fresh: true })).store,
-    publication: { publisher: pub.publisher, context: pub.context, clock: pub.clock, settings: pub.settings },
+    publication: { publisher: pub.publisher, context: pub.context, clock: pub.clock, settings: pub.settings, ...(pub.emit ? { emit: pub.emit } : {}) },
     onAlert: (a) => console.error(JSON.stringify({ level: "error", fn: "review_publish", ...a })),
   });
 }

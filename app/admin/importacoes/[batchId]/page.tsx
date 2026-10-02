@@ -43,7 +43,7 @@ export default async function Page({ params }: { params: Promise<{ batchId: stri
         <CountCard label="Linhas com aviso" value={warnings} hint="Município alterado ou mantido" />
       </div>
       {batch.fileErrors.length > 0 ? (
-        <section role="alert" className="rounded-card flex flex-col gap-2 bg-red-50 px-6 py-6 text-red-900">
+        <section role="alert" className="rounded-card flex flex-col gap-2 bg-erro-fundo px-6 py-6 text-erro-texto">
           <h2 className="text-lg font-extrabold">Erros do arquivo</h2>
           <ul className="list-disc pl-5 text-[15px]">
             {batch.fileErrors.map((e, i) => (

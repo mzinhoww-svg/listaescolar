@@ -9,7 +9,7 @@ const TONE_CLASS: Readonly<Record<BadgeTone, string>> = {
   neutral: "bg-campo text-texto-2",
   ok: "bg-verde-certo text-tinta",
   warn: "bg-[#FDEBD3] text-[#6B3A00]",
-  error: "bg-[#fde2e0] text-[#8a1c14]",
+  error: "bg-erro-fundo text-erro-texto",
   info: "bg-tinta text-papel",
 };
 

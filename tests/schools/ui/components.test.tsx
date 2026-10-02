@@ -169,7 +169,7 @@ describe("ProfileInfo / ClaimBlock", () => {
 
   it("ClaimBlock: suspensa não oferece; sem reivindicação própria mostra o estado 1 (também para escola demo)", () => {
     const { rerender } = render(<ClaimBlock inep="51001234" status="registered" />);
-    expect(screen.getByRole("link", { name: "Reivindicar escola" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
+    expect(screen.getByRole("link", { name: "Pedir para administrar" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
     rerender(<ClaimBlock inep="99001001" status="registered" />);
     expect(screen.getByText("Você trabalha nesta escola?")).toBeInTheDocument();
     rerender(<ClaimBlock inep="51001234" status="suspended" />);

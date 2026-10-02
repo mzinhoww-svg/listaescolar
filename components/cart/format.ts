@@ -25,8 +25,21 @@ export function formatCheckedAt(date: Date): string {
   return dateFormat.format(date);
 }
 
+/** Origens de preço conhecidas (ver `price_snapshots.source` e `CATALOG_PRICE_SOURCE`). Acrescentar uma exige o rótulo aqui. */
+export const PRICE_SOURCES = ["demo", "informed_by_stationery", "manual_admin"] as const;
+export type PriceSource = (typeof PRICE_SOURCES)[number];
+
+export const SOURCE_LABEL: Record<PriceSource, string> = {
+  demo: "demonstração",
+  informed_by_stationery: "informado pela papelaria",
+  manual_admin: "cadastro da equipe ListaCerta",
+};
+
+/** Nunca mostra o código técnico: feeds (`retailer_feed:<nome>`) e origens novas caem em rótulos genéricos em pt-BR. */
 export function sourceLabel(source: string): string {
-  return source === "demo" ? "demonstração" : source;
+  if ((PRICE_SOURCES as readonly string[]).includes(source)) return SOURCE_LABEL[source as PriceSource];
+  if (source.startsWith("retailer_feed:")) return "informado pela loja";
+  return "fonte informada";
 }
 
 export function moneyOrUnavailable(cents: number | null): string {
@@ -63,7 +76,25 @@ export function isSelectable(option: CartOption): boolean {
   return option.status !== "unavailable" && option.totalCents !== null;
 }
 
+/** Sem nenhuma opção com preço, a cotação da papelaria local vem primeiro: é o caminho que resta. */
+export function orderOptions(options: readonly CartOption[]): CartOption[] {
+  if (options.some(isSelectable)) return [...options];
+  return [...options].sort((a, b) => Number(b.strategy === "local_stationery") - Number(a.strategy === "local_stationery"));
+}
+
 export function storesText(option: CartOption): string {
   if (!isSelectable(option)) return "sem lojas com preço";
   return option.stores.length === 1 ? "1 loja" : `${option.stores.length} lojas`;
 }
+
+/** Opções sem preço de loja (a papelaria local fica de fora: ela tem o próprio caminho, a cotação). */
+export function unpricedStoreOptions(options: readonly CartOption[]): CartOption[] {
+  return options.filter((o) => !isSelectable(o) && o.strategy !== "local_stationery");
+}
+
+/** Opções que ganham cartão: as com preço e a papelaria local (que traz o pedido de cotação). */
+export function visibleOptions(options: readonly CartOption[]): CartOption[] {
+  return options.filter((o) => isSelectable(o) || o.strategy === "local_stationery");
+}
+
+export const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;

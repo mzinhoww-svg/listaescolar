@@ -46,7 +46,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <section className="flex flex-col gap-5 rounded-[24px] bg-white p-6">
             <div className="flex flex-wrap items-center gap-2">
               <ClaimStatusBadge status={claim.status} />
-              <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[11px] font-extrabold">{claim.school.verificationStatus === "verified" ? "Escola com admin" : "Escola sem admin"}</span>
+              <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[12px] font-extrabold">{claim.school.verificationStatus === "verified" ? "Escola com admin" : "Escola sem admin"}</span>
               {claim.isDemo ? <DemoBadge /> : null}
             </div>
             <h2 className="text-[22px] font-extrabold"><Link href={`/escolas/${claim.school.inep}`} className="hover:underline">{claim.school.name}</Link></h2>

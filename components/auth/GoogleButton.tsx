@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 
+import { track } from "@/lib/analytics/track";
 import { signInWithGoogle } from "@/features/auth/actions";
 import type { AuthActionState } from "@/features/auth/schemas";
 
@@ -10,6 +11,7 @@ import { GoogleIcon } from "./icons";
 const initial: AuthActionState = { status: "idle" };
 
 async function run(_prev: AuthActionState, formData: FormData): Promise<AuthActionState> {
+  track("login_started", { method: "google" });
   return signInWithGoogle(formData);
 }
 
@@ -27,7 +29,7 @@ export function GoogleButton({ next }: { next: string }) {
         {pending ? "Aguarde…" : "Entrar com Google"}
       </button>
       {state.status === "error" && state.message ? (
-        <p role="alert" className="text-center text-[13px] font-semibold text-red-700">
+        <p role="alert" className="text-center text-[13px] font-semibold text-erro-texto">
           {state.message}
         </p>
       ) : null}

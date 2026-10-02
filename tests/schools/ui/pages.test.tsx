@@ -123,7 +123,7 @@ describe("/escolas/[inep]", () => {
     expect(JSON.parse(ld?.innerHTML ?? "{}").name).toBe("</script><b>X");
     expect(container.innerHTML).not.toMatch(/mailto:|[\w.]+@[\w.]+/);
     expect(screen.getByText("Esta escola já tem administrador")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Reivindicar/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Pedir para administrar/ })).toBeNull();
   });
 
   it("escola demo: selo Demonstração e sem JSON-LD; metadados noindex", async () => {
@@ -133,7 +133,7 @@ describe("/escolas/[inep]", () => {
     expect(screen.getAllByText("Demonstração").length).toBeGreaterThan(0);
     expect(screen.getByText(/Demonstração: dados fictícios/)).toBeInTheDocument();
     expect(screen.getByText("Você trabalha nesta escola?")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Reivindicar escola" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
+    expect(screen.getByRole("link", { name: "Pedir para administrar" })).toHaveAttribute("href", "/escolas/51001234/reivindicar");
     const m = await schoolMeta(props());
     expect(m.robots).toMatchObject({ index: false });
     expect(String(m.title)).toContain("Demonstração");
@@ -144,7 +144,7 @@ describe("/escolas/[inep]", () => {
     const { container } = render(await SchoolPage(props()));
     expect(screen.getByText(/perfil está suspenso/)).toBeInTheDocument();
     expect(container.querySelector('script[type="application/ld+json"]')).toBeNull();
-    expect(screen.queryByRole("link", { name: "Reivindicar escola" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Pedir para administrar" })).toBeNull();
   });
 
   it("falha ao consultar a lista vira 'indisponível' no bloco e não derruba o perfil", async () => {

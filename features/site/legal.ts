@@ -9,6 +9,8 @@ export type Legal = {
   auditRetention: string | null;
   legalBasis: string | null;
   operators: string | null;
+  /** Operador da medição de uso (PostHog): a definir e validar juridicamente. */
+  analyticsOperator: string | null;
   lastUpdated: string | null;
 };
 
@@ -25,6 +27,7 @@ export const LEGAL: Legal = {
   auditRetention: null,
   legalBasis: null,
   operators: null,
+  analyticsOperator: null,
   lastUpdated: null,
 };
 
@@ -92,6 +95,19 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       ["Usamos o Supabase (banco de dados, autenticação e arquivos), a Vercel (hospedagem) e um provedor de IA, acessado pelo OpenRouter, que lê os arquivos de lista enviados para extrair os itens."],
       ["Operadores, contratos e local de tratamento: ", { key: "operators", label: "operadores e contratos" }, "."],
       ["Ao abrir um link de loja, você sai da ListaCerta e passa às regras da loja."],
+    ],
+  },
+  {
+    title: "Medição de uso",
+    paragraphs: [
+      [
+        "Se você aceitar, medimos como o site é usado (páginas vistas, busca, cliques de compra) para melhorar as listas. Os eventos não levam nome, e-mail, telefone, texto digitado nem dado de estudante; levam só identificadores como o código da escola (INEP) e a série. Antes da sua escolha nada é enviado do seu navegador, e recusar não tira nenhuma função do site. Ao aceitar, guardamos no navegador um cookie que diz apenas \"aceito\", sem identificador; sem ele, nossos servidores não registram o seu login nem o seu clique de compra. Guardamos também, no armazenamento local do navegador (chave lc_analytics_id), um identificador aleatório que só serve para ligar os eventos do mesmo navegador; ele não é o seu nome nem o seu e-mail e é apagado se você recusar ou retirar o aceite.",
+      ],
+      [
+        "Independentemente da sua escolha, nossos servidores registram fatos do funcionamento do serviço, como uma lista publicada ou um pedido de cotação recebido por uma papelaria. Esses registros são agregados (por exemplo, faixa de quantidade de itens), levam um código aleatório e não trazem dado seu, de estudante ou da papelaria.",
+      ],
+      ["Operador da medição de uso: ", { key: "analyticsOperator", label: "operador da medição de uso (PostHog)" }, "."],
+      ["Você pode mudar a escolha a qualquer momento nesta página, quando a medição estiver ativa."],
     ],
   },
   {

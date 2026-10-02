@@ -124,7 +124,7 @@ export function StepService({ values, errors }: Props) {
           <Chip name="offersPickup" label="Retirada na loja" defaultChecked={val(values, "offersPickup") === "on"} />
         </div>
         {errors.offersPickup ? (
-          <p role="alert" className="mt-2 text-[13px] font-semibold text-red-700">
+          <p role="alert" className="mt-2 text-[13px] font-semibold text-erro-texto">
             {errors.offersPickup}
           </p>
         ) : null}

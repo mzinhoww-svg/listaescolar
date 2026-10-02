@@ -18,7 +18,7 @@ export function NavLinks({ items }: { items: readonly NavItem[] }) {
           key={i.href}
           href={i.href}
           aria-current={i.href === active ? "page" : undefined}
-          className={`focus-visible:outline-verde-certo rounded-campo px-3.5 py-2.5 text-[15px] font-bold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 ${
+          className={`min-h-11 inline-flex items-center justify-center focus-visible:outline-verde-certo rounded-campo px-3.5 py-2.5 text-[15px] font-bold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 ${
             i.href === active ? "bg-white/10 text-white" : "text-white/70 hover:text-white"
           }`}
         >

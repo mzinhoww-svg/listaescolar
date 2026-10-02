@@ -8,7 +8,7 @@ export function PendingRepassesTable({ rows }: { rows: readonly PendingRepasseVi
     return <p className="text-texto-3 text-[14px] font-semibold">Nada pendente de repasse agora.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white">
+    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[640px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">
@@ -28,7 +28,7 @@ export function PendingRepassesTable({ rows }: { rows: readonly PendingRepasseVi
                 <form action={createPayoutBatchAction}>
                   <input type="hidden" name="schoolId" value={r.schoolId} />
                   <input type="hidden" name="beneficiaryType" value={r.beneficiaryType} />
-                  <button type="submit" className="bg-tinta text-papel rounded-botao h-9 px-4 text-[13px] font-extrabold">
+                  <button type="submit" className="bg-tinta text-papel rounded-botao h-11 px-4 text-[13px] font-extrabold">
                     Gerar lote de pagamento
                   </button>
                 </form>

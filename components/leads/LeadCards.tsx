@@ -22,8 +22,12 @@ export function LeadCards({ rows, now }: { rows: readonly StationeryLead[]; now:
             {r.itemCount} itens · enviado {moneyOrUnavailable(r.quotedTotalCents)} · {relativeWhen(r.createdAt, now)}
           </p>
           {r.isDemo ? <DemoSeal /> : null}
-          <Link href={`/papelaria/leads/${r.code}`} className="text-verde-fundo text-[14px] font-extrabold" aria-label={`Abrir ${r.code} (cartão)`}>
-            Abrir
+          <Link
+            href={`/papelaria/leads/${r.code}`}
+            className="bg-tinta text-papel rounded-botao mt-1 flex h-12 items-center justify-center text-[15px] font-extrabold"
+            aria-label={`Abrir ${r.code} (cartão)`}
+          >
+            Abrir e responder o pedido
           </Link>
         </li>
       ))}

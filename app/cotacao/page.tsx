@@ -24,7 +24,7 @@ export default async function CotacoesPage({ searchParams }: PageProps<"/cotacao
       <h1 className="text-[26px] leading-[1.1] font-extrabold tracking-[-0.035em]">
         {rows.length === 0 ? "Nenhuma cotação ainda" : `${rows.length} ${rows.length === 1 ? "pedido de cotação" : "pedidos de cotação"}`}
       </h1>
-      {erro ? <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">{errorMessageForCode(erro)}</p> : null}
+      {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{errorMessageForCode(erro)}</p> : null}
       <p className="bg-campo text-texto-2 rounded-campo px-4 py-3 text-[13px] font-semibold">
         A compra acontece no WhatsApp. Aqui aparece o andamento; o valor só aparece quando a papelaria o informa.
       </p>

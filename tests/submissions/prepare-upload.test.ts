@@ -71,6 +71,13 @@ describe("prepareUpload", () => {
     expect(r).toEqual({ ok: false, message: ERROR_MESSAGES.file_too_large });
   });
 
+  it("primeira passada ainda grande: desce lado e qualidade e envia a que cabe", async () => {
+    const resize = vi.fn(async (_f: File, side: number) => blobOf(side === COMPRESS_MAX_SIDE_PX ? MAX_UPLOAD_BYTES + 1 : 1_500_000));
+    const r = await prepareUpload(fakeFile("a.jpg", "image/jpeg", 9_000_000), { resize });
+    expect(r.ok && r.compressed).toBe(true);
+    expect(resize.mock.calls.length).toBeGreaterThan(1);
+  });
+
   it("PDF acima de 4 MB é recusado com mensagem própria; até 4 MB passa", async () => {
     const resize = vi.fn();
     const big = await prepareUpload(fakeFile("l.pdf", "application/pdf", MAX_UPLOAD_BYTES + 1), { resize });

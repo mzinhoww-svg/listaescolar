@@ -68,7 +68,7 @@ export function RotateDialog({ keyId }: { keyId: string }) {
             <>
               <h2 className="text-[18px] font-extrabold">Rotacionar chave</h2>
               <p className="text-texto-2 text-[14px] font-semibold">Rotação sem downtime: a chave anterior vale pelos dias de carência escolhidos.</p>
-              {error ? <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-3 py-2.5 text-[13px] font-bold">{error}</p> : null}
+              {error ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">{error}</p> : null}
               <fieldset className="flex flex-col gap-2">
                 <legend className="text-[13px] font-bold">Carência da chave anterior</legend>
                 <div className="flex gap-2">

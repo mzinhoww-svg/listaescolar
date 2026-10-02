@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { connection } from "next/server";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { getAnalyticsConfigFromProcess } from "@/lib/analytics/config";
 import { SITE_LOCALE, SITE_NAME } from "@/lib/seo";
 import { siteBase } from "@/lib/site-base";
 import "./globals.css";
@@ -17,6 +19,7 @@ const plusJakartaSans = localFont({
 });
 
 const base = siteBase();
+const analyticsEnabled = getAnalyticsConfigFromProcess().enabled;
 
 export const metadata: Metadata = {
   ...(base ? { metadataBase: new URL(base) } : {}),
@@ -36,6 +39,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="pt-BR" className={`${plusJakartaSans.variable} h-full antialiased`}>
       <body className="bg-papel text-tinta flex min-h-full flex-col font-medium">
         <div className="flex flex-1 flex-col">{children}</div>
+        {analyticsEnabled ? <AnalyticsProvider /> : null}
       </body>
     </html>
   );

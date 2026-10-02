@@ -3,6 +3,9 @@ import Link from "next/link";
 import { SearchForm } from "@/app/escolas/SearchForm";
 import { SITE_COPY } from "@/features/site/copy";
 
+import { PublishedShortcuts } from "@/components/schools/PublishedShortcuts";
+import type { PublishedListShortcut } from "@/features/schools/published-lists";
+
 import { HeroListCard } from "./HeroListCard";
 
 const CHIPS = [
@@ -12,7 +15,7 @@ const CHIPS = [
   { label: "Privada", rede: "privada" },
 ];
 
-export function Hero() {
+export function Hero({ shortcuts = [] }: { shortcuts?: readonly PublishedListShortcut[] }) {
   const c = SITE_COPY.hero;
   return (
     <section aria-labelledby="hero-t" className="bg-papel"><div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 items-center gap-10 px-6 py-12 md:grid-cols-2 md:gap-16 md:py-20">
@@ -22,7 +25,8 @@ export function Hero() {
           {c.title}
         </h1>
         <p className="text-texto-2 text-base leading-relaxed font-medium md:text-lg">{c.lead}</p>
-        <SearchForm showNeighborhood={false} submitLabel="Buscar a escola do meu filho" />
+        <SearchForm showNeighborhood={false} stacked submitLabel="Buscar a escola do meu filho" />
+        <p className="text-texto-3 -mt-2 text-[13px] font-semibold">{c.scope}</p>
         <nav aria-label="Buscar por rede" className="-mx-6 overflow-x-auto px-6 md:mx-0 md:px-0">
           <ul className="flex gap-2">
             {CHIPS.map((ch) => (
@@ -37,6 +41,7 @@ export function Hero() {
             ))}
           </ul>
         </nav>
+        <PublishedShortcuts items={shortcuts} />
         <Link
           href="/escolas"
           className="text-tinta border-tinta rounded-botao focus-visible:outline-verde-fundo flex min-h-11 w-fit items-center border-[1.5px] px-5 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2"

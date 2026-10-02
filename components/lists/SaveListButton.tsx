@@ -27,14 +27,14 @@ export function SaveListButton({
 
   if (!loggedIn) {
     return (
-      <Link href={`/entrar?next=${encodeURIComponent(nextPath)}`} className="text-verde-fundo text-[13px] font-extrabold underline">
+      <Link href={`/entrar?next=${encodeURIComponent(nextPath)}`} className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
         Entrar para salvar esta lista
       </Link>
     );
   }
   if (students.length === 0) {
     return (
-      <Link href="/conta/alunos/novo" className="text-verde-fundo text-[13px] font-extrabold underline">
+      <Link href="/conta/alunos/novo" className="text-verde-fundo inline-flex min-h-11 items-center text-[13px] font-extrabold underline">
         Cadastrar um aluno para salvar esta lista
       </Link>
     );

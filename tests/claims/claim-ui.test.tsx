@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -30,7 +30,7 @@ describe("ClaimBlock (App14b)", () => {
   it("estado 1 sem reivindicação própria, também para demo", () => {
     render(<ClaimBlock inep="99001001" status="registered" />);
     expect(screen.getByText("Você trabalha nesta escola?")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Reivindicar escola" })).toHaveAttribute("href", "/escolas/99001001/reivindicar");
+    expect(screen.getByRole("link", { name: "Pedir para administrar" })).toHaveAttribute("href", "/escolas/99001001/reivindicar");
   });
   it("estado 2 (verified): texto sem botão", () => {
     render(<ClaimBlock inep="99001001" status="verified" />);
@@ -43,7 +43,7 @@ describe("ClaimBlock (App14b)", () => {
   });
   it("estado 3: em análise com a data real e link para o status", () => {
     render(<ClaimBlock inep="99001001" status="claimed" claim={{ status: "awaiting_verification", createdAt: "2026-09-10T15:00:00Z", decisionReason: null }} />);
-    expect(screen.getByText("Reivindicação em análise")).toBeInTheDocument();
+    expect(screen.getByText("Pedido em análise")).toBeInTheDocument();
     expect(screen.queryByText(/^Estado \d/)).toBeNull();
     expect(screen.getByText(/Enviada em 10\/09\/2026/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ver status" })).toHaveAttribute("href", "/escolas/99001001/reivindicar");
@@ -51,12 +51,12 @@ describe("ClaimBlock (App14b)", () => {
   it("estado 3 com pedido apenas iniciado (submitted): título de rascunho, não 'em análise'", () => {
     render(<ClaimBlock inep="99001001" status="registered" claim={{ status: "submitted", createdAt: "2026-09-10T15:00:00Z", decisionReason: null }} />);
     expect(screen.getByText("Pedido em preparo")).toBeInTheDocument();
-    expect(screen.queryByText("Reivindicação em análise")).toBeNull();
+    expect(screen.queryByText("Pedido em análise")).toBeNull();
   });
-  it("estado 4: motivo real e reivindicar de novo", () => {
+  it("estado 4: motivo real e pedir de novo", () => {
     render(<ClaimBlock inep="99001001" status="registered" claim={{ status: "rejected", createdAt: "2026-09-10T15:00:00Z", decisionReason: "Documento ilegível" }} />);
     expect(screen.getByText(/Motivo: Documento ilegível/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Reivindicar de novo" })).toHaveAttribute("href", "/escolas/99001001/reivindicar?nova=1");
+    expect(screen.getByRole("link", { name: "Pedir de novo" })).toHaveAttribute("href", "/escolas/99001001/reivindicar?nova=1");
   });
   it("suspensa não mostra bloco", () => {
     const { container } = render(<ClaimBlock inep="99001001" status="suspended" />);
@@ -152,7 +152,7 @@ describe("ClaimFlow / ClaimTimeline / ClaimStepper", () => {
     expect(screen.getByText("Motivo: Falta o cargo")).toBeInTheDocument();
     expect(screen.getByLabelText(/Nota de evidência/)).toBeInTheDocument();
     rerender(<ClaimFlow inep="99001001" claim={statusView({ status: "rejected", decisionReason: "Sem vínculo" })} actions={actions} />);
-    expect(screen.getByRole("link", { name: "Reivindicar de novo" })).toHaveAttribute("href", "/escolas/99001001/reivindicar?nova=1");
+    expect(screen.getByRole("link", { name: "Pedir de novo" })).toHaveAttribute("href", "/escolas/99001001/reivindicar?nova=1");
     rerender(<ClaimFlow inep="99001001" claim={statusView({ status: "approved" })} actions={actions} />);
     expect(screen.getByRole("link", { name: "Ir para Minhas escolas" })).toHaveAttribute("href", "/escola");
   });
@@ -226,12 +226,21 @@ describe("MySchoolsTable (Escola03)", () => {
           { id: CLAIM_ID, status: "awaiting_verification", decisionReason: null, createdAt: "2026-09-10T15:00:00Z", isDemo: true, school: { inep: "99001002", name: "Escola Demonstração 2" } },
           { id: "44444444-4444-4444-8444-444444444444", status: "rejected", decisionReason: "Sem vínculo", createdAt: "2026-09-10T15:00:00Z", isDemo: true, school: { inep: "99001003", name: "Escola Demonstração 3" } },
         ]}
+        withList={new Set(["s1"])}
       />,
     );
-    expect(screen.getByText("Verificada")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Abrir página pública" })).toHaveAttribute("href", "/escolas/99001004");
-    expect(screen.getByRole("link", { name: "Ver status" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
-    expect(screen.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ver e reivindicar de novo" })).toBeInTheDocument();
+    const table = within(screen.getByRole("table"));
+    expect(table.getByText("Verificada")).toBeInTheDocument();
+    expect(table.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(table.getByRole("link", { name: "Ver o status do pedido" })).toHaveAttribute("href", "/escolas/99001002/reivindicar");
+    expect(table.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
+    expect(table.getByRole("link", { name: "Ver o motivo e pedir de novo" })).toBeInTheDocument();
+    expect(table.getAllByText(/Próximo passo:/)).toHaveLength(3);
+    // Celular (revisão UX I5): os mesmos três itens viram cartões com "Próximo passo" e a ação.
+    const cards = within(screen.getByRole("list", { name: "Minhas escolas" }));
+    expect(cards.getAllByRole("listitem")).toHaveLength(3);
+    expect(cards.getAllByText(/Próximo passo:/)).toHaveLength(3);
+    expect(cards.getByRole("link", { name: "Ver a lista publicada" })).toHaveAttribute("href", "/escolas/99001004");
+    expect(cards.getByText("Motivo: Sem vínculo")).toBeInTheDocument();
   });
 });

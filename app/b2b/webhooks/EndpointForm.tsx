@@ -91,7 +91,7 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
     <div className="flex flex-col gap-4 rounded-[20px] bg-white p-5">
       <h2 className="text-[16px] font-extrabold">Endpoint</h2>
       {error ? (
-        <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-3 py-2.5 text-[13px] font-bold">
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-3 py-2.5 text-[13px] font-bold">
           {error}
         </p>
       ) : null}
@@ -138,7 +138,7 @@ export function EndpointForm({ endpoint, onSaved }: { endpoint: EndpointRow | nu
                   {copied ? "Copiado" : "Copiar"}
                 </button>
                 {justCreatedSecret && !endpoint ? (
-                  <button type="button" onClick={concludeCreate} className="bg-tinta text-papel rounded-botao h-10 w-fit px-4 text-[13px] font-extrabold">
+                  <button type="button" onClick={concludeCreate} className="bg-tinta text-papel rounded-botao h-11 w-fit px-4 text-[13px] font-extrabold">
                     Já copiei
                   </button>
                 ) : null}

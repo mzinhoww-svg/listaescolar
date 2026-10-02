@@ -1,3 +1,4 @@
+import { TrackView } from "@/components/analytics/TrackView";
 import Link from "next/link";
 
 import { CatalogTable } from "@/components/stationeries/CatalogTable";
@@ -40,6 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   return (
     <>
       <PageHeader crumb="Papelaria / Catálogo" title="Catálogo" />
+      <TrackView name="stationery_onboarding_step" props={{ step: "catalog", status: "viewed" }} />
       {ok ? <Notice kind="ok">Item salvo.</Notice> : null}
       {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       {!writable ? (

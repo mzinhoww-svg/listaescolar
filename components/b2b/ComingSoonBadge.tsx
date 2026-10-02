@@ -3,7 +3,7 @@
 
 export function ComingSoonBadge() {
   return (
-    <span className="bg-campo text-texto-2 inline-flex items-center rounded-botao px-2.5 py-1 text-[11px] font-extrabold tracking-[0.02em] uppercase">
+    <span className="bg-campo text-texto-2 inline-flex items-center rounded-botao px-2.5 py-1 text-[12px] font-extrabold tracking-[0.02em] uppercase">
       Em breve
     </span>
   );

@@ -9,6 +9,7 @@ import { getStationeryOfOwner } from "@/features/stationeries/queries";
 import { registerStationery } from "@/features/stationeries/repository";
 import { submitForReview } from "@/features/stationeries/submit";
 import { canSubmitForReview } from "@/features/stationeries/submit-rules";
+import { captureServer } from "@/lib/analytics/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { safeErrorLabel } from "@/lib/log-error";
 
@@ -32,7 +33,7 @@ export async function registerStationeryAction(_prev: RegisterState, formData: F
   const admin = createAdminClient();
   const municipality = await admin
     .from("municipalities")
-    .select("id")
+    .select("id, ibge_code")
     .eq("id", parsed.data.basics.municipalityId)
     .eq("is_enabled", true)
     .maybeSingle();
@@ -56,6 +57,12 @@ export async function registerStationeryAction(_prev: RegisterState, formData: F
     console.error("enviar para análise", safeErrorLabel(error));
     redirect(`${NEXT}?erro=envio`);
   }
+  // Medição (ADR-007): só município (IBGE) e as duas opções de atendimento; nada da papelaria nem da pessoa.
+  captureServer("stationery_registered", {
+    municipality_ibge: municipality.data.ibge_code,
+    offers_pickup: parsed.data.service.offersPickup,
+    offers_delivery: parsed.data.service.offersDelivery,
+  });
   redirect(NEXT);
 }
 

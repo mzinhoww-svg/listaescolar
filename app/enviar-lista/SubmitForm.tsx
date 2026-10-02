@@ -10,7 +10,8 @@ import { BoltIcon, CameraIcon, ChevronLeftIcon, ClockIcon } from "@/components/s
 import { ProcessingScreen } from "@/components/submissions/ProcessingScreen";
 import { SchoolSearchPicker } from "@/components/submissions/SchoolPicker";
 import { SeriesFields } from "@/components/submissions/SeriesFields";
-import { ACCEPT_ATTR, REVIEW_NOTICE } from "@/features/submissions/copy";
+import { ACCEPT_ATTR, errorFieldFor, FORM_ERROR_ID, REVIEW_NOTICE } from "@/features/submissions/copy";
+import { trackUploadStarted } from "@/lib/analytics/track";
 import { idleState } from "@/features/submissions/form-schema";
 
 import { submitListAction } from "./actions";
@@ -42,6 +43,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
     if (problem) return;
     const data = new FormData(form);
     const original = pickedFile(form);
+    if (original) trackUploadStarted(original, data.get("schoolId") !== "");
     if (original) {
       setPreparing(true);
       const prepared = await prepareUpload(original);
@@ -56,17 +58,20 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
     startTransition(() => action(data));
   };
   const message = clientError ?? (state.status === "error" ? state.message : null);
+  const errorField = errorFieldFor(message);
+  const fileInvalid = errorField === "file";
 
   return (
     <>
-      <form action={action} onSubmit={onSubmit} noValidate className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col gap-4 px-5 pt-14 pb-9">
+      <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-1 flex-col">
+      <form action={action} onSubmit={onSubmit} noValidate className="flex w-full flex-1 flex-col gap-4 px-5 pt-14 pb-9">
         <header className="relative flex h-12 items-center justify-center">
           <Link href="/" aria-label="Voltar" className="bg-campo absolute left-0 grid size-12 place-items-center rounded-full">
             <ChevronLeftIcon />
           </Link>
           <h1 className="text-base font-extrabold">Enviar lista</h1>
         </header>
-        <p className="flex items-start gap-2.5 rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-semibold text-[#7a4a0a]">
+        <p className="flex items-start gap-2.5 rounded-2xl bg-aviso-fundo p-3.5 text-[13px] leading-[1.4] font-semibold text-[#7a4a0a]">
           <ClockIcon size={16} className="mt-0.5 shrink-0" />
           {REVIEW_NOTICE}
         </p>
@@ -78,8 +83,8 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
             </span>
             A IA lê a lista, identifica cada item e confere as quantidades.
           </p>
-          <input ref={camera} name="file" type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Tirar foto da lista" onChange={() => onPick(camera.current, gallery.current)} />
-          <input ref={gallery} id="file" name="file" type="file" accept={ACCEPT_ATTR} className="sr-only" tabIndex={-1} aria-label="Arquivo da lista" onChange={() => onPick(gallery.current, camera.current)} />
+          <input ref={camera} name="file" type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Tirar foto da lista" aria-invalid={fileInvalid} aria-describedby={fileInvalid ? FORM_ERROR_ID : undefined} onChange={() => onPick(camera.current, gallery.current)} />
+          <input ref={gallery} id="file" name="file" type="file" accept={ACCEPT_ATTR} className="sr-only" tabIndex={-1} aria-label="Arquivo da lista" aria-invalid={fileInvalid} aria-describedby={fileInvalid ? FORM_ERROR_ID : undefined} onChange={() => onPick(gallery.current, camera.current)} />
           <button type="button" className={`${primary} h-14`} onClick={() => camera.current?.click()}>
             <CameraIcon size={18} /> Tirar foto
           </button>
@@ -94,11 +99,11 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
         </section>
 
         <SchoolSearchPicker />
-        <SeriesFields years={years} defaultYear={defaultYear} />
-        <ConsentField invalid={message !== null && /consentimento/i.test(message)} />
+        <SeriesFields years={years} defaultYear={defaultYear} invalid={errorField === "grade"} />
+        <ConsentField invalid={errorField === "consent"} />
         <div aria-live="polite">
           {message ? (
-            <p role="alert" className="text-[13px] font-bold text-red-700">
+            <p id={FORM_ERROR_ID} role="alert" className="text-[13px] font-bold text-erro-texto">
               {message}
             </p>
           ) : null}
@@ -107,6 +112,7 @@ export function SubmitForm({ years, defaultYear }: { years: number[]; defaultYea
           {preparing ? "Preparando a foto…" : "Enviar para revisão"}
         </button>
       </form>
+      </main>
       {pending ? (
         <div className="fixed inset-0 z-50 overflow-auto">
           <ProcessingScreen phase="sending" title="Enviando sua lista" subtitle="Guardando o arquivo e iniciando a leitura." />

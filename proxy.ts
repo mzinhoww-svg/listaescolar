@@ -46,9 +46,10 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-// Tudo, exceto `_next/`, `brand/` e `v1/`. Não excluir por extensão: `/admin.json` não pode contornar o gate.
+// Tudo, exceto `_next/`, `brand/`, `v1/` e `ingest/`. Não excluir por extensão: `/admin.json` não pode contornar o gate.
 // `v1/` (API B2B, S24) fica fora de propósito: sem cookie, sem refresh de sessão, sem redirect de login — a
 // autenticação é só pela chave `x-listacerta-key`, verificada no próprio handler de cada rota.
+// `ingest/` (proxy de medição, ADR-007) também: Route Handler que repassa só `content-type` ao PostHog, sem sessão nem cookie do app.
 export const config = {
-  matcher: ["/((?!_next/|brand/|v1/).*)"],
+  matcher: ["/((?!_next/|brand/|v1/|ingest/).*)"],
 };

@@ -30,7 +30,7 @@ export function PublicProfileView({ profile, reviews = [] }: { profile: PublicPr
   const payments = profile.paymentMethods.filter((m) => (PAYMENT_METHODS as readonly string[]).includes(m)).map((m) => PAYMENT_LABEL[m] ?? m);
   const delivery = [profile.offersPickup ? "Retirada na loja" : null, profile.offersDelivery ? "Entrega no bairro" : null].filter(Boolean);
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col pb-28">
+    <main id="conteudo" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col pb-28">
       <header className="bg-tinta rounded-b-[28px] px-5 pt-14 pb-7 text-white">
         <div className="flex items-center gap-3.5">
           <span aria-hidden className="bg-verde-certo text-tinta grid size-14 shrink-0 place-items-center rounded-[18px] text-[18px] font-extrabold">
@@ -128,6 +128,6 @@ export function PublicProfileView({ profile, reviews = [] }: { profile: PublicPr
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

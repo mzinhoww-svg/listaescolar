@@ -18,7 +18,7 @@ export default async function SavedListsPage() {
 
   return (
     <main id="conteudo" className="mx-auto flex w-full max-w-[420px] flex-col gap-6 px-6 pt-14 pb-9">
-      <BackHeader href="/conta" title="Listas salvas" />
+      <BackHeader href="/conta" title="Listas salvas" heading />
       {rows.length === 0 ? (
         <p className="text-texto-2 text-[15px] font-medium">Nenhuma lista salva ainda.</p>
       ) : (
@@ -31,7 +31,7 @@ export default async function SavedListsPage() {
                 </Link>
                 <form action={removeSavedListAction}>
                   <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" className="text-[12px] font-extrabold text-[#8a1c14] underline">
+                  <button type="submit" className="text-[12px] font-extrabold text-erro-texto underline">
                     Remover
                   </button>
                 </form>

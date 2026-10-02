@@ -63,16 +63,16 @@ export function PendingCampaignRow({ campaign }: { campaign: CampaignRow }) {
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="border-texto-3/30 rounded-[12px] border bg-white px-3 py-2 text-[14px]" rows={2} />
         </label>
       ) : null}
-      {error ? <p className="mb-2 text-[13px] font-bold text-[#8a1c14]">{error}</p> : null}
+      {error ? <p className="mb-2 text-[13px] font-bold text-erro-texto">{error}</p> : null}
       <div className="flex gap-2">
-        <button type="button" disabled={pending} onClick={() => decide("approved")} className="bg-verde-certo text-tinta rounded-botao h-10 px-4 text-[13px] font-extrabold disabled:opacity-50">
+        <button type="button" disabled={pending} onClick={() => decide("approved")} className="bg-verde-certo text-tinta rounded-botao h-11 px-4 text-[13px] font-extrabold disabled:opacity-50">
           Aprovar
         </button>
         <button
           type="button"
           disabled={pending || (rejecting && reason.trim() === "")}
           onClick={() => decide("rejected")}
-          className="bg-[#fde2e0] text-[#8a1c14] rounded-botao h-10 px-4 text-[13px] font-extrabold disabled:opacity-50"
+          className="bg-erro-fundo text-erro-texto rounded-botao h-10 px-4 text-[13px] font-extrabold disabled:opacity-50"
         >
           {rejecting ? "Confirmar recusa" : "Recusar"}
         </button>

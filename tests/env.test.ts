@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getServerEnv } from "@/lib/env";
@@ -17,7 +20,7 @@ const SERVER = {
 afterEach(() => vi.unstubAllEnvs());
 
 function stub(values: Record<string, string>) {
-  for (const key of [...Object.keys(PUBLIC), ...Object.keys(SERVER), "SENTRY_DSN"]) {
+  for (const key of [...Object.keys(PUBLIC), ...Object.keys(SERVER), "SENTRY_DSN", "APP_ENV", "B2B_CAMPAIGN_TRACKING_SECRET", "B2B_CAMPAIGN_TRACKING"]) {
     vi.stubEnv(key, "");
   }
   for (const [k, v] of Object.entries(values)) vi.stubEnv(k, v);
@@ -62,6 +65,36 @@ describe("getServerEnv", () => {
     stub(PUBLIC);
     expect(() => getServerEnv()).toThrow(/SUPABASE_SECRET_KEY/);
     expect(() => getServerEnv()).toThrow(/OPENROUTER_KEY/);
+  });
+
+  describe("B2B_CAMPAIGN_TRACKING_SECRET (S28)", () => {
+    const prod = { ...PUBLIC, ...SERVER, APP_ENV: "production", B2B_CAMPAIGN_TRACKING_SECRET: "", B2B_CAMPAIGN_TRACKING: "" };
+    const HEX = "a".repeat(64);
+
+    it("falha em produção sem o segredo e sem desligar o rastreio", () => {
+      stub(prod);
+      expect(() => getServerEnv()).toThrow(/B2B_CAMPAIGN_TRACKING_SECRET/);
+    });
+
+    it("passa em produção com o segredo, ou com o rastreio desligado", () => {
+      stub({ ...prod, B2B_CAMPAIGN_TRACKING_SECRET: HEX });
+      expect(getServerEnv().B2B_CAMPAIGN_TRACKING_SECRET).toBe(HEX);
+      stub({ ...prod, B2B_CAMPAIGN_TRACKING: "0" });
+      expect(getServerEnv().B2B_CAMPAIGN_TRACKING_SECRET).toBeUndefined();
+    });
+
+    it("rejeita segredo curto e continua opcional fora de produção", () => {
+      stub({ ...prod, B2B_CAMPAIGN_TRACKING_SECRET: "curto" });
+      expect(() => getServerEnv()).toThrow(/B2B_CAMPAIGN_TRACKING_SECRET/);
+      stub({ ...PUBLIC, ...SERVER, APP_ENV: "staging", B2B_CAMPAIGN_TRACKING_SECRET: "" });
+      expect(getServerEnv().B2B_CAMPAIGN_TRACKING_SECRET).toBeUndefined();
+    });
+
+    it("não vaza o valor no erro e o .env.example traz a chave", () => {
+      stub({ ...prod, B2B_CAMPAIGN_TRACKING_SECRET: "valor-secreto-curto" });
+      expect(() => getServerEnv()).not.toThrow(/valor-secreto-curto/);
+      expect(readFileSync(join(process.cwd(), ".env.example"), "utf8")).toMatch(/^B2B_CAMPAIGN_TRACKING_SECRET=$/m);
+    });
   });
 
   it("D-009 (S19): CRON_SECRET curto não derruba getServerEnv() — o contrato de 503 é da própria rota de cron", () => {

@@ -11,9 +11,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
   return (
     <>
       <SkipLink />
-      <div className="mx-auto flex w-full max-w-[420px] justify-end px-6 pt-4">
+      <header className="mx-auto flex w-full max-w-[420px] justify-end px-6 pt-4">
         <NotificationBell count={count} />
-      </div>
+      </header>
       {children}
     </>
   );

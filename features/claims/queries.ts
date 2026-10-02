@@ -76,7 +76,7 @@ const schoolRow = z.object({
 
 const BLOCK: Partial<Record<VerificationStatus, string>> = {
   verified: "Esta escola já tem administrador. O pedido de acesso adicional ainda não está disponível.",
-  suspended: "Esta escola não aceita reivindicação no momento.",
+  suspended: "Esta escola não aceita pedidos no momento.",
 };
 
 /**

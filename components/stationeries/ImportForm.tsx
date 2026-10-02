@@ -36,7 +36,7 @@ export function ImportForm({ action }: { action: Action }) {
         onChange={(e) => setSizeError((e.target.files?.[0]?.size ?? 0) > MAX_BYTES)}
       />
       {sizeError ? (
-        <p role="alert" className="text-[14px] font-bold text-red-700">
+        <p role="alert" className="text-[14px] font-bold text-erro-texto">
           A planilha passa de 2 MB. Divida em partes menores.
         </p>
       ) : null}
@@ -45,7 +45,7 @@ export function ImportForm({ action }: { action: Action }) {
       </button>
       <div aria-live="polite">
         {state.status === "error" ? (
-          <p role="alert" className="text-[14px] font-bold text-red-700">
+          <p role="alert" className="text-[14px] font-bold text-erro-texto">
             {state.message} Escolha o arquivo de novo para tentar outra vez.
           </p>
         ) : null}

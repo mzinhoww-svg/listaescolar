@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { callbackQuerySchema } from "@/features/auth/schemas";
+import { captureLogin } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
 
 /** Redirect com Location relativo: Host/x-forwarded-host são forjáveis e não entram na URL. */
@@ -29,17 +30,20 @@ export async function GET(request: NextRequest) {
   if (query.error || query.error_description) return fail("provedor", headers);
   if (!query.code) return fail("codigo", headers);
 
+  let session: { supabase: unknown; user: { id: string; email?: string | null } | null };
   try {
     const supabase = await createClient(headers);
-    const { error } = await supabase.auth.exchangeCodeForSession(query.code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(query.code);
     // D-005/S19: registrado sem e-mail/PII (o redator do Sentry tira qualquer resíduo; nunca a mensagem crua).
     if (error) {
       Sentry.captureException(new Error(`auth_callback_exchange: ${error.status ?? "sem_status"}`));
       return fail("codigo", headers);
     }
+    session = { supabase, user: data?.user ?? null };
   } catch (e) {
     Sentry.captureException(e instanceof Error ? e : new Error("auth_callback: exceção desconhecida"));
     return fail("codigo", headers);
   }
+  if (session.user) await captureLogin("google", session.supabase, session.user);
   return redirectTo(query.next, headers);
 }

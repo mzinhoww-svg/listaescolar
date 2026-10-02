@@ -16,7 +16,7 @@ export const STATUS_HINT: Record<ClaimStatus, string> = {
   awaiting_verification: "Acompanhe o status nesta página. Uma mudança também aparece na central de notificações.",
   token_expired: "O código ou link venceu. Peça um novo para continuar.",
   insufficient_evidence: "A equipe ListaCerta pediu mais evidências. Veja o motivo e reenvie.",
-  rejected: "A reivindicação foi recusada. Veja o motivo abaixo.",
+  rejected: "O pedido foi recusado. Veja o motivo abaixo.",
   approved: "Escola verificada pela equipe ListaCerta.",
 };
 
@@ -28,17 +28,17 @@ export const METHOD_LABEL: Record<ClaimMethod, string> = {
 
 export const INEP_NOTE = "Escola encontrada no cadastro do INEP. O cadastro do INEP não é verificação.";
 export const PRIVACY_TEXT =
-  "Aceito que a ListaCerta guarde meu nome, cargo e e-mail da conta para analisar esta reivindicação.";
+  "Aceito que a ListaCerta guarde meu nome, cargo e e-mail da conta para analisar este pedido.";
 export const EVIDENCE_WARNING = "Não envie documentos com dados de alunos.";
-export const ROLE_BLOCK_MESSAGE = "Só uma conta de responsável ou de escola pode reivindicar uma escola. Entre com essa conta para continuar.";
+export const ROLE_BLOCK_MESSAGE = "Só uma conta de responsável ou de escola pode pedir para administrar uma escola. Entre com essa conta para continuar.";
 export const ADMIN_ONLY_MESSAGE = "Esta ação é só para administradores.";
 
 export const CONFIRM_MESSAGE: Record<ConfirmResult, string> = {
-  confirmed: "Canal confirmado. A equipe ListaCerta segue com a análise; acompanhe o status na página da reivindicação.",
+  confirmed: "Canal confirmado. A equipe ListaCerta segue com a análise; acompanhe o status na página do pedido.",
   already_confirmed: "Este canal já foi confirmado.",
-  expired: "O link ou código venceu. Peça um novo na página da reivindicação.",
+  expired: "O link ou código venceu. Peça um novo na página do pedido.",
   invalid: "Link ou código inválido para esta conta.",
-  locked: "Tentativas esgotadas. Peça um novo código na página da reivindicação.",
+  locked: "Tentativas esgotadas. Peça um novo código na página do pedido.",
 };
 
 export type ClaimErrorCode =
@@ -61,19 +61,19 @@ export type ClaimErrorCode =
   | "database";
 
 const BY_CODE: Record<ClaimErrorCode, string> = {
-  not_found: "Reivindicação não encontrada.",
+  not_found: "Pedido não encontrado.",
   forbidden: "Você não tem permissão para esta ação.",
-  invalid_state: "Esta ação não está disponível no estado atual da reivindicação.",
+  invalid_state: "Esta ação não está disponível no estado atual do pedido.",
   invalid_argument: "Dados inválidos. Revise e tente de novo.",
-  school_closed: "Esta escola não aceita reivindicação agora.",
-  limit: "Você atingiu um limite (reivindicações, evidências ou códigos). Tente mais tarde ou use outro método.",
+  school_closed: "Esta escola não aceita pedidos agora.",
+  limit: "Você atingiu um limite (pedidos, evidências ou códigos). Tente mais tarde ou use outro método.",
   wait: "Aguarde um minuto para pedir outro código.",
   delivery_unavailable: "Envio indisponível no momento. Use o método de documentos.",
   delivery_failed: "Não foi possível enviar agora. Aguarde um minuto e tente de novo.",
   storage: "Não foi possível guardar o arquivo agora. Tente de novo.",
   invalid_file: "Arquivo inválido. Envie um PDF, PNG ou JPEG que corresponda ao tipo do arquivo.",
   file_too_large: "O arquivo passa de 4 MB.",
-  conflict: "Já existe uma reivindicação em aberto ou aprovada para esta escola.",
+  conflict: "Já existe um pedido em aberto ou aprovado para esta escola.",
   account_email: "O e-mail da sua conta está ausente ou inválido. Corrija o e-mail da conta e tente de novo.",
   approval_needs_channel: "Não dá para aprovar: o canal (e-mail ou WhatsApp) ainda não foi confirmado.",
   approval_needs_evidence: "Não dá para aprovar: falta ao menos uma evidência enviada.",

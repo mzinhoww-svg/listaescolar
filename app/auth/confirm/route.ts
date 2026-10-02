@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { confirmQuerySchema } from "@/features/auth/schemas";
+import { captureLogin } from "@/lib/analytics/server";
 import { createClient } from "@/lib/supabase/server";
 
 const ERRO = "/entrar?erro=codigo";
@@ -29,9 +30,10 @@ export async function GET(request: NextRequest) {
   const { token_hash, type, code, next } = query.data;
   if (!(token_hash && type) && !code) return redirectTo(ERRO, headers);
 
+  let session: { supabase: unknown; user: { id: string; email?: string | null } | null };
   try {
     const supabase = await createClient(headers);
-    const { error } =
+    const { data, error } =
       token_hash && type
         ? await supabase.auth.verifyOtp({ token_hash, type })
         : await supabase.auth.exchangeCodeForSession(code ?? "");
@@ -40,9 +42,11 @@ export async function GET(request: NextRequest) {
       Sentry.captureException(new Error(`auth_confirm: ${error.status ?? "sem_status"}`));
       return redirectTo(ERRO, headers);
     }
+    session = { supabase, user: data?.user ?? null };
   } catch (e) {
     Sentry.captureException(e instanceof Error ? e : new Error("auth_confirm: exceção desconhecida"));
     return redirectTo(ERRO, headers);
   }
+  if (session.user) await captureLogin("magic_link", session.supabase, session.user);
   return redirectTo(next, headers);
 }

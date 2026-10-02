@@ -5,6 +5,8 @@ import { robotsHeaders } from "./lib/robots-header";
 import { staticAssetHeaders } from "./lib/security-headers";
 
 const dsn = process.env.SENTRY_DSN;
+// Ambiente que o navegador enxerga (marca `app_env` e `is_internal` nos eventos); APP_ENV não é público.
+const publicAppEnv = process.env.APP_ENV || (process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview" ? process.env.VERCEL_ENV : "local");
 
 const baseConfig: NextConfig = {
   // Limite ÚNICO de corpo das Server Actions (padrão do Next: 1 MB): 4 MB, abaixo do teto de 4,5 MB da Vercel.
@@ -18,7 +20,9 @@ const baseConfig: NextConfig = {
       ...staticAssetHeaders(),
     ];
   },
-  ...(dsn ? { env: { NEXT_PUBLIC_SENTRY_DSN: dsn } } : {}),
+  // Proxy de medição (ADR-007): Route Handler `app/ingest/[...path]/route.ts` (não é rewrite: um rewrite repassaria
+  // cookie, referer e IP do usuário ao PostHog; ver ledger, revisão de segurança PostHog).
+  env: { NEXT_PUBLIC_APP_ENV: publicAppEnv, ...(dsn ? { NEXT_PUBLIC_SENTRY_DSN: dsn } : {}) },
 };
 
 // Sem DSN, Sentry fica totalmente fora do build (sem token, sem rede).

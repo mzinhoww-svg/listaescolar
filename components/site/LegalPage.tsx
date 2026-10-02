@@ -1,13 +1,13 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { LEGAL, PRELIMINARY_BANNER, type LegalSection } from "@/features/site/legal";
 
 import { MailIcon } from "./icons";
 import { Placeholder } from "./Placeholder";
 
-type Props = { title: string; sections: LegalSection[] };
+type Props = { title: string; sections: LegalSection[]; extra?: ReactNode };
 
-export function LegalPage({ title, sections }: Props) {
+export function LegalPage({ title, sections, extra }: Props) {
   return (
     <main id="conteudo" className="mx-auto w-full max-w-[720px] flex-1 px-6 py-12">
       <p role="note" className="bg-aviso-fundo text-aviso-texto rounded-campo mb-6 px-4 py-3 text-sm font-bold">
@@ -37,6 +37,7 @@ export function LegalPage({ title, sections }: Props) {
           </li>
         ))}
       </ol>
+      {extra}
       <aside aria-label="Dúvidas" className="bg-white rounded-card mt-12 flex items-center gap-3 px-5 py-4 text-sm font-extrabold">
         <MailIcon />
         <p>

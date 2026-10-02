@@ -48,7 +48,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       ) : (
         <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
           <section className="flex flex-col gap-3 rounded-[20px] bg-white p-6">
-            <span className="bg-campo text-texto-2 w-fit rounded-botao px-2.5 py-1 text-[11px] font-extrabold">{REPORT_STATUS_LABEL[report.status]}</span>
+            <span className="bg-campo text-texto-2 w-fit rounded-botao px-2.5 py-1 text-[12px] font-extrabold">{REPORT_STATUS_LABEL[report.status]}</span>
             <h2 className="text-[20px] font-extrabold">{REPORT_TARGET_TYPE_LABEL[report.targetType]} · {REPORT_REASON_LABEL[report.reason]}</h2>
             <dl className="grid gap-2 text-[14px] sm:grid-cols-2">
               <div><dt className="text-texto-3 font-semibold">Aberta em</dt><dd className="font-bold">{formatWhen(report.createdAt)}</dd></div>

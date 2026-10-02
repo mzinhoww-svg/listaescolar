@@ -16,7 +16,7 @@ async function main() {
     { messages: [{ role: "user", content: 'Responda somente com o JSON {"ok": true}.' }], responseFormat: "json", maxTokens: 50 },
     {},
   );
-  console.log("texto: ok, modelo:", r.model, "latência(ms):", r.latencyMs, "tokens:", r.usage?.totalTokens ?? "n/d");
+  console.log("texto: ok, modelo:", r.model, "latência(ms):", r.latencyMs, "tokens:", r.usage?.totalTokens ?? "n/d", "custo(US$ micros, informado pelo provedor):", r.usage?.costUsdMicros ?? "n/d");
 
   const file = process.argv[2];
   if (!file) return;

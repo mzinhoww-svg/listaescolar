@@ -24,7 +24,7 @@ export function NetworkChips({ input }: { input: SearchInput }) {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`rounded-botao focus-visible:outline-verde-fundo block px-4 py-2.5 text-[13px] whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                className={`rounded-botao focus-visible:outline-verde-fundo flex min-h-11 items-center px-4 py-2.5 text-[13px] whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   active ? "bg-tinta text-papel font-bold" : "bg-campo text-tinta font-semibold"
                 }`}
               >

@@ -23,5 +23,7 @@ check 404 "/escolas/00000000/reivindicar/confirmar?token=x" "confirmação de es
 check 307 "/papelaria/leads/LC-ZZZZ" "anônimo em lead: redireciona ao login"
 check 307 "/cotacao/LC-ZZZZ" "anônimo em cotação: redireciona ao login"
 check 307 "/admin/reivindicacoes/00000000-0000-0000-0000-000000000000" "anônimo em admin: redireciona"
+check 307 "/papelaria" "anônimo em papelaria: redireciona ao login"
+check 307 "/escola" "anônimo em escola: redireciona ao login"
 check 200 "/" "home"
 exit $((fail > 0))

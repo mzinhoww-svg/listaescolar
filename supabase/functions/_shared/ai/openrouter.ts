@@ -96,7 +96,13 @@ const responseSchema = z.object({
     .array(z.object({ message: z.object({ content: z.union([z.string(), z.array(z.object({ type: z.string(), text: z.string().optional() })), z.null()]).optional() }) }))
     .min(1),
   usage: z
-    .object({ prompt_tokens: z.number().optional(), completion_tokens: z.number().optional(), total_tokens: z.number().optional() })
+    .object({
+      prompt_tokens: z.number().optional(),
+      completion_tokens: z.number().optional(),
+      total_tokens: z.number().optional(),
+      // custo em créditos (US$) da chamada; valor fora do esperado vira "não informado"
+      cost: z.unknown().optional(),
+    })
     .optional(),
 });
 
@@ -122,6 +128,7 @@ export class OpenRouterAdapter implements LlmProvider, OcrProvider {
   async complete(req: LlmRequest, opts: CallOptions): Promise<LlmResponse> {
     const t0 = this.now();
     const body: Record<string, unknown> = { model: this.model, messages: req.messages.map(messageToWire) };
+    body.usage = { include: true }; // o OpenRouter devolve tokens e custo reais da chamada (sem preço no código)
     if (req.responseFormat === "json") body.response_format = { type: "json_object" };
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
@@ -166,10 +173,18 @@ export class OpenRouterAdapter implements LlmProvider, OcrProvider {
       throw new AiError("provider_error", { transient: true, status, detail: "unexpected_response" });
     }
     const u = parsed.data.usage;
+    const cost = typeof u?.cost === "number" && Number.isFinite(u.cost) && u.cost >= 0 ? Math.round(u.cost * 1_000_000) : undefined;
     return {
       text,
       model: this.model,
-      usage: u ? { promptTokens: u.prompt_tokens, completionTokens: u.completion_tokens, totalTokens: u.total_tokens } : undefined,
+      usage: u
+        ? {
+            promptTokens: u.prompt_tokens,
+            completionTokens: u.completion_tokens,
+            totalTokens: u.total_tokens,
+            ...(cost !== undefined ? { costUsdMicros: cost } : {}),
+          }
+        : undefined,
       latencyMs: Math.max(0, this.now() - t0),
     };
   }

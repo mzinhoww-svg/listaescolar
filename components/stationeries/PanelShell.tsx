@@ -27,7 +27,7 @@ export function PanelShell({ badge, nav, email, children }: Props) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-bold">{email ?? "indisponível"}</p>
             <form action={signOutAction}>
-              <button type="submit" className="text-[12px] font-semibold text-white/70 underline">
+              <button type="submit" className="min-h-11 px-2 text-[12px] font-semibold text-white/70 underline">
                 Sair
               </button>
             </form>
@@ -63,9 +63,9 @@ export function PageHeader({ crumb, title, children }: { crumb: string; title: s
 export function Notice({ kind, children }: { kind: "ok" | "error" | "info"; children: ReactNode }) {
   const tone =
     kind === "ok"
-      ? "bg-[#d6f3e5] text-verde-fundo"
+      ? "bg-verde-certo/20 text-verde-fundo"
       : kind === "error"
-        ? "bg-[#fde2e0] text-[#8a1c14]"
+        ? "bg-erro-fundo text-erro-texto"
         : "bg-campo text-texto-2";
   return (
     <p role={kind === "error" ? "alert" : "status"} className={`mb-4 rounded-campo px-4 py-3 text-[14px] font-bold ${tone}`}>

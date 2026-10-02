@@ -9,6 +9,7 @@ import { errorMessageForCode } from "@/features/stationeries/messages";
 import { listAdminRows, type AdminListRow } from "@/features/stationeries/queries";
 
 import { adminTransitionAction } from "./actions";
+import { safeErrorLabel } from "@/lib/log-error";
 
 type SP = { aba?: string; q?: string; ok?: string; erro?: string };
 
@@ -22,7 +23,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   try {
     all = await listAdminRows();
   } catch (error) {
-    console.error("listar papelarias (admin)", error);
+    console.error("listar papelarias (admin)", safeErrorLabel(error));
     failed = true;
   }
   const count = (s: string) => all.filter((r) => r.status === s).length;
@@ -68,7 +69,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
             key={t.key}
             href={`/admin/papelarias?aba=${t.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
             aria-current={t.key === tab ? "page" : undefined}
-            className={`rounded-botao px-5 py-2.5 text-[14px] font-extrabold ${t.key === tab ? "bg-tinta text-papel" : "bg-campo"}`}
+            className={`inline-flex min-h-11 items-center rounded-botao px-5 py-2.5 text-[14px] font-extrabold ${t.key === tab ? "bg-tinta text-papel" : "bg-campo"}`}
           >
             {t.label}
           </Link>

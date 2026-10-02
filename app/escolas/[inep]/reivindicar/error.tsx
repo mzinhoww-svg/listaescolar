@@ -14,7 +14,7 @@ export default function ClaimError({ reset }: { error: Error & { digest?: string
     <Screen>
       <div className="flex flex-1 flex-col gap-3.5" role="alert">
         <div className="flex-1" />
-        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Não conseguimos abrir a reivindicação</h1>
+        <h1 className="text-[28px] leading-[1.1] font-extrabold tracking-[-0.035em]">Não conseguimos abrir o pedido</h1>
         <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">Houve um problema ao consultar os dados. Tente de novo em instantes.</p>
         <div className="flex-1" />
         <button type="button" onClick={retry} className={primaryButton}>Tentar de novo</button>

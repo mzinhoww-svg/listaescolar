@@ -25,6 +25,8 @@ export async function updateAiSettingsAction(formData: FormData): Promise<void> 
     criticalAlerts: formData.getAll("criticalAlerts").filter((v): v is string => typeof v === "string"),
     maxEscalations: formData.get("maxEscalations"),
     pipelineVersion: formData.get("pipelineVersion"),
+    // Ausente (`null`) e vazio ("") são coisas diferentes: só o vazio, digitado de propósito, apaga a taxa.
+    usdBrlRate: formData.get("usdBrlRate"),
   });
   if (!parsed.success) redirect(`${NEXT}?erro=invalido`);
 
@@ -37,6 +39,8 @@ export async function updateAiSettingsAction(formData: FormData): Promise<void> 
       critical_alerts: parsed.data.criticalAlerts,
       max_escalations: parsed.data.maxEscalations,
       pipeline_version: parsed.data.pipelineVersion,
+      // Campo ausente do FormData (formulário antigo, requisição parcial) NÃO apaga a taxa (revisão M8).
+      ...(formData.has("usdBrlRate") ? { usd_brl_rate: parsed.data.usdBrlRate } : {}),
     })
     .eq("scope", "default");
   if (error) {

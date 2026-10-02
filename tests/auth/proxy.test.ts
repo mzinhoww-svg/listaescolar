@@ -4,7 +4,7 @@ import { config } from "@/proxy";
 
 describe("proxy matcher", () => {
   it("exclui v1/ (API B2B, S24) além de _next/ e brand/", () => {
-    expect(config.matcher).toEqual(["/((?!_next/|brand/|v1/).*)"]);
+    expect(config.matcher).toEqual(["/((?!_next/|brand/|v1/|ingest/).*)"]);
   });
 
   it("o padrão do matcher de fato não casa com /v1/schools nem /v1/openapi.json", () => {

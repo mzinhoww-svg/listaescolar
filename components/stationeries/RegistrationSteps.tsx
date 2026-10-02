@@ -86,7 +86,7 @@ export function StepConsent({ errors, values }: { errors: Errors; values: Values
         Uso os dados do responsável só para atender o pedido da lista (LGPD).
       </label>
       {errors.lgpdAccepted ? (
-        <p role="alert" className="text-[13px] font-semibold text-red-700">
+        <p role="alert" className="text-[13px] font-semibold text-erro-texto">
           {errors.lgpdAccepted}
         </p>
       ) : null}

@@ -36,9 +36,9 @@ export default async function Page() {
           <BatchTable batches={data.batches} />
         </>
       ) : (
-        <div role="alert" className="rounded-card flex flex-col items-start gap-3 bg-red-50 px-6 py-6 text-red-900">
+        <div role="alert" className="rounded-card flex flex-col items-start gap-3 bg-erro-fundo px-6 py-6 text-erro-texto">
           <p className="font-extrabold">Não foi possível carregar as importações.</p>
-          <Link href="/admin/importacoes" className="rounded-botao border-[1.5px] border-red-900 px-4 py-1.5 text-sm font-extrabold">
+          <Link href="/admin/importacoes" className="min-h-11 inline-flex items-center justify-center rounded-botao border-[1.5px] border-erro-texto px-4 py-1.5 text-sm font-extrabold">
             Tentar novamente
           </Link>
         </div>

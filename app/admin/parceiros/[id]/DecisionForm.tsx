@@ -205,7 +205,7 @@ export function DecisionForm({ partnerId, status, action, plan = null, coverageU
               <button
                 type="button"
                 onClick={confirmAndSubmit}
-                className="rounded-botao flex h-11 flex-1 items-center justify-center border-[1.5px] border-[#8a1c14] text-[14px] font-extrabold text-[#8a1c14]"
+                className="rounded-botao flex h-11 flex-1 items-center justify-center border-[1.5px] border-erro-texto text-[14px] font-extrabold text-erro-texto"
               >
                 {confirmation.confirm}
               </button>

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { clientIp } from "@/lib/net/client-ip";
+import { clientIp, ipRateKey } from "@/lib/net/client-ip";
 import { checkRateLimit } from "@/lib/rate-limit/memory-bucket";
 
 // Rotas públicas do widget (`app/api/widget/**`, S25): CORS aberto (dado público, sem cookie, sem credencial —
@@ -9,6 +9,9 @@ import { checkRateLimit } from "@/lib/rate-limit/memory-bucket";
 
 const WIDGET_RATE_LIMIT = 30; // por janela
 const WIDGET_RATE_WINDOW_MS = 60_000;
+// Ruling (reverificação S19, N4b): teto por IP independente do `partnerId` — sem ele, quem gira `?partner=` ganha
+// um balde novo a cada valor. 120/min por IP cobre um site de parceiro atrás de NAT com folga.
+const WIDGET_IP_CEILING = 120;
 
 const CORS_HEADERS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, OPTIONS", "cache-control": "no-store", "x-content-type-options": "nosniff" } as const;
 
@@ -21,6 +24,8 @@ export function widgetOptionsResponse(): Response {
 }
 
 export function widgetRateLimited(request: Request, partnerId: string | null): boolean {
-  const ip = clientIp(request) ?? "unknown";
+  const raw = clientIp(request.headers);
+  const ip = raw ? ipRateKey(raw) : "unknown";
+  if (!checkRateLimit(`widget-ip:${ip}`, WIDGET_IP_CEILING, WIDGET_RATE_WINDOW_MS)) return true;
   return !checkRateLimit(`widget:${ip}:${partnerId ?? "-"}`, WIDGET_RATE_LIMIT, WIDGET_RATE_WINDOW_MS);
 }

@@ -73,7 +73,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <div className="grid items-start gap-5 xl:grid-cols-[1fr_380px]">
           <section className="flex flex-col gap-5">
             {ok ? <p role="status" className="bg-verde-certo/20 text-verde-fundo rounded-campo px-4 py-3 text-[14px] font-bold">Decisão registrada.</p> : null}
-            {erro ? <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold">{b2bServiceMessage(erro) ?? "Não foi possível concluir agora."}</p> : null}
+            {erro ? <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">{b2bServiceMessage(erro) ?? "Não foi possível concluir agora."}</p> : null}
             <div className="flex flex-col gap-4 rounded-[24px] bg-white p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <PartnerStatusBadge status={overview.status as B2bPartnerStatus} />

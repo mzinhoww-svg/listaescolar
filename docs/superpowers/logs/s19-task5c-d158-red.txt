@@ -1,0 +1,20 @@
+Refatoração pura (D-158, S19): sem teste vermelho novo (não é comportamento novo, é só mover código).
+Rede de segurança: as suítes existentes de cada domínio continuam verdes ANTES e DEPOIS da divisão (mesma
+asserção, nenhuma edição), prova de que nenhum comportamento mudou. Achado corrigido durante a divisão (não uma
+mudança de comportamento, uma correção de um erro de cópia): em features/b2b/repository-keys.ts,
+getKeyEnvironment usava por engano `failMasked` em vez de `fail` (o original usa `fail` — corrigido antes do
+commit, conferido contra o arquivo original linha a linha).
+
+$ pnpm check:sizes (antes da Task 5, D-158)
+  533 features/payouts/repository.ts
+  496 features/conversion/repository.ts
+  411 features/b2b/repository.ts
+  320 features/campaigns/repository.ts
+  (603 features/billing/repository.ts e 334 features/billing/service.ts e 549 features/b2b/api/handler.ts já
+  resolvidos em commits anteriores desta mesma Task 5)
+
+$ pnpm check:sizes (depois)
+Arquivos acima de 250 linhas (0)
+D-057: nenhum dos 10 arquivos vigiados está acima do limite.
+
+Gate completo (typecheck, lint, pnpm test, pnpm db:reset && pnpm test:db, pnpm build) verde — ver relatório final.

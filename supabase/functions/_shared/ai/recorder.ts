@@ -2,6 +2,19 @@ import { AiError } from "./errors.ts";
 import { type RpcClient, isConfigError, rpcUnavailable } from "./settings.ts";
 import type { DecisionRecord, DecisionRecorder } from "./types.ts";
 
+const nonNegativeInt = (v: number | undefined): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+
+/** Só o que o provedor informou e é inteiro não negativo; o resto fica de fora (o banco grava nulo). */
+function usageFields(u: DecisionRecord["usage"]): Record<string, number> {
+  if (!u) return {};
+  return {
+    ...(nonNegativeInt(u.promptTokens) ? { prompt_tokens: u.promptTokens } : {}),
+    ...(nonNegativeInt(u.completionTokens) ? { completion_tokens: u.completionTokens } : {}),
+    ...(nonNegativeInt(u.totalTokens) ? { total_tokens: u.totalTokens } : {}),
+    ...(nonNegativeInt(u.costUsdMicros) ? { provider_cost_usd_micros: u.costUsdMicros } : {}),
+  };
+}
+
 /** Grava por `ai_record_decision(jsonb)` (whitelist no banco). Só ids, scores, códigos e nomes de modelo. */
 export function createRpcRecorder(rpc: RpcClient): DecisionRecorder {
   return {
@@ -24,6 +37,7 @@ export function createRpcRecorder(rpc: RpcClient): DecisionRecorder {
         started_at: d.startedAt,
         finished_at: d.finishedAt,
         latency_ms: d.latencyMs,
+        ...usageFields(d.usage),
       };
       let error: unknown;
       try {

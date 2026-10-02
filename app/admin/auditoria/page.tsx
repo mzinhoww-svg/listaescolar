@@ -52,7 +52,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
           <p className="text-texto-2 mb-4 text-[14px] font-semibold">
             {rows.length} pedidos analisados · {divergent} com divergência entre o declarado pela papelaria e a regra de 2 de 3 sinais.
           </p>
-          <div className="rounded-card overflow-x-auto bg-white">
+          <div className="rounded-card overflow-x-auto bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
             <table className="w-full min-w-[720px] text-left text-[13px]">
               <thead className="text-texto-3 border-b border-black/10 font-bold">
                 <tr>

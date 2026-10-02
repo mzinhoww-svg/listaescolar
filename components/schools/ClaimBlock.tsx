@@ -19,8 +19,8 @@ function Card({ state, eyebrow, tag, title, text, children }: { state: string; e
   return (
     <section aria-labelledby="reivindicar" className="bg-campo flex flex-col gap-3 rounded-3xl p-5" data-claim-state={state}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-texto-3 text-[11px] font-extrabold tracking-[0.1em] uppercase">{eyebrow}</span>
-        <span className="rounded-botao bg-white px-2.5 py-1 text-[11px] font-extrabold">{tag}</span>
+        <span className="text-texto-3 text-[12px] font-extrabold tracking-[0.1em] uppercase">{eyebrow}</span>
+        <span className="rounded-botao bg-white px-2.5 py-1 text-[12px] font-extrabold">{tag}</span>
       </div>
       <h2 id="reivindicar" className="text-base font-extrabold">{title}</h2>
       <p className="text-texto-2 text-[13px] leading-[1.4] font-medium">{text}</p>
@@ -41,17 +41,17 @@ export function ClaimBlock({ inep, status, claim }: Props) {
       claim.status === "submitted"
         ? `Pedido iniciado em ${formatDate(claim.createdAt)}. Conclua o envio para a equipe analisar.`
         : claim.status === "awaiting_verification"
-          ? `Enviada em ${formatDate(claim.createdAt)}. Acompanhe o status na página da reivindicação.`
+          ? `Enviada em ${formatDate(claim.createdAt)}. Acompanhe o status na página do pedido.`
           : `Enviada em ${formatDate(claim.createdAt)}. Precisa da sua atenção: veja o status.`;
     return (
-      <Card state="3" eyebrow="Página da escola" tag={claim.status === "awaiting_verification" ? "Pendente" : "Ação necessária"} title={claim.status === "submitted" ? "Pedido em preparo" : "Reivindicação em análise"} text={text}>
+      <Card state="3" eyebrow="Página da escola" tag={claim.status === "awaiting_verification" ? "Pendente" : "Ação necessária"} title={claim.status === "submitted" ? "Pedido em preparo" : "Pedido em análise"} text={text}>
         <Link href={href} className={soft}>Ver status</Link>
       </Card>
     );
   }
   if (claim?.status === "approved") {
     return (
-      <Card state="approved" eyebrow="Sua escola" tag="Com admin" title="Você administra esta escola" text="Sua reivindicação foi aprovada pela equipe ListaCerta.">
+      <Card state="approved" eyebrow="Sua escola" tag="Com admin" title="Você administra esta escola" text="Seu pedido foi aprovado pela equipe ListaCerta.">
         <Link href="/escola" className={soft}>Ir para Minhas escolas</Link>
       </Card>
     );
@@ -63,8 +63,8 @@ export function ClaimBlock({ inep, status, claim }: Props) {
   }
   if (claim?.status === "rejected") {
     return (
-      <Card state="4" eyebrow="Página da escola" tag="Recusada" title="Reivindicação recusada" text={`Motivo: ${claim.decisionReason ?? "indisponível"}. Você pode enviar uma nova com mais evidências.`}>
-        <Link href={`${href}?nova=1`} className={outline}>Reivindicar de novo</Link>
+      <Card state="4" eyebrow="Página da escola" tag="Recusada" title="Pedido recusado" text={`Motivo: ${claim.decisionReason ?? "indisponível"}. Você pode enviar uma nova com mais evidências.`}>
+        <Link href={`${href}?nova=1`} className={outline}>Pedir de novo</Link>
       </Card>
     );
   }
@@ -74,9 +74,9 @@ export function ClaimBlock({ inep, status, claim }: Props) {
       eyebrow="Página da escola"
       tag="Sem admin"
       title="Você trabalha nesta escola?"
-      text={status === "claimed" ? "Este perfil já tem uma reivindicação em andamento. Se você também trabalha na escola, envie a sua." : "Ninguém administra esta página ainda."}
+      text={status === "claimed" ? "Este perfil já tem um pedido em andamento. Se você também trabalha na escola, envie a sua." : "Ninguém administra esta página ainda."}
     >
-      <Link href={href} className={solid}>Reivindicar escola</Link>
+      <Link href={href} className={solid}>Pedir para administrar</Link>
     </Card>
   );
 }

@@ -118,7 +118,7 @@ export function NovaCampanhaForm({ partnerId }: { partnerId: string }) {
         <input type="checkbox" checked={sendNow} onChange={(e) => setSendNow(e.target.checked)} />
         Enviar para aprovação do admin agora
       </label>
-      {error ? <p className="text-[13px] font-bold text-[#8a1c14]">{error}</p> : null}
+      {error ? <p className="text-[13px] font-bold text-erro-texto">{error}</p> : null}
       <button type="submit" disabled={pending} className="bg-tinta text-papel rounded-botao h-12 text-[15px] font-extrabold disabled:opacity-50">
         {pending ? "Salvando…" : sendNow ? "Criar e enviar para aprovação" : "Salvar rascunho"}
       </button>

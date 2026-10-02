@@ -1,0 +1,81 @@
+import { NextRequest } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const getUser = vi.fn();
+let mockRole: string | null = null;
+
+vi.mock("@supabase/ssr", () => ({
+  createServerClient: () => ({
+    auth: { getUser: async () => getUser() },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mockRole ? { role: mockRole } : null }) }) }) }),
+  }),
+}));
+
+import { proxy } from "@/proxy";
+
+const req = (p: string) => new NextRequest(`http://127.0.0.1:3000${p}`);
+
+describe("proxy: cabeçalhos de segurança e CSP (S19)", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_x");
+    mockRole = null;
+    getUser.mockReset();
+    getUser.mockResolvedValue({ data: { user: null } });
+  });
+
+  it("aplica CSP com nonce diferente a cada requisição, sem 'unsafe-inline' em script-src", async () => {
+    const res1 = await proxy(req("/"));
+    const res2 = await proxy(req("/"));
+    const csp1 = res1.headers.get("Content-Security-Policy");
+    const csp2 = res2.headers.get("Content-Security-Policy");
+    expect(csp1).toBeTruthy();
+    expect(csp1).not.toBe(csp2);
+    const scriptSrc = (csp1 as string).split(";").find((d) => d.trim().startsWith("script-src"));
+    expect(scriptSrc).not.toContain("unsafe-inline");
+  });
+
+  it("aplica os cabeçalhos base (HSTS, nosniff, Referrer-Policy, COOP)", async () => {
+    const res = await proxy(req("/entrar"));
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Strict-Transport-Security")).toMatch(/max-age=/);
+    expect(res.headers.get("Cross-Origin-Opener-Policy")).toBe("same-origin");
+  });
+
+  it("encaminha o CSP com o nonce no cabeçalho da REQUISIÇÃO (é de onde o Next 16 lê o nonce; revisão B1)", async () => {
+    const res = await proxy(req("/"));
+    const csp = res.headers.get("Content-Security-Policy") as string;
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeTruthy();
+    expect(res.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    expect(res.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
+    expect(res.headers.get("x-middleware-override-headers")).toContain("content-security-policy");
+  });
+
+  it("rotas sem CSP mantêm os cabeçalhos base (revisão M1)", async () => {
+    const res = await proxy(req("/api/widget/config"));
+    expect(res.headers.get("Content-Security-Policy")).toBeNull();
+    expect(res.headers.get("x-middleware-request-content-security-policy")).toBeNull();
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Strict-Transport-Security")).toMatch(/max-age=/);
+  });
+
+  it("não aplica CSP em /api/widget/** nem em /widget.js (S25, sem iframe)", async () => {
+    const widgetApi = await proxy(req("/api/widget/config"));
+    const widgetJs = await proxy(req("/widget.js"));
+    expect(widgetApi.headers.get("Content-Security-Policy")).toBeNull();
+    expect(widgetJs.headers.get("Content-Security-Policy")).toBeNull();
+  });
+
+  it("N1: o rewrite 403 (papel sem acesso a /admin) também leva o CSP/nonce na REQUISIÇÃO", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockRole = "parent";
+    const res = await proxy(req("/admin"));
+    expect(res.status).toBe(403);
+    const csp = res.headers.get("Content-Security-Policy") as string;
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeTruthy();
+    expect(res.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    expect(res.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
+  });
+});

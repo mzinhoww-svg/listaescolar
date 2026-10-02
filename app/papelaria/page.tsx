@@ -1,15 +1,19 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/Button";
+import { ActivationChecklist } from "@/components/stationeries/ActivationChecklist";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { StatusPanel } from "@/components/stationeries/StatusPanel";
+import { listStationeryLeads } from "@/features/leads/queries";
+import { computeActivation } from "@/features/stationeries/activation";
 import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
-import { listStatusEvents } from "@/features/stationeries/queries";
+import { countCatalogItems, listOwnAreas, listStatusEvents } from "@/features/stationeries/queries";
 import { getOwnerContext } from "@/features/stationeries/session";
 
 import { ownerStatusAction } from "./actions";
 
-const btn = "bg-tinta text-papel h-12 rounded-botao px-6 text-[15px] font-extrabold";
-const btnOutline = "border-tinta h-12 rounded-botao border-[1.5px] px-6 text-[15px] font-extrabold";
+const btn = buttonClass("primary");
+const btnOutline = buttonClass("outline");
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const { ok, erro } = await searchParams;
@@ -24,6 +28,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   }
   const { stationery } = ctx;
   const events = await listStatusEvents(stationery.id);
+  const showActivation = stationery.status === "approved" || stationery.status === "active" || stationery.status === "paused";
+  const activation = showActivation
+    ? computeActivation({
+        hasProfile: stationery.status === "active" || stationery.status === "paused",
+        areasCount: (await listOwnAreas(stationery.id)).length,
+        catalogCount: await countCatalogItems(stationery.id),
+        leadsReceived: (await listStationeryLeads(ctx.actor, stationery.id)).rows.length,
+      })
+    : null;
   const move = (to: "active" | "paused", label: string, outline = false) => (
     <form action={ownerStatusAction}>
       <input type="hidden" name="to" value={to} />
@@ -45,11 +58,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
         {stationery.status === "approved" ? move("active", "Publicar papelaria") : null}
         {stationery.status === "active" ? move("paused", "Pausar", true) : null}
         {stationery.status === "paused" ? move("active", "Reativar") : null}
-        <Link href="/papelaria/catalogo" className={`${btnOutline} flex items-center`}>
+        <Link href="/papelaria/catalogo" className={btnOutline}>
           Catálogo
         </Link>
         {stationery.status === "active" ? (
-          <Link href={`/papelarias/${stationery.slug}`} className={`${btnOutline} flex items-center`}>
+          <Link href={`/papelarias/${stationery.slug}`} className={btnOutline}>
             Ver perfil público
           </Link>
         ) : null}
@@ -57,6 +70,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
       {stationery.status === "approved" ? (
         <Notice kind="info">Aprovada: publique para aparecer aos pais. Preço e estoque só aparecem se você informar no catálogo.</Notice>
       ) : null}
+      {activation ? <ActivationChecklist activation={activation} /> : null}
       <StatusPanel stationery={stationery} events={events} />
     </>
   );

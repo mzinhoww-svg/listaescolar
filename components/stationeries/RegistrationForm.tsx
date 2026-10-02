@@ -68,7 +68,7 @@ export function RegistrationForm({ action, municipalities, freeLeads, hasPass }:
         <Stepper current={cur} />
         <form ref={formRef} action={formAction} noValidate className="flex flex-col gap-5 rounded-card bg-white p-6">
           {state.status === "error" ? (
-            <p role="alert" className="rounded-campo bg-[#fde2e0] px-4 py-3 text-[14px] font-bold text-[#8a1c14]">
+            <p role="alert" className="rounded-campo bg-erro-fundo px-4 py-3 text-[14px] font-bold text-erro-texto">
               {state.message}
             </p>
           ) : null}

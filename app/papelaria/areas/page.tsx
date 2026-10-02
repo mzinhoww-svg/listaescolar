@@ -1,3 +1,4 @@
+import { TrackView } from "@/components/analytics/TrackView";
 import { Field } from "@/components/stationeries/fields";
 import { Notice, PageHeader } from "@/components/stationeries/PanelShell";
 import { errorMessageForCode, STATUS_LABEL } from "@/features/stationeries/messages";
@@ -23,6 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   return (
     <>
       <PageHeader crumb="Papelaria / Bairros" title="Bairros atendidos" />
+      <TrackView name="stationery_onboarding_step" props={{ step: "areas", status: "viewed" }} />
       {ok ? <Notice kind="ok">Bairros salvos.</Notice> : null}
       {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       {!writable ? (

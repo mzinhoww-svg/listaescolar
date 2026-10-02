@@ -50,3 +50,72 @@ body {
   color: var(--tinta);
   font-family: var(--font-sans);
 }
+
+/* S28 · D-04: campo de texto em fundo Campo ganha limite visível (borda 1,5 px em texto-3, 5,3:1 contra o Papel; WCAG 1.4.11).
+   Em @layer base, então utilitários (ex.: border-erro-texto em campo inválido) continuam vencendo. */
+@layer base {
+  /* S28 Task 20 · alvo de toque mínimo de 44 px (DESIGN.md §3, WCAG 2.5.8) em todo botão, resumo e seleção. */
+  button:not(.sr-only),
+  summary,
+  select {
+    min-height: 2.75rem;
+  }
+  button:not(.sr-only) {
+    min-width: 2.75rem;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="color"]) {
+    min-height: 2.75rem;
+  }
+  /* Caixa e rádio pequenos ganham rótulo clicável de 44 px de altura (DESIGN.md §3). */
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
+    min-height: 2.75rem;
+    align-items: center;
+  }
+  /* Campo dentro de grade ou flex não impõe a largura padrão (cerca de 150 px) como mínimo da coluna. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* Texto `sr-only` (position: absolute) numa célula de tabela larga não é cortado pelo contêiner de rolagem se o
+     contêiner não for posicionado, e alarga a página inteira no celular. */
+  .overflow-x-auto {
+    position: relative;
+  }
+  /* `fieldset` tem largura mínima do conteúdo por padrão e estoura a coluna no celular. */
+  fieldset {
+    min-width: 0;
+  }
+  input.bg-campo:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select.bg-campo,
+  textarea.bg-campo {
+    border: 1.5px solid var(--texto-3);
+  }
+}
+
+/* S28 · movimento leve (DESIGN.md §7): só opacity e transform, sempre com alternativa para movimento reduzido. */
+@keyframes reveal-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tick-loop {
+  0%, 8% { opacity: 0.45; }
+  14%, 70% { opacity: 1; }
+  86%, 100% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 30%;
+    }
+  }
+  /* Só o ícone pulsa: texto com opacidade < 1 durante a animação reprova o contraste (axe/Lighthouse). */
+  .tick-loop > :first-child {
+    animation: tick-loop 9s ease-out infinite;
+    animation-delay: calc(var(--i, 0) * 0.9s);
+  }
+}

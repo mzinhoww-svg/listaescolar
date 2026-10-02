@@ -1,5 +1,6 @@
 // Publicação humana (S10): SÓ pela porta ListPublisher da S09, com lease, teto de 45 s + AbortSignal, resultado validado
 // e chave de idempotência = id da versão aprovada (distinta da chave `submissionId` da publicação automática).
+import { safeEmit } from "../../supabase/functions/_shared/analytics/capture";
 import { normalizeName } from "../../supabase/functions/_shared/ai/extraction-normalize";
 import type { PublicationDeps } from "../../supabase/functions/_shared/publication/decide";
 import {
@@ -16,7 +17,7 @@ import { PUBLISH_FAIL_INVALID_ITEMS, PUBLISH_FAIL_INVALID_RESULT, PUBLISH_FAIL_R
 import { publicationBlockers } from "./gate";
 import type { PublishOutcome, ReviewStore, ReviewVersion } from "./types";
 
-export type ReviewPublicationDeps = Pick<PublicationDeps, "publisher" | "context" | "clock">;
+export type ReviewPublicationDeps = Pick<PublicationDeps, "publisher" | "context" | "clock" | "emit">;
 export type OnAlert = (a: { code: string; submissionId: string }) => void;
 
 export const HUMAN_PUBLISH_LEASE_SECONDS = 120;
@@ -149,6 +150,12 @@ export async function publishApproved(o: {
     safeAlert(o.onAlert, done === "orphaned" ? "published_after_failure" : "published_not_recorded", id);
     return done === "orphaned" ? { status: "orphaned" } : { status: "not_reviewable" };
   }
+  safeEmit(publication.emit, "list_published", {
+    grade_slug: pctx.gradeSlug,
+    school_year: ctx.version.schoolYear,
+    origin: "human",
+    is_first_version: result.previousVersionId === null,
+  });
   return { status: "published", listId: result.listId, previousVersionId: result.previousVersionId, newVersionId: result.newVersionId };
 }
 

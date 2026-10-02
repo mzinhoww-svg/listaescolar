@@ -3,7 +3,7 @@ const STYLE = {
   pending: "bg-campo text-texto-2",
   processing: "bg-campo text-texto-2",
   completed: "bg-verde-certo/20 text-verde-fundo",
-  failed: "bg-red-100 text-red-800",
+  failed: "bg-erro-fundo text-erro-texto",
 } as const;
 
 export function StatusChip({ status }: { status: keyof typeof LABEL }) {

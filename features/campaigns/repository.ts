@@ -3,26 +3,23 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { isSessionActor, type SessionActor } from "@/features/auth/actor";
+import type { SessionActor } from "@/features/auth/actor";
 
-import { campaignDbErrorCode, CampaignServiceError, type CampaignServiceErrorCode } from "./errors";
+import { fail, numericAsNumber, requireActor } from "./repository-shared";
 
-// Repositório server-only das campanhas B2B (S26). Recebe o cliente de SERVIÇO e um SessionActor; posse e papel
-// são conferidos aqui E de novo, dentro da mesma chamada, pelas funções SQL (0503) — defesa em profundidade.
-// Mesmo padrão de features/b2b/repository.ts.
-
-function requireActor(actor: SessionActor): void {
-  if (!isSessionActor(actor)) throw new CampaignServiceError("ator não vem da sessão", "forbidden");
-}
-
-function fail(what: string, error: { message: string; code?: string; hint?: string | null }, code?: CampaignServiceErrorCode): never {
-  throw new CampaignServiceError(`${what}: ${error.message}`, code ?? campaignDbErrorCode(error), error.code);
-}
-
-/** Colunas `numeric` (0503: `accrued_total_cents`, livro-razão/extrato em milésimos de centavo para o CPM exato)
- * chegam do PostgREST como string, nunca como float, para não perder precisão — converte para number aqui, na
- * borda, depois de já ter passado pelo Postgres com precisão total. */
-const numericAsNumber = z.union([z.number(), z.string()]).transform((v) => Number(v));
+/**
+ * D-158 (S19): este arquivo tinha 320 linhas. Dividido em arquivos-irmãos por responsabilidade, mesmo padrão do
+ * D-057 (S18): `repository-shared.ts` (guarda/erro/conversão numérica comuns), `repository-insights.ts`
+ * (insights com k-anonimato), `repository-statements.ts` (extrato B2B). Este arquivo continua sendo o ÚNICO
+ * ponto de import (`@/features/campaigns/repository`) — reexporta os dois irmãos e mantém CRUD de campanha,
+ * eventos, desempenho e servir campanha (o núcleo do domínio).
+ *
+ * Repositório server-only das campanhas B2B (S26). Recebe o cliente de SERVIÇO e um SessionActor; posse e papel
+ * são conferidos aqui E de novo, dentro da mesma chamada, pelas funções SQL (0503) — defesa em profundidade.
+ * Mesmo padrão de features/b2b/repository.ts.
+ */
+export { getMinK, insightsRaw, setMinK, type RawInsightCell } from "./repository-insights";
+export { generateStatement, listStatementsForPartner, type Statement, type StatementLineItem } from "./repository-statements";
 
 export type CampaignRow = {
   id: string;
@@ -154,115 +151,6 @@ export async function getCampaign(client: SupabaseClient, campaignId: string): P
   const { data, error } = await client.from("b2b_campaigns").select("*").eq("id", campaignId).maybeSingle();
   if (error) fail("buscar campanha", error);
   return data ? campaignRowSchema.parse(data) : null;
-}
-
-export type RawInsightCell = { cityIbge: string; cityName: string; distinctSchools: number };
-
-const rawInsightSchema = z.object({ city_ibge: z.string(), city_name: z.string(), distinct_schools: z.number() });
-
-/** Contagem CRUA por ESCOLA distinta (sem k-anonimato) — service_role only. Chamado só por insights-service, que
- * aplica a supressão. */
-export async function insightsRaw(client: SupabaseClient, category: string, gradeStage: string, isDemo: boolean): Promise<RawInsightCell[]> {
-  const { data, error } = await client.rpc("b2b_insights_raw", { p_category: category, p_grade_stage: gradeStage, p_is_demo: isDemo });
-  if (error) fail("consultar insights", error);
-  return z
-    .array(rawInsightSchema)
-    .parse(data ?? [])
-    .map((r) => ({ cityIbge: r.city_ibge, cityName: r.city_name, distinctSchools: r.distinct_schools }));
-}
-
-export async function getMinK(client: SupabaseClient): Promise<number> {
-  const { data, error } = await client.from("b2b_insights_settings").select("min_k").limit(1).maybeSingle();
-  if (error) fail("consultar min_k", error);
-  return z.object({ min_k: z.number() }).parse(data).min_k;
-}
-
-export async function setMinK(client: SupabaseClient, actor: SessionActor, minK: number): Promise<number> {
-  requireActor(actor);
-  const { data, error } = await client.rpc("b2b_insights_settings_set", { p_actor_id: actor.userId, p_min_k: minK });
-  if (error) fail("configurar min_k", error);
-  return z.number().parse(data);
-}
-
-export type StatementLineItem = {
-  id: string;
-  source: "api_usage" | "campaign_cpm" | "campaign_cpc";
-  campaignId: string | null;
-  label: string;
-  quantity: number;
-  unit: string;
-  unitPriceCents: number | null;
-  amountCents: number | null;
-  pricingStatus: "priced" | "unavailable";
-};
-
-export type Statement = {
-  id: string;
-  partnerId: string;
-  periodStart: string;
-  periodEnd: string;
-  paymentInstruction: string | null;
-  createdAt: string;
-  lineItems: readonly StatementLineItem[];
-};
-
-const lineItemSchema = z.object({
-  id: z.uuid(),
-  source: z.enum(["api_usage", "campaign_cpm", "campaign_cpc"]),
-  campaign_id: z.uuid().nullable(),
-  label: z.string(),
-  quantity: numericAsNumber,
-  unit: z.string(),
-  unit_price_cents: z.number().nullable(),
-  amount_cents: numericAsNumber.nullable(),
-  pricing_status: z.enum(["priced", "unavailable"]),
-});
-
-export async function generateStatement(
-  client: SupabaseClient,
-  actor: SessionActor,
-  partnerId: string,
-  periodStart: string,
-  periodEnd: string,
-  paymentInstruction?: string,
-): Promise<{ statementId: string }> {
-  requireActor(actor);
-  const { data, error } = await client.rpc("b2b_statement_generate", {
-    p_actor_id: actor.userId,
-    p_partner_id: partnerId,
-    p_period_start: periodStart,
-    p_period_end: periodEnd,
-    p_payment_instruction: paymentInstruction ?? null,
-  });
-  if (error) fail("gerar extrato", error);
-  return { statementId: z.uuid().parse(data) };
-}
-
-export async function listStatementsForPartner(client: SupabaseClient, partnerId: string): Promise<Statement[]> {
-  const { data, error } = await client.from("b2b_statements").select("*, b2b_statement_line_items(*)").eq("partner_id", partnerId).order("period_start", { ascending: false });
-  if (error) fail("listar extratos", error);
-  return (data ?? []).map((row: Record<string, unknown>) => {
-    const items = z.array(lineItemSchema).parse(row.b2b_statement_line_items ?? []);
-    return {
-      id: z.uuid().parse(row.id),
-      partnerId: z.uuid().parse(row.partner_id),
-      periodStart: z.string().parse(row.period_start),
-      periodEnd: z.string().parse(row.period_end),
-      paymentInstruction: z.string().nullable().parse(row.payment_instruction),
-      createdAt: z.string().parse(row.created_at),
-      lineItems: items.map((i) => ({
-        id: i.id,
-        source: i.source,
-        campaignId: i.campaign_id,
-        label: i.label,
-        quantity: i.quantity,
-        unit: i.unit,
-        unitPriceCents: i.unit_price_cents,
-        amountCents: i.amount_cents,
-        pricingStatus: i.pricing_status,
-      })),
-    };
-  });
 }
 
 export async function recordCampaignEvent(client: SupabaseClient, campaignId: string, listVersionId: string, eventType: "impression" | "click", dedupeKey: string): Promise<boolean> {

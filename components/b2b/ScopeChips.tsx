@@ -13,7 +13,7 @@ export function ScopeChips({ scopes }: { scopes: readonly string[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {scopes.map((s) => (
-        <span key={s} className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[11px] font-extrabold">
+        <span key={s} className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[12px] font-extrabold">
           {SCOPE_LABEL[s as B2bScope] ?? s}
         </span>
       ))}

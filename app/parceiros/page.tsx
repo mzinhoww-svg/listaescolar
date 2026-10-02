@@ -132,7 +132,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
             <p className="text-texto-2 text-[16px] font-medium">Conte o tipo de parceria e a região de interesse.</p>
           </div>
           {erro ? (
-            <p role="alert" className="bg-[#fde2e0] text-[#8a1c14] rounded-campo px-4 py-3 text-[14px] font-bold md:col-span-2 md:order-3">
+            <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold md:col-span-2 md:order-3">
               {b2bServiceMessage(erro) ?? "Não foi possível concluir agora."}
             </p>
           ) : null}

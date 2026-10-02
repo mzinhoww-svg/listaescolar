@@ -1,5 +1,6 @@
 import "server-only";
 
+import { emitServer } from "@/lib/analytics/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { createPublicationDeps } from "../../supabase/functions/_shared/publication/composition";
@@ -20,6 +21,7 @@ export function buildPublicationDeps(): PublicationDeps {
     rpc: createAdminClient() as unknown as Raw,
     clock: systemClock,
     onAlert: (a) => console.error(JSON.stringify({ level: "error", fn: "publication", ...a })),
+    emit: emitServer,
   });
 }
 

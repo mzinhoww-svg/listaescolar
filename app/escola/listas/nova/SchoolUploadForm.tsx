@@ -100,7 +100,7 @@ export function SchoolUploadForm({ schools, initialSchoolId, years, defaultYear 
           <ConsentField invalid={message !== null && /consentimento/i.test(message)} />
           <div aria-live="polite">
             {message ? (
-              <p role="alert" className="text-[13px] font-bold text-red-700">
+              <p role="alert" className="text-[13px] font-bold text-erro-texto">
                 {message}
               </p>
             ) : null}

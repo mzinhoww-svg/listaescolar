@@ -35,14 +35,14 @@ export default async function ConfirmPage({ params, searchParams }: Props) {
       {blocked ? (
         <p role="alert" className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-3 text-[14px] font-bold">{ROLE_BLOCK_MESSAGE}</p>
       ) : !token.success ? (
-        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Link inválido. Peça um novo na página da reivindicação.</p>
+        <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Link inválido. Peça um novo na página do pedido.</p>
       ) : (
         <>
           <p className="text-texto-2 text-[15px] leading-[1.4] font-medium">Confirme que você recebeu este link no e-mail da escola registrado no INEP. Use a mesma conta que fez o pedido.</p>
           <ConfirmEmailPanel inep={inep} token={token.data} confirm={confirmTokenAction} />
         </>
       )}
-      <Link href={`/escolas/${inep}/reivindicar`} className="text-verde-fundo text-[14px] font-extrabold">Ver status da reivindicação</Link>
+      <Link href={`/escolas/${inep}/reivindicar`} className="text-verde-fundo text-[14px] font-extrabold">Ver status do pedido</Link>
     </ClaimLayout>
   );
 }

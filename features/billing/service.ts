@@ -3,33 +3,25 @@ import "server-only";
 import type { SessionActor } from "@/features/stationeries/actor";
 
 import { BillingError } from "./errors";
-import { RECONCILE_BATCH_SIZE, RECONCILE_TIME_BUDGET_MS } from "./limits";
-import type {
-  ActivePlan,
-  BillingStore,
-  InvoiceView,
-  LedgerEntryView,
-  PaymentProvider,
-  PlanDraft,
-  SeasonPassView,
-  WalletSummary,
-} from "./ports";
+import type { ActivePlan, InvoiceView, LedgerEntryView, PlanDraft, SeasonPassView, WalletSummary } from "./ports";
 import { buyPackageInputSchema, buyPassInputSchema, payInvoiceInputSchema, planDraftSchema, simulateDemoPaymentInputSchema } from "./schemas";
 import { maxInstallmentsAvailable, seasonWindow } from "./season";
+import { attachPixChargeIfNeeded, reconcileInvoiceByChargeId, reconcileOpenInvoices, resolveProviderOrThrow } from "./service-pix";
+import type { BillingServiceDeps, PurchaseResult } from "./service-types";
 import { statementLines, weeklyAverage, type StatementLine } from "./statement";
 import { BILLING_TERMS_TEXT_VERSION } from "./terms";
 import { tierFor, validateTiers } from "./tiers";
 
-export type BillingServiceDeps = {
-  store: BillingStore;
-  /** `resolvePaymentProvider` já parcialmente aplicado ao ambiente do processo (fábrica em `payments/factory.ts`). */
-  providerFor: (wallet: { isDemo: boolean }) => PaymentProvider | null;
-  now: () => Date;
-};
+export type { BillingServiceDeps, PurchaseResult } from "./service-types";
 
-export type PurchaseResult = { invoiceId: string; pixCopyPaste: string | null; chargeExpiresAt: Date | null; provider: PaymentProvider["id"] };
-
-/** Casos de uso da cobrança da papelaria. Autorização final é do banco; aqui vão as regras de produto e o PSP. */
+/**
+ * D-158 (S19): este arquivo tinha 334 linhas. A cobrança Pix (gerar/reaproveitar cobrança) e a reconciliação
+ * foram extraídas para `service-pix.ts` (funções que só dependem de `BillingServiceDeps`, ver nota lá); os
+ * métodos públicos abaixo continuam com a MESMA assinatura, agora como delegadores de uma linha — nenhum
+ * comportamento muda, nenhum chamador externo é afetado.
+ *
+ * Casos de uso da cobrança da papelaria. Autorização final é do banco; aqui vão as regras de produto e o PSP.
+ */
 export class BillingService {
   constructor(private readonly deps: BillingServiceDeps) {}
 
@@ -91,67 +83,6 @@ export class BillingService {
     return this.deps.providerFor({ isDemo }) !== null;
   }
 
-  private async resolveProviderOrThrow(stationeryId: string): Promise<{ provider: PaymentProvider; cnpj: string; tradeName: string }> {
-    const info = await this.deps.store.getStationeryBillingInfo(stationeryId);
-    if (!info) throw new BillingError("papelaria não encontrada", "not_found");
-    const provider = this.deps.providerFor({ isDemo: info.isDemo });
-    if (!provider) throw new BillingError("pagamento indisponível no momento", "payments_unavailable");
-    return { provider, cnpj: info.cnpj, tradeName: info.tradeName };
-  }
-
-  /**
-   * Gera (ou reaproveita) a cobrança Pix de uma fatura. D-100 (S23, revisão de segurança da S21): quando já existe
-   * uma cobrança atual (`invoice.providerChargeId`), SEMPRE reconsulta o PSP antes de decidir — nunca gera uma
-   * SEGUNDA cobrança por cima de uma ainda válida (duplo clique em "comprar pacote"/"comprar passe" reaproveitava a
-   * FATURA pela idempotência, mas chamava esta função de novo, trocando uma cobrança Pix que o pagador podia já ter
-   * em mãos por uma nova — os dois BR Codes ficavam pagáveis, risco de pagamento em dobro). Mesma lógica que
-   * `payInvoice` já usava (extraída para cá, único lugar): `paid` com valor batendo confirma direto; `pending` com
-   * `pixCopyPaste` ainda salvo devolve a cobrança atual tal como o PSP diz que vale; `unknown` nunca regenera às
-   * cegas (falha visível); só sem cobrança nenhuma ou `expired` (já reconsultada) segue para gerar uma nova —
-   * compare-and-swap (`attachCharge`) garante que o retorno é sempre a cobrança REALMENTE vinculada, mesmo com
-   * corrida (revisão de segurança da S21).
-   */
-  private async attachPixChargeIfNeeded(
-    provider: PaymentProvider,
-    invoice: { id: string; amountCents: number; providerChargeId: string | null; pixCopyPaste: string | null; chargeExpiresAt: Date | null },
-    description: string,
-    payer: { cnpj: string; name: string },
-  ): Promise<{ pixCopyPaste: string | null; chargeExpiresAt: Date | null }> {
-    if (provider.id !== "pix") return { pixCopyPaste: null, chargeExpiresAt: null };
-    if (invoice.providerChargeId) {
-      const status = await provider.getCharge(invoice.providerChargeId);
-      if (status.status === "paid" && status.paidAmountCents !== null) {
-        if (status.paidAmountCents === invoice.amountCents) {
-          await this.deps.store.confirmInvoicePayment({
-            invoiceId: invoice.id,
-            provider: provider.id,
-            providerRef: invoice.providerChargeId,
-            amountCents: status.paidAmountCents,
-            paidAt: status.paidAt ?? this.deps.now(),
-          });
-        }
-        return { pixCopyPaste: null, chargeExpiresAt: null };
-      }
-      if (status.status === "pending" && invoice.pixCopyPaste) {
-        return { pixCopyPaste: invoice.pixCopyPaste, chargeExpiresAt: invoice.chargeExpiresAt };
-      }
-      if (status.status === "unknown") {
-        throw new BillingError("não foi possível confirmar o status da cobrança no PSP", "payments_unavailable");
-      }
-      // 'expired' (já reconsultada, nada de dinheiro perdido) ou 'pending' sem copyPaste salvo: segue e gera nova.
-    }
-    const charge = await provider.createCharge({ invoiceId: invoice.id, amountCents: invoice.amountCents, description, payer });
-    const attached = await this.deps.store.attachCharge({
-      invoiceId: invoice.id,
-      provider: provider.id,
-      expectedCurrentChargeId: invoice.providerChargeId,
-      providerChargeId: charge.chargeId,
-      pixCopyPaste: charge.copyPaste,
-      chargeExpiresAt: charge.expiresAt,
-    });
-    return { pixCopyPaste: attached.pixCopyPaste, chargeExpiresAt: attached.chargeExpiresAt };
-  }
-
   /** Compra de pacote de crédito. Sem aceite -> `consent_required` sem chamar o repositório (nada é gravado). */
   async buyPackage(actor: SessionActor, raw: unknown): Promise<PurchaseResult> {
     const parsed = buyPackageInputSchema.safeParse(raw);
@@ -160,7 +91,7 @@ export class BillingService {
     // O checkbox precisa estar marcado NESTA compra (o banco reaproveitaria um consentimento antigo com `termsVersion`
     // vazio, mas isso é rede de segurança para retry idempotente, não uma forma de pular o aceite pela app).
     if (input.termsAccepted !== true) throw new BillingError("consentimento obrigatório", "consent_required");
-    const { provider, cnpj, tradeName } = await this.resolveProviderOrThrow(input.stationeryId);
+    const { provider, cnpj, tradeName } = await resolveProviderOrThrow(this.deps, input.stationeryId);
     const invoiceId = await this.deps.store.createPackageInvoice(actor, {
       stationeryId: input.stationeryId,
       packageId: input.packageId,
@@ -170,7 +101,7 @@ export class BillingService {
     });
     const invoice = await this.deps.store.getInvoice(actor, input.stationeryId, invoiceId);
     if (!invoice) throw new BillingError("fatura não encontrada", "not_found");
-    const attached = await this.attachPixChargeIfNeeded(provider, invoice, "Recarga de créditos ListaCerta", { cnpj, name: tradeName });
+    const attached = await attachPixChargeIfNeeded(this.deps, provider, invoice, "Recarga de créditos ListaCerta", { cnpj, name: tradeName });
     return { invoiceId, provider: provider.id, ...attached };
   }
 
@@ -180,7 +111,7 @@ export class BillingService {
     if (!parsed.success) throw new BillingError("dados inválidos", "invalid_input");
     const input = parsed.data;
     if (input.termsAccepted !== true) throw new BillingError("consentimento obrigatório", "consent_required");
-    const { provider, cnpj, tradeName } = await this.resolveProviderOrThrow(input.stationeryId);
+    const { provider, cnpj, tradeName } = await resolveProviderOrThrow(this.deps, input.stationeryId);
     const passId = await this.deps.store.purchaseSeasonPass(actor, {
       stationeryId: input.stationeryId,
       installments: input.installments,
@@ -192,7 +123,7 @@ export class BillingService {
     const passInvoices = invoices.filter((i) => i.kind === "season_pass_installment" && i.seasonPassId === passId).sort((a, b) => (a.installmentNo ?? 0) - (b.installmentNo ?? 0));
     const first = passInvoices.find((i) => i.installmentNo === 1);
     if (!first) throw new BillingError("1ª parcela não encontrada", "database");
-    const attached = await this.attachPixChargeIfNeeded(provider, first, "1ª parcela do passe de temporada ListaCerta", { cnpj, name: tradeName });
+    const attached = await attachPixChargeIfNeeded(this.deps, provider, first, "1ª parcela do passe de temporada ListaCerta", { cnpj, name: tradeName });
     return {
       invoiceId: first.id,
       provider: provider.id,
@@ -213,9 +144,9 @@ export class BillingService {
     const invoice = await this.deps.store.getInvoice(actor, input.stationeryId, input.invoiceId);
     if (!invoice) throw new BillingError("fatura não encontrada", "not_found");
     if (invoice.status !== "open") throw new BillingError("fatura não está aberta", "invalid_state");
-    const { provider, cnpj, tradeName } = await this.resolveProviderOrThrow(input.stationeryId);
+    const { provider, cnpj, tradeName } = await resolveProviderOrThrow(this.deps, input.stationeryId);
     if (provider.id !== invoice.provider) throw new BillingError("provedor não bate com a fatura", "provider_invalid");
-    return this.attachPixChargeIfNeeded(provider, invoice, "Fatura ListaCerta", { cnpj, name: tradeName });
+    return attachPixChargeIfNeeded(this.deps, provider, invoice, "Fatura ListaCerta", { cnpj, name: tradeName });
   }
 
   /** "Simular pagamento (demonstração)": confirma direto, sem depender de status de PSP (não há PSP real na demo). */
@@ -236,78 +167,15 @@ export class BillingService {
 
   /** Reconsulta o PSP e SÓ confirma com `CONCLUIDA` e valor igual (nunca pelo corpo do webhook nem do cron). */
   async reconcileInvoiceByChargeId(chargeId: string): Promise<{ invoiceId: string; confirmed: boolean } | null> {
-    const info = await this.findInvoiceByChargeIdInternal(chargeId);
-    if (!info) {
-      await this.flagLateChargeIfActuallyPaid(chargeId);
-      return null;
-    }
-    const provider = this.deps.providerFor({ isDemo: false });
-    if (!provider || provider.id !== "pix") return null;
-    const status = await provider.getCharge(chargeId);
-    if (status.status !== "paid" || status.paidAmountCents === null) return { invoiceId: info.invoiceId, confirmed: false };
-    if (status.paidAmountCents !== info.amountCents) return { invoiceId: info.invoiceId, confirmed: false };
-    const confirmed = await this.deps.store.confirmInvoicePayment({
-      invoiceId: info.invoiceId,
-      provider: "pix",
-      providerRef: chargeId,
-      amountCents: status.paidAmountCents,
-      paidAt: status.paidAt ?? this.deps.now(),
-    });
-    return { invoiceId: info.invoiceId, confirmed };
+    return reconcileInvoiceByChargeId(this.deps, chargeId);
   }
 
   /**
-   * D-101 (revisão de segurança da S21): o txid não bateu em nenhuma fatura ABERTA — pode ser um pagamento
-   * recebido depois que a fatura já foi paga (ou cancelada) por outro caminho. Só registra o alerta se o PSP
-   * CONFIRMAR que o valor foi mesmo pago (nunca pelo corpo do webhook); idempotente por (fatura, txid), então uma
-   * redelivery do mesmo webhook não duplica o alerta. Nunca recredita: é só o registro para o admin decidir na
-   * conciliação (Admin13).
-   */
-  private async flagLateChargeIfActuallyPaid(chargeId: string): Promise<void> {
-    const any = await this.deps.store.findAnyInvoiceByChargeId(chargeId);
-    if (!any || any.status === "open") return;
-    const provider = this.deps.providerFor({ isDemo: false });
-    if (!provider || provider.id !== "pix") return;
-    const status = await provider.getCharge(chargeId);
-    if (status.status !== "paid" || status.paidAmountCents === null) return;
-    await this.deps.store.flagLatePayment({
-      invoiceId: any.invoiceId,
-      provider: "pix",
-      providerChargeId: chargeId,
-      amountCents: status.paidAmountCents,
-    });
-  }
-
-  /** Só para uso interno do webhook/cron; contorna a checagem de posse (chamado sem `actor` de sessão). */
-  private async findInvoiceByChargeIdInternal(chargeId: string): Promise<{ invoiceId: string; amountCents: number } | null> {
-    return this.deps.store.findOpenInvoiceByChargeId(chargeId);
-  }
-
-  /**
-   * Cron diário: reconsulta fatura Pix aberta com cobrança anexada. Revisão de segurança: lote limitado
-   * (`RECONCILE_BATCH_SIZE`, as mais antigas primeiro) e orçamento de tempo (`RECONCILE_TIME_BUDGET_MS`) — estourou o
-   * orçamento, para e devolve `truncated: true`; a próxima execução (diária) continua dali, sem cron sem fim.
+   * Cron diário: reconsulta fatura Pix aberta com cobrança anexada. Revisão de segurança: lote limitado e
+   * orçamento de tempo (ver `service-pix.ts`) — estourou o orçamento, para e devolve `truncated: true`.
    */
   async reconcileOpenInvoices(): Promise<{ checked: number; confirmed: number; truncated: boolean }> {
-    const chargeIds = await this.deps.store.listOpenPixChargeIds(RECONCILE_BATCH_SIZE);
-    const start = this.deps.now().getTime();
-    let confirmed = 0;
-    let checked = 0;
-    let truncated = false;
-    for (const chargeId of chargeIds) {
-      if (this.deps.now().getTime() - start > RECONCILE_TIME_BUDGET_MS) {
-        truncated = true;
-        break;
-      }
-      checked++;
-      try {
-        const r = await this.reconcileInvoiceByChargeId(chargeId);
-        if (r?.confirmed) confirmed++;
-      } catch (error) {
-        console.error("reconciliar fatura Pix", error instanceof Error ? error.name : "erro");
-      }
-    }
-    return { checked, confirmed, truncated };
+    return reconcileOpenInvoices(this.deps);
   }
 
   /** Estorno (usado pela S22, contestação aceita). */

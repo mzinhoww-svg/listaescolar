@@ -59,7 +59,7 @@ export function StoreCard({ cartId, info, lines, itemIdFor, opened, primary }: P
         ))}
       </ul>
       {oldest ? (
-        <p className="text-texto-3 text-[11px] font-medium">
+        <p className="text-texto-3 text-[12px] font-medium">
           Preço mais antigo verificado em {formatCheckedAt(oldest)}.
         </p>
       ) : null}

@@ -35,9 +35,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   return (
     <AdminShell active="/admin/denuncias" email={user.email} breadcrumb="Admin / Denúncias" title="Denúncias">
       <nav className="mb-4 flex flex-wrap gap-2 text-[13px] font-bold" aria-label="Filtrar por estado">
-        <Link href="/admin/denuncias" className={`rounded-botao px-3 py-1.5 ${!statusParam ? "bg-tinta text-papel" : "bg-campo"}`}>Abertas</Link>
+        <Link href="/admin/denuncias" className={`min-h-11 inline-flex items-center justify-center rounded-botao px-3 py-1.5 ${!statusParam ? "bg-tinta text-papel" : "bg-campo"}`}>Abertas</Link>
         {REPORT_STATUSES.map((s) => (
-          <Link key={s} href={`/admin/denuncias?status=${s}`} className={`rounded-botao px-3 py-1.5 ${statusParam === s ? "bg-tinta text-papel" : "bg-campo"}`}>
+          <Link key={s} href={`/admin/denuncias?status=${s}`} className={`min-h-11 inline-flex items-center justify-center rounded-botao px-3 py-1.5 ${statusParam === s ? "bg-tinta text-papel" : "bg-campo"}`}>
             {REPORT_STATUS_LABEL[s]}
           </Link>
         ))}
@@ -45,7 +45,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
       {failed ? (
         <p role="alert" className="bg-erro-fundo text-erro-texto rounded-campo px-4 py-3 text-[14px] font-bold">Não foi possível carregar.</p>
       ) : (
-        <div className="rounded-card overflow-x-auto bg-white">
+        <div className="rounded-card overflow-x-auto bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
           <table className="w-full min-w-[720px] text-left text-[13px]">
             <thead className="text-texto-3 border-b border-black/10 font-bold">
               <tr>

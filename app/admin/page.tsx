@@ -27,6 +27,8 @@ function CategoryCard({ title, category, labels }: { title: string; category: Da
       </div>
       {category.unavailable ? (
         <p className="text-erro-texto text-[13px] font-semibold">Não foi possível consultar agora.</p>
+      ) : category.counts.every((c) => c.count === 0) ? (
+        <p className="text-texto-3 text-[13px] font-semibold">Nenhum registro ainda.</p>
       ) : (
         <dl className="grid grid-cols-2 gap-2 text-[13px]">
           {category.counts
@@ -37,7 +39,6 @@ function CategoryCard({ title, category, labels }: { title: string; category: Da
                 <dd className="font-extrabold">{c.count}</dd>
               </div>
             ))}
-          {category.counts.every((c) => c.count === 0) ? <p className="text-texto-3 col-span-2 text-[13px] font-semibold">Nenhum registro ainda.</p> : null}
         </dl>
       )}
     </section>
@@ -67,11 +68,11 @@ export default async function Page() {
         </div>
       )}
       <div className="mt-6 flex flex-wrap gap-3 text-[14px] font-extrabold">
-        <Link href="/admin/importacoes" className="text-verde-fundo underline">Importações de escolas</Link>
-        <Link href="/admin/papelarias" className="text-verde-fundo underline">Papelarias</Link>
-        <Link href="/admin/eventos" className="text-verde-fundo underline">Eventos (auditoria)</Link>
-        <Link href="/admin/denuncias" className="text-verde-fundo underline">Denúncias</Link>
-        <Link href="/admin/ia" className="text-verde-fundo underline">Configuração de IA</Link>
+        <Link href="/admin/importacoes" className="text-verde-fundo inline-flex min-h-11 items-center underline">Importações de escolas</Link>
+        <Link href="/admin/papelarias" className="text-verde-fundo inline-flex min-h-11 items-center underline">Papelarias</Link>
+        <Link href="/admin/eventos" className="text-verde-fundo inline-flex min-h-11 items-center underline">Eventos (auditoria)</Link>
+        <Link href="/admin/denuncias" className="text-verde-fundo inline-flex min-h-11 items-center underline">Denúncias</Link>
+        <Link href="/admin/ia" className="text-verde-fundo inline-flex min-h-11 items-center underline">Configuração de IA</Link>
       </div>
     </AdminShell>
   );

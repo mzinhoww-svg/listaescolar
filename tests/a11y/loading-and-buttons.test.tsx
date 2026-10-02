@@ -1,22 +1,23 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import Loading from "@/app/loading";
 import { outlineButton, primaryButton } from "@/components/auth/Screen";
 
 /**
- * S18 (estados e a11y): `app/loading.tsx` cobre por herança as ~75 rotas que não tinham `loading.tsx` próprio; a
- * animação respeita `prefers-reduced-motion` (D-057/estados). `primaryButton`/`outlineButton` (usados por ~20
- * telas de sistema) ganharam foco visível — antes desta fatia dependiam só do padrão do navegador.
+ * S28 (Task 17): `app/loading.tsx` na raiz foi removido. Um `loading.tsx` na raiz envolve TODA rota em Suspense e força
+ * streaming, e com streaming `notFound()`/`redirect()` respondem HTTP 200 (soft-404, D-043). Esqueletos ficam só nas
+ * árvores privadas (`papelaria`, `escola`, `carrinho`), que não dependem de indexação.
  */
-describe("app/loading.tsx", () => {
-  it("anuncia o carregamento para leitor de tela e desliga a animação com prefers-reduced-motion", () => {
-    render(<Loading />);
-    const status = screen.getByRole("status");
-    expect(status).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByText("Carregando…")).toBeInTheDocument();
-    expect(status.querySelector(".motion-reduce\\:animate-none")).not.toBeNull();
+describe("sem loading.tsx na raiz (soft-404, D-043)", () => {
+  it("app/loading.tsx não existe", () => {
+    expect(existsSync(join(process.cwd(), "app", "loading.tsx"))).toBe(false);
+  });
+  it("as páginas públicas indexáveis não têm loading.tsx", () => {
+    expect(existsSync(join(process.cwd(), "app", "escolas", "[inep]", "[serie]", "loading.tsx"))).toBe(false);
+    expect(existsSync(join(process.cwd(), "app", "escolas", "[inep]", "loading.tsx"))).toBe(false);
   });
 });
 

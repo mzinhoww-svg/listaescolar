@@ -18,7 +18,7 @@ export function AdminTable({ rows, approve }: Props) {
     );
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white">
+    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[820px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">
@@ -36,7 +36,7 @@ export function AdminTable({ rows, approve }: Props) {
             <tr key={r.id} className="border-linha border-b last:border-b-0">
               <th scope="row" className="px-5 py-3.5 font-extrabold">
                 {r.tradeName}
-                {r.isDemo ? <span className="bg-campo ml-2 rounded-botao px-2 py-0.5 text-[11px]">Demonstração</span> : null}
+                {r.isDemo ? <span className="bg-campo ml-2 rounded-botao px-2 py-0.5 text-[12px]">Demonstração</span> : null}
               </th>
               <td className="px-5 py-3.5 font-bold whitespace-nowrap">{formatCnpj(r.cnpj)}</td>
               <td className="px-5 py-3.5 font-bold">{r.neighborhood ?? "indisponível"}</td>
@@ -46,7 +46,7 @@ export function AdminTable({ rows, approve }: Props) {
               <td className="px-5 py-3.5 font-bold">{STATUS_LABEL[r.status]}</td>
               <td className="px-5 py-3.5 font-bold">{formatDateTime(r.createdAt)}</td>
               <td className="flex items-center justify-end gap-2 px-5 py-3.5">
-                <Link href={`/admin/papelarias/${r.id}`} className="border-tinta rounded-botao border-[1.5px] px-4 py-2 text-[13px] font-extrabold">
+                <Link href={`/admin/papelarias/${r.id}`} className="min-h-11 inline-flex items-center justify-center border-tinta rounded-botao border-[1.5px] px-4 py-2 text-[13px] font-extrabold">
                   {r.status === "under_review" ? "Recusar" : "Abrir"}
                 </Link>
                 {r.status === "under_review" ? (
@@ -54,7 +54,7 @@ export function AdminTable({ rows, approve }: Props) {
                     <input type="hidden" name="id" value={r.id} />
                     <input type="hidden" name="to" value="approved" />
                     <input type="hidden" name="back" value="list" />
-                    <button type="submit" className="bg-tinta text-papel rounded-botao px-4 py-2 text-[13px] font-extrabold">Aprovar</button>
+                    <button type="submit" className="min-h-11 inline-flex items-center justify-center bg-tinta text-papel rounded-botao px-4 py-2 text-[13px] font-extrabold">Aprovar</button>
                   </form>
                 ) : null}
               </td>

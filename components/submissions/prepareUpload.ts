@@ -1,5 +1,6 @@
 import { MAX_UPLOAD_BYTES } from "@/features/submissions/constants";
 import { ERROR_MESSAGES } from "@/features/submissions/copy";
+import { reduceToLimit } from "@/features/submissions/image-reduction";
 
 /** A Vercel limita o corpo da requisição a 4,5 MB: o teto é 4 MB e fotos maiores são reduzidas no navegador. */
 export const COMPRESS_THRESHOLD_BYTES = 3_000_000;
@@ -72,7 +73,12 @@ export async function prepareUpload(file: File, deps: { resize: Resize } = { res
     } catch {
       return { ok: false, message: ERROR_MESSAGES.image_undecodable };
     }
-    if (blob.size > MAX_UPLOAD_BYTES) return { ok: false, message: ERROR_MESSAGES.file_too_large };
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      // Primeira passada ainda grande (foto muito detalhada): desce lado e qualidade até caber.
+      const again = await reduceToLimit((side, quality) => deps.resize(file, side, quality), MAX_UPLOAD_BYTES);
+      if (!again.ok) return { ok: false, message: ERROR_MESSAGES.file_too_large };
+      blob = again.blob;
+    }
     const name = `${file.name.replace(/\.[^./\\]+$/, "") || "lista"}.jpg`;
     return { ok: true, file: new File([blob], name, { type: "image/jpeg" }), compressed: true };
   }

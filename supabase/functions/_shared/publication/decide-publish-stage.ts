@@ -1,5 +1,6 @@
 // Publicação: lease -> porta -> registro (a etapa que chama `ListPublisher`). Extraído de decide.ts (D-057, S18,
 // arquivo com 301 linhas) — comportamento idêntico ao original.
+import { safeEmit } from "../analytics/capture.ts";
 import type { ExtractionResult } from "../extraction-schema.ts";
 import {
   PortError,
@@ -137,5 +138,11 @@ export async function publishStage(
     alert(deps, done === "orphaned" ? "published_after_failure" : "published_not_recorded", id);
     return { status: "publish_orphaned", newVersionId: out.newVersionId };
   }
+  safeEmit(deps.emit, "list_published", {
+    grade_slug: ctx.gradeSlug,
+    school_year: input.schoolYear,
+    origin: "auto",
+    is_first_version: out.previousVersionId === null,
+  });
   return { status: "auto_published", listId: out.listId, previousVersionId: out.previousVersionId, newVersionId: out.newVersionId };
 }

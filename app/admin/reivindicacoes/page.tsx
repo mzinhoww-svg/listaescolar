@@ -38,7 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
             key={t.key}
             href={`/admin/reivindicacoes?aba=${t.key}`}
             aria-current={t.key === tab.key ? "page" : undefined}
-            className={`rounded-botao px-5 py-2.5 text-[14px] font-extrabold ${t.key === tab.key ? "bg-tinta text-papel" : "bg-campo"}`}
+            className={`inline-flex min-h-11 items-center rounded-botao px-5 py-2.5 text-[14px] font-extrabold ${t.key === tab.key ? "bg-tinta text-papel" : "bg-campo"}`}
           >
             {t.label}{lists ? ` (${lists[i]?.length ?? 0})` : ""}
           </Link>

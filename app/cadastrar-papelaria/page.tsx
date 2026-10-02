@@ -1,3 +1,4 @@
+import { TrackView } from "@/components/analytics/TrackView";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -50,5 +51,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
     return wrap(<Notice kind="info">Ainda não há município habilitado para cadastro de papelarias.</Notice>);
   }
   const plan = await getBillingService().getActivePlan();
-  return wrap(<RegistrationForm action={registerStationeryAction} municipalities={municipalities} freeLeads={plan?.freeLeads ?? null} hasPass={plan?.pass !== null && plan?.pass !== undefined} />);
+  return wrap(
+    <>
+      <TrackView name="stationery_onboarding_step" props={{ step: "register", status: "viewed" }} />
+      <RegistrationForm action={registerStationeryAction} municipalities={municipalities} freeLeads={plan?.freeLeads ?? null} hasPass={plan?.pass !== null && plan?.pass !== undefined} />
+    </>,
+  );
 }

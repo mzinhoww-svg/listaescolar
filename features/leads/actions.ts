@@ -1,13 +1,16 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { captureUserAction } from "@/lib/analytics/server";
 import { getSessionActor } from "@/features/stationeries/actor";
 
 import { normalizeLeadCode } from "./code";
 import { leadErrorCode } from "./messages";
+import { leadCreateRateLimited } from "./rate-limit";
 import { getLeadService } from "./wiring";
 
 const uuid = z.uuid();
@@ -29,6 +32,10 @@ export async function createLeadAction(formData: FormData): Promise<void> {
   const back = cart.success ? `/cotacao/nova?carrinho=${cart.data}` : "/cotacao/nova";
   const actor = await getSessionActor();
   if (!actor) redirect(`/entrar?next=${encodeURIComponent(back)}`);
+  // D-001 (S19): primeira camada de rate limit por IP+ator, além do limite por usuário já existente no serviço.
+  if (leadCreateRateLimited(await headers(), actor.userId)) {
+    redirect(`${back}${back.includes("?") ? "&" : "?"}erro=rate_limited`);
+  }
   let code: string;
   try {
     const created = await getLeadService().createLead(actor, {
@@ -70,6 +77,7 @@ export async function openWhatsappAction(formData: FormData): Promise<void> {
     console.error("abrir WhatsApp", "URL fora do wa.me");
     redirect(`/cotacao/${code}?erro=whatsapp_unavailable`);
   }
+  await captureUserAction("purchase_clicked", { canal: "papelaria_whatsapp" });
   revalidatePath(`/cotacao/${code}`);
   redirect(url);
 }

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { getSiteOrigin } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 
+import { loginRateLimited } from "./rate-limit";
 import { googleInputSchema, magicLinkInputSchema, type AuthActionState } from "./schemas";
 
 const RATE_LIMIT_ERROR = "Aguarde um minuto para pedir outro link.";
@@ -40,6 +41,10 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
     };
   }
   const email = parsed.data.email;
+  // D-001 (S19): primeira camada de rate limit por IP + e-mail, além do limite por e-mail que o Supabase Auth já aplica.
+  if (loginRateLimited(await headers(), email)) {
+    return { status: "error", message: RATE_LIMIT_ERROR, email };
+  }
   try {
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({

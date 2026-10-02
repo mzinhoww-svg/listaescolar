@@ -9,10 +9,10 @@ export function SiteHeader() {
   return (
     <header className="bg-papel">
       <div className="mx-auto flex w-full max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-1 px-6 py-4">
-        <Link href="/" aria-label="ListaCerta, página inicial" className={`order-1 block w-40 rounded ${FOCUS}`}>
+        <Link href="/" aria-label="ListaCerta, página inicial" className={`order-1 flex min-h-11 w-40 items-center rounded ${FOCUS}`}>
           <Logo variant="horizontal" height={36} priority />
         </Link>
-        <nav aria-label="Seções" className="order-3 w-full overflow-x-auto md:order-2 md:ml-auto md:w-auto md:overflow-visible">
+        <nav aria-label="Seções" className="order-3 w-full overflow-x-auto [mask-image:linear-gradient(to_right,#000_88%,transparent)] md:order-2 md:ml-auto md:w-auto md:overflow-visible md:[mask-image:none]">
           <ul className="flex gap-1 whitespace-nowrap">
             {NAV_LINKS.map((l) => (
               <li key={l.href}>

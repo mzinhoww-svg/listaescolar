@@ -9,8 +9,8 @@ export const STOCK_LABEL: Record<CatalogRow["stock"], string> = {
   unknown: "Não informado",
 };
 const STOCK_TONE: Record<CatalogRow["stock"], string> = {
-  in_stock: "bg-[#d6f3e5] text-verde-fundo",
-  out_of_stock: "bg-[#fde2e0] text-[#8a1c14]",
+  in_stock: "bg-verde-certo/20 text-verde-fundo",
+  out_of_stock: "bg-erro-fundo text-erro-texto",
   unknown: "bg-campo text-texto-2",
 };
 export const PRICE_SOURCE_LABEL = "Informado pela papelaria";
@@ -25,7 +25,7 @@ export function CatalogTable({ rows, editHref }: { rows: readonly CatalogRow[]; 
     );
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white">
+    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[720px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">
@@ -48,7 +48,7 @@ export function CatalogTable({ rows, editHref }: { rows: readonly CatalogRow[]; 
                 <span className={`rounded-botao px-3 py-1 text-[12px] font-extrabold ${STOCK_TONE[r.stock]}`}>{STOCK_LABEL[r.stock]}</span>
               </td>
               <td className="px-5 py-3.5">
-                <a href={editHref(r.id)} className="text-verde-fundo font-extrabold">Editar</a>
+                <a href={editHref(r.id)} aria-label={`Editar ${r.name}`} className="text-verde-fundo focus-visible:outline-verde-fundo -my-2 inline-flex min-h-11 min-w-11 items-center font-extrabold underline focus-visible:outline-2 focus-visible:outline-offset-2">Editar</a>
               </td>
             </tr>
           ))}

@@ -41,7 +41,7 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false,
         </section>
       ) : null}
       {state ? null : (
-        <p className="text-texto-2 rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-semibold">{REVIEW_NOTICE}</p>
+        <p className="text-texto-2 rounded-2xl bg-aviso-fundo p-3.5 text-[13px] leading-[1.4] font-semibold">{REVIEW_NOTICE}</p>
       )}
       {items.length === 0 ? (
         <p className="text-texto-2 text-[15px] font-semibold">Nenhum item foi identificado neste arquivo.</p>
@@ -57,7 +57,7 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false,
                   {item.name}
                   {(item.alerts ?? []).map((a) =>
                     ALERT_LABEL[a] ? (
-                      <span key={a} className="text-texto-3 ml-2 text-[11px] font-semibold">
+                      <span key={a} className="text-texto-3 ml-2 text-[12px] font-semibold">
                         {ALERT_LABEL[a]}
                       </span>
                     ) : null,
@@ -77,7 +77,7 @@ export function ReviewSummary({ result, isDemo, status, publicationDemo = false,
           role={w === WARNING_LOW_CONFIDENCE ? "alert" : undefined}
           className={
             attention
-              ? "text-tinta rounded-2xl bg-[#fdebd3] p-3.5 text-[13px] leading-[1.4] font-extrabold"
+              ? "text-tinta rounded-2xl bg-aviso-fundo p-3.5 text-[13px] leading-[1.4] font-extrabold"
               : "text-texto-3 text-xs font-semibold"
           }
         >

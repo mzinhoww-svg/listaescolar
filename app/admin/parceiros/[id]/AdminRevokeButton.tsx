@@ -18,7 +18,7 @@ export function AdminRevokeButton({ partnerId, keyId, action }: { partnerId: str
       <input type="hidden" name="partnerId" value={partnerId} />
       <input type="hidden" name="keyId" value={keyId} />
       <input type="hidden" name="reason" value="revogada pelo admin" />
-      <button type="button" onClick={() => dialogRef.current?.showModal()} className="text-[13px] font-extrabold text-[#8a1c14] underline">
+      <button type="button" onClick={() => dialogRef.current?.showModal()} className="text-[13px] font-extrabold text-erro-texto underline">
         Revogar
       </button>
       <dialog ref={dialogRef} className="m-auto rounded-[20px] bg-white p-0 backdrop:bg-black/40">
@@ -35,7 +35,7 @@ export function AdminRevokeButton({ partnerId, keyId, action }: { partnerId: str
                 dialogRef.current?.close();
                 formRef.current?.requestSubmit();
               }}
-              className="rounded-botao flex h-11 flex-1 items-center justify-center border-[1.5px] border-[#8a1c14] text-[14px] font-extrabold text-[#8a1c14]"
+              className="rounded-botao flex h-11 flex-1 items-center justify-center border-[1.5px] border-erro-texto text-[14px] font-extrabold text-erro-texto"
             >
               Revogar agora
             </button>

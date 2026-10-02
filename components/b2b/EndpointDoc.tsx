@@ -34,7 +34,7 @@ export function EndpointDoc({ entry }: { entry: EndpointEntry }) {
       <div className="flex flex-wrap items-center gap-3">
         <span className="bg-tinta text-papel rounded-botao px-2.5 py-1 text-[12px] font-extrabold">{entry.method}</span>
         <code className="text-[15px] font-extrabold">{entry.path}</code>
-        <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[11px] font-extrabold">
+        <span className="bg-campo text-texto-2 rounded-botao px-2.5 py-1 text-[12px] font-extrabold">
           escopo {SCOPE_LABEL[entry.scope]}
         </span>
       </div>
@@ -52,7 +52,7 @@ export function EndpointDoc({ entry }: { entry: EndpointEntry }) {
           ))}
         </ul>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
         {entry.example.request !== undefined ? <CodeSample title="Exemplo de requisição (ilustrativo)" code={entry.example.request} /> : null}
         <CodeSample title="Exemplo de resposta (ilustrativo)" code={successBody} />
       </div>

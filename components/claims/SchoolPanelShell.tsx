@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/brand/Logo";
+import { SchoolPanelNav } from "@/components/claims/SchoolPanelNav";
 import { SkipLink } from "@/components/site/SkipLink";
 
 const NAV = [
@@ -14,24 +14,13 @@ const NAV = [
 /** Casca desktop da área da escola (Escola03): barra lateral Tinta, conteúdo Papel. Só links que existem. */
 export function SchoolPanelShell({ email, title, crumb, actions, children }: { email: string | undefined; title: string; crumb: string; actions?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-1">
+    <div className="flex min-h-dvh flex-1 flex-col lg:flex-row">
       <SkipLink />
-      <aside className="bg-tinta text-papel hidden w-[248px] shrink-0 flex-col gap-3 px-[18px] py-6 lg:flex">
+      <aside className="bg-tinta text-papel flex shrink-0 flex-wrap items-center gap-3 px-[18px] py-4 lg:w-[248px] lg:flex-col lg:items-stretch lg:py-6">
         <Logo variant="horizontal-negativo" height={34} />
-        <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[11px] font-extrabold">Escola</span>
-        <nav aria-label="Portal da escola" className="mt-4 flex flex-col gap-1">
-          {NAV.map((n) => (
-            <Link
-              key={n.label}
-              href={n.href}
-              aria-current={"current" in n ? "page" : undefined}
-              className={`focus-visible:outline-verde-certo rounded-xl px-3.5 py-2.5 text-[15px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${"current" in n ? "bg-papel/10 text-papel" : "text-papel/70"}`}
-            >
-              {n.label}
-            </Link>
-          ))}
-        </nav>
-        <p className="mt-auto flex items-center gap-3 text-xs font-semibold">
+        <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[12px] font-extrabold">Escola</span>
+        <SchoolPanelNav items={NAV} />
+        <p className="mt-auto hidden items-center gap-3 text-xs font-semibold lg:flex">
           <span className="bg-verde-certo text-tinta grid size-10 place-items-center rounded-full font-extrabold">{(email ?? "?").slice(0, 2).toUpperCase()}</span>
           <span className="break-all">{email ?? "indisponível"}</span>
         </p>

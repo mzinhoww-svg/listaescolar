@@ -48,7 +48,7 @@ export function LineRow({
         <p className="text-sm font-semibold">
           {line.name} <span className="text-texto-3">× {line.quantity}</span>
         </p>
-        <p className="text-texto-3 text-[11px] leading-[1.4] font-medium">
+        <p className="text-texto-3 text-[12px] leading-[1.4] font-medium">
           {formatBRL(unitPriceCents)} cada · origem: {sourceLabel(source)} ·{" "}
           {formatCheckedAt(checkedAt)}
         </p>

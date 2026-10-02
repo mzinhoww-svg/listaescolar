@@ -41,8 +41,11 @@ const serverSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   MELI_AFFILIATE_ID: z.string().min(1).optional(),
   AMAZON_ASSOCIATE_TAG: z.string().min(1).optional(),
-  /** Autentica o cron de expiração de leads (Bearer). Ausente = o cron responde 503. */
-  CRON_SECRET: z.string().min(16).optional(),
+  /** Autentica os crons (Bearer). D-009 (S19): sem `min()` aqui de propósito — o contrato de "curto demais = 503"
+   * é de cada rota de cron (`CRON_SECRET_MIN_LENGTH`, `features/leads/cron-auth.ts`), não deste schema; um valor
+   * curto aqui antes derrubava `getServerEnv()` inteiro (500 em toda rota que o chama, ex. o pepper B2B), em vez
+   * do 503 pontual só na rota de cron. */
+  CRON_SECRET: z.string().min(1).optional(),
   // S21 (cobrança): Pix atrás de flag, sem nenhuma credencial fixa. Validação fina (config COMPLETA ou nada) é de
   // `features/billing/payments/factory.ts`; aqui só os tipos, para o Next não reclamar de variável desconhecida.
   PAYMENTS_PIX_ENABLED: flag,
@@ -69,7 +72,21 @@ const serverSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{64}$/, "precisa ter 64 caracteres hexadecimais (32 bytes)")
     .optional(),
+  /** Segredo do HMAC do rastreio de campanhas B2B (cliques e visualizações; `features/campaigns/tracking-service.ts`):
+   * mínimo de 32 caracteres, gerar com `openssl rand -hex 32`. Obrigatório quando `APP_ENV=production`, salvo com o
+   * rastreio desligado de propósito (`B2B_CAMPAIGN_TRACKING=0`). Local, preview e staging seguem opcionais. */
+  B2B_CAMPAIGN_TRACKING_SECRET: z.string().min(32).optional(),
+  /** `0` desliga o rastreio de campanhas B2B (aí o segredo não é exigido). */
+  B2B_CAMPAIGN_TRACKING: flag,
   ...pipelineShape,
+}).superRefine((env, ctx) => {
+  if (env.APP_ENV === "production" && env.B2B_CAMPAIGN_TRACKING !== "0" && !env.B2B_CAMPAIGN_TRACKING_SECRET) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["B2B_CAMPAIGN_TRACKING_SECRET"],
+      message: "obrigatória em produção (ou desligue o rastreio com B2B_CAMPAIGN_TRACKING=0)",
+    });
+  }
 });
 
 export type ServerEnv = z.infer<typeof serverSchema> & PublicEnv;
@@ -102,6 +119,8 @@ export function getServerEnv(): ServerEnv {
       IP_HASH_SALT: process.env.IP_HASH_SALT,
       B2B_API_KEY_PEPPER: process.env.B2B_API_KEY_PEPPER,
       B2B_WEBHOOK_ENCRYPTION_KEY: process.env.B2B_WEBHOOK_ENCRYPTION_KEY,
+      B2B_CAMPAIGN_TRACKING_SECRET: process.env.B2B_CAMPAIGN_TRACKING_SECRET,
+      B2B_CAMPAIGN_TRACKING: process.env.B2B_CAMPAIGN_TRACKING,
       ...readPipelineFlags(),
     }),
   );

@@ -11,7 +11,7 @@ export function SalesTable({ rows }: { rows: readonly SalePaymentView[] }) {
     return <p className="text-texto-3 text-[14px] font-semibold">Nenhuma venda confirmada ainda.</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-card bg-white">
+    <div className="overflow-x-auto rounded-card bg-white" tabIndex={0} role="region" aria-label="Tabela (role para o lado para ver todas as colunas)">
       <table className="w-full min-w-[900px] text-left text-[14px]">
         <thead>
           <tr className="text-texto-3 border-linha border-b text-[12px] tracking-[0.08em] uppercase">
@@ -29,7 +29,7 @@ export function SalesTable({ rows }: { rows: readonly SalePaymentView[] }) {
             <tr key={r.id} className="border-linha border-b last:border-b-0">
               <th scope="row" className="px-5 py-3.5 font-extrabold">
                 {r.leadCode}
-                {r.isDemo ? <span className="bg-campo ml-2 rounded-botao px-2 py-0.5 text-[11px]">Demonstração</span> : null}
+                {r.isDemo ? <span className="bg-campo ml-2 rounded-botao px-2 py-0.5 text-[12px]">Demonstração</span> : null}
               </th>
               <td className="px-5 py-3.5 font-bold">{r.stationeryName}</td>
               <td className="px-5 py-3.5 font-bold">{r.schoolName ?? "não identificada"}</td>

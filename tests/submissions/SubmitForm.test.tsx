@@ -163,3 +163,37 @@ describe("SchoolUploadForm (Escola08)", () => {
     expect((submitListAction.mock.calls[0]![1] as FormData).get("schoolId")).toBe(SCHOOL);
   });
 });
+
+describe("SubmitForm · erros ligados ao campo (revisão UX, menores)", () => {
+  beforeEach(() => submitListAction.mockReset());
+
+  it("sem consentimento: a caixa fica aria-invalid e aponta para a mensagem", async () => {
+    render(<SubmitForm years={[2027]} defaultYear={2027} />);
+    fill({ consent: false });
+    send();
+    const alert = await screen.findByRole("alert");
+    const box = screen.getByRole("checkbox");
+    expect(box).toHaveAttribute("aria-invalid", "true");
+    expect(box).toHaveAttribute("aria-describedby", alert.id);
+  });
+
+  it("sem série: o seletor de série aponta para a mensagem e os outros campos não", async () => {
+    render(<SubmitForm years={[2027]} defaultYear={2027} />);
+    fill({ grade: "" });
+    send();
+    const alert = await screen.findByRole("alert");
+    const grade = screen.getByLabelText("Série");
+    expect(grade).toHaveAttribute("aria-invalid", "true");
+    expect(grade).toHaveAttribute("aria-describedby", alert.id);
+    expect(screen.getByRole("checkbox")).toHaveAttribute("aria-invalid", "false");
+  });
+
+  it("sem arquivo: os campos de arquivo ficam aria-invalid", async () => {
+    render(<SubmitForm years={[2027]} defaultYear={2027} />);
+    fill({ file: false });
+    send();
+    const alert = await screen.findByRole("alert");
+    expect(screen.getByLabelText("Arquivo da lista")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Arquivo da lista")).toHaveAttribute("aria-describedby", alert.id);
+  });
+});

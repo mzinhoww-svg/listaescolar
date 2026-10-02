@@ -1,3 +1,4 @@
+import { TrackView } from "@/components/analytics/TrackView";
 import Link from "next/link";
 
 import { CatalogTable } from "@/components/stationeries/CatalogTable";
@@ -11,6 +12,7 @@ import { CATALOG_WRITABLE_STATUSES } from "@/features/stationeries/state";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { importCatalogAction, saveItemAction } from "./actions";
+import { safeErrorLabel } from "@/lib/log-error";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string; editar?: string }> }) {
   const { ok, erro, editar } = await searchParams;
@@ -31,7 +33,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   try {
     rows = await listCatalogItems(createAdminClient(), actor, stationery.id);
   } catch (error) {
-    console.error("listar catálogo", error);
+    console.error("listar catálogo", safeErrorLabel(error));
     failed = true;
   }
   const editing = rows.find((r) => r.id === editar);
@@ -39,6 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   return (
     <>
       <PageHeader crumb="Papelaria / Catálogo" title="Catálogo" />
+      <TrackView name="stationery_onboarding_step" props={{ step: "catalog", status: "viewed" }} />
       {ok ? <Notice kind="ok">Item salvo.</Notice> : null}
       {erro ? <Notice kind="error">{errorMessageForCode(erro)}</Notice> : null}
       {!writable ? (

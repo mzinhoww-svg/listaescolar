@@ -1,0 +1,17 @@
+S19 · correções da revisão de segurança (f90e236..0dbc6ec) · gate em 2026-09-28/29
+Commits: e67e4c3 (B1/I3/M1/M3) 5a76deb (M2) f7f148a (I1) 4226775 (I2) 3d4811f (I4/M5) 49ba234 (I5/M4) 4ff1794 (I6/M6) + teste de fuso em campaigns.
+
+pnpm typecheck  OK
+pnpm lint       OK (0 erros, 6 avisos preexistentes)
+pnpm test       OK  281 arquivos, 3548 testes passando (1ª execução, máquina sem carga)
+                Reexecuções com a máquina sobrecarregada (load average 30-40 de outras sessões) deram timeouts de
+                worker/teste isolados que passam quando rodados sozinhos (ex.: tests/extraction/pipeline.test.ts, 24/24).
+pnpm db:reset   OK
+pnpm test:db    88 arquivos passaram, 1 pulado; 1854 testes passando + tests/db/lead-conversion.test.ts (30/30) reexecutado
+                sozinho após timeout de 60 s sob carga (o teste em si não foi tocado). Antes do ajuste, 3 testes de
+                tests/db/campaigns.test.ts falhavam após as 20h locais (dia UTC x America/Cuiaba); corrigido no teste.
+pnpm build      OK
+
+B1 (prova): pnpm build && pnpm start -> HTML de / com 22 <script>, 22 com nonce= igual ao do cabeçalho
+Content-Security-Policy da resposta (um único cabeçalho); agent-browser em /entrar: React hidratou (props do fiber no
+<form>, 10 chunks executados), console sem erro de CSP.

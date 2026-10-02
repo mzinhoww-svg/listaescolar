@@ -20,7 +20,7 @@ import { confirmTokenAction } from "./confirmar/actions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
-export const metadata: Metadata = { title: "Reivindicar escola · ListaCerta", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Pedir para administrar a escola · ListaCerta", robots: { index: false, follow: false } };
 
 type Props = { params: Promise<{ inep: string }>; searchParams: Promise<{ nova?: string }> };
 const STEPS = ["Pedido", "Verificação", "Análise"] as const;
@@ -33,11 +33,11 @@ export default async function ClaimPage({ params, searchParams }: Props) {
   if (!actor) redirect(loginPath(inep));
   const user = await getCurrentUser();
   const { school } = context;
-  const crumb = `Escola / ${school.name} / Reivindicar`;
+  const crumb = `Escola / ${school.name} / Pedir para administrar`;
 
   if (actor.role !== "parent" && actor.role !== "school_member") {
     return (
-      <ClaimLayout inep={inep} title="Reivindicar escola" crumb={crumb}>
+      <ClaimLayout inep={inep} title="Pedir para administrar a escola" crumb={crumb}>
         <p role="alert" className="bg-aviso-fundo text-aviso-texto rounded-campo px-4 py-3 text-[14px] font-bold">{ROLE_BLOCK_MESSAGE}</p>
         <Link href={`/escolas/${inep}`} className="text-verde-fundo text-[14px] font-extrabold">Voltar ao perfil da escola</Link>
       </ClaimLayout>
@@ -50,7 +50,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
   const showForm = view === null || restart;
 
   return (
-    <ClaimLayout inep={inep} title={showForm ? "Reivindicar escola" : "Sua reivindicação"} crumb={crumb}>
+    <ClaimLayout inep={inep} title={showForm ? "Pedir para administrar a escola" : "Seu pedido"} crumb={crumb}>
       <ClaimStepper steps={STEPS} current={showForm ? 1 : claimStep(view)} />
       <SchoolSummaryCard school={school} />
       {showForm ? (

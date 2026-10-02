@@ -16,6 +16,7 @@ const rowSchema = z.object({
   max_escalations: z.number(),
   pipeline_version: z.string(),
   auto_publish_enabled: z.boolean(),
+  usd_brl_rate: z.union([z.string(), z.number(), z.null()]).default(null),
   routes: z.unknown(),
   updated_at: z.string(),
 });
@@ -36,6 +37,7 @@ export async function getAiSettingsForAdmin(actor: SessionActor): Promise<AiSett
     maxEscalations: r.max_escalations,
     pipelineVersion: r.pipeline_version,
     autoPublishEnabled: r.auto_publish_enabled,
+    usdBrlRate: r.usd_brl_rate === null ? null : Number(r.usd_brl_rate),
     routes: r.routes,
     updatedAt: new Date(r.updated_at),
   };

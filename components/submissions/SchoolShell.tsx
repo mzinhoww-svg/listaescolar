@@ -23,7 +23,7 @@ export function SchoolShell({ email, children }: { email: string | undefined; ch
       <SkipLink />
       <aside className="bg-tinta text-papel hidden w-[248px] shrink-0 flex-col gap-3 px-[18px] py-6 lg:flex">
         <Logo variant="horizontal-negativo" height={34} />
-        <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[11px] font-extrabold">Escola</span>
+        <span className="bg-verde-certo text-tinta w-fit rounded-full px-3 py-1 text-[12px] font-extrabold">Escola</span>
         <nav aria-label="Portal da escola" className="mt-4 flex flex-col gap-1">
           {NAV.map((n) => {
             const cls = `focus-visible:outline-verde-certo rounded-xl px-3.5 py-2.5 text-[15px] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${"current" in n ? "bg-papel/10 text-papel" : "text-papel/70"}`;

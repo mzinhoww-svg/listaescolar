@@ -1,5 +1,6 @@
 // Processamento de uma mensagem (extração + conclusão/retry/morte). Extraído de worker-core.ts (D-057, S18) —
 // comportamento idêntico ao original.
+import { safeEmit } from "./analytics/capture.ts";
 import {
   BUSY_RETRY_SECONDS,
   DEFAULT_NOT_DUE_SECONDS,
@@ -87,9 +88,18 @@ export async function processMessage(jobId: string, deps: WorkerDeps): Promise<M
   }
   const parsed = deps.resultSchema.safeParse(result);
   if (!parsed.success) return failWith("resultado inválido do pipeline");
-  await deps.jobs.complete(jobId, parsed.data, Math.max(0, Math.round(deps.clock.now() - started)), {
+  const durationMs = Math.max(0, Math.round(deps.clock.now() - started));
+  await deps.jobs.complete(jobId, parsed.data, durationMs, {
     attempts,
     isDemo: deps.pipeline.isDemo === true,
+  });
+  const read = parsed.data as { items?: unknown[]; lowConfidence?: boolean } | null;
+  safeEmit(deps.emit, "ocr_completed", {
+    duracao_ms: durationMs,
+    fila: "async",
+    status: read?.lowConfidence === true ? "low_confidence" : "accepted",
+    items_count: Array.isArray(read?.items) ? read.items.length : 0,
+    attempts,
   });
   if (deps.decide) {
     try {

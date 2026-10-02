@@ -36,7 +36,7 @@ export function PaymentAlertsList({ alerts }: { alerts: readonly PaymentAlertVie
                   placeholder="Nota (ex.: estornado manualmente)"
                   className="bg-white h-9 rounded-campo border border-linha px-3 text-[13px] font-semibold"
                 />
-                <button type="submit" className="bg-tinta text-papel rounded-botao h-9 px-4 text-[13px] font-extrabold">Resolver</button>
+                <button type="submit" className="bg-tinta text-papel rounded-botao h-11 px-4 text-[13px] font-extrabold">Resolver</button>
               </form>
             </li>
           ))}

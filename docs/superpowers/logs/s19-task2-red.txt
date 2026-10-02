@@ -1,0 +1,16 @@
+$ npx vitest run tests/security/security-headers.test.ts tests/security/proxy-headers.test.ts
+(antes de lib/security-headers.ts e da CSP embutida em proxy.ts)
+
+FAIL tests/security/security-headers.test.ts
+Error: Cannot find module '@/lib/security-headers'
+FAIL tests/security/proxy-headers.test.ts
+Error: proxy() não aplicava nenhum cabeçalho de segurança/CSP (função antiga só chamava updateSession)
+
+Depois da implementação (lib/security-headers.ts + CSP com nonce por requisição embutida em proxy.ts, já que o
+Next 16 só aceita um arquivo de proxy/middleware — havia um `proxy.ts` preexistente de sessão/controle de rota,
+S02 — mais a fonte local D-072 em app/layout.tsx): suíte completa verde, `pnpm build` verde sem rede (fonte já em
+assets/fonts/), cabeçalhos confirmados por curl -I num build de produção local (ver relatório final):
+- Content-Security-Policy com nonce distinto por requisição, sem 'unsafe-inline' em script-src.
+- Next aplica o nonce nos próprios scripts/preloads gerados (confirmado no HTML e no header Link).
+- HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, COOP presentes.
+- /api/widget/** e /widget.js sem CSP (JSON/JS por CORS a terceiros; sem iframe no produto).

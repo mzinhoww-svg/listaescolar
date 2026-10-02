@@ -45,6 +45,7 @@ describe("OpenRouterAdapter", () => {
       response_format: { type: "json_object" },
       temperature: 0,
       max_tokens: 500,
+      usage: { include: true },
     });
     expect(res.text).toBe('{"items":[]}');
     expect(res.model).toBe("m-x");

@@ -130,7 +130,7 @@ describe("OptionCard", () => {
 describe("OptionDetail", () => {
   it("cada preço mostra origem e data/hora; nunca renderiza a URL do produto como link", () => {
     const { container } = render(<OptionDetail option={option()} stores={stores} />);
-    expect(screen.getByText(/origem: manual_admin/)).toBeInTheDocument();
+    expect(screen.getByText(/origem: cadastro da equipe ListaCerta/)).toBeInTheDocument();
     expect(
       screen.getByText(new RegExp(formatCheckedAt(CHECKED).replace(/[/.]/g, "\\$&"))),
     ).toBeInTheDocument();

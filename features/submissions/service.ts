@@ -1,3 +1,4 @@
+import { safeEmit } from "../../supabase/functions/_shared/analytics/capture";
 import { PIPELINE_ABORT_MARGIN_MS } from "../../supabase/functions/_shared/worker-core";
 import { SYNC_BUDGET_MS, CONSENT_PURPOSE, CONSENT_TEXT_VERSION, PUBLICATION_INLINE_TIMEOUT_MS } from "./constants";
 import {
@@ -118,6 +119,7 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
   }
   if (outcome.kind === "infra") return enqueueAsync(outcome.pipelineAvailable);
   if (outcome.kind === "error") {
+    safeEmit(deps.emit, "ocr_completed", { duracao_ms: Math.max(0, clock.now() - started), fila: "inline", status: "failed", items_count: 0 });
     await store.reject(submissionId, "extraction_failed").catch(() => undefined);
     return { status: "failed", submissionId, reason: "extraction_failed" };
   }
@@ -133,6 +135,13 @@ export async function submitList(input: SubmitInput, deps: SubmitDeps): Promise<
     // assíncrono refaz a leitura em vez de perder o envio.
     return enqueueAsync();
   }
+  safeEmit(deps.emit, "ocr_completed", {
+    duracao_ms: Math.max(0, clock.now() - started),
+    fila: "inline",
+    status: parsed.data.lowConfidence === true ? "low_confidence" : "accepted",
+    items_count: parsed.data.items.length,
+    attempts: 1,
+  });
   const publication = deps.publication ? await decideInline(submissionId, deps.publication, clock) : null;
   return { status: "review_needed", submissionId, result: parsed.data, ...(publication ? { publication } : {}) };
 }

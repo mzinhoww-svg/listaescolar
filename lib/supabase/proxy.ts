@@ -64,7 +64,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   const out =
     decision.action === "redirect-login"
       ? NextResponse.redirect(target)
-      : NextResponse.rewrite(target, { status: 403 });
+      : // `request` propaga o CSP/x-nonce já gravados em `request.headers` pelo proxy: sem isso a página /403 sai sem
+        // nonce e o `strict-dynamic` bloqueia todos os scripts (reverificação S19, N1).
+        NextResponse.rewrite(target, { status: 403, request: { headers: request.headers } });
   for (const cookie of response.cookies.getAll()) out.cookies.set(cookie);
   for (const [key, value] of Object.entries(cacheHeaders)) out.headers.set(key, value);
   return out;

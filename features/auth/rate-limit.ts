@@ -41,3 +41,17 @@ export function loginRateLimited(headers: HeadersLike, email: string): boolean {
   if (!checkRateLimit(`login-email:${key}`, LOGIN_EMAIL_CEILING, LOGIN_RATE_WINDOW_MS)) return true;
   return !checkRateLimit(`login:${ip ?? "noip"}:${key}`, LOGIN_EMAIL_LIMIT, LOGIN_RATE_WINDOW_MS);
 }
+
+// T2 (D-163): verificação do código de 6 dígitos. Espaço de 1 milhão de códigos: limite apertado por IP + e-mail
+// (8 por 10 min) e teto por e-mail (20) contra quem varia IPs. O Supabase Auth aplica o próprio limite por cima.
+const CODE_EMAIL_IP_LIMIT = 8;
+const CODE_EMAIL_CEILING = 20;
+
+/** `true` = acima do limite (recusar); `false` = pode seguir (e já contabilizado). */
+export function codeRateLimited(headers: HeadersLike, email: string): boolean {
+  const rawIp = clientIp(headers);
+  const ip = rawIp ? ipRateKey(rawIp) : null;
+  const key = emailKey(email);
+  if (!checkRateLimit(`code-email:${key}`, CODE_EMAIL_CEILING, LOGIN_RATE_WINDOW_MS)) return true;
+  return !checkRateLimit(`code:${ip ?? "noip"}:${key}`, CODE_EMAIL_IP_LIMIT, LOGIN_RATE_WINDOW_MS);
+}

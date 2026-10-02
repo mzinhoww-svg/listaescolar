@@ -12,6 +12,18 @@ const nextSchema = z
 
 export const magicLinkInputSchema = z.object({ email: emailSchema, next: nextSchema });
 
+/** Código de 6 dígitos do e-mail (aceita espaços colados, ex.: "123 456"). */
+export const codeSchema = z
+  .string()
+  .transform((v) => v.replace(/\s+/g, ""))
+  .pipe(z.string().regex(/^\d{6}$/));
+
+export const verifyCodeInputSchema = z.object({
+  email: emailSchema,
+  code: codeSchema,
+  next: nextSchema,
+});
+
 export const googleInputSchema = z.object({ next: nextSchema });
 
 const optionalText = z
@@ -31,7 +43,10 @@ export const callbackQuerySchema = z.object({
 /** Query do link mágico (`/auth/confirm`). */
 export const confirmQuerySchema = z.object({
   token_hash: optionalText,
-  type: z.enum(["email", "magiclink", "signup"]).nullish().transform((v) => v ?? undefined),
+  type: z
+    .enum(["email", "magiclink", "signup"])
+    .nullish()
+    .transform((v) => v ?? undefined),
   code: optionalText,
   next: nextSchema,
 });

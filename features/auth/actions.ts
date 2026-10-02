@@ -6,10 +6,18 @@ import { redirect } from "next/navigation";
 import { getSiteOrigin } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 
-import { loginRateLimited } from "./rate-limit";
-import { googleInputSchema, magicLinkInputSchema, type AuthActionState } from "./schemas";
+import { codeRateLimited, loginRateLimited } from "./rate-limit";
+import {
+  googleInputSchema,
+  magicLinkInputSchema,
+  verifyCodeInputSchema,
+  type AuthActionState,
+} from "./schemas";
 
 const RATE_LIMIT_ERROR = "Aguarde um minuto para pedir outro link.";
+const CODE_RATE_ERROR = "Muitas tentativas. Aguarde um minuto e tente de novo.";
+// Mesma mensagem para código errado, expirado ou e-mail inexistente: não enumera contas.
+const CODE_INVALID_ERROR = "Código inválido ou expirado. Peça um novo código.";
 const GENERIC_ERROR = "Não foi possível continuar. Tente novamente.";
 
 async function siteOrigin(): Promise<string> {
@@ -65,6 +73,42 @@ export async function signInWithMagicLink(formData: FormData): Promise<AuthActio
   } catch {
     return { status: "error", message: GENERIC_ERROR, email };
   }
+}
+
+/** D-163: login por código de 6 dígitos (mesmo e-mail do link; funciona em navegador embutido). */
+export async function verifyEmailCode(formData: FormData): Promise<AuthActionState> {
+  const rawEmail = formData.get("email");
+  const parsed = verifyCodeInputSchema.safeParse({
+    email: rawEmail,
+    code: formData.get("code"),
+    next: formData.get("next") ?? undefined,
+  });
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: "Informe o código de 6 dígitos.",
+      invalid: true,
+      email: typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : undefined,
+    };
+  }
+  const { email, code, next } = parsed.data;
+  if (codeRateLimited(await headers(), email)) {
+    return { status: "error", message: CODE_RATE_ERROR, email };
+  }
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+    if (error) {
+      return {
+        status: "error",
+        message: isRateLimit(error) ? CODE_RATE_ERROR : CODE_INVALID_ERROR,
+        email,
+      };
+    }
+  } catch {
+    return { status: "error", message: GENERIC_ERROR, email };
+  }
+  redirect(next);
 }
 
 export async function signInWithGoogle(formData: FormData): Promise<AuthActionState> {

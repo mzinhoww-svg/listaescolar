@@ -5,6 +5,7 @@ const signInWithMagicLink = vi.fn();
 vi.mock("@/features/auth/actions", () => ({
   signInWithMagicLink: (f: FormData) => signInWithMagicLink(f),
   signInWithGoogle: vi.fn(),
+  verifyEmailCode: vi.fn(),
 }));
 
 import { LoginForm } from "@/app/entrar/LoginForm";

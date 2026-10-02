@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { GoogleButton } from "@/components/auth/GoogleButton";
 import { PrivacyNote } from "@/components/auth/PrivacyNote";
 import { Screen } from "@/components/auth/Screen";
 import { getCurrentUser } from "@/features/auth/queries";
+import { detectInAppBrowser } from "@/features/auth/in-app-browser";
 import { safeNextPath } from "@/features/auth/redirect";
 
+import { InAppBrowserNotice } from "./InAppBrowserNotice";
 import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = { title: "Entrar · ListaCerta" };
@@ -21,6 +24,8 @@ export default async function EntrarPage({ searchParams }: PageProps<"/entrar">)
   if (await getCurrentUser()) redirect(next);
   const erro = Array.isArray(sp.erro) ? sp.erro[0] : sp.erro;
   const erroMsg = erro ? (ERRORS[erro] ?? "Não foi possível entrar. Tente de novo.") : null;
+
+  const inApp = detectInAppBrowser((await headers()).get("user-agent"));
 
   return (
     <Screen top={72}>
@@ -43,6 +48,7 @@ export default async function EntrarPage({ searchParams }: PageProps<"/entrar">)
               {erroMsg}
             </p>
           ) : null}
+          {inApp ? <InAppBrowserNotice app={inApp} /> : null}
           <GoogleButton next={next} />
           <PrivacyNote />
           <LoginForm next={next} />
